@@ -590,6 +590,9 @@
 
   const TASKS = [
     // ---- Known bugs / tech debt ----
+    { id: 'done-release-path', group: 'shipped', status: 'done', date: '2026-07-20',
+      title: 'Release path: WebP conversion + first working installer (~1.1 GB) + git init',
+      notes: 'Overnight. PNG masters archived to D:/PROJECT/portrait-master-png (the rollback path), 25,527+695 portraits converted to q90 WebP with normalized names via scripts/convert-portraits.js (self-verifying) — 5.4 GB → 864 MB; fallback-chain code deleted. First packaging run produced working NSIS+portable installers (~1.1 GB, down from projected 5+ GB) and CAUGHT A REAL SHIP-BLOCKER: 705 asset files across 6 folders (3d_logos, awards, bowlgames, confchamp, playoffs, rivalry) had _result suffixes from the earlier compression pass — masked in dev by stale dist copies, fatal in case-sensitive asar. All normalized; 684 logo + 39 trophy paths audited exact-case, zero misses. Packaged app verified end-to-end isolated via new permanent CFB_USER_DATA_DIR hook (screenshots: release-packaged-app-verified). Git initialized (.gitignore hardened; initial commit e1fcb2f, 491 files; overnight work committed after).' },
     { id: 'done-bug-slot', group: 'shipped', status: 'done', date: '2026-07-20',
       title: 'FIXED: stale-slot heuristic (extract-stats + extract-kicking)',
       notes: 'The "highest SEAS_YEAR slot = current" heuristic showed a player’s previous season as current until they recorded a new-season stat line (the Tulane fresh-preseason Statistics page showing full stat lines vs a 0-0 team was this bug live). Fixed via exact SEAS_YEAR match to the synced season (same relative-year convention as the schedule fix); no match = honest season:null. Verified both directions on disposable imports: fresh preseason → 0/34 stale lines (careers intact); completed season → all 44 real lines, sample QB 3,165 yds.' },

@@ -29,6 +29,15 @@ import { getSchedule } from '../database/getSchedule';
  * any other app.* calls; the second instance quits immediately and its
  * arguments are handed to the first instance instead.
  */
+// Isolated-userData hook for diagnostics/tests against the PACKAGED build.
+// The dev CLI honors --user-data-dir, but the packaged binary rejects it
+// ("bad option"), and overriding %APPDATA% doesn't move Electron's appData
+// (resolved via the OS API, not the env var) — confirmed 2026-07-20 when a
+// packaged screenshot run silently landed on the real user database. Must be
+// set before requestSingleInstanceLock(), which locks against userData.
+if (process.env.CFB_USER_DATA_DIR) {
+  app.setPath('userData', process.env.CFB_USER_DATA_DIR);
+}
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
