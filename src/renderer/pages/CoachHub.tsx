@@ -235,8 +235,8 @@ export function CoachHub() {
     <div className="space-y-6">
       <SurfaceCard>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-6">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-1 flex-wrap items-center gap-5">
+            <div className="flex items-center gap-5">
               {userCoach ? (
                 <CoachPortrait coach={userCoach} size="xl" />
               ) : (

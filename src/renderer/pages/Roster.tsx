@@ -259,6 +259,7 @@ export function Roster() {
             portraitAssetName: player.portraitAssetName,
           }
         : undefined,
+      viewedTeamIndex ?? undefined,
     );
   }
 

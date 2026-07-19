@@ -28,11 +28,14 @@ const UNIT_ORDER = ['Offense', 'Defense', 'Special Teams'] as const;
 function TeammateRail({
   dynastyId,
   seasonId,
+  leagueTeamIndex,
   activePlayerId,
   onPick,
 }: {
   dynastyId: string;
   seasonId: number | undefined;
+  /** Set when browsing another team via the team switcher — the rail then lists that team's league-snapshot roster, not the user's. */
+  leagueTeamIndex: number | undefined;
   activePlayerId: number;
   onPick: (playerId: number) => void;
 }) {
@@ -41,13 +44,18 @@ function TeammateRail({
 
   useEffect(() => {
     let cancelled = false;
-    window.api.db.getRoster(dynastyId, seasonId).then((result) => {
+    setRoster(undefined);
+    const fetchRoster =
+      leagueTeamIndex === undefined
+        ? window.api.db.getRoster(dynastyId, seasonId)
+        : window.api.db.getLeagueTeamRoster(dynastyId, leagueTeamIndex, seasonId).then((r) => r?.players ?? null);
+    fetchRoster.then((result) => {
       if (!cancelled) setRoster(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [dynastyId, seasonId]);
+  }, [dynastyId, seasonId, leagueTeamIndex]);
 
   const filtered = useMemo(() => {
     if (!roster) return [];
@@ -222,7 +230,7 @@ export function PlayerProfileModal() {
 
   if (!state) return null;
 
-  const { dynastyId, seasonId, fallback } = state;
+  const { dynastyId, seasonId, fallback, leagueTeamIndex } = state;
   const activePlayerId = state.playerId;
   const navIndex = navigationIds?.indexOf(activePlayerId) ?? -1;
   const hasNavigation = navigationIds !== undefined && navIndex !== -1;
@@ -298,6 +306,7 @@ export function PlayerProfileModal() {
               <TeammateRail
                 dynastyId={dynastyId}
                 seasonId={seasonId}
+                leagueTeamIndex={leagueTeamIndex}
                 activePlayerId={activePlayerId}
                 onPick={(id) => goToPlayer(id)}
               />
@@ -310,6 +319,7 @@ export function PlayerProfileModal() {
                 playerId={activePlayerId}
                 seasonId={seasonId}
                 fallback={fallback}
+                leagueTeamIndex={leagueTeamIndex}
               />
             </div>
           </div>

@@ -590,7 +590,10 @@
 
   const TASKS = [
     // ---- Known bugs / tech debt ----
-    { id: 'done-team-switcher', group: 'shipped', status: 'done', date: '2026-07-20',
+    { id: 'done-ux-polish-league-bios', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'UX polish batch (7 items) + full player bios for league teams',
+      notes: "Statistics header controls moved to their own row; team dropdowns show the real team name (no more generic My Team, user team deduped from the league list); Dashboard delete button fixed — real cause was flex min-content shrink to 18px (proven by DOM measurement, not styling) — now 36x36 matching its siblings with only the icon red; Coach Hub hero cropped tight (transparent headroom in the game PNGs); Awards is its own tab in player bios; league players opened anywhere render the SAME full profile as user players (hero, bio tiles, season stats, honors, live attributes via PresentationId) with the teammate rail showing the viewed team and honest empties only for truly untracked data (game logs). New permanent harness hooks: SCREENSHOT_IMPORT_SAVE + SCREENSHOT_EVAL. Verified live on fresh scratch import; screenshots in Productivity/screenshots (2026-07-19 set)." },
+    { id: 'done-team-switcher', group: 'shipped', status: 'done', date: '2026-07-19',
       title: 'Team switcher on Team Hub / Roster / Schedule / Statistics / History + logos everywhere',
       notes: "ViewedTeamProvider context + shared TeamSwitcher dropdown (active team logo beside it; auto-hides on seasons without league snapshots). Roster: full league rosters through the existing filter/sort/gallery machinery + leaguewide edit pencils. Statistics: 4 player categories for any team (team tiles/kicking/splits honestly user-only). Schedule: NEW extract-league-schedule — every game in the league, 19KB/season compressed — any team's schedule with W/L from their perspective. Team Hub: league summary (record, avg OVR, top-10 players). History: titles-only view for other programs from tracked league history. Player-bio hero shows the season's ACTUAL team logo/name — transfer-correct. Verified live on Alabama roster (team-switcher-alabama-roster screenshot)." },
     { id: 'done-league-browse', group: 'shipped', status: 'done', date: '2026-07-20',

@@ -1006,12 +1006,19 @@ function LeagueRostersSection({ dynastyId, seasonId }: { dynastyId: string; seas
                 <tr
                   key={p.id}
                   onClick={() =>
-                    openPlayerModal(dynastyId, p.id, roster.seasonId, filteredPlayers.map((x) => x.id), {
-                      name: `${p.firstName} ${p.lastName}`,
-                      position: p.position,
-                      teamDisplayName: roster.displayName,
-                      portraitAssetName: p.portraitAssetName,
-                    })
+                    openPlayerModal(
+                      dynastyId,
+                      p.id,
+                      roster.seasonId,
+                      filteredPlayers.map((x) => x.id),
+                      {
+                        name: `${p.firstName} ${p.lastName}`,
+                        position: p.position,
+                        teamDisplayName: roster.displayName,
+                        portraitAssetName: p.portraitAssetName,
+                      },
+                      roster.teamIndex,
+                    )
                   }
                   tabIndex={0}
                   role="button"

@@ -401,6 +401,20 @@ app
             const dir = process.env.SCREENSHOT_DIR as string;
             win.setSize(1400, 2600);
             await new Promise((r) => setTimeout(r, 500));
+            // Imports a save file into the (isolated) database before any
+            // select/click/capture — lets a verification run self-provision a
+            // disposable dynasty instead of needing a pre-seeded user-data
+            // dir. Runs through the same preload API the real UI uses. Only
+            // meaningful with CFB_USER_DATA_DIR pointing at a scratch dir.
+            if (process.env.SCREENSHOT_IMPORT_SAVE) {
+              await win.webContents.executeJavaScript(
+                `window.api.db.importDynasty(${JSON.stringify(process.env.SCREENSHOT_IMPORT_SAVE)});`,
+              );
+              await new Promise((r) => setTimeout(r, 1500));
+              // Re-enter the route so pages mounted before the import re-fetch against the now-populated DB.
+              await win.webContents.executeJavaScript('window.location.reload();');
+              await new Promise((r) => setTimeout(r, 2500));
+            }
             // "selector::value[;;selector::value...]" — sets <select> values
             // the way React sees them (native setter + change event), for UI
             // reachable only through dropdowns (e.g. the season switcher, the
@@ -423,6 +437,15 @@ app
                 );
                 await new Promise((r) => setTimeout(r, 900));
               }
+            }
+            // Diagnostic escape hatch: evaluates the given JS in the page and
+            // logs the JSON-stringified result to stdout — for verification
+            // runs that need to inspect live DOM state (computed styles,
+            // rects) rather than eyeball a screenshot. Local dev only, like
+            // every other SCREENSHOT_* hook.
+            if (process.env.SCREENSHOT_EVAL) {
+              const evalResult = await win.webContents.executeJavaScript(process.env.SCREENSHOT_EVAL);
+              console.log('[screenshot-eval]', JSON.stringify(evalResult));
             }
             if (process.env.SCREENSHOT_CLICK_SELECTOR) {
               await win.webContents.executeJavaScript(

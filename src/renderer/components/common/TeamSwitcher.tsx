@@ -8,10 +8,11 @@ import { useViewedTeam } from '../../data/ViewedTeamProvider';
  * entirely when the season has no league snapshot (synced before the league
  * browse feature) so pages just behave as before.
  */
-export function TeamSwitcher({ userTeamName }: { userTeamName?: string | null }) {
-  const { viewedTeamIndex, setViewedTeamIndex, leagueTeams } = useViewedTeam();
+export function TeamSwitcher({ userTeamName: userTeamNameProp }: { userTeamName?: string | null } = {}) {
+  const { viewedTeamIndex, setViewedTeamIndex, leagueTeams, userTeamName: contextTeamName } = useViewedTeam();
   if (!leagueTeams || leagueTeams.length === 0) return null;
 
+  const userTeamName = userTeamNameProp ?? contextTeamName;
   const activeName =
     viewedTeamIndex === null
       ? (userTeamName ?? 'My Team')
@@ -26,8 +27,9 @@ export function TeamSwitcher({ userTeamName }: { userTeamName?: string | null })
         aria-label="Viewed team"
         className="border border-slate-200/80 bg-slate-50/90 px-3 py-2 font-display text-sm font-semibold text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
       >
-        <option value="">{userTeamName ? `${userTeamName} (My Team)` : 'My Team'}</option>
-        {leagueTeams.map((t) => (
+        <option value="">{userTeamName ?? 'My Team'}</option>
+        {/* The user's team is the '' option above with full data — skip its league-snapshot twin. */}
+        {leagueTeams.filter((t) => t.displayName !== userTeamName).map((t) => (
           <option key={t.teamIndex} value={t.teamIndex}>
             {t.displayName}
           </option>

@@ -595,7 +595,7 @@ export function Statistics() {
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-5">
           <div className="flex items-center gap-4">
             <TeamLogo
               team={{ assetName: viewedTeamName ?? overview.teamName, label: viewedTeamName ?? overview.teamName }}
@@ -614,7 +614,7 @@ export function Statistics() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-4 dark:border-slate-800/60">
             <TeamSwitcher userTeamName={overview.teamName} />
             <Button variant="secondary" onClick={() => setCompareOpen(true)} disabled={comparablePlayers.length < 2}>
               Compare Players

@@ -534,12 +534,13 @@ function buildPlayerHonorSeasons(awardHistory: AwardsBySeason[], playerId: numbe
  * existing editor IPC (read-only reuse — current season only, since the save
  * has long since moved past any historical season's state).
  */
-type ProfileTab = 'overview' | 'stats' | 'career' | 'attributes' | 'gamelog' | 'history';
+type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'attributes' | 'gamelog' | 'history';
 
 const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'stats', label: 'Stats' },
   { key: 'career', label: 'Career' },
+  { key: 'awards', label: 'Awards' },
   { key: 'attributes', label: 'Attributes' },
   { key: 'gamelog', label: 'Game Log' },
   { key: 'history', label: 'History' },
@@ -743,6 +744,7 @@ export function PlayerProfileContent({
   playerId,
   seasonId,
   fallback,
+  leagueTeamIndex,
 }: {
   dynastyId: string;
   playerId: number;
@@ -750,6 +752,8 @@ export function PlayerProfileContent({
   seasonId?: number;
   /** Display info for players who won't be found in the local roster (e.g. an opposing team's Heisman winner) — that roster snapshot only covers the user's own team. Lets this component show a real name/team instead of a bare "not found" for leaguewide award data. */
   fallback?: PlayerModalFallback;
+  /** Set when the player was opened while browsing another team via the team switcher — the profile then resolves from that team's league snapshot (full bio + season stats + live attributes) instead of the user's roster, so it renders the same full layout as a user-team player. Per-player game logs aren't tracked leaguewide, so those sections show their honest empty states. */
+  leagueTeamIndex?: number;
 }) {
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [allStats, setAllStats] = useState<PlayerStats[] | null | undefined>(undefined);
@@ -821,6 +825,28 @@ export function PlayerProfileContent({
       }
       setTeamAwardWins(wins.sort((a, b) => b.seasonYear - a.seasonYear));
 
+      // League mode: the player lives on another team's league snapshot, not
+      // the user's roster. LeagueRosterPlayer extends RosterPlayer, so the
+      // full profile layout renders as-is; per-player game logs aren't
+      // tracked leaguewide, so those sections keep their honest empties.
+      if (leagueTeamIndex !== undefined) {
+        const leagueRoster = await window.api.db.getLeagueTeamRoster(dynastyId, leagueTeamIndex, seasonId);
+        if (cancelled) return;
+        setResolvedSeasonId(leagueRoster?.seasonId);
+        setRoster(leagueRoster?.players ?? null);
+        setAllStats(
+          leagueRoster
+            ? leagueRoster.players
+                .filter((p) => p.seasonStat)
+                .map((p) => ({ playerId: p.id, category: p.seasonStat!.category, career: null, season: p.seasonStat!.season }))
+            : null,
+        );
+        setHeroTeamName(leagueRoster?.displayName ?? fallback?.teamDisplayName ?? null);
+        setAllGamelog(null);
+        setSchedule(null);
+        return;
+      }
+
       // Resolve which season to actually render: the one the caller was
       // browsing, if the player is on its roster; otherwise search every
       // season newest-first for the one that has them. A player who
@@ -877,7 +903,7 @@ export function PlayerProfileContent({
     return () => {
       cancelled = true;
     };
-  }, [dynastyId, seasonId, playerId]);
+  }, [dynastyId, seasonId, playerId, leagueTeamIndex, fallback?.teamDisplayName]);
 
   if (roster === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading player...</p>;
@@ -1093,8 +1119,8 @@ export function PlayerProfileContent({
                   )
                 }
                 support={latestHonor ?? undefined}
-                onJump={() => setTab('career')}
-                jumpLabel="Career résumé"
+                onJump={() => setTab('awards')}
+                jumpLabel="Awards & honors"
               />
             </div>
           </>
@@ -1121,6 +1147,11 @@ export function PlayerProfileContent({
               emptyMessage="No career stats yet. These appear once games have been played and re-imported."
             />
             <ImportedSeasonHistorySection seasons={importedStatSeasons} />
+          </>
+        )}
+
+        {tab === 'awards' && (
+          <>
             <TeamAwardsWonSection wins={teamAwardWins} />
             <HonorsSection seasons={honorSeasons} />
           </>

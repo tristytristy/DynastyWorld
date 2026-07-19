@@ -83,7 +83,7 @@ function coachPortraitIdentity(
 }
 
 const CARD_ICON_BUTTON_CLASS =
-  'inline-flex h-9 w-9 items-center justify-center border border-slate-300/80 bg-white/90 text-slate-600 shadow-[0_12px_30px_-14px_rgba(15,23,42,0.5)] backdrop-blur-md transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-300 dark:hover:bg-white/10';
+  'inline-flex h-9 w-9 shrink-0 items-center justify-center border border-slate-300/80 bg-white/90 text-slate-600 shadow-[0_12px_30px_-14px_rgba(15,23,42,0.5)] backdrop-blur-md transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-300 dark:hover:bg-white/10';
 
 export function Dashboard() {
   const [dynasties, setDynasties] = useState<DynastySummary[]>([]);
@@ -424,14 +424,14 @@ export function Dashboard() {
                         </button>
                       </div>
                       {/* A deliberate gap plus this divider separate destructive from maintenance actions, so reaching for Sync/Backup never lands on Delete by mistake. */}
-                      <div className="h-5 w-px bg-slate-300/70 dark:bg-slate-700/70" aria-hidden="true" />
+                      <div className="h-5 w-px shrink-0 bg-slate-300/70 dark:bg-slate-700/70" aria-hidden="true" />
                       <button
                         type="button"
                         onClick={(event) => handleDelete(event, dynasty.id)}
                         disabled={deletingId === dynasty.id}
                         aria-label={`Delete ${dynasty.teamName} dynasty`}
                         title="Delete dynasty"
-                        className="inline-flex h-9 w-9 items-center justify-center border border-red-300/80 bg-white/90 text-red-600 shadow-[0_12px_30px_-14px_rgba(220,38,38,0.6)] backdrop-blur-md transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900/80 dark:bg-slate-950/90 dark:text-red-400 dark:hover:bg-red-950/60"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-slate-300/80 bg-white/90 text-red-600 shadow-[0_12px_30px_-14px_rgba(15,23,42,0.5)] backdrop-blur-md transition hover:bg-red-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/90 dark:text-red-400 dark:hover:bg-red-950/60"
                       >
                         <TrashIcon />
                       </button>

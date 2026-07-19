@@ -18,6 +18,8 @@ interface ViewedTeamContextValue {
   setViewedTeamIndex: (teamIndex: number | null) => void;
   /** All teams with league-snapshot rosters this season — dropdown source. Null when the season predates league snapshots. */
   leagueTeams: LeagueTeamSummary[] | null | undefined;
+  /** The user's own team name this season (e.g. "C. Carolina") — for labels instead of a generic "My Team". */
+  userTeamName: string | null;
 }
 
 const ViewedTeamContext = createContext<ViewedTeamContextValue | null>(null);
@@ -26,6 +28,7 @@ export function ViewedTeamProvider({ dynastyId, children }: { dynastyId: string;
   const { selectedSeasonId } = useSelectedSeason();
   const [viewedTeamIndex, setViewedTeamIndex] = useState<number | null>(null);
   const [leagueTeams, setLeagueTeams] = useState<LeagueTeamSummary[] | null | undefined>(undefined);
+  const [userTeamName, setUserTeamName] = useState<string | null>(null);
 
   useEffect(() => {
     setViewedTeamIndex(null);
@@ -33,6 +36,9 @@ export function ViewedTeamProvider({ dynastyId, children }: { dynastyId: string;
     setLeagueTeams(undefined);
     window.api.db.getLeagueTeams(dynastyId, selectedSeasonId).then((result) => {
       if (!cancelled) setLeagueTeams(result);
+    });
+    window.api.db.getSeasonOverview(dynastyId, selectedSeasonId).then((overview) => {
+      if (!cancelled) setUserTeamName(overview?.teamName ?? null);
     });
     return () => {
       cancelled = true;
@@ -42,8 +48,8 @@ export function ViewedTeamProvider({ dynastyId, children }: { dynastyId: string;
   const set = useCallback((teamIndex: number | null) => setViewedTeamIndex(teamIndex), []);
 
   const value = useMemo<ViewedTeamContextValue>(
-    () => ({ viewedTeamIndex, setViewedTeamIndex: set, leagueTeams }),
-    [viewedTeamIndex, set, leagueTeams],
+    () => ({ viewedTeamIndex, setViewedTeamIndex: set, leagueTeams, userTeamName }),
+    [viewedTeamIndex, set, leagueTeams, userTeamName],
   );
 
   return <ViewedTeamContext.Provider value={value}>{children}</ViewedTeamContext.Provider>;
@@ -53,4 +59,9 @@ export function useViewedTeam(): ViewedTeamContextValue {
   const ctx = useContext(ViewedTeamContext);
   if (!ctx) throw new Error('useViewedTeam must be used within a ViewedTeamProvider.');
   return ctx;
+}
+
+/** Like useViewedTeam, but safe for components that also render outside DynastyLayout (e.g. inside the app-root player modal) — returns null there instead of throwing. */
+export function useViewedTeamOptional(): ViewedTeamContextValue | null {
+  return useContext(ViewedTeamContext);
 }

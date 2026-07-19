@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { SurfaceCard } from '../ui/SurfaceCard';
 import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
+import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
 import { StatisticsTable, type StatColumn, type StatTableRow } from './StatisticsTable';
 
 /**
@@ -95,10 +96,12 @@ export function LeaderCard({
   qualifier?: string;
 }) {
   const { openPlayerModal } = usePlayerModal();
+  // League-mode clicks resolve against the viewed team's league snapshot; null-safe for use outside DynastyLayout.
+  const viewedTeamIndex = useViewedTeamOptional()?.viewedTeamIndex ?? null;
   return (
     <button
       type="button"
-      onClick={() => openPlayerModal(dynastyId, row.playerId, seasonId)}
+      onClick={() => openPlayerModal(dynastyId, row.playerId, seasonId, undefined, undefined, viewedTeamIndex ?? undefined)}
       className="corner-cut-sm flex w-full items-center gap-3 border border-slate-200/80 bg-slate-50/85 p-3 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
     >
       <PlayerPortrait player={row} size="sm" />

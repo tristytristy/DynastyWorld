@@ -140,12 +140,19 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
               key={p.id}
               type="button"
               onClick={() =>
-                openPlayerModal(dynastyId, p.id, roster?.seasonId, topPlayers.map((x) => x.id), {
-                  name: `${p.firstName} ${p.lastName}`,
-                  position: p.position,
-                  teamDisplayName: teamName,
-                  portraitAssetName: p.portraitAssetName,
-                })
+                openPlayerModal(
+                  dynastyId,
+                  p.id,
+                  roster?.seasonId,
+                  topPlayers.map((x) => x.id),
+                  {
+                    name: `${p.firstName} ${p.lastName}`,
+                    position: p.position,
+                    teamDisplayName: teamName,
+                    portraitAssetName: p.portraitAssetName,
+                  },
+                  teamIndex,
+                )
               }
               className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
             >

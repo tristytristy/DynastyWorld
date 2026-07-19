@@ -18,6 +18,8 @@ interface PlayerModalState {
   /** The exact ordered list of player IDs currently visible wherever the modal was opened from (e.g. Roster's current sort/filter/search result) — enables Previous/Next. Undefined when opened from a context with no meaningful ordering (e.g. an award card). */
   navigationIds: number[] | undefined;
   fallback: PlayerModalFallback | undefined;
+  /** Set when the player was opened while browsing another team via the team switcher — the profile and teammate rail then resolve against that team's league snapshot instead of the user's roster. */
+  leagueTeamIndex: number | undefined;
 }
 
 interface PlayerModalContextValue {
@@ -28,6 +30,7 @@ interface PlayerModalContextValue {
     seasonId?: number,
     navigationIds?: number[],
     fallback?: PlayerModalFallback,
+    leagueTeamIndex?: number,
   ) => void;
   closePlayerModal: () => void;
   goToPlayer: (playerId: number, fallback?: PlayerModalFallback) => void;
@@ -45,8 +48,9 @@ export function PlayerModalProvider({ children }: { children: ReactNode }) {
       seasonId?: number,
       navigationIds?: number[],
       fallback?: PlayerModalFallback,
+      leagueTeamIndex?: number,
     ) => {
-      setState({ dynastyId, playerId, seasonId, navigationIds, fallback });
+      setState({ dynastyId, playerId, seasonId, navigationIds, fallback, leagueTeamIndex });
     },
     [],
   );

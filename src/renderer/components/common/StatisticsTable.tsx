@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
+import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
 
 /** One numeric (or "-") column in a statistics table. `getValue` returning null means genuinely not applicable for this row (e.g. a rate stat with a zero denominator) — rendered as "-", never as 0. */
 export interface StatColumn<TLine> {
@@ -43,6 +44,10 @@ export function StatisticsTable<TLine>({
   emptyStateMessage: string;
 }) {
   const { openPlayerModal } = usePlayerModal();
+  // When the page is browsing another team via the team switcher, player
+  // clicks resolve against that team's league snapshot. Null-safe because
+  // this table also renders inside the app-root player modal.
+  const viewedTeamIndex = useViewedTeamOptional()?.viewedTeamIndex ?? null;
   const [sortKey, setSortKey] = useState(defaultSortKey);
   const [sortDir, setSortDir] = useState<SortDir>(defaultSortDirection);
 
@@ -75,7 +80,7 @@ export function StatisticsTable<TLine>({
   }
 
   function openPlayer(playerId: number) {
-    openPlayerModal(dynastyId, playerId, seasonId, sorted.map((row) => row.playerId));
+    openPlayerModal(dynastyId, playerId, seasonId, sorted.map((row) => row.playerId), undefined, viewedTeamIndex ?? undefined);
   }
 
   if (rows.length === 0) {
