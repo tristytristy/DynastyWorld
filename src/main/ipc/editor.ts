@@ -1,0 +1,91 @@
+import { ipcMain } from 'electron';
+import { IPC } from '../../shared/ipcChannels';
+import type {
+  CoachEditData,
+  CoachEditFields,
+  PlayerEditData,
+  PlayerEditFields,
+  PortraitFilters,
+  PortraitSearchResponse,
+  RecruitEditData,
+  RecruitEditFields,
+  SaveEditResult,
+  SaveFileBackupResult,
+} from '../../shared/types';
+import {
+  backupSaveFile,
+  getCoachEditData,
+  getPlayerEditData,
+  getRecruitEditData,
+  saveCoachEdits,
+  savePlayerEdits,
+  saveRecruitEdits,
+  searchPortraits,
+} from '../editorWrite';
+
+export function registerEditorHandlers(): void {
+  ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
+    return backupSaveFile(dynastyId);
+  });
+
+  ipcMain.handle(
+    IPC.editor.getPlayer,
+    async (_event, dynastyId: string, playerId: number): Promise<PlayerEditData | null> => {
+      return getPlayerEditData(dynastyId, playerId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.savePlayer,
+    async (_event, dynastyId: string, playerId: number, fields: PlayerEditFields): Promise<SaveEditResult> => {
+      return savePlayerEdits(dynastyId, playerId, fields);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.getCoach,
+    async (_event, dynastyId: string, teamIndex: number, position: string): Promise<CoachEditData | null> => {
+      return getCoachEditData(dynastyId, teamIndex, position);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.saveCoach,
+    async (
+      _event,
+      dynastyId: string,
+      teamIndex: number,
+      position: string,
+      fields: CoachEditFields,
+    ): Promise<SaveEditResult> => {
+      return saveCoachEdits(dynastyId, teamIndex, position, fields);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.getRecruit,
+    async (_event, dynastyId: string, playerId: number): Promise<RecruitEditData | null> => {
+      return getRecruitEditData(dynastyId, playerId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.saveRecruit,
+    async (_event, dynastyId: string, playerId: number, fields: RecruitEditFields): Promise<SaveEditResult> => {
+      return saveRecruitEdits(dynastyId, playerId, fields);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.searchPortraits,
+    async (
+      _event,
+      kind: 'player' | 'coach',
+      query: string,
+      filters: PortraitFilters,
+      page: number,
+    ): Promise<PortraitSearchResponse> => {
+      return searchPortraits(kind, query, filters, page);
+    },
+  );
+}

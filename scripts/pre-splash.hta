@@ -1,0 +1,172 @@
+<!--
+  Instant, non-Electron pre-splash. Launched by hidden-relaunch.vbs as close
+  to the very first instant of the double-click as possible — Electron
+  cannot paint anything until its own process finishes booting (a hard
+  platform constraint), so without this the user stares at nothing for
+  however long that cold start plus any rebuild-check/rebuild takes. An HTA
+  is one of the few things Windows can render close to instantly without a
+  compiled native binary.
+
+  Sized to spshscr.png's exact native resolution (868x420 — see main.ts's
+  SPLASH_WIDTH/SPLASH_HEIGHT, which use the same numbers) so neither this nor
+  the real Electron splash ever scales or crops the image, and the handoff
+  between the two is a pixel-identical swap. The WIDTH/HEIGHT attributes
+  below are kept as a first attempt, but neither they nor a script-based
+  window.resizeTo actually took effect reliably when tested — the HTA host
+  opened some other, much larger default size regardless, with the image
+  stranded in a corner of a big gray field. The mechanism that actually works
+  is external: scripts\force-resize-pre-splash.ps1 (launched by
+  hidden-relaunch.vbs right after this file) finds this window by its
+  (deliberately unique) title and forces its bounds via the Win32 API.
+
+  Closes itself the moment main.ts's signalPreSplashReady() writes the
+  ready-flag file (polled every 100ms), with a safety timeout so a startup
+  that fails in an unexpected way never leaves this stuck on screen.
+-->
+<html>
+<head>
+<!--
+  Deliberately NOT "CFB Dynasty Hub" — the real Electron splash and main
+  window both use that exact title, and scripts\force-resize-pre-splash.ps1
+  finds this window by title match. A shared title would risk it grabbing
+  (and resizing) one of Electron's own windows instead in a race.
+-->
+<title>CFB Dynasty Hub Pre-Splash</title>
+<HTA:APPLICATION
+  ID="cfbDynastyHubPreSplash"
+  APPLICATIONNAME="CFB Dynasty Hub"
+  BORDER="none"
+  CAPTION="no"
+  ICON=""
+  MAXIMIZEBUTTON="no"
+  MINIMIZEBUTTON="no"
+  SCROLL="no"
+  SHOWINTASKBAR="no"
+  SINGLEINSTANCE="yes"
+  SYSMENU="no"
+  WINDOWSTATE="normal"
+  WIDTH="868"
+  HEIGHT="420"
+  INNERBORDER="no"
+/>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 868px;
+    height: 420px;
+    overflow: hidden;
+    background: #3a3a3a;
+  }
+  .bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 868px;
+    height: 420px;
+  }
+  .overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 28px 22px;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+  }
+  .status {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+  .bar-track {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 40%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #60a5fa, #2563eb);
+    /* Real per-step progress isn't available yet at this stage (that's the
+       real Electron splash's job, once it takes over) — an indeterminate
+       sweep is an honest "something is happening," not a fake percentage. */
+    animation: sweep 1.3s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0%   { margin-left: -40%; width: 40%; }
+    50%  { margin-left: 60%;  width: 45%; }
+    100% { margin-left: 100%; width: 5%;  }
+  }
+</style>
+</head>
+<body>
+<img class="bg" src="..\public\assets\splash\spshscr.png" alt="" />
+<div class="overlay">
+  <div class="status" id="status">Starting...</div>
+  <div class="bar-track"><div class="bar-fill"></div></div>
+</div>
+<script language="VBScript">
+Const POLL_MS = 100
+' 120s safety cap. It only matters if the ready-flag never arrives at all;
+' the normal close is the flag appearing when the main window is ready, and
+' the launcher's :failed path writes the flag on a build/start failure — so
+' this cap is a true last resort, not the expected path. It's set well above
+' a cold first-run (npm install + full webpack build + Electron cold start)
+' so a legitimately slow first launch never makes the splash vanish while
+' work is still happening (the "splash gone, then nothing, then app" gap).
+Const MAX_POLLS = 1200
+
+Dim pollCount, statusMessages, statusIndex
+pollCount = 0
+statusIndex = 0
+statusMessages = Array("Starting...", "Preparing workspace...", "Almost there...")
+
+Sub Window_OnLoad
+  CheckReady
+  CycleStatus
+End Sub
+
+Sub CheckReady
+  Dim fso, flagPath
+  Set fso = CreateObject("Scripting.FileSystemObject")
+  flagPath = fso.GetSpecialFolder(2) & "\cfb-dynasty-hub-splash-ready.flag"
+
+  If fso.FileExists(flagPath) Then
+    On Error Resume Next
+    fso.DeleteFile flagPath, True
+    On Error Goto 0
+    window.close
+    Exit Sub
+  End If
+
+  pollCount = pollCount + 1
+  If pollCount >= MAX_POLLS Then
+    window.close
+    Exit Sub
+  End If
+
+  window.setTimeout "CheckReady", POLL_MS
+End Sub
+
+' Cycles the status label every few seconds purely so the pre-splash doesn't
+' look frozen during however long Electron's own cold boot takes — these
+' messages are deliberately generic (no fake percentages), since this phase
+' has no real progress signal to report yet.
+Sub CycleStatus
+  Dim el
+  Set el = document.getElementById("status")
+  statusIndex = (statusIndex + 1) Mod 3
+  If Not el Is Nothing Then el.innerText = statusMessages(statusIndex)
+  window.setTimeout "CycleStatus", 2200
+End Sub
+</script>
+</body>
+</html>

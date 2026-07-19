@@ -1,0 +1,85 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import { IPC } from '../shared/ipcChannels';
+import type { DynastyApi, ExtractionProgressEvent } from '../shared/types';
+
+const api: DynastyApi = {
+  fs: {
+    selectFile: () => ipcRenderer.invoke(IPC.fs.selectFile),
+    getDefaultSavesDir: () => ipcRenderer.invoke(IPC.fs.getDefaultSavesDir),
+    scanForSaves: (dirPath) => ipcRenderer.invoke(IPC.fs.scanForSaves, dirPath),
+  },
+  db: {
+    getDynasties: () => ipcRenderer.invoke(IPC.db.getDynasties),
+    importDynasty: (savePath) => ipcRenderer.invoke(IPC.db.importDynasty, savePath),
+    checkDynastyMatch: (savePath) => ipcRenderer.invoke(IPC.db.checkDynastyMatch, savePath),
+    relinkDynasty: (dynastyId, savePath) => ipcRenderer.invoke(IPC.db.relinkDynasty, dynastyId, savePath),
+    syncDynasty: (dynastyId) => ipcRenderer.invoke(IPC.db.syncDynasty, dynastyId),
+    getSeasonOverview: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSeasonOverview, dynastyId, seasonId),
+    getNcaaHub: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getNcaaHub, dynastyId, seasonId),
+    getHistory: (dynastyId) => ipcRenderer.invoke(IPC.db.getHistory, dynastyId),
+    deleteDynasty: (dynastyId) => ipcRenderer.invoke(IPC.db.deleteDynasty, dynastyId),
+    getSeasons: (dynastyId) => ipcRenderer.invoke(IPC.db.getSeasons, dynastyId),
+    getRoster: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRoster, dynastyId, seasonId),
+    getPlayerStats: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getPlayerStats, dynastyId, seasonId),
+    getTeamStats: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getTeamStats, dynastyId, seasonId),
+    getKickingStats: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getKickingStats, dynastyId, seasonId),
+    getGameLog: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getGameLog, dynastyId, seasonId),
+    getTeamTrophies: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getTeamTrophies, dynastyId, seasonId),
+    getSchedule: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSchedule, dynastyId, seasonId),
+    getStandings: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getStandings, dynastyId, seasonId),
+    getCoaches: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getCoaches, dynastyId, seasonId),
+    getAwards: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getAwards, dynastyId, seasonId),
+    getRankings: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRankings, dynastyId, seasonId),
+    getRecruits: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRecruits, dynastyId, seasonId),
+    getDynastyTheme: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTheme, dynastyId),
+    getTeamAwardDefinitions: () => ipcRenderer.invoke(IPC.db.getTeamAwardDefinitions),
+    getTeamAwardResults: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getTeamAwardResults, dynastyId, seasonId),
+    calculateTeamAward: (dynastyId, seasonId, awardDefinitionId) =>
+      ipcRenderer.invoke(IPC.db.calculateTeamAward, dynastyId, seasonId, awardDefinitionId),
+    confirmTeamAwardWinner: (dynastyId, seasonId, awardDefinitionId, winnerId) =>
+      ipcRenderer.invoke(IPC.db.confirmTeamAwardWinner, dynastyId, seasonId, awardDefinitionId, winnerId),
+    selectManualAwardWinner: (dynastyId, seasonId, awardDefinitionId, winnerId) =>
+      ipcRenderer.invoke(IPC.db.selectManualAwardWinner, dynastyId, seasonId, awardDefinitionId, winnerId),
+    finalizeTeamAwards: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.finalizeTeamAwards, dynastyId, seasonId),
+    unlockTeamAwards: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.unlockTeamAwards, dynastyId, seasonId),
+    getTeamAwardSettings: (dynastyId) => ipcRenderer.invoke(IPC.db.getTeamAwardSettings, dynastyId),
+    saveTeamAwardSettings: (dynastyId, settings) =>
+      ipcRenderer.invoke(IPC.db.saveTeamAwardSettings, dynastyId, settings),
+    getTeamAwardHistory: (dynastyId) => ipcRenderer.invoke(IPC.db.getTeamAwardHistory, dynastyId),
+  },
+  extraction: {
+    extractAll: (savePath) => ipcRenderer.invoke(IPC.extraction.extractAll, savePath),
+    onProgress: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: ExtractionProgressEvent) =>
+        callback(payload);
+      ipcRenderer.on(IPC.extraction.progress, listener);
+      return () => ipcRenderer.removeListener(IPC.extraction.progress, listener);
+    },
+  },
+  export: {
+    historyToHtml: (dynastyId) => ipcRenderer.invoke(IPC.export.historyToHtml, dynastyId),
+  },
+  editor: {
+    backupSaveFile: (dynastyId) => ipcRenderer.invoke(IPC.editor.backupSaveFile, dynastyId),
+    getPlayer: (dynastyId, playerId) => ipcRenderer.invoke(IPC.editor.getPlayer, dynastyId, playerId),
+    savePlayer: (dynastyId, playerId, fields) =>
+      ipcRenderer.invoke(IPC.editor.savePlayer, dynastyId, playerId, fields),
+    getCoach: (dynastyId, teamIndex, position) =>
+      ipcRenderer.invoke(IPC.editor.getCoach, dynastyId, teamIndex, position),
+    saveCoach: (dynastyId, teamIndex, position, fields) =>
+      ipcRenderer.invoke(IPC.editor.saveCoach, dynastyId, teamIndex, position, fields),
+    getRecruit: (dynastyId, playerId) => ipcRenderer.invoke(IPC.editor.getRecruit, dynastyId, playerId),
+    saveRecruit: (dynastyId, playerId, fields) =>
+      ipcRenderer.invoke(IPC.editor.saveRecruit, dynastyId, playerId, fields),
+    searchPortraits: (kind, query, filters, page) =>
+      ipcRenderer.invoke(IPC.editor.searchPortraits, kind, query, filters, page),
+  },
+};
+
+contextBridge.exposeInMainWorld('api', api);

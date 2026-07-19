@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dynasty Hub Notes</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --border: #e4e6ef;
+    --text: #172b4d;
+    --text-muted: #6b7280;
+    --text-faint: #9699a6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --accent: #1a5bd6;
+    --accent-dark: #123f9c;
+    --green: #00c875;
+    --green-dark: #00a35d;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 40px 40px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .top-nav { font-size: 12px; margin-bottom: 14px; }
+  .top-nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .top-nav a:hover { text-decoration: underline; }
+
+  header.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin: 0;
+  }
+
+  .toolbar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .filename-input {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: #fafbfd;
+    min-width: 220px;
+    flex: 1;
+    max-width: 320px;
+  }
+  .filename-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  button {
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.06s ease;
+  }
+  button:active { transform: translateY(1px); }
+
+  .btn-save { background: var(--green); color: #fff; }
+  .btn-save:hover { background: var(--green-dark); }
+
+  .btn-clear { background: #eceef5; color: var(--text-muted); }
+  .btn-clear:hover { background: #e0e3ec; color: var(--text); }
+
+  .toolbar-status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .editor-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 4px;
+    flex: 1;
+    display: flex;
+    min-height: 480px;
+  }
+
+  #notes {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 20px 24px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+    background: transparent;
+    border-radius: 10px;
+  }
+
+  .footnote {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+  .footnote code {
+    background: #eceef5;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top-nav"><a href="agenda.html">&larr; Agenda Board</a></div>
+
+  <header class="page-head">
+    <div>
+      <h1>Dynasty Hub Notes</h1>
+      <p class="subtitle">A scratch pad for quick notes — autosaved locally in this browser, export anytime as a real .md file.</p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input type="text" id="filename" class="filename-input" spellcheck="false" />
+    <button class="btn-save" onclick="saveAsMarkdown()">Save as .md</button>
+    <button class="btn-clear" onclick="clearNotes()">Clear</button>
+    <div class="toolbar-status" id="status">—</div>
+  </div>
+
+  <div class="editor-card">
+    <textarea id="notes" placeholder="Start typing... this autosaves in your browser as you go. Click &quot;Save as .md&quot; whenever you want a real file on disk." spellcheck="true"></textarea>
+  </div>
+
+  <p class="footnote">
+    Autosave only lives in this browser (via <code>localStorage</code>) — it isn't a real file until you click <strong>Save as .md</strong>. Your browser will download it to its default downloads location, or prompt you for a folder if "ask where to save" is enabled — pick the <code>Productivity</code> folder to keep everything together.
+  </p>
+
+</div>
+
+<script>
+  const textarea = document.getElementById('notes');
+  const filenameInput = document.getElementById('filename');
+  const statusEl = document.getElementById('status');
+  const STORAGE_KEY = 'cfbDynastyHub.notepad.content';
+
+  function todayFilename() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `notes-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  }
+
+  function updateStatus(message) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const words = textarea.value.trim() ? textarea.value.trim().split(/\s+/).length : 0;
+    const chars = textarea.value.length;
+    statusEl.textContent = `${message} at ${time} · ${words} words · ${chars} chars`;
+  }
+
+  let saveTimer = null;
+  function scheduleAutosave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, textarea.value);
+      updateStatus('Autosaved');
+    }, 400);
+  }
+
+  function saveAsMarkdown() {
+    let filename = filenameInput.value.trim() || todayFilename();
+    if (!filename.toLowerCase().endsWith('.md')) filename += '.md';
+    const blob = new Blob([textarea.value], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    updateStatus('Downloaded ' + filename);
+  }
+
+  function clearNotes() {
+    if (textarea.value.trim() && !confirm('Clear all notes? This can\'t be undone unless you already saved a .md file.')) return;
+    textarea.value = '';
+    localStorage.removeItem(STORAGE_KEY);
+    updateStatus('Cleared');
+    textarea.focus();
+  }
+
+  // Restore any previously autosaved draft.
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) textarea.value = saved;
+  filenameInput.value = todayFilename();
+  updateStatus(saved ? 'Restored draft' : 'Ready');
+
+  textarea.addEventListener('input', scheduleAutosave);
+  textarea.focus();
+</script>
+
+</body>
+</html>

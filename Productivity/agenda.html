@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CFB 27 Dynasty Hub — Dev Agenda</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --border: #e4e6ef;
+    --text: #172b4d;
+    --text-muted: #6b7280;
+    --text-faint: #9699a6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --accent: #1a5bd6;
+
+    --pill-not-started-bg: #e2e4ea;
+    --pill-not-started-fg: #4b4f5c;
+    --pill-planned-bg: #dbe9ff;
+    --pill-planned-fg: #1a5bd6;
+    --pill-in-progress-bg: #fff3b0;
+    --pill-in-progress-fg: #8a6d00;
+    --pill-blocked-bg: #ffe3cf;
+    --pill-blocked-fg: #b95c00;
+    --pill-done-bg: #cdf3d4;
+    --pill-done-fg: #1f8a3d;
+    --pill-limitation-bg: #f1e4ff;
+    --pill-limitation-fg: #7a3ed6;
+
+    --grp-awards: #a25ddc;
+    --grp-stats: #2e8ce0;
+    --grp-bugs: #e2445c;
+    --grp-limits: #9b6bcf;
+    --grp-shipped: #00c875;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 40px 80px;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .meta {
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .progress-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .progress-stat { text-align: center; min-width: 74px; }
+  .progress-stat .num { font-size: 22px; font-weight: 700; }
+  .progress-stat .lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .progress-bar-outer {
+    flex: 1;
+    min-width: 220px;
+    height: 10px;
+    border-radius: 999px;
+    background: #eceef5;
+    overflow: hidden;
+  }
+  .progress-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #00c875, #1a5bd6);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+  .progress-pct { font-size: 13px; color: var(--text-muted); font-weight: 600; min-width: 40px; }
+
+  /* ===================== View switcher ===================== */
+
+  .view-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .view-tab {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .view-tab:hover { color: var(--text); }
+  .view-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  /* ===================== Board view ===================== */
+
+  .board-group {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    cursor: pointer;
+    user-select: none;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .group-head .chevron {
+    transition: transform 0.18s ease;
+    font-size: 11px;
+    opacity: 0.9;
+  }
+  .board-group.collapsed .chevron { transform: rotate(-90deg); }
+  .group-head .count-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,0.25);
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .group-awards .group-head { background: var(--grp-awards); }
+  .group-stats  .group-head { background: var(--grp-stats); }
+  .group-bugs   .group-head { background: var(--grp-bugs); }
+  .group-limits .group-head { background: var(--grp-limits); }
+  .group-shipped .group-head { background: var(--grp-shipped); }
+
+  table.item-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .board-group.collapsed table.item-table { display: none; }
+
+  table.item-table th {
+    text-align: left;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 600;
+    padding: 10px 18px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.item-table td {
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.item-table tr:last-child td { border-bottom: none; }
+  table.item-table tr:hover td { background: #fafbfd; }
+
+  td.item-name { font-weight: 600; width: 24%; }
+  td.item-notes { color: var(--text-muted); line-height: 1.5; }
+  td.item-status { width: 130px; white-space: nowrap; }
+  td.item-priority { width: 90px; color: var(--text-muted); font-size: 12px; }
+
+  .pill {
+    display: inline-block;
+    padding: 3px 11px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill-not-started { background: var(--pill-not-started-bg); color: var(--pill-not-started-fg); }
+  .pill-planned     { background: var(--pill-planned-bg); color: var(--pill-planned-fg); }
+  .pill-in-progress { background: var(--pill-in-progress-bg); color: var(--pill-in-progress-fg); }
+  .pill-blocked     { background: var(--pill-blocked-bg); color: var(--pill-blocked-fg); }
+  .pill-done        { background: var(--pill-done-bg); color: var(--pill-done-fg); }
+  .pill-limitation  { background: var(--pill-limitation-bg); color: var(--pill-limitation-fg); }
+
+  .shot-link { font-size: 11.5px; color: var(--accent); text-decoration: none; font-weight: 700; white-space: nowrap; }
+  .shot-link:hover { text-decoration: underline; }
+
+  /* ===================== "Now Working On" banner ===================== */
+
+  .now-working-banner {
+    background: linear-gradient(90deg, rgba(255,243,176,0.55), rgba(255,255,255,0.9));
+    border: 1px solid #f0d878;
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .now-working-banner .pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #d69e00;
+    box-shadow: 0 0 0 0 rgba(214,158,0,0.6);
+    animation: pulse 1.8s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(214,158,0,0.5); }
+    70% { box-shadow: 0 0 0 9px rgba(214,158,0,0); }
+    100% { box-shadow: 0 0 0 0 rgba(214,158,0,0); }
+  }
+  .now-working-label {
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a6d00;
+  }
+  .now-working-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .now-working-item {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    background: rgba(255,255,255,0.75);
+    border: 1px solid #f0d878;
+    border-radius: 999px;
+    padding: 4px 12px;
+  }
+  .now-working-idle { font-size: 13px; color: var(--text-faint); font-style: italic; }
+
+  /* ===================== Kanban view ===================== */
+
+  .kanban-board {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+  .kanban-col {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    min-width: 250px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: 74vh;
+  }
+  .kanban-col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+    background: var(--card);
+  }
+  .count-badge-mini {
+    background: #eceef5;
+    color: var(--text-muted);
+    border-radius: 999px;
+    padding: 1px 9px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .kanban-col-body {
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kanban-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fbfcfe;
+  }
+  .kanban-card-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .kanban-card-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .kanban-card-notes { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+  .kanban-card-footer { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .kanban-priority { font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+  .kanban-date { font-size: 10.5px; color: var(--text-faint); }
+  .kanban-empty { font-size: 12px; color: var(--text-faint); text-align: center; padding: 16px 0; }
+
+  /* ===================== Timeline view ===================== */
+
+  .timeline-upnext { margin-bottom: 28px; }
+  .timeline-upnext h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 10px; }
+  .timeline-upnext-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .upnext-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
+  .upnext-title { font-weight: 600; font-size: 13px; margin-top: 6px; }
+  .upnext-notes { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
+
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+  .timeline-item { position: relative; padding-bottom: 20px; }
+  .timeline-dot { position: absolute; left: -28px; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 2px var(--border); }
+  .timeline-date { font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .timeline-content { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; box-shadow: var(--shadow); }
+  .timeline-title { font-weight: 600; font-size: 13.5px; }
+  .timeline-notes { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.55; }
+
+  .footnote {
+    margin-top: 26px;
+    font-size: 12px;
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+  .footnote strong { color: var(--text-muted); }
+
+  @media (max-width: 700px) {
+    body { padding: 20px; }
+    td.item-priority { display: none; }
+    table.item-table th:nth-child(4) { display: none; }
+  }
+
+  /* ===================== Floating Notes panel ===================== */
+
+  .notes-fab {
+    position: fixed;
+    right: 26px;
+    bottom: 26px;
+    z-index: 500;
+    background: var(--grp-shipped, #00c875);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 13px 20px;
+    font-size: 13.5px;
+    font-weight: 700;
+    font-family: inherit;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .notes-fab:hover { background: #00a35d; }
+
+  .notes-panel {
+    position: fixed;
+    right: 26px;
+    bottom: 88px;
+    width: 420px;
+    height: 480px;
+    min-width: 300px;
+    min-height: 220px;
+    max-width: 92vw;
+    max-height: 86vh;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(15,23,42,0.28);
+    z-index: 490;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    resize: both;
+  }
+  .notes-panel.open { display: flex; }
+
+  .notes-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 10px 16px;
+    background: linear-gradient(90deg, #00c875, #1a5bd6);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: move;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .notes-titlebar .drag-hint { opacity: 0.85; font-weight: 500; font-size: 11px; }
+  .notes-titlebar-close {
+    margin-left: auto;
+    background: rgba(255,255,255,0.22);
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .notes-titlebar-close:hover { background: rgba(255,255,255,0.36); }
+
+  .notes-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .notes-toolbar input[type="text"] {
+    flex: 1;
+    min-width: 100px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 9px;
+    font-size: 12px;
+    font-family: inherit;
+    background: #fafbfd;
+    color: var(--text);
+  }
+  .notes-toolbar button {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    padding: 6px 11px;
+    cursor: pointer;
+  }
+  .notes-toolbar .btn-save { background: var(--grp-shipped, #00c875); color: #fff; }
+  .notes-toolbar .btn-save:hover { background: #00a35d; }
+  .notes-toolbar .btn-clear { background: #eceef5; color: var(--text-muted); }
+  .notes-toolbar .btn-clear:hover { background: #e0e3ec; }
+
+  .notes-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  #notes-textarea {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 14px 16px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    background: transparent;
+  }
+
+  .notes-statusbar {
+    padding: 6px 12px;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <div>
+      <h1>CFB 27 Dynasty Hub — Dev Agenda</h1>
+      <p class="subtitle">What's shipped, what's next, and what's a known permanent limitation. Kept current by Claude as work happens.</p>
+    </div>
+    <div class="meta">
+      Last updated: <span id="last-updated">2026-07-19</span><br/>
+      Source of truth: <code>DevLog.md</code> / <code>MASTER_ROADMAP_v2.md</code>
+    </div>
+  </header>
+
+  <div class="progress-card">
+    <div class="progress-stat"><div class="num" id="stat-open">–</div><div class="lbl">Open</div></div>
+    <div class="progress-stat"><div class="num" id="stat-done">–</div><div class="lbl">Done</div></div>
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-fill"></div></div>
+    <div class="progress-pct" id="progress-pct">–</div>
+  </div>
+
+  <div id="now-working-banner"></div>
+
+  <div class="view-tabs">
+    <button class="view-tab" id="tab-board" onclick="showView('board')">📋 Board</button>
+    <button class="view-tab" id="tab-kanban" onclick="showView('kanban')">🗂️ Kanban</button>
+    <button class="view-tab" id="tab-timeline" onclick="showView('timeline')">🕒 Timeline</button>
+  </div>
+
+  <div id="view-board"></div>
+  <div id="view-kanban"></div>
+  <div id="view-timeline"></div>
+
+  <p class="footnote">
+    <strong>How this works:</strong> this file lives outside the shipped app (<code>Productivity/</code>, not part of the build). When you ask for a new feature, Claude adds a row here as <span class="pill pill-not-started" style="padding:2px 8px;">Not Started</span>. The moment Claude actually starts working on something, it flips to <span class="pill pill-in-progress" style="padding:2px 8px;">In Progress</span> and shows up in the "Working on now" banner at the top of the page — so you always know what's active without asking. When something ships, its row moves to <span class="pill pill-done" style="padding:2px 8px;">Done</span> in Recently Shipped / the Timeline view, and any verification screenshot Claude used to confirm it lands in <code>Productivity/screenshots/</code> rather than a temp folder that gets wiped. Board groups are click-to-collapse. The full technical write-up for anything here always lives in <code>DevLog.md</code> — this page is just the at-a-glance version.
+  </p>
+
+</div>
+
+<!-- ===================== Floating Notes panel ===================== -->
+<button class="notes-fab" id="notes-fab" onclick="toggleNotes()">📝 Notes</button>
+
+<div class="notes-panel" id="notes-panel">
+  <div class="notes-titlebar" id="notes-titlebar">
+    <span>📝 Notes</span>
+    <span class="drag-hint">drag to move · corner to resize</span>
+    <button class="notes-titlebar-close" onclick="toggleNotes(false)" title="Close">✕</button>
+  </div>
+  <div class="notes-toolbar">
+    <input type="text" id="notes-filename" spellcheck="false" />
+    <button class="btn-save" onclick="saveNotesAsMarkdown()">Save as .md</button>
+    <button class="btn-clear" onclick="clearNotesPanel()">Clear</button>
+  </div>
+  <div class="notes-body">
+    <textarea id="notes-textarea" placeholder="Quick notes... autosaved locally as you type." spellcheck="true"></textarea>
+  </div>
+  <div class="notes-statusbar" id="notes-status">—</div>
+</div>
+
+<script>
+  /* =========================================================================
+     DATA — single source of truth for all three views. Claude edits this
+     array when tasks are added, statuses change, or work ships; the views
+     re-render from it, so nothing has to be kept in sync by hand.
+     ========================================================================= */
+
+  const GROUPS = {
+    refine:  { label: 'Phase 3 — Awards/Rankings/Recruiting/Portraits/Statistics Refinement', shortLabel: 'Phase 3 Refinement', scope: 'actionable' },
+    awards:  { label: 'Team Awards — Remaining Phases', shortLabel: 'Team Awards', scope: 'actionable' },
+    stats:   { label: 'Statistics Page — Remaining Phases', shortLabel: 'Statistics', scope: 'actionable' },
+    bugs:    { label: 'Known Bugs / Tech Debt', shortLabel: 'Tech Debt', scope: 'actionable' },
+    limits:  { label: "Permanent Known Limitations (not on the to-do list — the save just doesn't have this data)", shortLabel: 'Limitation', scope: 'reference' },
+    shipped: { label: 'Recently Shipped', shortLabel: 'Shipped', scope: 'shipped', collapsedByDefault: true },
+  };
+
+  const STATUS_LABEL = {
+    'not-started': 'Not Started',
+    'planned': 'Planned',
+    'in-progress': 'In Progress',
+    'blocked': 'Blocked',
+    'done': 'Done',
+    'limitation': 'By Design',
+  };
+  const STATUS_PILL_CLASS = {
+    'not-started': 'pill-not-started',
+    'planned': 'pill-planned',
+    'in-progress': 'pill-in-progress',
+    'blocked': 'pill-blocked',
+    'done': 'pill-done',
+    'limitation': 'pill-limitation',
+  };
+
+  const TASKS = [
+    // ---- Known bugs / tech debt ----
+    { id: 'done-bug-slot', group: 'shipped', status: 'done', date: '2026-07-20',
+      title: 'FIXED: stale-slot heuristic (extract-stats + extract-kicking)',
+      notes: 'The "highest SEAS_YEAR slot = current" heuristic showed a player’s previous season as current until they recorded a new-season stat line (the Tulane fresh-preseason Statistics page showing full stat lines vs a 0-0 team was this bug live). Fixed via exact SEAS_YEAR match to the synced season (same relative-year convention as the schedule fix); no match = honest season:null. Verified both directions on disposable imports: fresh preseason → 0/34 stale lines (careers intact); completed season → all 44 real lines, sample QB 3,165 yds.' },
+    { id: 'done-bug-coachport', group: 'shipped', status: 'done', date: '2026-07-20',
+      title: 'FIXED: coach portrait write field (Coach.Portrait decoded)',
+      notes: 'Dumped all 493 coaches on a real save: Portrait is an arbitrary baked-in index — offsets vs the asset number scatter across ~250 values (the old "+10 pattern" was coincidental clustering). But asset→Portrait is conflict-free within a save (448 and 408 distinct assets on two saves, zero conflicts), so writes now copy the index from whichever coach already wears the chosen asset, and also set AssetName (reads prefer it over GenericHeadAssetName — unique coaches previously kept their old face even in-app). Unmapped assets leave Portrait untouched (honest, narrow limitation). Verified via real write→save→reopen round trip.' },
+    { id: 'audit-reclaim', group: 'bugs', status: 'not-started', priority: 'Low',
+      title: 'Reclaim ~11GB regenerable/archival bloat (audit follow-up)',
+      notes: 'Per docs/CODEBASE_AUDIT.md: dist/ 7.6GB (stale, never cleaned — npm run clean now exists), release/ 3.2GB (old package output), References/ 109MB (.toc files EA_FILES_FINDINGS.md says are safe to delete). All regenerable/archival, user’s call. dist is the current working build (deleting forces a one-time ~34s rebuild).' },
+    { id: 'audit-polish', group: 'bugs', status: 'not-started', priority: 'Low',
+      title: 'Audit polish remainder: types.ts split (readme + EditButton done)',
+      notes: 'readme.md written 2026-07-19 (overhaul follow-up pass); EditButton deduped 3→1 in Visual Overhaul P2. Remaining: shared/types.ts (1,219 lines) could split by domain if it keeps growing — cosmetic, does not block release.' },
+
+    // ---- Permanent limitations (reference only, not actionable) ----
+    { id: 'lim-opp', group: 'limits', status: 'limitation', priority: '—',
+      title: 'No opponent player stats (portraits are leaguewide, as of 2026-07-19)',
+      notes: "Box score / \"Top Performer\" is still scoped to the user's own roster only — full bio/stats/game-log for opposing players is never extracted. Portraits are the one exception: a lightweight leaguewide playerId->portrait pass (extract-league-portraits.ts, ~16k players) now lets Heisman/Annual Awards/All-America/All-Conference winners and the opposing-player profile fallback show a real photo instead of initials or a team logo." },
+    { id: 'lim-venue', group: 'limits', status: 'limitation', priority: '—',
+      title: 'No stadium/venue names',
+      notes: "Confirmed the save's Stadium reference points at table IDs that don't exist in the dynasty file at all (base-game static content)." },
+    { id: 'lim-rec', group: 'limits', status: 'limitation', priority: '—',
+      title: 'School record book has no opponent/score context',
+      notes: "The save's own single-game record table only carries player/position/year/value — no opponent, week, or final score field to join against." },
+    { id: 'lim-div', group: 'limits', status: 'limitation', priority: '—',
+      title: 'No real conference divisions',
+      notes: 'Verified directly against real save schema — Conference.Divisions resolves but its "Teams" field just contains the entire conference with blank division names.' },
+
+    // ---- Visual overhaul (active) ----
+    { id: 'done-vo-depill', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Visual Overhaul — P3 de-pill sweep (100 pill controls → hard rectangles)',
+      notes: 'App-wide conditional sweep: rounded-full stripped from every padded control (100→10; survivors are genuine circles). Nav tabs now hard DIN rectangles, active tab carries the team-colored cut corner; navbar buttons, season switcher, menu triggers/toggles, filter/class chips, badges all squared. Verified live on Statistics light+Team Mode (visual-overhaul-p3-depill-statistics). Remaining P3: heroes, leader cards, Awards pass, PageHeader adoption.' },
+    { id: 'done-vo-shape', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Visual Overhaul — shape pivot: hard edges + single cut corner (user direction)',
+      notes: 'User constraint with game-UI reference shots: no rounded corners — hard edges with one angled corner, "Minority Report" futuristic, same-universe as the game. Radius tokens all 0px (one-switch, reversible); new .corner-cut/.corner-cut-sm clip-path classes on SurfaceCard (now flat/border-defined), StatTile, primary/destructive Buttons — applied with restraint. rounded-full kept for true circles only. Remaining pill controls (navbar, nav tabs, chips) migrate in P3-4 sweeps. Preference saved to durable memory (feedback_shape_language.md). Verified live (visual-overhaul-shape-pivot-roster).' },
+    { id: 'done-vo-p2', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Visual Overhaul — Phase 2: Core components',
+      notes: 'PageHeader primitive (eyebrow → DIN title → description → actions; adopted Roster/Schedule/History, rest migrate in P3-4). Button primitive (primary/secondary/tertiary/destructive, 6px corners, DIN labels) — editor Save buttons moved off spec-violating red pills onto accent primary. StatTile → DIN + tabular numerals app-wide; SurfaceCard surface levels on theme-aware vars; StatisticsTable tnum numerics + DIN headers. EditButton deduped 3→1 (audit follow-up). Verified live (visual-overhaul-p2-*); typecheck/lint/build clean. Deferred: structural modal-shell refactor (visual consistency already holds; focus-trap refactor is high-risk/low-gain), portrait size tokens, full 13-page header sweep.' },
+    { id: 'done-ta-p5', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Team Awards Phase 5 — Single-Game Performance of the Year (feature complete: all 11 awards live)',
+      notes: 'Unblocked by the GameDetail gamelog-to-schedule join. Dedicated per-game calculation path (teamAwards/singleGame.ts) on the shared gameImpactScore (moved to shared/): each player represented by their single best played game, distinct finalists, real game context in the explanation ("Week 5 vs Boise State (W 37-34): 28/41 for 374 yds..."). Ranked-opponent bonus permanently dropped (no historical rank data). Verified via diagnostic on a real completed season + live in the Team Awards UI with confirm/override workflow (team-awards-p5-single-game screenshot). "More Awards Coming" section is now empty — every in-scope award ships.' },
+    { id: 'done-st-p34', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Statistics Phases 3-4 — qualification minimums, comparison, splits, Hot Players, Milestones',
+      notes: 'P3: LeaderMetric qualification rules (excluded from the card only, never the table; hidden if nobody qualifies) — Completion % (min 100 att), Y/C (min 40 att), Y/R (min 20 rec); side-by-side PlayerComparison modal (portal to body — clip-path containing-block gotcha), better value highlighted in team color, lower-is-better for INTs. P4: Regular/Postseason/Home/Away + opponent splits re-aggregated from real per-game lines (same season column sets; GP=games in split; longs=max) with Kicking/Punting/Returns honestly noted as unsplittable (no per-game data in save); Hot Players (top 5 by last-3-games impact, per-game trend); Milestones (75%+ progress, REACHED badges, progress bars). Verified live on a real 14-game season incl. the Home split changing the Y/C leader because the season leader fell below the 40-att minimum in home games (stats-p3p4-*, stats-p4-home-split screenshots). Harness: SCREENSHOT_SELECT_VALUE now multi-pair, runs before clicks.' },
+    { id: 'done-gamedetail-split', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'GameDetail box score → Passing/Rushing/Receiving/Defense (matches Statistics page)',
+      notes: 'User direction: uniformity with the season Statistics page instead of one wide Offense table full of dashes. Per-category columns mirror the season sets (GP/Int/Lng honestly omitted — not on per-game lines), rows category-scoped (only players who attempted/carried/caught in that game), per-section leader cards. New permanent SCREENSHOT_SELECT_VALUE diagnostic hook (React-visible select setter) to reach past-season pages. Verified on a real game — Texas State @ Louisiana, maroon Team Mode (gamedetail-category-split screenshot).' },
+    { id: 'done-vo-followups', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Overhaul follow-ups: every heading in DIN + real readme.md',
+      notes: 'All remaining h2/h3 headings converted to DIN roles via tag-scoped sed (zero generic headings remain; stat values sharing the same size classes deliberately untouched); Heisman winner name included. readme.md written (was 0 bytes): quick start, import/sync/browse workflow, repo layout, user-data location, design-system summary. Verified live on Team Hub dark (visual-overhaul-final-teamhub-dark). Remaining optional: structural PageHeader swap (pure code dedup now), modal-shell refactor, types.ts split.' },
+    { id: 'done-vo-p345', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Visual Overhaul — Phases 3-5 complete (overhaul closed)',
+      notes: 'P3: profile heroes (player/recruit/coach) in DIN page-title + stat-lg; LeaderCard cut corner + DIN tabular value (Statistics + GameDetail via shared component); Awards verified ceremonial-but-restrained (DIN sub-tabs, green cut-corner active tab, editorial Heisman hero). All ~115 longhand eyebrow labels migrated to the single .type-eyebrow DIN class (9 orderings → 1 class; 2 intentional trophy-label exceptions remain). P4: Schedule verified dark-mode end-to-end; Standings/NcaaHub/Recruiting/GameDetail inherit via shared components + app-wide sweeps. P5: dark/light/Team Mode verified on 6+ pages; reduced-motion covered by existing global clamp (zero new animations); perf unaffected (typography/shape/color only); responsive unchanged by construction (no layout classes touched). Optional non-blocking follow-ups in DevLog: structural PageHeader adoption (~7 pages), modal-shell refactor, licensed DIN Pro drop-in. Screenshots: visual-overhaul-p3-awards, p4-schedule-dark, p3-coachhub-hero.' },
+
+    // ---- Shipped — reverse chronological ----
+    { id: 'done-vo-p1', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Visual Overhaul — Phase 1: Foundation (tokens, DIN/Inter, radius language)',
+      notes: 'Backup first (CFB27-Hub-Backups/2026-07-18_203800, DB byte-verified). DIN display identity via Windows-native Bahnschrift (licensed DIN 1451; DIN Pro slot ready, nothing unlicensed bundled) + Inter body bundled legally (OFL, 97KB, offline-CSP-safe @font-face). Token system extended: role type scale, 6/10/12/14px radii, controlled shadows, 120/180/260/320ms motion, theme-aware surface vars. Removed the global border-radius:0 !important override and migrated all 107 dead arbitrary rounded-[Npx] values to the token scale. .type-* classes formalize eyebrow/meta/stat styles with tabular numerals. Verified live both themes + Team Mode against a copy of the real DB (screenshots: visual-overhaul-p1-*). Audit + full plan: docs/VISUAL_OVERHAUL_PLAN.md.' },
+    { id: 'done-startup-fix', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Startup slowness root-caused + fixed (dev launcher), full codebase audit',
+      notes: 'User reported ~10s to open + a "splash vanishes then nothing then app" gap. Profiled: the Electron app itself is fast (DB loaded 60ms, content painted ~620ms). Root cause was dev-.bat-only: the rebuild-check powershell call took ~15s because it mixed individual config-file paths into a single Get-ChildItem -Recurse with src (a PowerShell path-resolution pathology — 15,066ms vs 404ms split). Fixed → ~14.6s/launch saved. The gap was the pre-splash HTA 30s safety timeout expiring mid-build; raised to 120s (safe — normal close is the ready-flag, :failed path closes it on real failure). Added webpack filesystem cache (~50s→16s rebuild). End users are unaffected: the packaged .exe has no .bat/PowerShell/rebuild/HTA and cold-starts in ~2-4s via the Electron splash. Audit (docs/CODEBASE_AUDIT.md): source is clean (3 debt markers, 0 dead files, 100% consistent naming, lean deps); real bloat is regenerable/archival outside src (dist 7.6GB, release 3.2GB, References 109MB, .backup 1.6MB, ~11GB reclaimable). Removed unused sharp devDep; added npm run clean/build:clean.' },
+    { id: 'done-recruit-editor-merge', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Redundant recruit editing merged into one "Edit Player" modal',
+      notes: 'User flagged two separate edit entry points on a recruit doing overlapping work (the recruiting-fields-only RecruitEditorModal from done-p3-c, plus the general Player editor), and a board-row pencil with no path to recruiting fields at all. Chose to merge (AskUserQuestion) rather than keep separate. PlayerEditorModal.tsx gained a conditional "Recruiting Info" tab (shown only when isRecruit is true) ported from the now-deleted RecruitEditorModal.tsx — same fields, same getRecruit fetch, same honest not-safe-to-write banner. Save now writes both player and recruit fields in one click. RecruitProfileModal.tsx shows exactly one pencil instead of two; the board-row pencil in Recruiting.tsx now also opens the Recruiting Info tab. Verified live against a real save (USC, 31-recruit board): merged modal shows real fetched recruiting data matching the database exactly, single edit icon confirmed on the profile modal.' },
+    { id: 'done-p3-d', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Phase 3 Refinement — Sub-phase D (GameDetail statistics unification, closes out the Phase 3 refinement pass)',
+      notes: 'Extracted StatisticsCategorySection/LeaderCard/withMode/ColumnDef out of Statistics.tsx into a new shared component, then rebuilt GameDetail’s Offense/Defense box score on top of it — real per-metric leader cards (Passing/Rushing/Receiving/Tackles/Sacks/Interceptions Leader, portrait + name + position/jersey) now render for a single game, for free, from the exact same component the season Statistics page uses. Verified live: Statistics page shows zero regression after the extraction, GameDetail correctly shows real per-game leaders with portraits, ties handled correctly, and a metric with no real data this game (Rushing Touchdowns) correctly stays hidden rather than showing a false 0 leader. Kicking/Punting/Returns box scores deliberately deferred, not bundled in — confirmed no per-game data exists for them anywhere (no KickingGameLine type, no such gamelog category), needs its own extraction phase. This closes out the Phase 3 refinement pass (sub-phases A-D all shipped).' },
+    { id: 'done-recruit-portrait-edit', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Recruit photo editing restored — same modal as roster players',
+      notes: 'The general Player editor’s Portrait tab already worked for recruits all along (recruits are Player rows; the board-row pencil never changed) — the real gap was no entry point from the recruit profile modal itself. Added a small edit icon on the portrait in RecruitProfileModal.tsx calling the same openPlayerEditor as roster players. PlayerEditorModal gained an initialTab prop (defaults to "profile" everywhere else) so this entry point jumps straight to the Portrait tab instead of Player Profile. Verified live: opens the identical Edit Player modal, already on Portrait, with the full picker.' },
+    { id: 'done-league-portraits', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Leaguewide player portraits + GameDetail team-name fix',
+      notes: 'User confirmation: every player leaguewide has a real portrait, including CPU-controlled teams — not just recruits (see the entry below). New lightweight extract-league-portraits.ts reads playerId+GenericHeadAssetName for every non-empty Player record leaguewide (~16,255 on a real save, confirmed 100% populated, no measurable extraction slowdown since the Player table is already fully loaded elsewhere) into a new leaguePortraits snapshot. Wired into getAwards.ts (LeagueAward/HeismanCandidate/HonorRosterEntry all gained portraitAssetName) and threaded through PlayerNameButton call sites (Annual Awards, Heisman, All-America/Conference) plus the PlayerModalProvider fallback + PlayerProfileContent.tsx opposing-team-player branch, which previously showed only a team logo. Verified live: every award winner across every team now shows a real photo instead of initials, and clicking through to an opposing-team player’s profile modal shows their real portrait too (stats/bio/game-log still correctly unavailable for opposing players — only the portrait gap was closed). Also fixed: GameDetail’s Quarter-by-quarter and Team stats tables said "You" instead of the real team name — both now use ScheduleGame.teamName, which already existed and was already reliably populated.' },
+    { id: 'done-p3-c-fix', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Follow-up fix — recruit profile photos restored (a real gap in the original sub-phase C research)',
+      notes: 'User correction: recruit portrait editing already worked before this pass (via the existing general Player editor — recruits are literally Player rows, unchanged by this work) and had worked before; the only real gap was that the recruit profile modal never displayed a photo at all. The original research wrongly concluded "no recruit photo data exists" — it only checked whether the recruiting-specific extraction type carried a portraitAssetName field, not whether the underlying Player record actually had one. Verified directly against a real save: every one of a real team’s 35 board slots has a populated GenericHeadAssetName, identical to roster players. Added portraitAssetName to RecruitData/RecruitBoardEntry (same field/format as extract-roster.ts) and swapped the recruit modal’s hardcoded initials-only avatar for the real PlayerPortrait component, which shows the real photo when present and falls back gracefully otherwise. Removed the now-inaccurate resolveRecruitPortrait() helper. Verified live: a real recruit’s actual photo now renders in the profile modal.' },
+    { id: 'done-p3-c', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Phase 3 Refinement — Sub-phase C (recruit portrait resolver + investigation-gated recruit editor)',
+      notes: 'Recruit editing built only after a real diagnostic write-probe against a disposable save: Hometown, Star Rating, Class Year, National/Position/State Rank confirmed safe (real write -> save -> reopen round trip); Home State (real enum, uncatalogued values), Top Schools (a table reference, not a scalar), and Commitment/Signed School (drives real recruiting game logic / derived cross-team data) deliberately excluded with honest reasons in the editor UI. New recruit-specific edit modal (third EditorModalProvider state), gated to the current season only — also fixed a real pre-existing gap where the general edit pencil ignored season at all. Verified end-to-end through the app’s real IPC path (not just the standalone probe): a real save/reopen round trip confirmed the new value. See the follow-up entry above — the "no recruit photo data" claim in this entry was later found to be wrong.' },
+    { id: 'done-p3-b', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Phase 3 Refinement — Sub-phase B (Team Awards retirement: Newcomer of the Year, Best Quarterback)',
+      notes: 'Real historical data was at stake — confirmed via a read-only query against the live database that both awards already have a confirmed result on a real, currently-active season. New retired flag on AwardDefinition (distinct from enabled/disabledAwardIds — never offered for future calculation/finalists/settings, but the definition object is kept so getAwardDefinition() still resolves it). Verified against a disposable copy of the real live database: both retired awards are gone from the live card workflow and from "More Awards Coming", the season still correctly reaches "Ready to Finalize" without them, and their real historical winners (Deuce Bailey — Best Quarterback, Jaden Allen-Hendrix — Newcomer of the Year) still render correctly in Season History, on the very same current season.' },
+    { id: 'done-p3-a', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Phase 3 Refinement — Sub-phase A (Awards nav, user-team highlighting, Rankings removal, portrait linking, Overall box)',
+      notes: 'Awards nav header restructured to title/description/submenu on separate rows (no more wrapping). isUserTeam highlighting extended to Heisman finalists and All-America/Conference tables, reusing the exact pattern already shipped for Annual Awards. Standalone Rankings page/nav/route removed — Coach Hub’s season-high rank tiles (same backend) verified untouched. Recruit commitment timeline made clickable. Portraits now render next to every player mention across Annual Awards/Heisman/All-Teams/Weekly Honors/Team Awards candidate lists/season history (PlayerPortrait gained an optional onClick prop). Player Profile Overall box now centers only the number, not the label. Verified live against a real save: nav layout, user-team highlight (Brad Jackson et al.), real portraits in Team Awards candidate scores and season history, initials-fallback portraits on leaguewide award data (honest — no leaguewide portraitAssetName exists), and Overall box centering in both light/dark.' },
+    { id: 'done-ta-p6', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Team Awards — Phase 6 (Season history, Player Profile / Coach Hub integration, settings panel)',
+      notes: 'Season-history view of confirmed winners (resolves each season’s own roster/team, not current state); Team Awards section on Player Profile between Game Log and Honors; compact summary card on Coach Hub; settings panel wiring up the Phase-1 backend (calculation timing, auto-recalculate, per-award enable/disable, locked Freshman/Newcomer toggles with honest reasons). Auto-recalculate now runs on every re-sync. Verified end-to-end on a real save: MVP/Offensive POY/Special Teams POY confirmed and calculated correctly across all four surfaces.' },
+    { id: 'done-ta-p4', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Team Awards — Phase 4 (Special Teams Player of the Year)',
+      notes: 'First award comparing three genuinely different roles (kicker, punter, returner) on one scale — each percentiled within its own group, same mechanism as cb/safety elsewhere. Verified on a real season: finalists were exactly the 3 real special-teams standouts, one per role, with a defensible kicker winner (15/19 FG, 41/42 XP).' },
+    { id: 'done-kicking-returns', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Kicking, Punting, and Return stats extracted + wired into Statistics',
+      notes: 'New Kicking/Punting categories (real CareerKickingStats table, shared by K and P) plus a real bug fix: return-duty players (e.g. a real WR with 11 kick returns for 295 yards) were being silently dropped from ALL stats — their CareerStats table name went unrecognized. Now recognized at both season/career and per-game level; return yardage added to Offensive/DefensiveStatLine.' },
+    { id: 'done-sched-fix', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'extract-schedule.ts season-scoping bug fixed at the source',
+      notes: "Found the save's own SeasonGame.SeasonYear field (relative index, same convention as player SEAS_YEAR) and used it plus the already-extracted baseCalendarYear to scope games to the season actually being synced. Verified on a real save mid-transition: previously would have wrongly attributed 43 leftover bowl games to a brand-new, genuinely-empty season." },
+    { id: 'done-breakout-removed', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Breakout Player of the Year removed from Team Awards scope',
+      notes: 'Explicit user decision — cut entirely, not left disabled. Team Awards is now 11 of the spec\'s original 12 awards.' },
+    { id: 'done-dashfix', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Dashboard card action buttons no longer overlap the coach portrait',
+      notes: 'Sync/Export/Backup/Delete moved out of an absolute-position overlay into a real reserved column under the coach name — structurally can\'t collide with the portrait regardless of its size.',
+      image: 'screenshots/dashboard-card-actions-fix-2026-07-19.png' },
+    { id: 'done-productivity', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Productivity toolkit shipped — this agenda board + a floating notes panel',
+      notes: 'Monday.com-style board (this page), a draggable/resizable notes widget with autosave + Save-as-.md, and a permanent home for dev-process verification screenshots.' },
+    { id: 'done-overnight', group: 'shipped', status: 'done', date: '2026-07-18',
+      title: 'Overnight UX / Navigation / Data Persistence pass (full 22-section spec)',
+      notes: 'Nav cleanup, Coach Hub/Team Hub/Dashboard redesign, historical player-profile fix, Schedule/GameDetail rework, Statistics leader cards, Awards submenu split, Recruiting profile modal, History page rebuild. Also caught a real bug: OC/DC-controlled dynasties failed to import entirely.' },
+    { id: 'done-awards-p2', group: 'shipped', status: 'done', date: '2026-07-18',
+      title: 'Team Awards — Phase 2 (7 more awards + a real data-model fix)',
+      notes: 'Offensive/Defensive POY, Best QB, Best Offensive Skill Player, Best Defensive Front/Back, Freshman of the Year. Found a real RUSHFUMBLES field that unblocked every award\'s Ball Security component.' },
+    { id: 'done-awards-p1', group: 'shipped', status: 'done', date: '2026-07-18',
+      title: 'Team Awards — Phase 1 (engine foundation + MVP + Newcomer of the Year)',
+      notes: 'First feature to write user-entered data to local SQLite. Verified full calculate → confirm → re-sync → finalize → unlock cycle survives intact.' },
+    { id: 'done-stats-verify', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Statistics page verified across multi-season boundaries, 2 real bugs fixed',
+      notes: 'Fixed a misleading "Dynasty not found" on History-Only seasons and an internally-inconsistent Team Overview at a season boundary.' },
+    { id: 'done-stats-p1', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Statistics page — Phase 1 (Team Stats + Passing/Rushing/Receiving/Defense)',
+      notes: 'Real find: Team.TeamSeasonStats (58 fields) had never been read by the app. New sortable, config-driven StatisticsTable component now reused everywhere.' },
+    { id: 'done-help', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'In-app Help menu shipped',
+      notes: 'A living how-to guide (importing, syncing, History Only seasons, Sync/Relink/Backup, editing caveats) — distinct from DevLog.md.' },
+    { id: 'done-history-backfill', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Multi-season history backfill + conference-championship bug fix',
+      notes: "Real backfill from the save's own league-history table for never-synced seasons, plus a real coach-award/conference-champion data-contamination bug fixed." },
+    { id: 'done-coach-p4', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Coach-centric redesign Phase 4 — scoped cleanup (redesign closed)',
+      notes: 'Confirmed prior phases left almost nothing dead. Closes Phases 0–4.' },
+    { id: 'done-coach-p3', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Coach-centric redesign Phase 3 — standalone Coaches page retired',
+      notes: 'Ported its per-coordinator Imported Resume into Coach Hub first so nothing regressed, then removed the page/route/nav tab.' },
+    { id: 'done-coach-p2', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Coach-centric redesign Phase 2 — Coach Hub shipped as the new default page',
+      notes: 'Found CareerCoachStats, a save-native lifetime coaching record, and made it the primary Career Record source.' },
+    { id: 'done-coach-p1', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Coach-centric redesign Phase 1 — collapsible Dynasty submenu + icon separation',
+      notes: 'Sidebar dynasty list now shows real coach name/logo; Delete visually separated from Sync/Backup.' },
+    { id: 'done-coach-p0', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Coach-centric redesign Phase 0 — per-season team tracking',
+      notes: "Fixed a real bug: dynasties.team_id never updated on reimport, so a genuine coaching-school-change would've silently mis-attributed every future season." },
+    { id: 'done-relink', group: 'shipped', status: 'done', date: '2026-07-17',
+      title: 'Dynasty relink + one-click "Sync Dynasty"',
+      notes: 'Fixed a real duplicate-dynasty bug from a renamed/moved save file; management actions moved to Dashboard card icons.' },
+    { id: 'done-multiseason', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Multi-season correctness pass + persistent season switcher',
+      notes: 'Fixed a real stats bug (stale prior-season slot shown as current) and replaced 8 duplicated per-page season dropdowns with one shared switcher.' },
+    { id: 'done-portrait-thumb', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: '"Current Portrait" broken-image bug fixed',
+      notes: '~3.5% of real portrait files use a doubled _result_result.png suffix the preview wasn\'t accounting for.' },
+    { id: 'done-portrait-ingame', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Real in-game portrait bug fixed (PLYR_PORTRAIT field)',
+      notes: 'The editor was writing a field the game engine doesn\'t render from — found the real field via full schema cross-reference against a real save.' },
+    { id: 'done-editor', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Player/Coach save-file editor shipped',
+      notes: "The app's first write-to-save-file feature. Caught a real Coach.PresentationId collision bug via testing the actual write path." },
+    { id: 'done-corruption', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Corrupted-database recovery flow',
+      notes: 'Quarantine + Restore Backup / Start Fresh dialog, plus automatic backup checkpoints after every successful startup.' },
+    { id: 'done-standings', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Conference standings page shipped',
+      notes: 'New Standings tab, editorial sort (conference record → overall → AP rank) since the save exposes no deeper tiebreak engine.' },
+    { id: 'done-3dlogos', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Premium 3D team logos + championship trophies',
+      notes: 'Dark/light-adaptive 3D logos everywhere, real conference/national/bowl trophies driven entirely by save data.' },
+    { id: 'done-import-fold', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Import flow folded into the Dashboard; real file-dialog bug fixed',
+      notes: "Windows' native picker was silently defaulting to a filter that matched zero real save files." },
+    { id: 'done-history-p10', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'Program History & Records (Phase 10) + follow-ups',
+      notes: 'School record book, dynasty resume, coaching ledger, season timeline, milestones — later rebuilt in the overnight pass above.' },
+    { id: 'done-html-export', group: 'shipped', status: 'done', date: '2026-07-16',
+      title: 'HTML Export (Phase 11 first slice)',
+      notes: 'Self-contained offline .html export of program history — later moved from its own page to a Dashboard icon in the overnight pass.' },
+    { id: 'done-recruiting', group: 'shipped', status: 'done', date: '2026-07-15',
+      title: 'Recruiting Pipeline (Phase 9) + logo / signed-vs-lost fixes',
+      notes: "Kanban-style board from the save's real 35-slot recruiting board. Fixed a real bug undercounting signed recruits by nearly half." },
+    { id: 'done-rankings', group: 'shipped', status: 'done', date: '2026-07-15',
+      title: 'Rankings & Visualizations (Phase 7)',
+      notes: 'New ranking_history table accumulating one snapshot per import, since the save itself stores no per-week poll history.' },
+    { id: 'done-awards-orig', group: 'shipped', status: 'done', date: '2026-07-15',
+      title: 'Awards page redesign + global Player Profile Modal',
+      notes: 'Fixed a real data bug (Jet Award / Paul Hornung Award labels were swapped); modal later reused everywhere a player name appears.' },
+    { id: 'done-launcher', group: 'shipped', status: 'done', date: '2026-07-15',
+      title: 'Launcher — instant pre-splash + real single-instance lock',
+      notes: 'A genuine separate HTA pre-splash shown the instant the launcher starts, before Electron itself can even paint.' },
+    { id: 'done-foundation', group: 'shipped', status: 'done', date: '2026-07-14',
+      title: 'Foundation — Electron + SQLite scaffold, Roster/Schedule/core Stats engine',
+      notes: 'Phases 0–6 core. App renamed "CFB Dynasty Tracker" → "CFB Dynasty Hub" the same day.' },
+  ];
+
+  /* =========================================================================
+     RENDERING
+     ========================================================================= */
+
+  function pillHtml(status) {
+    return `<span class="pill ${STATUS_PILL_CLASS[status]}">${STATUS_LABEL[status]}</span>`;
+  }
+
+  function shotLinkHtml(task) {
+    return task.image ? ` <a href="${task.image}" target="_blank" class="shot-link">📷 Screenshot</a>` : '';
+  }
+
+  function renderBoardView() {
+    const order = ['awards', 'stats', 'bugs', 'limits', 'shipped'];
+    document.getElementById('view-board').innerHTML = order.map((key) => {
+      const g = GROUPS[key];
+      const items = TASKS.filter((t) => t.group === key);
+      const rows = items.map((t) => `
+        <tr data-status="${t.status}">
+          <td class="item-name">${t.title}</td>
+          <td class="item-status">${pillHtml(t.status)}</td>
+          <td class="item-priority">${t.priority}</td>
+          <td class="item-notes">${t.notes}${shotLinkHtml(t)}</td>
+        </tr>`).join('');
+      return `
+        <section class="board-group group-${key}${g.collapsedByDefault ? ' collapsed' : ''}" data-group="${g.scope}">
+          <div class="group-head" onclick="toggleGroup(this)">
+            <span class="chevron">▾</span>
+            <span>${g.label}</span>
+            <span class="count-badge">${items.length} item${items.length === 1 ? '' : 's'}</span>
+          </div>
+          <table class="item-table">
+            <thead><tr><th>Item</th><th>Status</th><th>Priority</th><th>Notes</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </section>`;
+    }).join('');
+  }
+
+  function toggleGroup(headEl) {
+    headEl.parentElement.classList.toggle('collapsed');
+  }
+
+  function renderKanbanView() {
+    const columns = [
+      { status: 'not-started', label: 'Not Started' },
+      { status: 'planned', label: 'Planned' },
+      { status: 'in-progress', label: 'In Progress' },
+      { status: 'blocked', label: 'Blocked' },
+      { status: 'done', label: 'Done' },
+    ];
+    const kanbanTasks = TASKS.filter((t) => GROUPS[t.group].scope !== 'reference');
+
+    const html = columns.map((col) => {
+      const items = kanbanTasks.filter((t) => t.status === col.status);
+      const cards = items.length
+        ? items.map((t) => `
+          <div class="kanban-card">
+            <div class="kanban-card-group" style="color:var(--grp-${t.group})">${GROUPS[t.group].shortLabel}</div>
+            <div class="kanban-card-title">${t.title}</div>
+            <div class="kanban-card-notes">${t.notes}</div>
+            <div class="kanban-card-footer">
+              ${t.priority && t.priority !== '—' ? `<span class="kanban-priority">${t.priority}</span>` : ''}
+              ${t.date ? `<span class="kanban-date">${t.date}</span>` : ''}
+              ${t.image ? `<a href="${t.image}" target="_blank" class="shot-link">📷</a>` : ''}
+            </div>
+          </div>`).join('')
+        : '<p class="kanban-empty">Nothing here.</p>';
+      return `
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>${col.label}</span><span class="count-badge-mini">${items.length}</span></div>
+          <div class="kanban-col-body">${cards}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('view-kanban').innerHTML = `<div class="kanban-board">${html}</div>`;
+  }
+
+  function renderTimelineView() {
+    const dated = TASKS.filter((t) => t.date).sort((a, b) => b.date.localeCompare(a.date));
+    const undated = TASKS.filter((t) => !t.date && GROUPS[t.group].scope === 'actionable');
+
+    let html = '';
+    if (undated.length) {
+      html += `
+        <div class="timeline-upnext">
+          <h3>Up Next <span class="count-badge-mini">${undated.length}</span></h3>
+          <div class="timeline-upnext-grid">
+            ${undated.map((t) => `
+              <div class="upnext-card">
+                ${pillHtml(t.status)}
+                <div class="upnext-title">${t.title}</div>
+                <div class="upnext-notes">${t.notes}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    html += `<div class="timeline">${dated.map((t) => `
+      <div class="timeline-item">
+        <div class="timeline-dot" style="background:var(--grp-shipped)"></div>
+        <div class="timeline-date">${t.date}</div>
+        <div class="timeline-content">
+          <div class="timeline-title">${t.title}</div>
+          <div class="timeline-notes">${t.notes}${shotLinkHtml(t)}</div>
+        </div>
+      </div>`).join('')}</div>`;
+
+    document.getElementById('view-timeline').innerHTML = html;
+  }
+
+  function refreshProgress() {
+    const actionable = TASKS.filter((t) => GROUPS[t.group].scope !== 'reference');
+    const done = actionable.filter((t) => t.status === 'done').length;
+    const open = actionable.length - done;
+    document.getElementById('stat-open').textContent = open;
+    document.getElementById('stat-done').textContent = done;
+    const pct = actionable.length > 0 ? Math.round((done / actionable.length) * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
+  }
+
+  function showView(view) {
+    ['board', 'kanban', 'timeline'].forEach((v) => {
+      document.getElementById('view-' + v).style.display = v === view ? '' : 'none';
+      document.getElementById('tab-' + v).classList.toggle('active', v === view);
+    });
+    localStorage.setItem('cfbDynastyHub.agenda.activeView', view);
+  }
+
+  /** Always-visible "what's happening right now" strip — pulls straight from TASKS, so it can never drift out of sync with the rest of the board. */
+  function renderNowWorkingBanner() {
+    const active = TASKS.filter((t) => t.status === 'in-progress');
+    const el = document.getElementById('now-working-banner');
+    if (active.length === 0) {
+      el.innerHTML = `
+        <div class="now-working-banner">
+          <span class="now-working-idle">Nothing actively in progress right now.</span>
+        </div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div class="now-working-banner">
+        <span class="pulse-dot"></span>
+        <div>
+          <div class="now-working-label">Working on now</div>
+          <div class="now-working-items">
+            ${active.map((t) => `<span class="now-working-item">${t.title}</span>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  renderBoardView();
+  renderKanbanView();
+  renderTimelineView();
+  renderNowWorkingBanner();
+  refreshProgress();
+  showView(localStorage.getItem('cfbDynastyHub.agenda.activeView') || 'board');
+
+  /* ===================== Floating Notes panel ===================== */
+
+  const notesPanel = document.getElementById('notes-panel');
+  const notesTitlebar = document.getElementById('notes-titlebar');
+  const notesTextarea = document.getElementById('notes-textarea');
+  const notesFilename = document.getElementById('notes-filename');
+  const notesStatus = document.getElementById('notes-status');
+
+  const NOTES_CONTENT_KEY = 'cfbDynastyHub.notepad.content';
+  const NOTES_STATE_KEY = 'cfbDynastyHub.notepad.panelState';
+
+  function todayNotesFilename() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `notes-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  }
+
+  function updateNotesStatus(message) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const words = notesTextarea.value.trim() ? notesTextarea.value.trim().split(/\s+/).length : 0;
+    notesStatus.textContent = `${message} at ${time} · ${words} words`;
+  }
+
+  function saveNotesPanelState() {
+    const rect = notesPanel.getBoundingClientRect();
+    localStorage.setItem(NOTES_STATE_KEY, JSON.stringify({
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      open: notesPanel.classList.contains('open'),
+    }));
+  }
+
+  function restoreNotesPanelState() {
+    const raw = localStorage.getItem(NOTES_STATE_KEY);
+    if (!raw) return;
+    try {
+      const state = JSON.parse(raw);
+      notesPanel.style.left = Math.max(0, state.left) + 'px';
+      notesPanel.style.top = Math.max(0, state.top) + 'px';
+      notesPanel.style.right = 'auto';
+      notesPanel.style.bottom = 'auto';
+      if (state.width) notesPanel.style.width = state.width + 'px';
+      if (state.height) notesPanel.style.height = state.height + 'px';
+      if (state.open) notesPanel.classList.add('open');
+    } catch (e) { /* ignore a corrupted saved state */ }
+  }
+
+  function toggleNotes(forceOpen) {
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !notesPanel.classList.contains('open');
+    notesPanel.classList.toggle('open', shouldOpen);
+    if (shouldOpen) notesTextarea.focus();
+    saveNotesPanelState();
+  }
+
+  let notesSaveTimer = null;
+  function scheduleNotesAutosave() {
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer = setTimeout(() => {
+      localStorage.setItem(NOTES_CONTENT_KEY, notesTextarea.value);
+      updateNotesStatus('Autosaved');
+    }, 400);
+  }
+
+  function saveNotesAsMarkdown() {
+    let filename = notesFilename.value.trim() || todayNotesFilename();
+    if (!filename.toLowerCase().endsWith('.md')) filename += '.md';
+    const blob = new Blob([notesTextarea.value], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    updateNotesStatus('Downloaded ' + filename);
+  }
+
+  function clearNotesPanel() {
+    if (notesTextarea.value.trim() && !confirm('Clear all notes? This can\'t be undone unless you already saved a .md file.')) return;
+    notesTextarea.value = '';
+    localStorage.removeItem(NOTES_CONTENT_KEY);
+    updateNotesStatus('Cleared');
+    notesTextarea.focus();
+  }
+
+  // Dragging — mousedown on the titlebar (not its close button) starts a drag.
+  let dragState = null;
+  notesTitlebar.addEventListener('mousedown', function (event) {
+    if (event.target.closest('.notes-titlebar-close')) return;
+    const rect = notesPanel.getBoundingClientRect();
+    notesPanel.style.left = rect.left + 'px';
+    notesPanel.style.top = rect.top + 'px';
+    notesPanel.style.right = 'auto';
+    notesPanel.style.bottom = 'auto';
+    dragState = { startX: event.clientX, startY: event.clientY, startLeft: rect.left, startTop: rect.top };
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', function (event) {
+    if (!dragState) return;
+    const dx = event.clientX - dragState.startX;
+    const dy = event.clientY - dragState.startY;
+    const maxLeft = window.innerWidth - 60;
+    const maxTop = window.innerHeight - 40;
+    notesPanel.style.left = Math.min(Math.max(0, dragState.startLeft + dx), maxLeft) + 'px';
+    notesPanel.style.top = Math.min(Math.max(0, dragState.startTop + dy), maxTop) + 'px';
+  });
+  document.addEventListener('mouseup', function () {
+    if (!dragState) return;
+    dragState = null;
+    document.body.style.userSelect = '';
+    saveNotesPanelState();
+  });
+
+  // Native CSS `resize: both` changes the panel's box size directly — just persist it once the user lets go.
+  new ResizeObserver(function () {
+    if (notesPanel.classList.contains('open')) saveNotesPanelState();
+  }).observe(notesPanel);
+
+  // Restore any previously autosaved draft + panel position/size.
+  const savedNotes = localStorage.getItem(NOTES_CONTENT_KEY);
+  if (savedNotes) notesTextarea.value = savedNotes;
+  notesFilename.value = todayNotesFilename();
+  updateNotesStatus(savedNotes ? 'Restored draft' : 'Ready');
+  restoreNotesPanelState();
+
+  notesTextarea.addEventListener('input', scheduleNotesAutosave);
+</script>
+
+</body>
+</html>

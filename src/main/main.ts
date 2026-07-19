@@ -1,0 +1,498 @@
+import { app, BrowserWindow, Menu, dialog, screen } from 'electron';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { registerFilesystemHandlers } from './ipc/filesystem';
+import { registerDatabaseHandlers } from './ipc/database';
+import { registerExtractionHandlers } from './ipc/extraction';
+import { registerExportHandlers } from './ipc/export';
+import { registerEditorHandlers } from './ipc/editor';
+import {
+  initDatabase,
+  DatabaseCorruptedError,
+  listBackups,
+  quarantineCorruptDatabase,
+  restoreFromBackup,
+  backupDatabase,
+  pruneOldBackups,
+} from '../database/init';
+import { extractAll } from '../extractors/extract-all';
+import { persistExtraction } from '../database/importExtraction';
+import { backfillMissingSeasonTeamIds } from '../database/helpers';
+import { getSchedule } from '../database/getSchedule';
+
+/**
+ * Without this, double-clicking the launcher twice while the first instance
+ * is still starting up (exactly the scenario the instant pre-splash — see
+ * scripts/pre-splash.hta — exists to discourage) would actually spawn two
+ * separate app processes fighting over the same SQLite file. Must run before
+ * any other app.* calls; the second instance quits immediately and its
+ * arguments are handed to the first instance instead.
+ */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const existing = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+    if (existing) {
+      if (existing.isMinimized()) existing.restore();
+      existing.focus();
+    }
+  });
+}
+
+const DEFAULT_WIDTH = 1400;
+const DEFAULT_HEIGHT = 900;
+const MIN_WIDTH = 1024;
+const MIN_HEIGHT = 700;
+const USE_PRE_SPLASH_ONLY = process.env.USE_PRE_SPLASH_ONLY === '1';
+
+interface WindowBounds {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+}
+
+function getWindowStatePath(): string {
+  return path.join(app.getPath('userData'), 'window-state.json');
+}
+
+function loadWindowState(): WindowBounds {
+  try {
+    const raw = fs.readFileSync(getWindowStatePath(), 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<WindowBounds>;
+    return {
+      width: parsed.width ?? DEFAULT_WIDTH,
+      height: parsed.height ?? DEFAULT_HEIGHT,
+      x: parsed.x,
+      y: parsed.y,
+    };
+  } catch {
+    return { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+  }
+}
+
+function rectsIntersect(a: Electron.Rectangle, b: Electron.Rectangle): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+/**
+ * Drops saved x/y if they'd place the window fully off every currently
+ * connected display — e.g. a monitor used last session has since been
+ * unplugged or had its resolution/arrangement changed. Without this check, a
+ * stale window-state.json can open the app fully off-screen with no way to
+ * recover short of manually deleting the file (must run after app 'ready' —
+ * the screen module requires it).
+ */
+function sanitizeWindowState(state: WindowBounds): WindowBounds {
+  const width = Math.max(state.width, MIN_WIDTH);
+  const height = Math.max(state.height, MIN_HEIGHT);
+
+  if (state.x === undefined || state.y === undefined) {
+    return { width, height };
+  }
+
+  const rect = { x: state.x, y: state.y, width, height };
+  const onScreen = screen.getAllDisplays().some((display) => rectsIntersect(rect, display.bounds));
+  return onScreen ? { width, height, x: state.x, y: state.y } : { width, height };
+}
+
+function saveWindowState(window: BrowserWindow): void {
+  try {
+    const bounds = window.getBounds();
+    fs.writeFileSync(getWindowStatePath(), JSON.stringify(bounds), 'utf-8');
+  } catch {
+    // Non-fatal: window position simply won't be restored next launch.
+  }
+}
+
+function createWindow(): BrowserWindow {
+  const state = sanitizeWindowState(loadWindowState());
+
+  const win = new BrowserWindow({
+    width: state.width,
+    height: state.height,
+    x: state.x,
+    y: state.y,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  win.on('close', () => saveWindowState(win));
+  if (process.env.SCREENSHOT_ROUTE) {
+    if (process.env.SCREENSHOT_DEBUG_CONSOLE) {
+      win.webContents.on('console-message', (_e, _level, message) => {
+        console.log('[renderer-console]', message);
+      });
+    }
+    win.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: process.env.SCREENSHOT_ROUTE });
+  } else {
+    win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  }
+  return win;
+}
+
+/** Shows the main window once its renderer has actually painted (avoids a blank-white flash) — used both on first launch (after the splash screen) and on macOS re-activation. */
+function showWhenReady(win: BrowserWindow, onShown?: () => void): void {
+  win.once('ready-to-show', () => {
+    win.show();
+    onShown?.();
+  });
+}
+
+/** Matches spshscr.png's native resolution exactly (868×420) — and the pre-splash HTA's own size, see scripts/pre-splash.hta — so neither ever scales/crops the image and the handoff between the two is pixel-identical. */
+const SPLASH_WIDTH = 868;
+const SPLASH_HEIGHT = 420;
+/** Real startup (sql.js init + IPC registration) can finish in well under a second on a warm cache — this floor keeps the splash from just flashing on screen instead of being visible/legible. */
+const MIN_SPLASH_DISPLAY_MS = 1200;
+
+/**
+ * "Launch CFB Dynasty Hub.bat" shows an instant, non-Electron pre-splash
+ * (scripts/pre-splash.hta, launched before npm/webpack/electron even start —
+ * that pre-Electron stretch is otherwise a silent gap with nothing on
+ * screen) using the exact same splash image, and polls for this file to know
+ * when it's safe to close. In normal Electron-splash mode it's written once
+ * this app's own splash becomes visible; in pre-splash-only launcher mode
+ * it's written once the real main window is ready. Not written at all when
+ * launched directly (`npx electron .`, diagnostic runs) — harmless, since
+ * nothing is polling for it in that case.
+ */
+const PRE_SPLASH_READY_FLAG = path.join(os.tmpdir(), 'cfb-dynasty-hub-splash-ready.flag');
+
+function signalPreSplashReady(): void {
+  try {
+    fs.writeFileSync(PRE_SPLASH_READY_FLAG, String(Date.now()));
+  } catch {
+    // Non-fatal — the pre-splash has its own safety timeout if this never arrives.
+  }
+}
+
+interface SplashProgressPayload {
+  percent: number;
+  status: string;
+}
+
+/**
+ * Resolves only once the splash page has actually finished loading (not just
+ * "ready to show") — its inline script attaches the splash:progress listener
+ * as part of that load, so sending progress before this resolves risks the
+ * first update being dropped silently.
+ */
+function createSplashWindow(): Promise<BrowserWindow> {
+  return new Promise((resolve) => {
+    const splash = new BrowserWindow({
+      width: SPLASH_WIDTH,
+      height: SPLASH_HEIGHT,
+      frame: false,
+      resizable: false,
+      movable: false,
+      center: true,
+      show: false,
+      backgroundColor: '#3a3a3a',
+      webPreferences: {
+        preload: path.join(__dirname, 'splash/splash-preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    splash.once('ready-to-show', () => {
+      splash.show();
+      signalPreSplashReady();
+    });
+    splash.webContents.once('did-finish-load', () => resolve(splash));
+    splash.loadFile(path.join(__dirname, 'splash/splash.html'));
+  });
+}
+
+function sendSplashProgress(splash: BrowserWindow, payload: SplashProgressPayload): void {
+  if (!splash.isDestroyed()) {
+    splash.webContents.send('splash:progress', payload);
+  }
+}
+
+function buildMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: 'File',
+      submenu: [{ role: 'quit' }],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About College Football 27 Dynasty Hub',
+          click: () => {
+            const options = {
+              type: 'info' as const,
+              title: 'About',
+              message: 'College Football 27 Dynasty Hub',
+              detail: `Version ${app.getVersion()}`,
+            };
+            const parent = BrowserWindow.getFocusedWindow();
+            if (parent) {
+              dialog.showMessageBox(parent, options);
+            } else {
+              dialog.showMessageBox(options);
+            }
+          },
+        },
+      ],
+    },
+  ]);
+}
+
+/**
+ * Wraps initDatabase() with a real recovery path for the one failure mode
+ * that's actually recoverable — the on-disk file existing but being
+ * unreadable (truncated write, garbage bytes, filesystem hiccup). Previously
+ * this class of failure just fell through to the top-level .catch() below and
+ * quit silently, with no explanation and no way back in short of manually
+ * finding and deleting the file. Any OTHER startup error (missing wasm
+ * binary, out of memory, etc.) still isn't "recoverable" by anything this
+ * function knows how to do, so it's re-thrown unchanged for that same
+ * top-level handler.
+ */
+async function initDatabaseWithRecovery(): Promise<void> {
+  try {
+    await initDatabase();
+  } catch (err) {
+    if (!(err instanceof DatabaseCorruptedError)) throw err;
+
+    // The pre-splash would otherwise sit on screen for its full safety
+    // timeout while the native dialog below waits for a response.
+    signalPreSplashReady();
+
+    const quarantinePath = quarantineCorruptDatabase(err.dbPath);
+    const backups = listBackups();
+    const mostRecent = backups[0];
+
+    const buttons = mostRecent ? ['Restore Backup', 'Start Fresh', 'Quit'] : ['Start Fresh', 'Quit'];
+    const detail = mostRecent
+      ? `Your dynasty database could not be read and may be corrupted. The unreadable file was moved to:\n${quarantinePath}\n\nA backup from ${mostRecent.label} is available to restore, or you can start fresh with an empty database.`
+      : `Your dynasty database could not be read and may be corrupted. The unreadable file was moved to:\n${quarantinePath}\n\nNo backup was found. Starting fresh creates a new, empty database — any imported dynasties will need to be re-imported from their save files.`;
+
+    // Diagnostic-only escape hatch: a real showMessageBoxSync call blocks on
+    // human input, which a headless verification run can never provide.
+    // Setting this env var lets a temporary diagnostic branch exercise the
+    // full recovery path (quarantine → choice → restore/fresh → re-open →
+    // checkpoint backup) without a real dialog ever appearing — see the
+    // "Corrupted-database recovery flow" entry in DevLog.md for how this was
+    // actually used to catch a real bug in this same function.
+    const choice = process.env.DIAGNOSTIC_DB_RECOVERY_CHOICE
+      ? process.env.DIAGNOSTIC_DB_RECOVERY_CHOICE
+      : buttons[dialog.showMessageBoxSync({
+          type: 'warning',
+          title: 'Database Could Not Be Opened',
+          message: 'Your dynasty database could not be read.',
+          detail,
+          buttons,
+          defaultId: 0,
+          cancelId: buttons.length - 1,
+        })];
+
+    if (choice === 'Quit') {
+      app.quit();
+      throw new Error('Startup canceled: user chose to quit after database corruption.');
+    }
+    if (choice === 'Restore Backup' && mostRecent) {
+      restoreFromBackup(mostRecent.path);
+    }
+    // 'Start Fresh': nothing else to do — the corrupt file is already
+    // quarantined out of the way, so retrying initDatabase() naturally
+    // creates a brand-new empty database in its place.
+    await initDatabase();
+  }
+
+  // Reaching here means the database is open and readable — whether that's
+  // the normal case, a fresh database, or one just restored from backup.
+  // Checkpoint a new backup now so there's always a recent recovery point,
+  // and cap how many accumulate on disk.
+  try {
+    backupDatabase();
+    pruneOldBackups();
+  } catch {
+    // Non-fatal — a missed backup checkpoint doesn't block the app from opening.
+  }
+
+  // One-time backfill for seasons imported before user_team_id existed (see
+  // schema_v3_season_team.sql) — cheap no-op once every row already has a value.
+  try {
+    backfillMissingSeasonTeamIds();
+  } catch (err) {
+    console.error('[startup] season team backfill failed', err);
+  }
+}
+
+app
+  .whenReady()
+  .then(async () => {
+    // A second instance's whenReady() can still fire in the brief window before
+    // app.quit() (called above) actually takes effect — bail out immediately
+    // rather than race the first instance for the same SQLite file.
+    if (!gotSingleInstanceLock) return;
+
+    // Diagnostic runs are a one-shot headless import + quit — the splash screen
+    // would just flash and add noise to the log, so it's skipped entirely.
+    if (process.env.DIAGNOSTIC_IMPORT_PATH) {
+      await initDatabase();
+      registerFilesystemHandlers();
+      registerDatabaseHandlers();
+      registerExtractionHandlers();
+      registerExportHandlers();
+      registerEditorHandlers();
+      try {
+        const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
+        const { dynasty } = persistExtraction(process.env.DIAGNOSTIC_IMPORT_PATH, extraction);
+        const schedule = getSchedule(dynasty.id);
+        console.log('[diagnostic] sample games:', JSON.stringify(schedule?.games.slice(0, 3), null, 2));
+      } catch (err) {
+        console.error('[diagnostic] FAILED', err);
+      }
+      app.quit();
+      return;
+    }
+
+    if (USE_PRE_SPLASH_ONLY) {
+      await initDatabaseWithRecovery();
+      registerFilesystemHandlers();
+      registerDatabaseHandlers();
+      registerExtractionHandlers();
+      registerExportHandlers();
+      registerEditorHandlers();
+      Menu.setApplicationMenu(buildMenu());
+
+      const win = createWindow();
+      showWhenReady(win, () => {
+        signalPreSplashReady();
+        if (process.env.SCREENSHOT_DIR) {
+          setTimeout(async () => {
+            const dir = process.env.SCREENSHOT_DIR as string;
+            win.setSize(1400, 2600);
+            await new Promise((r) => setTimeout(r, 500));
+            // "selector::value[;;selector::value...]" — sets <select> values
+            // the way React sees them (native setter + change event), for UI
+            // reachable only through dropdowns (e.g. the season switcher, the
+            // Statistics split filters). Runs BEFORE the click hooks so a page
+            // can be scoped to the right season/filter first, then clicked
+            // (e.g. open a modal on the now-populated page).
+            if (process.env.SCREENSHOT_SELECT_VALUE) {
+              for (const pair of process.env.SCREENSHOT_SELECT_VALUE.split(';;')) {
+                const sepIndex = pair.indexOf('::');
+                const selector = pair.slice(0, sepIndex);
+                const value = pair.slice(sepIndex + 2);
+                await win.webContents.executeJavaScript(
+                  `(() => {
+                    const el = document.querySelector(${JSON.stringify(selector)});
+                    if (!el) return;
+                    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+                    setter.call(el, ${JSON.stringify(value)});
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                  })();`,
+                );
+                await new Promise((r) => setTimeout(r, 900));
+              }
+            }
+            if (process.env.SCREENSHOT_CLICK_SELECTOR) {
+              await win.webContents.executeJavaScript(
+                `document.querySelector(${JSON.stringify(process.env.SCREENSHOT_CLICK_SELECTOR)})?.click();`,
+              );
+              await new Promise((r) => setTimeout(r, 500));
+            }
+            if (process.env.SCREENSHOT_CLICK_SELECTOR_2) {
+              await win.webContents.executeJavaScript(
+                `document.querySelector(${JSON.stringify(process.env.SCREENSHOT_CLICK_SELECTOR_2)})?.click();`,
+              );
+              await new Promise((r) => setTimeout(r, 500));
+            }
+            if (process.env.SCREENSHOT_FORCE_HOVER_SELECTOR) {
+              // CDP screenshots can't simulate a real mouse hover — force any
+              // group-hover/hover-reveal opacity rule visible for the matched
+              // selector so hover-only UI (e.g. card action buttons) shows up.
+              // The extra wait lets any CSS opacity transition actually finish
+              // before the frame is captured, instead of grabbing mid-fade.
+              await win.webContents.executeJavaScript(
+                `document.querySelectorAll(${JSON.stringify(process.env.SCREENSHOT_FORCE_HOVER_SELECTOR)}).forEach((el) => { el.style.transition = 'none'; el.style.opacity = '1'; });`,
+              );
+              await new Promise((r) => setTimeout(r, 300));
+            }
+            const rectEnv = process.env.SCREENSHOT_RECT;
+            const rect = rectEnv
+              ? (([x, y, width, height]) => ({ x, y, width, height }))(rectEnv.split(',').map(Number))
+              : undefined;
+            const image = await win.webContents.capturePage(rect);
+            fs.writeFileSync(path.join(dir, `${process.env.SCREENSHOT_NAME ?? 'shot'}.png`), image.toPNG());
+            app.quit();
+          }, 3500);
+        }
+      });
+    } else {
+      const splashStartedAt = Date.now();
+      const splash = await createSplashWindow();
+
+      sendSplashProgress(splash, { percent: 10, status: 'Loading database engine...' });
+      await initDatabaseWithRecovery();
+
+      sendSplashProgress(splash, { percent: 55, status: 'Preparing workspace...' });
+      registerFilesystemHandlers();
+      registerDatabaseHandlers();
+      registerExtractionHandlers();
+      registerExportHandlers();
+      registerEditorHandlers();
+      Menu.setApplicationMenu(buildMenu());
+
+      sendSplashProgress(splash, { percent: 85, status: 'Opening hub...' });
+      const win = createWindow();
+      showWhenReady(win, () => {
+        sendSplashProgress(splash, { percent: 100, status: 'Ready.' });
+        const elapsed = Date.now() - splashStartedAt;
+        const remaining = Math.max(0, MIN_SPLASH_DISPLAY_MS - elapsed);
+        setTimeout(() => {
+          if (!splash.isDestroyed()) splash.close();
+        }, remaining);
+      });
+    }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        showWhenReady(createWindow());
+      }
+    });
+  })
+  .catch((err) => {
+    console.error('[startup]', err);
+    // A startup failure before createSplashWindow() ever ran means nothing
+    // would otherwise tell the pre-splash to close — it would otherwise sit
+    // on screen for its full safety timeout while the user just sees nothing
+    // else happen.
+    signalPreSplashReady();
+    app.quit();
+  });
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
