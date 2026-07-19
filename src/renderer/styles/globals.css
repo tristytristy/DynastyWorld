@@ -245,6 +245,25 @@
   }
 
   /**
+   * Subtle mount motion for swapped content (profile tabs, player switches) —
+   * quick, controlled, no bounce (motion spec §9). The global reduced-motion
+   * clamp zeroes the duration automatically.
+   */
+  .content-enter {
+    animation: content-fade-up var(--duration-base) var(--ease-enter);
+  }
+  @keyframes content-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /**
    * The signature shape (user direction 2026-07-19): hard rectangular edges
    * with ONE angled corner — top-right, cut at 45° — echoing the game's own
    * panel language so app and game feel like the same universe. Applied to

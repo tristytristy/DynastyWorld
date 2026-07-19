@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { RATING_SECTIONS } from '../../../shared/playerEditorFields';
 import { SurfaceCard } from '../ui/SurfaceCard';
 import { PlayerPortrait } from './PlayerPortrait';
 import { TeamLogo } from './TeamLogo';
@@ -19,6 +21,7 @@ import type {
   LeagueAward,
   OffensiveGameLine,
   OffensiveStatLine,
+  PlayerEditFields,
   PlayerStats,
   RosterPlayer,
   ScheduleOverview,
@@ -245,116 +248,6 @@ function StatLineSection({
   );
 }
 
-function createEmptyOffensiveLine(): OffensiveStatLine {
-  return {
-    gamesPlayed: 0,
-    gamesStarted: 0,
-    passAttempts: 0,
-    passCompletions: 0,
-    passYards: 0,
-    passTDs: 0,
-    passInts: 0,
-    passLongest: 0,
-    rushAttempts: 0,
-    rushYards: 0,
-    rushTDs: 0,
-    rushLongest: 0,
-    fumbles: 0,
-    receptions: 0,
-    receivingYards: 0,
-    receivingTDs: 0,
-    receivingLongest: 0,
-    kickReturns: 0,
-    kickReturnYards: 0,
-    kickReturnTDs: 0,
-    kickReturnLongest: 0,
-    puntReturns: 0,
-    puntReturnYards: 0,
-    puntReturnTDs: 0,
-    puntReturnLongest: 0,
-  };
-}
-
-function createEmptyDefensiveLine(): DefensiveStatLine {
-  return {
-    gamesPlayed: 0,
-    gamesStarted: 0,
-    tackles: 0,
-    assistedTackles: 0,
-    tacklesForLoss: 0,
-    sacks: 0,
-    interceptions: 0,
-    interceptionReturnYards: 0,
-    interceptionTDs: 0,
-    forcedFumbles: 0,
-    fumbleRecoveries: 0,
-    passDeflections: 0,
-    kickReturns: 0,
-    kickReturnYards: 0,
-    kickReturnTDs: 0,
-    kickReturnLongest: 0,
-    puntReturns: 0,
-    puntReturnYards: 0,
-    puntReturnTDs: 0,
-    puntReturnLongest: 0,
-  };
-}
-
-function addOffensiveLines(total: OffensiveStatLine, line: OffensiveStatLine): OffensiveStatLine {
-  return {
-    gamesPlayed: total.gamesPlayed + line.gamesPlayed,
-    gamesStarted: total.gamesStarted + line.gamesStarted,
-    passAttempts: total.passAttempts + line.passAttempts,
-    passCompletions: total.passCompletions + line.passCompletions,
-    passYards: total.passYards + line.passYards,
-    passTDs: total.passTDs + line.passTDs,
-    passInts: total.passInts + line.passInts,
-    passLongest: Math.max(total.passLongest, line.passLongest),
-    rushAttempts: total.rushAttempts + line.rushAttempts,
-    rushYards: total.rushYards + line.rushYards,
-    rushTDs: total.rushTDs + line.rushTDs,
-    rushLongest: Math.max(total.rushLongest, line.rushLongest),
-    fumbles: total.fumbles + line.fumbles,
-    receptions: total.receptions + line.receptions,
-    receivingYards: total.receivingYards + line.receivingYards,
-    receivingTDs: total.receivingTDs + line.receivingTDs,
-    receivingLongest: Math.max(total.receivingLongest, line.receivingLongest),
-    kickReturns: total.kickReturns + line.kickReturns,
-    kickReturnYards: total.kickReturnYards + line.kickReturnYards,
-    kickReturnTDs: total.kickReturnTDs + line.kickReturnTDs,
-    kickReturnLongest: Math.max(total.kickReturnLongest, line.kickReturnLongest),
-    puntReturns: total.puntReturns + line.puntReturns,
-    puntReturnYards: total.puntReturnYards + line.puntReturnYards,
-    puntReturnTDs: total.puntReturnTDs + line.puntReturnTDs,
-    puntReturnLongest: Math.max(total.puntReturnLongest, line.puntReturnLongest),
-  };
-}
-
-function addDefensiveLines(total: DefensiveStatLine, line: DefensiveStatLine): DefensiveStatLine {
-  return {
-    gamesPlayed: total.gamesPlayed + line.gamesPlayed,
-    gamesStarted: total.gamesStarted + line.gamesStarted,
-    tackles: total.tackles + line.tackles,
-    assistedTackles: total.assistedTackles + line.assistedTackles,
-    tacklesForLoss: total.tacklesForLoss + line.tacklesForLoss,
-    sacks: total.sacks + line.sacks,
-    interceptions: total.interceptions + line.interceptions,
-    interceptionReturnYards: total.interceptionReturnYards + line.interceptionReturnYards,
-    interceptionTDs: total.interceptionTDs + line.interceptionTDs,
-    forcedFumbles: total.forcedFumbles + line.forcedFumbles,
-    fumbleRecoveries: total.fumbleRecoveries + line.fumbleRecoveries,
-    kickReturns: total.kickReturns + line.kickReturns,
-    kickReturnYards: total.kickReturnYards + line.kickReturnYards,
-    kickReturnTDs: total.kickReturnTDs + line.kickReturnTDs,
-    kickReturnLongest: Math.max(total.kickReturnLongest, line.kickReturnLongest),
-    puntReturns: total.puntReturns + line.puntReturns,
-    puntReturnYards: total.puntReturnYards + line.puntReturnYards,
-    puntReturnTDs: total.puntReturnTDs + line.puntReturnTDs,
-    puntReturnLongest: Math.max(total.puntReturnLongest, line.puntReturnLongest),
-    passDeflections: total.passDeflections + line.passDeflections,
-  };
-}
-
 function buildImportedStatSeasons(history: PlayerStatsBySeason[], playerId: number): PlayerImportedStatSeason[] {
   return history
     .map(({ seasonYear, roster, stats }) => {
@@ -373,34 +266,11 @@ function buildImportedStatSeasons(history: PlayerStatsBySeason[], playerId: numb
     .sort((a, b) => b.seasonYear - a.seasonYear);
 }
 
-function buildImportedCareerTotals(
-  seasons: PlayerImportedStatSeason[],
-): { category: 'offense' | 'defense'; line: OffensiveStatLine | DefensiveStatLine } | null {
-  if (seasons.length === 0) return null;
-  const category = seasons[0].category;
-  const matching = seasons.filter((season) => season.category === category);
-  if (matching.length === 0) return null;
-
-  if (category === 'offense') {
-    const line = matching.reduce(
-      (total, season) => addOffensiveLines(total, season.line as OffensiveStatLine),
-      createEmptyOffensiveLine(),
-    );
-    return { category, line };
-  }
-
-  const line = matching.reduce(
-    (total, season) => addDefensiveLines(total, season.line as DefensiveStatLine),
-    createEmptyDefensiveLine(),
-  );
-  return { category, line };
-}
-
 function ImportedSeasonHistorySection({ seasons }: { seasons: PlayerImportedStatSeason[] }) {
   if (seasons.length === 0) {
     return (
       <EmptySection
-        title="Imported season history"
+        title="Season by season"
         message="No multi-season stat history is available yet. Import more seasons to build this player timeline."
       />
     );
@@ -411,7 +281,7 @@ function ImportedSeasonHistorySection({ seasons }: { seasons: PlayerImportedStat
   return (
     <SurfaceCard className="overflow-hidden p-0">
       <div className="border-b border-slate-200/80 px-5 py-4 dark:border-white/5">
-        <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Imported season history</h3>
+        <h3 className="font-display text-section-title font-semibold text-slate-950 dark:text-white">Season by season</h3>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           One row per imported season for this player.
         </p>
@@ -657,6 +527,217 @@ function buildPlayerHonorSeasons(awardHistory: AwardsBySeason[], playerId: numbe
  * deep-linking) or the global PlayerProfileModal without either owning the
  * other's concerns.
  */
+/**
+ * Profile subpages (2026-07-20 redesign — see DevLog). One long scroll became
+ * a hero + six destinations; every tab renders from data the component
+ * already loads, except Attributes, which reads the save file via the
+ * existing editor IPC (read-only reuse — current season only, since the save
+ * has long since moved past any historical season's state).
+ */
+type ProfileTab = 'overview' | 'stats' | 'career' | 'attributes' | 'gamelog' | 'history';
+
+const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'stats', label: 'Stats' },
+  { key: 'career', label: 'Career' },
+  { key: 'attributes', label: 'Attributes' },
+  { key: 'gamelog', label: 'Game Log' },
+  { key: 'history', label: 'History' },
+];
+
+function profileTabClass(active: boolean): string {
+  return [
+    'px-4 py-2 font-display text-sm font-semibold transition-all duration-base ease-standard',
+    active
+      ? 'corner-cut-sm bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white',
+  ].join(' ');
+}
+
+/** Compact editorial card used across the Overview tab — title, one focal line, supporting line, optional jump-to-tab action. */
+function OverviewCard({
+  eyebrow,
+  focal,
+  support,
+  onJump,
+  jumpLabel,
+}: {
+  eyebrow: string;
+  focal: ReactNode;
+  support?: ReactNode;
+  onJump?: () => void;
+  jumpLabel?: string;
+}) {
+  return (
+    <div className="corner-cut-sm flex flex-col border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-white/5">
+      <p className="type-eyebrow text-slate-400 dark:text-slate-500">{eyebrow}</p>
+      <div className="mt-2 flex-1 text-slate-950 dark:text-white">{focal}</div>
+      {support ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{support}</p> : null}
+      {onJump ? (
+        <button
+          type="button"
+          onClick={onJump}
+          className="mt-3 self-start font-display text-xs font-semibold uppercase tracking-[0.18em] text-[var(--team-primary)] transition hover:opacity-75"
+        >
+          {jumpLabel ?? 'View'} →
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Read-only attribute ratings, grouped exactly like the editor's Ratings tab
+ * (same RATING_SECTIONS source). Current season only — ratings live in the
+ * save file, and a historical season's file state no longer exists to read.
+ */
+function AttributesTab({ dynastyId, playerId, isCurrentSeason }: { dynastyId: string; playerId: number; isCurrentSeason: boolean }) {
+  const [fields, setFields] = useState<PlayerEditFields | null | undefined>(isCurrentSeason ? undefined : null);
+
+  useEffect(() => {
+    if (!isCurrentSeason) return;
+    let cancelled = false;
+    setFields(undefined);
+    window.api.editor.getPlayer(dynastyId, playerId).then((result) => {
+      if (!cancelled) setFields(result?.fields ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, playerId, isCurrentSeason]);
+
+  if (!isCurrentSeason) {
+    return (
+      <EmptySection
+        title="Attributes"
+        message="Attribute ratings are read live from the save file, so they're only available for players on the current season's roster — a past season's save state no longer exists to read."
+      />
+    );
+  }
+  if (fields === undefined) {
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Reading attributes from the save file...</p>;
+  }
+  if (fields === null) {
+    return <EmptySection title="Attributes" message="This player couldn't be found in the save file." />;
+  }
+
+  return (
+    <div className="space-y-5">
+      {RATING_SECTIONS.map((section) => (
+        <div key={section.title}>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">{section.title}</p>
+          <div className="mt-2 grid grid-cols-3 gap-2.5 sm:grid-cols-5 xl:grid-cols-6">
+            {section.fields.map((f) => (
+              <div key={f.key} className="corner-cut-sm border border-slate-200/80 bg-slate-50/85 p-3 text-center dark:border-slate-800 dark:bg-white/5">
+                <p className="type-eyebrow text-slate-400 dark:text-slate-500">{f.abbr}</p>
+                <p className="type-stat-sm mt-1 text-slate-950 dark:text-white">{fields.ratings[f.key] ?? 0}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface TimelineEvent {
+  seasonYear: number;
+  label: string;
+  detail: string | null;
+}
+
+/**
+ * The player's story, derived strictly from data the archive actually holds:
+ * per-season roster presence (class/OVR/team), honors, and team awards. No
+ * fabricated events — transfers/redshirts only appear where the snapshots
+ * show them (a team change between tracked seasons, a repeated class year).
+ */
+function buildTimeline(
+  statsHistory: PlayerStatsBySeason[],
+  playerId: number,
+  honors: PlayerHonorSeason[],
+  teamAwardWins: PlayerTeamAwardWin[],
+): TimelineEvent[] {
+  const events: TimelineEvent[] = [];
+  const rosterByYear = statsHistory
+    .map((entry) => ({ seasonYear: entry.seasonYear, player: entry.roster?.find((p) => p.id === playerId) }))
+    .filter((e): e is { seasonYear: number; player: RosterPlayer } => !!e.player)
+    .sort((a, b) => a.seasonYear - b.seasonYear);
+
+  rosterByYear.forEach((entry, index) => {
+    if (index === 0) {
+      events.push({
+        seasonYear: entry.seasonYear,
+        label: 'First tracked season',
+        detail: `${entry.player.schoolYear} · ${entry.player.position} · ${entry.player.overallRating} OVR`,
+      });
+      return;
+    }
+    const prev = rosterByYear[index - 1];
+    const ovrDelta = entry.player.overallRating - prev.player.overallRating;
+    const details = [
+      `${entry.player.schoolYear} · ${entry.player.overallRating} OVR${ovrDelta !== 0 ? ` (${ovrDelta > 0 ? '+' : ''}${ovrDelta})` : ''}`,
+    ];
+    if (entry.player.position !== prev.player.position) {
+      details.push(`moved ${prev.player.position} → ${entry.player.position}`);
+    }
+    if (entry.player.jerseyNumber !== prev.player.jerseyNumber) {
+      details.push(`#${prev.player.jerseyNumber} → #${entry.player.jerseyNumber}`);
+    }
+    events.push({ seasonYear: entry.seasonYear, label: 'Season', detail: details.join(' · ') });
+  });
+
+  for (const honorSeason of honors) {
+    for (const award of honorSeason.marqueeWins) {
+      events.push({ seasonYear: honorSeason.seasonYear, label: formatAwardLabel(award.awardType), detail: 'National award' });
+    }
+    for (const tier of honorSeason.honorTiers) {
+      events.push({ seasonYear: honorSeason.seasonYear, label: formatAwardLabel(tier.awardType), detail: null });
+    }
+    for (const grouped of groupWeeklyHonors(honorSeason.weeklyHonors)) {
+      events.push({
+        seasonYear: honorSeason.seasonYear,
+        label: `${grouped.count > 1 ? `${grouped.count}x ` : ''}${grouped.label}`,
+        detail: 'Weekly honor',
+      });
+    }
+  }
+  for (const win of teamAwardWins) {
+    events.push({ seasonYear: win.seasonYear, label: win.awardName, detail: 'Team award' });
+  }
+
+  return events.sort((a, b) => b.seasonYear - a.seasonYear);
+}
+
+function HistoryTab({ events }: { events: TimelineEvent[] }) {
+  if (events.length === 0) {
+    return <EmptySection title="History" message="This player's story builds up as more seasons are imported — seasons, honors, and awards will appear here." />;
+  }
+  const byYear = new Map<number, TimelineEvent[]>();
+  for (const event of events) {
+    byYear.set(event.seasonYear, [...(byYear.get(event.seasonYear) ?? []), event]);
+  }
+  return (
+    <div className="space-y-4">
+      {[...byYear.entries()].map(([year, yearEvents]) => (
+        <div key={year} className="flex gap-4">
+          <div className="w-16 shrink-0 pt-0.5 text-right">
+            <span className="type-stat-sm text-slate-950 dark:text-white">{year}</span>
+          </div>
+          <div className="flex-1 space-y-2 border-l-2 border-[var(--team-primary)] pl-4 pb-2">
+            {yearEvents.map((event, i) => (
+              <div key={i}>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{event.label}</p>
+                {event.detail && <p className="text-xs text-slate-500 dark:text-slate-400">{event.detail}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PlayerProfileContent({
   dynastyId,
   playerId,
@@ -679,6 +760,7 @@ export function PlayerProfileContent({
   const [teamAwardWins, setTeamAwardWins] = useState<PlayerTeamAwardWin[]>([]);
   /** The season this component actually resolved and is rendering — may differ from the `seasonId` prop if that season's roster didn't have the player and a fallback scan found them in an older one. Drives the Edit button's current-season-only restriction below. */
   const [resolvedSeasonId, setResolvedSeasonId] = useState<number | undefined>(seasonId);
+  const [tab, setTab] = useState<ProfileTab>('overview');
   const [seasonsList, setSeasonsList] = useState<SeasonSummary[]>([]);
   const { openPlayerEditor } = useEditorModal();
 
@@ -837,7 +919,6 @@ export function PlayerProfileContent({
   const playerGamelog = (allGamelog ?? []).filter((entry) => entry.playerId === playerId);
   const honorSeasons = buildPlayerHonorSeasons(awardHistory ?? [], playerId);
   const importedStatSeasons = buildImportedStatSeasons(statsHistory ?? [], playerId);
-  const importedCareerTotals = buildImportedCareerTotals(importedStatSeasons);
 
   // Editing is only ever allowed while looking at the live, current season —
   // a historical season's roster is a frozen snapshot, and the save file
@@ -847,88 +928,197 @@ export function PlayerProfileContent({
   const viewedSeason = seasonsList.find((s) => s.id === resolvedSeasonId);
   const canEditPlayer = viewedSeason?.isCurrent === true;
 
+  const timelineEvents = buildTimeline(statsHistory ?? [], playerId, honorSeasons, teamAwardWins);
+  const latestGame = playerGamelog
+    .map((entry) => ({ entry, game: schedule?.games.find((g) => g.gameId === entry.gameId) }))
+    .sort((a, b) => (b.game?.week ?? 0) - (a.game?.week ?? 0))[0];
+  const seasonTiles =
+    stats?.season && stats.category
+      ? (stats.category === 'offense'
+          ? offensiveTiles(stats.season as OffensiveStatLine)
+          : defensiveTiles(stats.season as DefensiveStatLine)
+        ).filter((t) => t.value !== 0 && t.value !== '0')
+      : [];
+  const totalHonors =
+    honorSeasons.reduce((sum, s) => sum + s.marqueeWins.length + s.honorTiers.length + s.weeklyHonors.length, 0) +
+    teamAwardWins.length;
+  const latestHonor = honorSeasons[0]
+    ? (honorSeasons[0].marqueeWins[0] && formatAwardLabel(honorSeasons[0].marqueeWins[0].awardType)) ||
+      (honorSeasons[0].honorTiers[0] && formatAwardLabel(honorSeasons[0].honorTiers[0].awardType)) ||
+      null
+    : (teamAwardWins[0]?.awardName ?? null);
+
   return (
-    <div className="space-y-6">
-      {viewedSeason && !viewedSeason.isCurrent && (
-        <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          Viewing the {viewedSeason.seasonYear} season — a past record, not this player&apos;s current roster status.
-        </div>
-      )}
-      <SurfaceCard>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="flex shrink-0 justify-center sm:justify-start">
-              <PlayerPortrait player={player} large className="bg-slate-50/85 dark:bg-white/5" />
-            </div>
-            <div>
-              <div className="inline-flex h-12 min-w-[3rem] items-center justify-center rounded-lg bg-[var(--team-primary)] px-4 text-xl font-bold text-[var(--team-on-primary)] shadow-[0_20px_45px_-24px_rgba(37,99,235,0.9)]">
+    <div className="space-y-5">
+      {/* Hero — unboxed portrait over a subtle team-color field; the player is the subject, not a card among cards. */}
+      <div
+        className="corner-cut relative overflow-hidden border border-slate-200/70 dark:border-white/10"
+        style={{
+          background:
+            'linear-gradient(120deg, color-mix(in srgb, var(--team-primary) 14%, transparent), transparent 55%), linear-gradient(300deg, color-mix(in srgb, var(--team-primary) 7%, transparent), transparent 45%)',
+        }}
+      >
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center md:p-6">
+          <div className="flex shrink-0 justify-center sm:justify-start">
+            <PlayerPortrait player={player} large />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <span className="corner-cut-sm inline-flex h-10 min-w-[2.6rem] items-center justify-center bg-[var(--team-primary)] px-3 font-display text-lg font-bold text-[var(--team-on-primary)]">
                 {player.jerseyNumber}
-              </div>
-              <p className="mt-4 type-eyebrow text-slate-400 dark:text-slate-500">Player detail</p>
-              <h2 className="mt-2 flex items-center gap-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-                {player.firstName} {player.lastName}
-                {canEditPlayer && (
-                  <EditButton
-                    onClick={() =>
-                      openPlayerEditor({
-                        dynastyId,
-                        playerId,
-                        playerLabel: `${player.firstName} ${player.lastName}`,
-                      })
-                    }
-                    label={`Edit ${player.firstName} ${player.lastName}`}
-                  />
-                )}
-              </h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                {player.position} | {abbreviateClass(player.schoolYear)} | {player.archetype}
-              </p>
+              </span>
+              <span className="type-eyebrow text-slate-500 dark:text-slate-400">
+                {player.position} · {abbreviateClass(player.schoolYear)}
+              </span>
+              {viewedSeason && !viewedSeason.isCurrent && (
+                <span className="type-eyebrow bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                  {viewedSeason.seasonYear} season
+                </span>
+              )}
             </div>
+            <h2 className="mt-3 flex items-center gap-2.5 font-display text-page-title font-bold text-slate-950 dark:text-white">
+              {player.firstName} {player.lastName}
+              {canEditPlayer && (
+                <EditButton
+                  onClick={() =>
+                    openPlayerEditor({
+                      dynastyId,
+                      playerId,
+                      playerLabel: `${player.firstName} ${player.lastName}`,
+                    })
+                  }
+                  label={`Edit ${player.firstName} ${player.lastName}`}
+                />
+              )}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              {player.archetype} · {player.developmentTrait} development · {formatHeight(player.heightInches)},{' '}
+              {player.weightPounds} lb
+            </p>
           </div>
-
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/85 px-5 py-4 dark:border-slate-800 dark:bg-white/5">
-            <p className="text-right type-eyebrow text-slate-400 dark:text-slate-500">
-              Overall
-            </p>
-            <p className="mt-2 flex items-center justify-center type-stat-lg text-slate-950 dark:text-white">
-              {player.overallRating}
-            </p>
+          <div className="shrink-0 text-center sm:pr-4">
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Overall</p>
+            <p className="type-stat-xl mt-1 text-slate-950 dark:text-white">{player.overallRating}</p>
           </div>
         </div>
-      </SurfaceCard>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <BioTile label="Height" value={formatHeight(player.heightInches)} />
-        <BioTile label="Weight" value={`${player.weightPounds} lb`} />
-        <BioTile label="Development trait" value={player.developmentTrait} />
-        <BioTile label="Archetype" value={player.archetype} />
-        <BioTile label="Hometown" value={`${player.hometown}, ${player.homeState}`} />
-        <BioTile label="Class" value={player.schoolYear} />
       </div>
 
-      <StatLineSection
-        title="Career stats"
-        category={stats?.category}
-        line={stats?.career}
-        emptyMessage="No career stats yet. These appear once games have been played and re-imported."
-      />
-      <StatLineSection
-        title="Season stats"
-        category={stats?.category}
-        line={stats?.season}
-        emptyMessage="No season stats yet. These appear once games have been played and re-imported."
-      />
-      <StatLineSection
-        title="Imported career totals"
-        category={importedCareerTotals?.category}
-        line={importedCareerTotals?.line}
-        emptyMessage="Import multiple seasons to build a true app-side career rollup for this player."
-      />
-      <ImportedSeasonHistorySection seasons={importedStatSeasons} />
-      <GameLogSection entries={playerGamelog} schedule={schedule ?? null} />
-      <TeamAwardsWonSection wins={teamAwardWins} />
-      <HonorsSection seasons={honorSeasons} />
-      <BestGameSection entries={playerGamelog} schedule={schedule ?? null} />
+      <div className="flex flex-wrap gap-1.5 border-b border-slate-200/80 pb-3 dark:border-white/10">
+        {PROFILE_TABS.map((t) => (
+          <button key={t.key} type="button" onClick={() => setTab(t.key)} className={profileTabClass(tab === t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div key={tab} className="space-y-5">
+        {tab === 'overview' && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <BioTile label="Height" value={formatHeight(player.heightInches)} />
+              <BioTile label="Weight" value={`${player.weightPounds} lb`} />
+              <BioTile label="Development trait" value={player.developmentTrait} />
+              <BioTile label="Archetype" value={player.archetype} />
+              <BioTile label="Hometown" value={`${player.hometown}, ${player.homeState}`} />
+              <BioTile label="Class" value={player.schoolYear} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <OverviewCard
+                eyebrow="Season snapshot"
+                focal={
+                  seasonTiles.length > 0 ? (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {seasonTiles.slice(0, 4).map((t) => (
+                        <span key={t.label} className="whitespace-nowrap">
+                          <span className="type-stat-sm">{t.value}</span>{' '}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{t.label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-500 dark:text-slate-400">No stats recorded yet this season.</span>
+                  )
+                }
+                onJump={() => setTab('stats')}
+                jumpLabel="Full stats"
+              />
+              <OverviewCard
+                eyebrow="Latest game"
+                focal={
+                  latestGame ? (
+                    <span className="text-sm font-semibold">
+                      {latestGame.game ? `${latestGame.game.isHome ? 'vs' : '@'} ${latestGame.game.opponent}` : 'Untracked game'}
+                      {latestGame.game?.result && (
+                        <span className={latestGame.game.result === 'W' ? 'ml-2 text-green-600 dark:text-green-400' : 'ml-2 text-red-600 dark:text-red-400'}>
+                          {latestGame.game.result} {latestGame.game.teamScore}-{latestGame.game.opponentScore}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-500 dark:text-slate-400">No games played yet.</span>
+                  )
+                }
+                support={latestGame ? gameLogSummary(latestGame.entry) : undefined}
+                onJump={() => setTab('gamelog')}
+                jumpLabel="Game log"
+              />
+              <OverviewCard
+                eyebrow="Honors & awards"
+                focal={
+                  totalHonors > 0 ? (
+                    <span>
+                      <span className="type-stat-sm">{totalHonors}</span>{' '}
+                      <span className="text-sm text-slate-500 dark:text-slate-400">career honor{totalHonors === 1 ? '' : 's'}</span>
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-500 dark:text-slate-400">None yet — the résumé starts here.</span>
+                  )
+                }
+                support={latestHonor ?? undefined}
+                onJump={() => setTab('career')}
+                jumpLabel="Career résumé"
+              />
+            </div>
+          </>
+        )}
+
+        {tab === 'stats' && (
+          <>
+            <StatLineSection
+              title="This season"
+              category={stats?.category}
+              line={stats?.season}
+              emptyMessage="No season stats yet. These appear once games have been played and re-imported."
+            />
+            <GameLogSection entries={playerGamelog} schedule={schedule ?? null} />
+          </>
+        )}
+
+        {tab === 'career' && (
+          <>
+            <StatLineSection
+              title="Career totals"
+              category={stats?.category}
+              line={stats?.career}
+              emptyMessage="No career stats yet. These appear once games have been played and re-imported."
+            />
+            <ImportedSeasonHistorySection seasons={importedStatSeasons} />
+            <TeamAwardsWonSection wins={teamAwardWins} />
+            <HonorsSection seasons={honorSeasons} />
+          </>
+        )}
+
+        {tab === 'attributes' && <AttributesTab dynastyId={dynastyId} playerId={playerId} isCurrentSeason={canEditPlayer} />}
+
+        {tab === 'gamelog' && (
+          <>
+            <BestGameSection entries={playerGamelog} schedule={schedule ?? null} />
+            <GameLogSection entries={playerGamelog} schedule={schedule ?? null} />
+          </>
+        )}
+
+        {tab === 'history' && <HistoryTab events={timelineEvents} />}
+      </div>
     </div>
   );
 }
