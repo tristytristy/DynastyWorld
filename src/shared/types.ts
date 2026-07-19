@@ -912,6 +912,25 @@ export interface RankingsOverview {
 export type RecruitBoardStage = 'watching' | 'offered' | 'committed' | 'signed' | 'lost';
 
 /** One prospect on the user's own recruiting board (up to 35 real slots — verified directly, not the full leaguewide recruit pool). */
+/** League-wide browse (2026-07-20): every team's roster from the compressed per-season league snapshot. Bio shape matches RosterPlayer; seasonStat joined for stat-holders only. */
+export interface LeagueTeamSummary {
+  teamIndex: number;
+  displayName: string;
+  playerCount: number;
+}
+
+export interface LeagueRosterPlayer extends RosterPlayer {
+  teamIndex: number;
+  seasonStat: { playerId: number; category: 'offense' | 'defense'; season: OffensiveStatLine | DefensiveStatLine | null } | null;
+}
+
+export interface LeagueTeamRoster {
+  teamIndex: number;
+  displayName: string;
+  seasonId: number;
+  players: LeagueRosterPlayer[];
+}
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -1164,6 +1183,8 @@ export interface DynastyApi {
     getAwards: (dynastyId: string, seasonId?: number) => Promise<AwardsOverview | null>;
     getRankings: (dynastyId: string, seasonId?: number) => Promise<RankingsOverview | null>;
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
+    getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
+    getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
     getTeamAwardResults: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;

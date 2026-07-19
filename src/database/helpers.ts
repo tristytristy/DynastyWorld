@@ -367,12 +367,49 @@ export function saveSnapshot(
   );
 }
 
+/**
+ * Compressed variant for league-scale snapshots (16k+ player payloads).
+ * sql.js keeps the whole database in memory and rewrites the full file on
+ * every persist, so multi-MB raw JSON per season would compound badly across
+ * a long dynasty — gzip+base64 keeps league snapshots to a few hundred KB
+ * each (~8-10x smaller) with no schema change. The `gz:` marker lets
+ * getSnapshot() transparently decompress, so readers don't care which way a
+ * snapshot was written.
+ */
+const GZIP_MARKER = 'gz:';
+
+export function saveSnapshotCompressed(
+  seasonId: number,
+  name: string,
+  payload: unknown,
+  extractionVersion = '1',
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const zlib = require('zlib') as typeof import('zlib');
+  const compressed = GZIP_MARKER + zlib.gzipSync(JSON.stringify(payload)).toString('base64');
+  run(
+    `INSERT INTO season_snapshots (season_id, name, payload, extracted_at, extraction_version)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(season_id, name) DO UPDATE SET
+       payload = excluded.payload,
+       extracted_at = excluded.extracted_at,
+       extraction_version = excluded.extraction_version`,
+    [seasonId, name, compressed, new Date().toISOString(), extractionVersion],
+  );
+}
+
 export function getSnapshot<T = unknown>(seasonId: number, name: string): T | undefined {
   const row = get<{ payload: string }>(
     'SELECT payload FROM season_snapshots WHERE season_id = ? AND name = ?',
     [seasonId, name],
   );
-  return row ? (JSON.parse(row.payload) as T) : undefined;
+  if (!row) return undefined;
+  if (row.payload.startsWith(GZIP_MARKER)) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const zlib = require('zlib') as typeof import('zlib');
+    return JSON.parse(zlib.gunzipSync(Buffer.from(row.payload.slice(GZIP_MARKER.length), 'base64')).toString('utf8')) as T;
+  }
+  return JSON.parse(row.payload) as T;
 }
 
 // ---- Ranking history --------------------------------------------------------

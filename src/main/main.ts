@@ -436,6 +436,14 @@ app
               );
               await new Promise((r) => setTimeout(r, 500));
             }
+            // Scrolls an element to the top of the viewport before capture —
+            // for sections living below the fold on long pages.
+            if (process.env.SCREENSHOT_SCROLL_SELECTOR) {
+              await win.webContents.executeJavaScript(
+                `document.querySelector(${JSON.stringify(process.env.SCREENSHOT_SCROLL_SELECTOR)})?.scrollIntoView({ block: 'start' });`,
+              );
+              await new Promise((r) => setTimeout(r, 400));
+            }
             if (process.env.SCREENSHOT_FORCE_HOVER_SELECTOR) {
               // CDP screenshots can't simulate a real mouse hover — force any
               // group-hover/hover-reveal opacity rule visible for the matched

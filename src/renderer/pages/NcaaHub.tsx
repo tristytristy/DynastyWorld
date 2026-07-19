@@ -5,6 +5,10 @@ import { CoachPortrait } from '../components/common/CoachPortrait';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { usePlayerModal } from '../data/PlayerModalProvider';
+import { useEditorModal } from '../data/EditorModalProvider';
+import { EditButton } from '../components/common/CoachCard';
+import { abbreviateClass } from '../lib/rosterOrder';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   getBowlLogoPath,
@@ -19,6 +23,11 @@ import type {
   NcaaHubRecordWatchEntry,
   NcaaHubRecruitingClassEntry,
   NcaaHubTop25Entry,
+  LeagueTeamSummary,
+  LeagueTeamRoster,
+  LeagueRosterPlayer,
+  OffensiveStatLine,
+  DefensiveStatLine,
 } from '../../shared/types';
 
 function rankChip(rank: number | null) {
@@ -841,6 +850,212 @@ export function NcaaHub() {
           </SurfaceCard>
         </div>
       </div>
+
+      {id && <LeagueRostersSection dynastyId={id} seasonId={seasonId} />}
     </div>
+  );
+}
+
+/**
+ * League-wide roster browse (2026-07-20) — every team in the league from the
+ * compressed per-season league snapshot, not just the user's own. Player
+ * click opens the shared profile modal (leaguewide fallback: portrait +
+ * identity); the pencil opens the same editor every roster uses — the write
+ * path was always leaguewide (PresentationId lookup), this is just the first
+ * entry point for other teams' players. A season synced before this feature
+ * shipped has no league snapshot; the empty state says exactly that.
+ */
+function LeagueRostersSection({ dynastyId, seasonId }: { dynastyId: string; seasonId?: number }) {
+  const [teams, setTeams] = useState<LeagueTeamSummary[] | null | undefined>(undefined);
+  const [teamIndex, setTeamIndex] = useState<number | ''>('');
+  const [roster, setRoster] = useState<LeagueTeamRoster | null | undefined>(null);
+  const [query, setQuery] = useState('');
+  const { openPlayerModal } = usePlayerModal();
+  const { openPlayerEditor } = useEditorModal();
+  const { seasons } = useSelectedSeason();
+  const isCurrentSeason = seasons.find((s) => s.id === (roster?.seasonId ?? seasonId))?.isCurrent === true;
+
+  useEffect(() => {
+    let cancelled = false;
+    setTeams(undefined);
+    setTeamIndex('');
+    setRoster(null);
+    window.api.db.getLeagueTeams(dynastyId, seasonId).then((result) => {
+      if (!cancelled) setTeams(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, seasonId]);
+
+  useEffect(() => {
+    if (teamIndex === '') {
+      setRoster(null);
+      return;
+    }
+    let cancelled = false;
+    setRoster(undefined);
+    window.api.db.getLeagueTeamRoster(dynastyId, teamIndex, seasonId).then((result) => {
+      if (!cancelled) setRoster(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, teamIndex, seasonId]);
+
+  const filteredPlayers = (roster && roster !== null ? roster.players : [])
+    .filter((p) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+        p.position.toLowerCase() === q ||
+        String(p.jerseyNumber) === q
+      );
+    })
+    .sort((a, b) => b.overallRating - a.overallRating);
+
+  function statSummary(p: LeagueRosterPlayer): string {
+    const s = p.seasonStat?.season;
+    if (!s) return '—';
+    if (p.seasonStat?.category === 'offense') {
+      const line = s as OffensiveStatLine;
+      const parts: string[] = [];
+      if (line.passAttempts > 0) parts.push(`${line.passYards} pass yds, ${line.passTDs} TD`);
+      if (line.rushAttempts > 0) parts.push(`${line.rushYards} rush yds`);
+      if (line.receptions > 0) parts.push(`${line.receptions} rec, ${line.receivingYards} yds`);
+      return parts.join(' · ') || '—';
+    }
+    const line = s as DefensiveStatLine;
+    const parts = [`${line.tackles + line.assistedTackles} tkl`];
+    if (line.sacks > 0) parts.push(`${line.sacks} sck`);
+    if (line.interceptions > 0) parts.push(`${line.interceptions} INT`);
+    return parts.join(' · ');
+  }
+
+  return (
+    <SurfaceCard>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">League Rosters</p>
+          <h3 className="mt-1 font-display text-section-title font-semibold text-slate-950 dark:text-white">
+            Browse any team in the country.
+          </h3>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={teamIndex}
+            onChange={(e) => setTeamIndex(e.target.value === '' ? '' : Number(e.target.value))}
+            aria-label="League team"
+            className="border border-slate-200/80 bg-slate-50/90 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            <option value="">Select a team...</option>
+            {(teams ?? []).map((t) => (
+              <option key={t.teamIndex} value={t.teamIndex}>
+                {t.displayName} ({t.playerCount})
+              </option>
+            ))}
+          </select>
+          {roster && roster !== null && (
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, #, position..."
+              aria-label="Search league players"
+              className="border border-slate-200/80 bg-slate-50/90 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+            />
+          )}
+        </div>
+      </div>
+
+      {teams === null && (
+        <p className="mt-4 border border-dashed border-slate-300/80 px-5 py-6 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
+          No league snapshot for this season — league rosters are captured at sync, so re-sync this dynasty to browse
+          every team. Seasons synced before this feature shipped can&apos;t be back-filled.
+        </p>
+      )}
+      {roster === undefined && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Loading roster...</p>}
+
+      {roster && roster !== null && (
+        <div className="mt-4 flex items-center gap-3">
+          <TeamLogo team={{ assetName: roster.displayName, label: roster.displayName }} size="md" />
+          <p className="font-display text-card-title font-semibold text-slate-950 dark:text-white">
+            {roster.displayName} <span className="text-slate-400 dark:text-slate-500">— {filteredPlayers.length} players</span>
+          </p>
+        </div>
+      )}
+
+      {roster && roster !== null && (
+        <div className="mt-3 overflow-x-auto border border-slate-200/80 dark:border-slate-800">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead className="bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
+              <tr>
+                {isCurrentSeason && <th className="px-3 py-2.5" aria-hidden="true" />}
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Pos</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Player</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Class</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.18em]">OVR</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Ht/Wt</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Hometown</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em]">Season</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPlayers.slice(0, 120).map((p) => (
+                <tr
+                  key={p.id}
+                  onClick={() =>
+                    openPlayerModal(dynastyId, p.id, roster.seasonId, filteredPlayers.map((x) => x.id), {
+                      name: `${p.firstName} ${p.lastName}`,
+                      position: p.position,
+                      teamDisplayName: roster.displayName,
+                      portraitAssetName: p.portraitAssetName,
+                    })
+                  }
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`View ${p.firstName} ${p.lastName}`}
+                  className="cursor-pointer border-b border-slate-200/70 bg-white/60 transition last:border-b-0 hover:bg-slate-100/90 dark:border-slate-800/70 dark:bg-transparent dark:hover:bg-white/5"
+                >
+                  {isCurrentSeason && (
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <EditButton
+                        onClick={() =>
+                          openPlayerEditor({
+                            dynastyId,
+                            playerId: p.id,
+                            playerLabel: `${p.firstName} ${p.lastName}`,
+                          })
+                        }
+                        label={`Edit ${p.firstName} ${p.lastName}`}
+                      />
+                    </td>
+                  )}
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{p.position}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">
+                    {p.firstName} {p.lastName}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{abbreviateClass(p.schoolYear)}</td>
+                  <td className="tnum px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">{p.overallRating}</td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                    {Math.floor(p.heightInches / 12)}&apos;{p.heightInches % 12}&quot; {p.weightPounds}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                    {p.hometown}, {p.homeState}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{statSummary(p)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredPlayers.length > 120 && (
+            <p className="border-t border-slate-200/70 px-3 py-2 text-xs text-slate-400 dark:border-slate-800/70">
+              Showing top 120 by overall — use search to narrow further.
+            </p>
+          )}
+        </div>
+      )}
+    </SurfaceCard>
   );
 }

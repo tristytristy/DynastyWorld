@@ -4,6 +4,7 @@ import { extractTeams, type TeamData } from './extract-teams';
 import { extractCoaches, findUserTeamIndex, type CoachData } from './extract-coaches';
 import { extractRoster, type RosterPlayerData } from './extract-roster';
 import { extractLeaguePortraits, type LeaguePortraitData } from './extract-league-portraits';
+import { extractLeagueRoster, type LeagueRosterData } from './extract-league-roster';
 import { extractSchedule, type GameData } from './extract-schedule';
 import { extractRecruits, type RecruitData } from './extract-recruits';
 import { extractStats, type PlayerStatsData } from './extract-stats';
@@ -25,6 +26,7 @@ export interface ExtractionData {
   coaches: CoachData[];
   roster: RosterPlayerData[];
   leaguePortraits: LeaguePortraitData[];
+  leagueRoster: LeagueRosterData;
   schedule: GameData[];
   recruits: RecruitData[];
   stats: PlayerStatsData[];
@@ -66,6 +68,7 @@ export async function extractAll(
   onProgress?.('roster', 'start');
   const roster = await extractRoster(franchise, userTeam.teamIndex);
   const leaguePortraits = await extractLeaguePortraits(franchise);
+  const leagueRoster = await extractLeagueRoster(franchise, league.seasonYear - league.baseCalendarYear);
   onProgress?.('roster', 'done');
 
   onProgress?.('schedule', 'start');
@@ -110,6 +113,7 @@ export async function extractAll(
     coaches,
     roster,
     leaguePortraits,
+    leagueRoster,
     schedule,
     recruits,
     stats,

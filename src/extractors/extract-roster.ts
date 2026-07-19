@@ -59,7 +59,7 @@ function formatDevTrait(traitDevelopment: string): string {
   return traitDevelopment.replace(/^College_/, '').replace(/_/g, ' ');
 }
 
-function mapPlayer(r: FranchiseRecord): RosterPlayerData {
+export function mapPlayer(r: FranchiseRecord): RosterPlayerData {
   return {
     id: Number(r.PresentationId),
     firstName: String(r.FirstName),

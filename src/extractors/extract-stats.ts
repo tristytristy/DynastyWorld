@@ -92,7 +92,7 @@ const PLAYER_FIELDS = ['PresentationId', 'TeamIndex', 'CareerStats', 'SeasonStat
  * separate category — see extract-kicking.ts — and O-Line stats remain out of
  * scope (not box-score counting stats).
  */
-function categoryFromTableName(name: string): StatCategory | undefined {
+export function categoryFromTableName(name: string): StatCategory | undefined {
   if (name === 'CareerOffensiveStats' || name === 'CareerOffensiveKPReturnStats') return 'offense';
   if (name === 'CareerDefensiveStats' || name === 'CareerDefensiveKPReturnStats') return 'defense';
   return undefined;
@@ -161,7 +161,7 @@ function mapDefensiveLine(r: FranchiseRecord): DefensiveStatLine {
   };
 }
 
-function mapLineForCategory(category: StatCategory, r: FranchiseRecord): OffensiveStatLine | DefensiveStatLine {
+export function mapLineForCategory(category: StatCategory, r: FranchiseRecord): OffensiveStatLine | DefensiveStatLine {
   return category === 'offense' ? mapOffensiveLine(r) : mapDefensiveLine(r);
 }
 

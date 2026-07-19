@@ -8,6 +8,7 @@ import {
   getSeasonByYear,
   recordRankingSnapshot,
   saveSnapshot,
+  saveSnapshotCompressed,
   updateDynasty,
   type Dynasty,
   type Season,
@@ -86,6 +87,7 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   saveSnapshot(season.id, 'coaches', extraction.coaches);
   saveSnapshot(season.id, 'roster', extraction.roster);
   saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
+  saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
   saveSnapshot(season.id, 'schedule', extraction.schedule);
   saveSnapshot(season.id, 'recruits', extraction.recruits);
   saveSnapshot(season.id, 'stats', extraction.stats);
