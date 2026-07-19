@@ -2,9 +2,14 @@ import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { PageHeader } from '../components/ui/PageHeader';
 import { StatTile } from '../components/ui/StatTile';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
+import { usePlayerModal } from '../data/PlayerModalProvider';
+import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   getBowlLogoPath,
@@ -91,12 +96,80 @@ function GameRow({ game }: { game: GameSummary }) {
   );
 }
 
+/** League-mode Team Hub — identity, record, and roster leaders for any team from the per-season league snapshots. Full hub features (trophies, rankings history, recent games detail) are user-team only. */
+function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
+  const [games, setGames] = useState<import('../../shared/types').LeagueTeamGame[] | null | undefined>(undefined);
+  const [roster, setRoster] = useState<import('../../shared/types').LeagueTeamRoster | null | undefined>(undefined);
+  const { openPlayerModal } = usePlayerModal();
+
+  useEffect(() => {
+    let cancelled = false;
+    setGames(undefined);
+    setRoster(undefined);
+    window.api.db.getLeagueTeamSchedule(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setGames(r));
+    window.api.db.getLeagueTeamRoster(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setRoster(r));
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, teamIndex, seasonId]);
+
+  const wins = (games ?? []).filter((g) => g.result === 'W').length;
+  const losses = (games ?? []).filter((g) => g.result === 'L').length;
+  const topPlayers = [...(roster?.players ?? [])].sort((a, b) => b.overallRating - a.overallRating).slice(0, 10);
+  const avgOvr =
+    roster && roster.players.length > 0
+      ? (roster.players.reduce((s, p) => s + p.overallRating, 0) / roster.players.length).toFixed(1)
+      : '—';
+
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Trophies, ranking history, and game detail are tracked for your own team only." actions={<TeamSwitcher />} />
+      <div className="flex items-center gap-4">
+        <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
+        <div className="grid flex-1 gap-3 sm:grid-cols-3">
+          <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
+          <StatTile label="Roster" value={String(roster?.players.length ?? 0)} />
+          <StatTile label="Average OVR" value={avgOvr} />
+        </div>
+      </div>
+      <SurfaceCard>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Top players</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {topPlayers.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() =>
+                openPlayerModal(dynastyId, p.id, roster?.seasonId, topPlayers.map((x) => x.id), {
+                  name: `${p.firstName} ${p.lastName}`,
+                  position: p.position,
+                  teamDisplayName: teamName,
+                  portraitAssetName: p.portraitAssetName,
+                })
+              }
+              className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
+            >
+              <PlayerPortrait player={p} size="sm" className="!h-9 !w-9" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-white">
+                {p.firstName} {p.lastName}
+              </span>
+              <span className="type-meta shrink-0 text-slate-500 dark:text-slate-400">{p.position}</span>
+              <span className="type-stat-sm shrink-0 text-slate-950 dark:text-white">{p.overallRating}</span>
+            </button>
+          ))}
+        </div>
+      </SurfaceCard>
+    </div>
+  );
+}
+
 export function DynastyOverview() {
   const { id } = useParams<{ id: string }>();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const [overview, setOverview] = useState<SeasonOverview | null | undefined>(undefined);
   const [trophies, setTrophies] = useState<TeamTrophies | null | undefined>(undefined);
   const [rankings, setRankings] = useState<RankingsOverview | null | undefined>(undefined);
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
 
   useEffect(() => {
     if (!id) return;
@@ -114,6 +187,11 @@ export function DynastyOverview() {
       cancelled = true;
     };
   }, [id, seasonId]);
+
+  if (id && viewedTeamIndex !== null) {
+    const teamName = leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? 'Team';
+    return <LeagueTeamHub dynastyId={id} teamIndex={viewedTeamIndex} teamName={teamName} seasonId={seasonId} />;
+  }
 
   if (overview === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading Team Hub...</p>;

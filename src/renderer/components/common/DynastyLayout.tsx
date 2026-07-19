@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
+import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
 import type { DynastyTheme } from '../../../shared/types';
 
 // Hard-edged tabs in the display face; the active tab carries the signature
@@ -91,6 +92,7 @@ export function DynastyLayout() {
 
   return (
     <SelectedSeasonProvider dynastyId={id}>
+      <ViewedTeamProvider dynastyId={id}>
       <div style={colorVars as unknown as CSSProperties} className="space-y-6">
         <nav className="rounded-xl border border-white/65 bg-white/76 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.38)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76">
           <div className="corner-cut flex flex-wrap items-center gap-2 border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
@@ -130,6 +132,7 @@ export function DynastyLayout() {
         <HistoryOnlySeasonBanner dynastyId={id} />
         <Outlet />
       </div>
+      </ViewedTeamProvider>
     </SelectedSeasonProvider>
   );
 }

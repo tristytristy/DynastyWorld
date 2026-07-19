@@ -88,6 +88,7 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   saveSnapshot(season.id, 'roster', extraction.roster);
   saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
   saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
+  saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
   saveSnapshot(season.id, 'schedule', extraction.schedule);
   saveSnapshot(season.id, 'recruits', extraction.recruits);
   saveSnapshot(season.id, 'stats', extraction.stats);

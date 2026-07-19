@@ -9,9 +9,11 @@ import { TeamLogo } from '../components/common/TeamLogo';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
+import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
 import { getBowlLogoPath } from '../lib/trophyAssetMapping';
-import type { ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { LeagueTeamGame, ScheduleGame, ScheduleOverview } from '../../shared/types';
 
 /** Traditional-bowl logo matching is a normalized-name guess (see trophyAssetMapping.ts) — fail over to the generic mark rather than a broken image icon. */
 function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): void {
@@ -147,11 +149,98 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
   );
 }
 
+/**
+ * League-mode schedule (viewing another team): compact all-games table from
+ * the league schedule snapshot — opponent, type, result from that team's
+ * perspective. No stadiums/kickoff/game-detail links: those are only tracked
+ * for the user's own games.
+ */
+function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
+  const [games, setGames] = useState<LeagueTeamGame[] | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setGames(undefined);
+    window.api.db.getLeagueTeamSchedule(dynastyId, teamIndex, seasonId).then((result) => {
+      if (!cancelled) setGames(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, teamIndex, seasonId]);
+
+  const wins = (games ?? []).filter((g) => g.result === 'W').length;
+  const losses = (games ?? []).filter((g) => g.result === 'L').length;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Schedule"
+        title={`${teamName} schedule.`}
+        description="From the league-wide season snapshot — results and opponents for any team in the country. Kickoff times, stadiums, and game detail are tracked for your own games only."
+        actions={<TeamSwitcher />}
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
+        <StatTile label="Games" value={String(games?.length ?? 0)} />
+      </div>
+      <SurfaceCard className="overflow-hidden p-0">
+        {games === undefined && <p className="p-6 text-sm text-slate-500 dark:text-slate-400">Loading schedule...</p>}
+        {games === null && (
+          <p className="p-6 text-sm text-slate-400 dark:text-slate-500">
+            No league schedule snapshot for this season — re-sync this dynasty to capture it.
+          </p>
+        )}
+        {games && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Wk</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Opponent</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Type</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.18em]">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {games.map((g) => (
+                  <tr key={g.gameId} className="border-b border-slate-200/70 bg-white/60 last:border-b-0 dark:border-slate-800/70 dark:bg-transparent">
+                    <td className="tnum px-4 py-3 text-slate-500 dark:text-slate-400">{g.week}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">
+                        <TeamLogo team={{ assetName: g.opponent, label: g.opponent }} size="sm" />
+                        <span>
+                          {g.isHome ? 'vs' : '@'} {g.opponent}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{g.bowlName ?? (g.weekType === 'RegularSeason' ? '—' : g.weekType)}</td>
+                    <td className="tnum px-4 py-3 text-right">
+                      {g.result === null ? (
+                        <span className="text-slate-400 dark:text-slate-500">Upcoming</span>
+                      ) : (
+                        <span className={`font-semibold ${g.result === 'W' ? 'text-green-700 dark:text-green-400' : g.result === 'L' ? 'text-red-700 dark:text-red-400' : 'text-slate-500'}`}>
+                          {g.result} {g.teamScore}-{g.opponentScore}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SurfaceCard>
+    </div>
+  );
+}
+
 export function Schedule() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { selectedSeasonId: seasonId } = useSelectedSeason();
   const [overview, setOverview] = useState<ScheduleOverview | null | undefined>(undefined);
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
 
   useEffect(() => {
     if (!id) return;
@@ -164,6 +253,11 @@ export function Schedule() {
       cancelled = true;
     };
   }, [id, seasonId]);
+
+  if (id && viewedTeamIndex !== null) {
+    const teamName = leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? 'Team';
+    return <LeagueTeamSchedule dynastyId={id} teamIndex={viewedTeamIndex} teamName={teamName} seasonId={seasonId} />;
+  }
 
   if (overview === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading schedule...</p>;
@@ -191,6 +285,7 @@ export function Schedule() {
         eyebrow="Schedule"
         title="Weekly flow, kickoff context, and results in one place."
         description="Review the full season board, move into game detail from any row, and keep key context visible while navigating between years."
+        actions={<TeamSwitcher userTeamName={overview.games[0]?.teamName} />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

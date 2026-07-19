@@ -924,6 +924,18 @@ export interface LeagueRosterPlayer extends RosterPlayer {
   seasonStat: { playerId: number; category: 'offense' | 'defense'; season: OffensiveStatLine | DefensiveStatLine | null } | null;
 }
 
+export interface LeagueTeamGame {
+  gameId: number;
+  week: number;
+  weekType: string;
+  bowlName: string | null;
+  isHome: boolean;
+  opponent: string;
+  teamScore: number | null;
+  opponentScore: number | null;
+  result: 'W' | 'L' | 'T' | null;
+}
+
 export interface LeagueTeamRoster {
   teamIndex: number;
   displayName: string;
@@ -1185,6 +1197,7 @@ export interface DynastyApi {
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
+    getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
     getTeamAwardResults: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;

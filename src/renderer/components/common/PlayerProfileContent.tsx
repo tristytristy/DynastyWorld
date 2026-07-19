@@ -760,6 +760,7 @@ export function PlayerProfileContent({
   const [teamAwardWins, setTeamAwardWins] = useState<PlayerTeamAwardWin[]>([]);
   /** The season this component actually resolved and is rendering — may differ from the `seasonId` prop if that season's roster didn't have the player and a fallback scan found them in an older one. Drives the Edit button's current-season-only restriction below. */
   const [resolvedSeasonId, setResolvedSeasonId] = useState<number | undefined>(seasonId);
+  const [heroTeamName, setHeroTeamName] = useState<string | null>(null);
   const [tab, setTab] = useState<ProfileTab>('overview');
   const [seasonsList, setSeasonsList] = useState<SeasonSummary[]>([]);
   const { openPlayerEditor } = useEditorModal();
@@ -845,6 +846,17 @@ export function PlayerProfileContent({
       setResolvedSeasonId(resolved?.seasonId);
       setRoster(resolved?.roster ?? null);
       setAllStats(resolved?.stats ?? null);
+
+      // Team identity for the hero — that season's actual team (a player who
+      // transferred shows the school they were on that year, not the
+      // dynasty's current one).
+      if (resolved) {
+        window.api.db.getSeasonOverview(dynastyId, resolved.seasonId).then((overview) => {
+          if (!cancelled) setHeroTeamName(overview?.teamName ?? null);
+        });
+      } else {
+        setHeroTeamName(null);
+      }
 
       if (resolved) {
         const [gamelogResult, scheduleResult] = await Promise.all([
@@ -967,6 +979,12 @@ export function PlayerProfileContent({
               <span className="corner-cut-sm inline-flex h-10 min-w-[2.6rem] items-center justify-center bg-[var(--team-primary)] px-3 font-display text-lg font-bold text-[var(--team-on-primary)]">
                 {player.jerseyNumber}
               </span>
+              {heroTeamName && (
+                <span className="flex items-center gap-2">
+                  <TeamLogo team={{ assetName: heroTeamName, label: heroTeamName }} size="sm" />
+                  <span className="type-eyebrow text-slate-500 dark:text-slate-400">{heroTeamName}</span>
+                </span>
+              )}
               <span className="type-eyebrow text-slate-500 dark:text-slate-400">
                 {player.position} · {abbreviateClass(player.schoolYear)}
               </span>

@@ -10,6 +10,8 @@ import {
   type StatMode,
 } from '../components/common/StatisticsCategorySection';
 import { PlayerComparison, type ComparablePlayer } from '../components/common/PlayerComparison';
+import { TeamSwitcher } from '../components/common/TeamSwitcher';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { Button } from '../components/ui/Button';
 import { usePlayerModal } from '../data/PlayerModalProvider';
@@ -289,6 +291,9 @@ export function Statistics() {
   const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
   const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
   const [mode, setMode] = useState<StatMode>('season');
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const viewedTeamName =
+    viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
   /** Phase 4 splits — scope the four gamelog-backed categories to a subset of played games. */
   const [gameFilter, setGameFilter] = useState<'all' | 'regular' | 'postseason' | 'home' | 'away'>('all');
   const [opponentFilter, setOpponentFilter] = useState<string>('all');
@@ -299,6 +304,35 @@ export function Statistics() {
     window.api.db.getSeasonOverview(id, seasonId).then((result) => {
       if (!cancelled) setOverview(result);
     });
+    if (viewedTeamIndex !== null) {
+      // League mode: another team's players from the per-season league
+      // snapshot. Team stats / kicking / gamelog / schedule aren't tracked
+      // for non-user teams — those sections get honest empty states instead
+      // of fabricated zeros.
+      setTeamStats(null);
+      setKickingStats([]);
+      setSchedule(null);
+      setGamelog([]);
+      window.api.db.getLeagueTeamRoster(id, viewedTeamIndex, seasonId).then((result) => {
+        if (cancelled) return;
+        setRoster(result?.players ?? null);
+        setPlayerStats(
+          result
+            ? result.players
+                .filter((p) => p.seasonStat !== null)
+                .map((p) => ({
+                  playerId: p.id,
+                  category: p.seasonStat!.category,
+                  career: null,
+                  season: p.seasonStat!.season,
+                }))
+            : null,
+        );
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     window.api.db.getTeamStats(id, seasonId).then((result) => {
       if (!cancelled) setTeamStats(result);
     });
@@ -320,7 +354,7 @@ export function Statistics() {
     return () => {
       cancelled = true;
     };
-  }, [id, seasonId]);
+  }, [id, seasonId, viewedTeamIndex]);
 
   const allRows = useMemo(() => {
     if (!roster || !playerStats) return [];
@@ -563,13 +597,16 @@ export function Statistics() {
       <SurfaceCard>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <TeamLogo team={{ assetName: overview.teamName, label: overview.teamName }} size="lg" />
+            <TeamLogo
+              team={{ assetName: viewedTeamName ?? overview.teamName, label: viewedTeamName ?? overview.teamName }}
+              size="lg"
+            />
             <div>
               <p className="type-eyebrow text-slate-400 dark:text-slate-500">
                 Statistics
               </p>
               <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-                {overview.teamName}
+                {viewedTeamName ?? overview.teamName}
               </h2>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Season {overview.seasonYear} — last synced {new Date(overview.lastSyncedAt).toLocaleDateString()}
@@ -578,6 +615,7 @@ export function Statistics() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <TeamSwitcher userTeamName={overview.teamName} />
             <Button variant="secondary" onClick={() => setCompareOpen(true)} disabled={comparablePlayers.length < 2}>
               Compare Players
             </Button>

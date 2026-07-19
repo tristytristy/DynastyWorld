@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
 import { PageHeader } from '../components/ui/PageHeader';
+import { TeamSwitcher } from '../components/common/TeamSwitcher';
+import { TeamLogo } from '../components/common/TeamLogo';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { formatAwardLabel } from '../lib/awardFormat';
 import type {
   LeagueHistoryYearEntry,
@@ -227,6 +230,9 @@ function DynastyResume({ history }: { history: ProgramHistoryOverview }) {
 export function History() {
   const { id } = useParams<{ id: string }>();
   const [history, setHistory] = useState<ProgramHistoryOverview | null | undefined>(undefined);
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const viewedLeagueTeamName =
+    viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
 
   useEffect(() => {
     if (!id) return;
@@ -259,9 +265,53 @@ export function History() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Program History"
-        title={`The school record book and dynasty resume for ${history.teamName}.`}
-        description="School records come straight from the save's built-in team record book. The dynasty resume, timeline, coaches, and milestones accumulate across your dynasty archive in the app."
+        title={
+          viewedLeagueTeamName
+            ? `${viewedLeagueTeamName} — championships on record.`
+            : `The school record book and dynasty resume for ${history.teamName}.`
+        }
+        description={
+          viewedLeagueTeamName
+            ? 'From the league history the save itself tracks — national and conference titles by year. The full record book, resume, and timeline are dynasty-scoped and available for your own program only.'
+            : "School records come straight from the save's built-in team record book. The dynasty resume, timeline, coaches, and milestones accumulate across your dynasty archive in the app."
+        }
+        actions={<TeamSwitcher userTeamName={history.teamName} />}
       />
+
+      {viewedLeagueTeamName && (
+        <SurfaceCard>
+          <div className="flex items-center gap-3">
+            <TeamLogo team={{ assetName: viewedLeagueTeamName, label: viewedLeagueTeamName }} size="md" />
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Titles in tracked league history</p>
+          </div>
+          <div className="mt-3 space-y-2">
+            {history.leagueHistory
+              .map((year) => {
+                const national = year.nationalChampion?.teamName === viewedLeagueTeamName;
+                const conf = year.conferenceChampions.find((c) => c.winningTeamName === viewedLeagueTeamName);
+                if (!national && !conf) return null;
+                return (
+                  <div key={year.seasonYear} className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm dark:border-slate-800 dark:bg-white/5">
+                    <span className="type-stat-sm text-slate-950 dark:text-white">{year.seasonYear}</span>
+                    <span className="text-slate-700 dark:text-slate-200">
+                      {national ? 'National Champions' : `${conf?.conferenceName ?? 'Conference'} Champions`}
+                    </span>
+                  </div>
+                );
+              })
+              .filter(Boolean)}
+            {history.leagueHistory.every(
+              (year) =>
+                year.nationalChampion?.teamName !== viewedLeagueTeamName &&
+                !year.conferenceChampions.some((c) => c.winningTeamName === viewedLeagueTeamName),
+            ) && (
+              <p className="text-sm text-slate-400 dark:text-slate-500">
+                No national or conference titles for this program in the tracked years.
+              </p>
+            )}
+          </div>
+        </SurfaceCard>
+      )}
 
       <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-5 py-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
         All-time school title counts are not exposed by the readable dynasty save yet, so title totals on this page are

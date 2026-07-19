@@ -9,6 +9,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
+import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import {
   CLASS_ORDER,
   POSITION_ORDER,
@@ -185,17 +187,27 @@ export function Roster() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [view, setView] = useState<ViewMode>('list');
 
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const viewedTeamName =
+    viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     setRoster(undefined);
-    window.api.db.getRoster(id, seasonId).then((result) => {
+    // League mode: another team's roster from the per-season league snapshot
+    // (LeagueRosterPlayer extends RosterPlayer, so the page renders it as-is).
+    const fetchRoster =
+      viewedTeamIndex === null
+        ? window.api.db.getRoster(id, seasonId)
+        : window.api.db.getLeagueTeamRoster(id, viewedTeamIndex, seasonId).then((r) => r?.players ?? null);
+    fetchRoster.then((result) => {
       if (!cancelled) setRoster(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [id, seasonId]);
+  }, [id, seasonId, viewedTeamIndex]);
 
   const positions = useMemo(() => {
     const present = new Set((roster ?? []).map((player) => player.position));
@@ -233,12 +245,30 @@ export function Roster() {
   function openPlayer(playerId: number) {
     if (!id) return;
     // The exact currently-visible order (search/filter/sort applied) — powers the modal's Previous/Next.
-    openPlayerModal(id, playerId, seasonId, sorted.map((p) => p.id));
+    const player = sorted.find((p) => p.id === playerId);
+    openPlayerModal(
+      id,
+      playerId,
+      seasonId,
+      sorted.map((p) => p.id),
+      viewedTeamIndex !== null && player && viewedTeamName
+        ? {
+            name: `${player.firstName} ${player.lastName}`,
+            position: player.position,
+            teamDisplayName: viewedTeamName,
+            portraitAssetName: player.portraitAssetName,
+          }
+        : undefined,
+    );
   }
 
   function refreshRoster() {
     if (!id) return;
-    window.api.db.getRoster(id, seasonId).then(setRoster);
+    if (viewedTeamIndex === null) {
+      window.api.db.getRoster(id, seasonId).then(setRoster);
+    } else {
+      window.api.db.getLeagueTeamRoster(id, viewedTeamIndex, seasonId).then((r) => setRoster(r?.players ?? null));
+    }
   }
 
   function editPlayer(player: RosterPlayer) {
@@ -279,8 +309,9 @@ export function Roster() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Roster"
-        title="Search, compare, and review every player in one pass."
+        title={viewedTeamName ? `${viewedTeamName} roster.` : 'Search, compare, and review every player in one pass.'}
         description="Use filters to narrow the board, switch between list and gallery views, and jump straight into individual player detail."
+        actions={<TeamSwitcher />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
