@@ -1,6 +1,11 @@
 import { getDb, persist } from './init';
 import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
-import type { MediaItem, MediaItemPatch } from '../shared/types';
+import { getRoster } from './getRoster';
+import { getSchedule } from './getSchedule';
+import type { MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer } from '../shared/types';
+
+/** Resolved display shape minus the absolute path — the media IPC layer adds the path (it owns the on-disk library location; see withPath in src/main/ipc/media.ts). */
+export type MediaItemDisplay = Omit<MediaItemResolved, 'absolutePath'>;
 
 /**
  * Media gallery metadata (schema v6). The files themselves live under
@@ -57,6 +62,85 @@ export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[
   }
   stmt.free();
   return items;
+}
+
+/**
+ * Resolves display metadata (game label, tagged players' names/portraits)
+ * against each item's OWN season's roster and schedule snapshots — items on a
+ * player's bio span seasons, so per-season resolution is what keeps a
+ * sophomore-year photo labeled with the sophomore-year game. Snapshot reads
+ * are cached per season within one call.
+ */
+function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[] {
+  const rosterBySeason = new Map<number, ReturnType<typeof getRoster>>();
+  const scheduleBySeason = new Map<number, ReturnType<typeof getSchedule>>();
+
+  return items.map((item) => {
+    if (!rosterBySeason.has(item.seasonId)) {
+      rosterBySeason.set(item.seasonId, getRoster(dynastyId, item.seasonId));
+      scheduleBySeason.set(item.seasonId, getSchedule(dynastyId, item.seasonId));
+    }
+    const roster = rosterBySeason.get(item.seasonId) ?? undefined;
+    const schedule = scheduleBySeason.get(item.seasonId) ?? undefined;
+
+    let gameLabel: string | null = null;
+    if (item.gameId !== null) {
+      const game = schedule?.games.find((g) => g.gameId === item.gameId);
+      if (game) {
+        const score =
+          game.teamScore !== null && game.opponentScore !== null
+            ? ` ${game.result ?? ''} ${game.teamScore}-${game.opponentScore}`
+            : '';
+        gameLabel = `Wk ${game.week} ${game.isHome ? 'vs' : '@'} ${game.opponent}${score}`;
+      }
+    }
+
+    const taggedPlayers: MediaTaggedPlayer[] = item.playerIds.map((playerId) => {
+      const player = roster?.find((p) => p.id === playerId);
+      return player
+        ? {
+            playerId,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            position: player.position,
+            portraitAssetName: player.portraitAssetName,
+          }
+        : { playerId, firstName: 'Player', lastName: `#${playerId}`, position: '', portraitAssetName: null };
+    });
+
+    return { ...item, gameLabel, taggedPlayers };
+  });
+}
+
+/** Every media item this player is tagged in, across all of the dynasty's seasons, newest first — powers the Media tab on player bios. */
+export function listMediaForPlayer(dynastyId: string, playerId: number): MediaItemDisplay[] {
+  const stmt = getDb().prepare(
+    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? ORDER BY created_at DESC, id DESC',
+  );
+  stmt.bind([dynastyId]);
+  const items: MediaItem[] = [];
+  while (stmt.step()) {
+    const item = mapRow(stmt.getAsObject() as unknown as MediaRow);
+    if (item.playerIds.includes(playerId)) items.push(item);
+  }
+  stmt.free();
+  return resolveItems(dynastyId, items);
+}
+
+/** Every media item linked to one game — powers the media section on the Game info page. Undefined seasonId resolves to the current season, the same convention as every other season-scoped query. */
+export function listMediaForGame(dynastyId: string, seasonId: number | undefined, gameId: number): MediaItemDisplay[] {
+  const season = seasonId !== undefined ? getSeasonById(seasonId) : getCurrentSeason(dynastyId);
+  if (!season || season.dynastyId !== dynastyId) return [];
+  const stmt = getDb().prepare(
+    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? AND season_id = ? AND game_id = ? ORDER BY created_at DESC, id DESC',
+  );
+  stmt.bind([dynastyId, season.id, gameId]);
+  const items: MediaItem[] = [];
+  while (stmt.step()) {
+    items.push(mapRow(stmt.getAsObject() as unknown as MediaRow));
+  }
+  stmt.free();
+  return resolveItems(dynastyId, items);
 }
 
 export function addMediaItem(

@@ -3,7 +3,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
 import type { MediaItemPatch, MediaItemWithPath } from '../../shared/types';
-import { addMediaItem, deleteMediaItem, listMediaItems, updateMediaItem } from '../../database/media';
+import {
+  addMediaItem,
+  deleteMediaItem,
+  listMediaForGame,
+  listMediaForPlayer,
+  listMediaItems,
+  updateMediaItem,
+} from '../../database/media';
+import type { MediaItemResolved } from '../../shared/types';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'm4v'];
@@ -33,7 +41,10 @@ function libraryFileName(originalPath: string): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${base}`;
 }
 
-function withPath(dynastyId: string, item: Omit<MediaItemWithPath, 'absolutePath'>): MediaItemWithPath {
+function withPath<T extends Omit<MediaItemWithPath, 'absolutePath'>>(
+  dynastyId: string,
+  item: T,
+): T & { absolutePath: string } {
   return { ...item, absolutePath: path.join(mediaDirFor(dynastyId), item.fileName) };
 }
 
@@ -83,6 +94,20 @@ export function registerMediaHandlers(): void {
     async (_event, dynastyId: string, seasonId?: number): Promise<MediaItemWithPath[] | undefined> => {
       const items = listMediaItems(dynastyId, seasonId);
       return items?.map((item) => withPath(dynastyId, item));
+    },
+  );
+
+  ipcMain.handle(
+    IPC.media.listForPlayer,
+    async (_event, dynastyId: string, playerId: number): Promise<MediaItemResolved[]> => {
+      return listMediaForPlayer(dynastyId, playerId).map((item) => withPath(dynastyId, item));
+    },
+  );
+
+  ipcMain.handle(
+    IPC.media.listForGame,
+    async (_event, dynastyId: string, seasonId: number | undefined, gameId: number): Promise<MediaItemResolved[]> => {
+      return listMediaForGame(dynastyId, seasonId, gameId).map((item) => withPath(dynastyId, item));
     },
   );
 

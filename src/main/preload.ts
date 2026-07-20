@@ -87,6 +87,8 @@ const api: DynastyApi = {
     pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
     addFiles: (dynastyId, seasonId, filePaths) => ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),
     list: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.list, dynastyId, seasonId),
+    listForPlayer: (dynastyId, playerId) => ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
+    listForGame: (dynastyId, seasonId, gameId) => ipcRenderer.invoke(IPC.media.listForGame, dynastyId, seasonId, gameId),
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
     remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
   },

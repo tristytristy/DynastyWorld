@@ -11,6 +11,7 @@ import { gameImpactScore, gameResultLine } from '../../../shared/gameImpactScore
 import type { PlayerModalFallback } from '../../data/PlayerModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { EditButton } from './CoachCard';
+import { MediaGallery } from './MediaGallery';
 import type {
   AwardsOverview,
   SeasonSummary,
@@ -19,6 +20,7 @@ import type {
   GameLogEntry,
   HonorRosterEntry,
   LeagueAward,
+  MediaItemResolved,
   OffensiveGameLine,
   OffensiveStatLine,
   PlayerEditFields,
@@ -534,17 +536,47 @@ function buildPlayerHonorSeasons(awardHistory: AwardsBySeason[], playerId: numbe
  * existing editor IPC (read-only reuse — current season only, since the save
  * has long since moved past any historical season's state).
  */
-type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'attributes' | 'gamelog' | 'history';
+type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'media' | 'attributes' | 'gamelog' | 'history';
 
 const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'stats', label: 'Stats' },
   { key: 'career', label: 'Career' },
   { key: 'awards', label: 'Awards' },
+  { key: 'media', label: 'Media' },
   { key: 'attributes', label: 'Attributes' },
   { key: 'gamelog', label: 'Game Log' },
   { key: 'history', label: 'History' },
 ];
+
+/** Media tab — everything this player is tagged in across all seasons, auto-populated from Media-page tags. Fetches lazily on first open. */
+function PlayerMediaTab({ dynastyId, playerId }: { dynastyId: string; playerId: number }) {
+  const [items, setItems] = useState<MediaItemResolved[] | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setItems(undefined);
+    window.api.media.listForPlayer(dynastyId, playerId).then((result) => {
+      if (!cancelled) setItems(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, playerId]);
+
+  if (items === undefined) {
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>;
+  }
+  if (items.length === 0) {
+    return (
+      <EmptySection
+        title="Media"
+        message="No photos or clips tag this player yet. Tag them on an upload in the Media page and it shows up here automatically."
+      />
+    );
+  }
+  return <MediaGallery dynastyId={dynastyId} items={items} omitPlayerId={playerId} />;
+}
 
 function profileTabClass(active: boolean): string {
   return [
@@ -1156,6 +1188,8 @@ export function PlayerProfileContent({
             <HonorsSection seasons={honorSeasons} />
           </>
         )}
+
+        {tab === 'media' && <PlayerMediaTab dynastyId={dynastyId} playerId={playerId} />}
 
         {tab === 'attributes' && <AttributesTab dynastyId={dynastyId} playerId={playerId} isCurrentSeason={canEditPlayer} />}
 

@@ -63,6 +63,8 @@ export const IPC = {
     pickFiles: 'media:pickFiles',
     addFiles: 'media:addFiles',
     list: 'media:list',
+    listForPlayer: 'media:listForPlayer',
+    listForGame: 'media:listForGame',
     update: 'media:update',
     remove: 'media:remove',
   },

@@ -968,6 +968,21 @@ export interface MediaItemPatch {
   playerIds: number[];
 }
 
+/** A tagged player's display info, resolved from the item's own season's roster snapshot. */
+export interface MediaTaggedPlayer {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  portraitAssetName: string | null;
+}
+
+/** MediaItemWithPath plus display metadata resolved server-side against the item's OWN season (game label, tagged players) — for the read-only galleries on player bios and game pages, which span or sit outside the Media page's selected season. */
+export interface MediaItemResolved extends MediaItemWithPath {
+  gameLabel: string | null;
+  taggedPlayers: MediaTaggedPlayer[];
+}
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -1278,6 +1293,10 @@ export interface DynastyApi {
     /** Copies the given files into the dynasty's media library and creates their DB rows. Split from pickFiles so verification runs can add files without a native dialog. */
     addFiles: (dynastyId: string, seasonId: number, filePaths: string[]) => Promise<MediaItemWithPath[]>;
     list: (dynastyId: string, seasonId?: number) => Promise<MediaItemWithPath[] | undefined>;
+    /** Everything this player is tagged in, across all seasons — the Media tab on player bios. */
+    listForPlayer: (dynastyId: string, playerId: number) => Promise<MediaItemResolved[]>;
+    /** Everything linked to one game — the media section on the Game info page. */
+    listForGame: (dynastyId: string, seasonId: number | undefined, gameId: number) => Promise<MediaItemResolved[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
     remove: (id: number) => Promise<void>;
   };

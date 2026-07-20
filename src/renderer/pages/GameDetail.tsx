@@ -12,9 +12,11 @@ import { gameImpactScore } from '../../shared/gameImpactScore';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { MediaGallery } from '../components/common/MediaGallery';
 import type {
   DefensiveGameLine,
   GameLogEntry,
+  MediaItemResolved,
   OffensiveGameLine,
   RosterPlayer,
   ScheduleGame,
@@ -210,6 +212,7 @@ export function GameDetail() {
   const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
+  const [media, setMedia] = useState<MediaItemResolved[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -217,10 +220,11 @@ export function GameDetail() {
     window.api.db.getSchedule(id, seasonId).then((result) => !cancelled && setSchedule(result));
     window.api.db.getRoster(id, seasonId).then((result) => !cancelled && setRoster(result));
     window.api.db.getGameLog(id, seasonId).then((result) => !cancelled && setGamelog(result));
+    window.api.media.listForGame(id, seasonId, Number(gameId)).then((result) => !cancelled && setMedia(result));
     return () => {
       cancelled = true;
     };
-  }, [id, seasonId]);
+  }, [id, seasonId, gameId]);
 
   if (schedule === undefined || roster === undefined || gamelog === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading game...</p>;
@@ -468,6 +472,16 @@ export function GameDetail() {
             </>
           )}
         </>
+      )}
+
+      {/* Auto-populated from Media-page tags: every upload linked to this game. Hidden when empty — the Media page is the hub; this is a bonus surface. */}
+      {media.length > 0 && (
+        <SurfaceCard>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Media</p>
+          <div className="mt-3">
+            <MediaGallery dynastyId={id} items={media} hideGameChip />
+          </div>
+        </SurfaceCard>
       )}
     </div>
   );

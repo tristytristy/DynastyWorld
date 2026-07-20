@@ -185,6 +185,11 @@ const HELP_TOPICS: HelpTopic[] = [
           linked game jumps to that game&apos;s page. Use the arrow keys (or the on-screen arrows) to move through the
           gallery.
         </p>
+        <p>
+          Tags do double duty: anything you tag automatically shows up on the <strong>Media tab of each tagged
+          player&apos;s bio</strong> (across every season they appear in) and in a <strong>Media section on the linked
+          game&apos;s page</strong> — no extra work needed.
+        </p>
         <p className="text-slate-500 dark:text-slate-400">
           Uploads land in whichever season the Season dropdown is set to — switch seasons first if you&apos;re
           backfilling older memories. Supported: PNG/JPG/WebP/GIF images and MP4/WebM video.
