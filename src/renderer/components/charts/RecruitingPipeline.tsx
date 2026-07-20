@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RecruitBoardEntry } from '../../../shared/types';
 import { useTheme } from '../../theme/ThemeProvider';
 import { US_MAP_VIEWBOX, US_STATE_SHAPES } from './usStatesGeo';
@@ -53,19 +53,67 @@ function clampZoom(scale: number, x: number, y: number) {
   };
 }
 
+// The 51 state <path> elements carry real, fairly heavy `d` geometry (~2.7KB
+// average). Isolated into its own memoized component so panning/zooming —
+// which only ever changes the wrapping <g transform> — never re-renders or
+// re-diffs any of them; only a genuine counts/theme/hover change does.
+const StatePaths = memo(function StatePaths({
+  counts,
+  ramp,
+  emptyFill,
+  stroke,
+  hoveredName,
+  onHover,
+}: {
+  counts: Map<string, number>;
+  ramp: string[];
+  emptyFill: string;
+  stroke: string;
+  hoveredName: string | null;
+  onHover: (name: string) => void;
+}) {
+  const max = Math.max(0, ...counts.values());
+  return (
+    <>
+      {US_STATE_SHAPES.map((s) => {
+        const n = counts.get(s.code) ?? 0;
+        const b = bucket(n, max);
+        return (
+          <path
+            key={s.code}
+            d={s.path}
+            fill={b < 0 ? emptyFill : ramp[b]}
+            stroke={stroke}
+            strokeWidth={0.75}
+            vectorEffect="non-scaling-stroke"
+            opacity={hoveredName === null || hoveredName === s.name ? 1 : 0.75}
+            onPointerEnter={() => onHover(s.name)}
+            style={{ transition: 'opacity 120ms' }}
+          />
+        );
+      })}
+    </>
+  );
+});
+
 /** Real geographic US choropleth (bundled state shapes — fully offline) with wheel/button zoom and drag-to-pan. States shade by recruit count; hover shows the count. */
 function USGeoMap({ counts }: { counts: Map<string, number> }) {
   const { appearance } = useTheme();
   const isDark = appearance === 'dark';
   const ramp = isDark ? RAMP_DARK : RAMP_LIGHT;
   const emptyFill = isDark ? '#1a2536' : '#eef2f7';
-  const stroke = isDark ? '#0b1220' : '#ffffff';
+  // Mid-tone slate, not surface-matched — visible as a real border against
+  // both the ramp fills and the page background in either theme, now that
+  // the map no longer sits inside its own tinted frame.
+  const stroke = isDark ? '#64748b' : '#94a3b8';
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
   const drag = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null);
-  const max = Math.max(0, ...counts.values());
+  const rafId = useRef<number | null>(null);
+  const pendingView = useRef<{ scale: number; x: number; y: number } | null>(null);
+  const handleHover = useCallback((name: string) => setHover(name), []);
 
   function zoomToward(cx: number, cy: number, factor: number) {
     setView((v) => {
@@ -123,13 +171,26 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
     drag.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
     setIsDragging(true);
   }
+  // A real, fast drag can fire pointermove far faster than the screen can
+  // paint. The previous version called setView synchronously on every one of
+  // those events, forcing React to re-render (and, before StatePaths was
+  // memoized, re-diff all 51 state paths) once per event rather than once
+  // per frame — a flood that can starve the renderer thread badly enough to
+  // read as a hung/blank tab. Batching to at most one setView per animation
+  // frame keeps the update rate matched to what the screen can actually show.
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!drag.current || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const dx = ((e.clientX - drag.current.sx) / rect.width) * VB_W;
     const dy = ((e.clientY - drag.current.sy) / rect.height) * VB_H;
-    setView((v) => clampZoom(v.scale, drag.current!.vx + dx, drag.current!.vy + dy));
+    pendingView.current = clampZoom(view.scale, drag.current.vx + dx, drag.current.vy + dy);
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+        if (pendingView.current) setView(pendingView.current);
+      });
+    }
   }
   function endDrag(e?: React.PointerEvent<SVGSVGElement>) {
     if (e) {
@@ -139,9 +200,18 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
         // Already released (e.g. pointercancel) — nothing to clean up.
       }
     }
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+    pendingView.current = null;
     drag.current = null;
     setIsDragging(false);
   }
+
+  useEffect(() => () => {
+    if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+  }, []);
 
   const btnClass =
     'flex h-8 w-8 items-center justify-center border border-slate-300/80 bg-white/90 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-200 dark:hover:bg-slate-800';
@@ -165,8 +235,10 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
 
       {/* overflow-hidden masks the extra pan slack — the map can be dragged
           somewhat past its content bounds (so the clamp is never felt as a
-          hard wall) without that slack ever being visible outside the box. */}
-      <div className="mt-2 overflow-hidden border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/5">
+          hard wall) without that slack ever being visible outside the box.
+          No fill here: the map sits directly on the page surface, bordered
+          only by its own state outlines. */}
+      <div className="mt-2 overflow-hidden border border-slate-200/80 dark:border-slate-800">
         <svg
           ref={svgRef}
           viewBox={US_MAP_VIEWBOX}
@@ -180,23 +252,7 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
           onMouseLeave={() => setHover((h) => (isDragging ? h : null))}
         >
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-            {US_STATE_SHAPES.map((s) => {
-              const n = counts.get(s.code) ?? 0;
-              const b = bucket(n, max);
-              return (
-                <path
-                  key={s.code}
-                  d={s.path}
-                  fill={b < 0 ? emptyFill : ramp[b]}
-                  stroke={stroke}
-                  strokeWidth={0.75}
-                  vectorEffect="non-scaling-stroke"
-                  opacity={hover === null || hover === s.name ? 1 : 0.75}
-                  onPointerEnter={() => setHover(s.name)}
-                  style={{ transition: 'opacity 120ms' }}
-                />
-              );
-            })}
+            <StatePaths counts={counts} ramp={ramp} emptyFill={emptyFill} stroke={stroke} hoveredName={hover} onHover={handleHover} />
           </g>
         </svg>
       </div>
@@ -302,9 +358,9 @@ export function RecruitingPipeline({ board }: { board: RecruitBoardEntry[] }) {
   }, [board]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="space-y-6">
       <USGeoMap counts={stateCounts} />
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-3">
         <Panel title="Top states">
           {topStates.length > 0 ? (
             <RankedBars rows={topStates} accentLight="#2159d0" accentDark="#5b9bf5" />

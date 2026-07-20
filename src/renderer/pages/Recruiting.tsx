@@ -422,13 +422,13 @@ function TeamNeedsPanel({ needs }: { needs: TeamNeedsSummary }) {
         more than {NEED_THRESHOLD} points below the team&apos;s overall is flagged as a need.
       </p>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-3 gap-3 lg:max-w-md">
         <StatTile label="Offense" value={String(needs.offenseRating)} />
         <StatTile label="Defense" value={String(needs.defenseRating)} />
         <StatTile label="Overall" value={String(needs.overallRating)} />
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-4 grid gap-x-8 gap-y-2 lg:grid-cols-2">
         {needs.positions.map((p) => {
           const isNeed = needs.overallRating - p.rating >= NEED_THRESHOLD;
           return (
@@ -547,20 +547,18 @@ export function Recruiting() {
             />
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-            <SurfaceCard>
-              <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Recruiting Pipeline</h3>
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Where the incoming class comes from and what it&apos;s made of — home state, star rating, and position,
-                straight from the board.
-              </p>
-              <div className="mt-4">
-                <RecruitingPipeline board={recruiting.board} />
-              </div>
-            </SurfaceCard>
+          <SurfaceCard>
+            <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Recruiting Pipeline</h3>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Where the incoming class comes from and what it&apos;s made of — home state, star rating, and position,
+              straight from the board.
+            </p>
+            <div className="mt-4">
+              <RecruitingPipeline board={recruiting.board} />
+            </div>
+          </SurfaceCard>
 
-            {recruiting.teamNeeds && <TeamNeedsPanel needs={recruiting.teamNeeds} />}
-          </div>
+          {recruiting.teamNeeds && <TeamNeedsPanel needs={recruiting.teamNeeds} />}
 
           {recruiting.timeline.length > 0 && (
             <SurfaceCard>
