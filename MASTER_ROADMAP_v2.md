@@ -2503,6 +2503,8 @@ Actionable items to address **before public release**, distinct from the long-te
 
 # Version History
 
+- **v2.84** (2026-07-19): **Playtest batch #1 — nav + chrome restructuring.** History trimmed to program-only (coach "Dynasty Resume" + "Seasons Coached" removed; they live on Coach Hub) and moved to a subpage of Team Hub (new TeamHubLayout with Overview|History sub-tabs). Team Hub gained a centralized team switcher and lost the "Season/Last synced" line. Utility controls (Light mode, Preferences, Help, Stadiums) moved from the top navbar to the bottom of the left sidebar — required a new portal-based AnchoredMenuPanel so the dropdowns open upward from the bottom-left without being clipped by the sidebar's blur/overflow. Verified live. Details in DevLog. (0.2.0 installer predates this batch.)
+
 - **v2.83** (2026-07-19): **App icon + beta package.** User-supplied DH icon (public/Icon/ICON.png) converted to multi-size build/icon.ico by new scripts/make-icon.js and wired into electron-builder. Fresh 0.2.0 installers cut with all shipped features; icon verified in the built exe, and the packaged binary passed a fresh-import smoke test including schema migration #6 and a media tag round-trip. Beta-ready artifact: release/CFB Dynasty Hub Setup 0.2.0.exe.
 
 - **v2.82** (2026-07-19): **Media flows to player bios + game pages.** Tagged media auto-populates a new Media tab on every tagged player's bio (across all their seasons) and a Media section on the linked game's page. Shared read-only MediaGallery (grid + lightbox + links); display metadata resolved server-side against each item's own season. Fixed a real containing-block bug (backdrop-filter traps fixed overlays — lightbox now portals to body). Help topic updated. Details in DevLog.

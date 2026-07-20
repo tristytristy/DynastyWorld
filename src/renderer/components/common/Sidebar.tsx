@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { TeamLogo } from './TeamLogo';
+import { useTheme } from '../../theme/ThemeProvider';
+import { PreferencesMenu } from './PreferencesMenu';
+import { HelpMenu } from './HelpMenu';
+import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
 import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
+
+// Shared full-width trigger styling for the utility controls now docked at the
+// bottom of the sidebar (theme toggle + the three menus).
+const UTILITY_TRIGGER_CLASS =
+  'w-full border border-slate-200/80 bg-white/80 px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-white/10';
 
 function navClass(isActive: boolean): string {
   return [
@@ -31,6 +40,8 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 export function Sidebar() {
   const location = useLocation();
+  const { appearance, toggleAppearance } = useTheme();
+  const isDark = appearance === 'dark';
   const [dynasties, setDynasties] = useState<DynastySummary[]>([]);
   const [expanded, setExpanded] = useState(true);
 
@@ -92,7 +103,7 @@ export function Sidebar() {
         </div>
 
         {UPCOMING_LINKS.length > 0 && (
-          <div className="mt-6 flex-1 border border-slate-200/80 bg-slate-50/85 p-4 dark:border-white/5 dark:bg-white/5">
+          <div className="mt-6 border border-slate-200/80 bg-slate-50/85 p-4 dark:border-white/5 dark:bg-white/5">
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">
               Planned Modules
             </p>
@@ -111,6 +122,21 @@ export function Sidebar() {
             </div>
           </div>
         )}
+
+        {/* Utility controls, docked at the bottom (mt-auto) so they sit far from the Dynasty list at the top. */}
+        <div className="mt-auto space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+          <button
+            type="button"
+            onClick={toggleAppearance}
+            className={UTILITY_TRIGGER_CLASS}
+            aria-label="Toggle dark mode"
+          >
+            {isDark ? 'Light mode' : 'Dark mode'}
+          </button>
+          <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+          <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+          <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+        </div>
       </nav>
     </aside>
   );

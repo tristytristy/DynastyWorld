@@ -9,7 +9,6 @@ import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
-import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   getBowlLogoPath,
@@ -123,7 +122,7 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Trophies, ranking history, and game detail are tracked for your own team only." actions={<TeamSwitcher />} />
+      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Trophies, ranking history, and game detail are tracked for your own team only." />
       <div className="flex items-center gap-4">
         <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
         <div className="grid flex-1 gap-3 sm:grid-cols-3">
@@ -233,12 +232,6 @@ export function DynastyOverview() {
                 <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
                   {overview.teamName}
                 </h2>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Season {overview.seasonYear} for {overview.dynastyLabel}.
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Last synced {new Date(overview.lastSyncedAt).toLocaleDateString()}
-                </p>
               </div>
             </div>
 

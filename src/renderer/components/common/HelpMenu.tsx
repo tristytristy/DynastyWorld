@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
+import { AnchoredMenuPanel } from './AnchoredMenuPanel';
 
 interface HelpTopic {
   id: string;
@@ -225,33 +226,12 @@ const HELP_TOPICS: HelpTopic[] = [
   },
 ];
 
-export function HelpMenu() {
+export function HelpMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
   const { appearance } = useTheme();
   const isDark = appearance === 'dark';
   const [isOpen, setIsOpen] = useState(false);
   const [activeTopicId, setActiveTopicId] = useState(HELP_TOPICS[0].id);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setIsOpen(false);
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const panelUnderlayClass = isDark
     ? 'bg-slate-950/78 shadow-[0_42px_120px_-44px_rgba(2,6,23,0.88)] backdrop-blur-[52px] backdrop-saturate-[1.55] backdrop-brightness-[0.28]'
@@ -278,20 +258,20 @@ export function HelpMenu() {
   const activeTopic = HELP_TOPICS.find((topic) => topic.id === activeTopicId) ?? HELP_TOPICS[0];
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+        className={triggerClassName ?? 'border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800'}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
         Help
       </button>
 
-      {isOpen && (
-        <div className={`absolute right-0 top-14 z-50 w-[46rem] max-w-[92vw] ${isDark ? 'dark' : ''}`}>
-          <div className="relative isolate">
+      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={46} isDark={isDark}>
+        <div className="relative isolate">
             <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
             <div aria-hidden="true" className={`pointer-events-none absolute inset-[1px] ${panelGradientClass}`} />
             <div className={`relative overflow-hidden p-5 ${panelShellClass}`}>
@@ -334,8 +314,7 @@ export function HelpMenu() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </AnchoredMenuPanel>
     </div>
   );
 }

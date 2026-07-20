@@ -59,8 +59,8 @@ function HistoryOnlySeasonBanner({ dynastyId }: { dynastyId: string }) {
       <span className="font-semibold">{selected.seasonYear} — History Only.</span>{' '}
       This season wasn&apos;t individually synced, so only league-wide results (national/conference champions, season
       awards) are available — see the{' '}
-      <Link to={`/dynasty/${dynastyId}/history`} className="font-medium underline underline-offset-2">
-        History tab
+      <Link to={`/dynasty/${dynastyId}/team-hub/history`} className="font-medium underline underline-offset-2">
+        Team Hub → History tab
       </Link>
       . Full roster, schedule, and stats require syncing while that season is current.
     </div>
@@ -122,9 +122,6 @@ export function DynastyLayout() {
             </NavLink>
             <NavLink to={`/dynasty/${id}/recruiting`} className={tabClass}>
               Recruiting
-            </NavLink>
-            <NavLink to={`/dynasty/${id}/history`} className={tabClass}>
-              History
             </NavLink>
             <NavLink to={`/dynasty/${id}/media`} className={tabClass}>
               Media

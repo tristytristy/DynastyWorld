@@ -590,6 +590,9 @@
 
   const TASKS = [
     // ---- Known bugs / tech debt ----
+    { id: 'done-playtest-nav-batch-1', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'Playtest batch #1 — History→Team Hub subpage, team switcher, sidebar utility menus',
+      notes: "From first playtest feedback. History trimmed to program-only (removed the coach 'Dynasty Resume' card + 'Seasons Coached' tile — those live on Coach Hub; kept program awards/coach-lineage in a slim ProgramHonors card) and moved to a subpage of Team Hub via a new TeamHubLayout (Overview|History sub-tabs, mirroring Awards). Team Hub got a centralized team switcher (one switcher governs both sub-tabs) and lost the Season/Last-synced line. Utility controls (Light mode, Preferences, Help, Stadiums) moved from the top navbar to the bottom of the left sidebar; built a shared portal-based AnchoredMenuPanel so the dropdowns open upward from the bottom-left without being clipped by the sidebar's backdrop-blur/overflow. Verified live (screenshots: teamhub-history-subpage, sidebar-utility-menus). Note: 0.2.0 installer predates this batch." },
     { id: 'done-app-icon-beta-package', group: 'shipped', status: 'done', date: '2026-07-19',
       title: 'App icon + fresh 0.2.0 beta package — ready to distribute',
       notes: "User-supplied DH icon converted to a multi-size Windows .ico by new scripts/make-icon.js (re-runnable; drop in new art and rerun) and wired into electron-builder. Fresh installers cut with every shipped feature (media gallery, bio/game media surfaces, league browse, team switcher, UX polish). Verified: icon extracted from the built exe shows the DH art; packaged binary passed a fresh-import smoke test (schema migration #6 applied, media add/tag/list round-trip). Distribute release/CFB Dynasty Hub Setup 0.2.0.exe (~1.2 GB); portable exe available as fallback. Known: unsigned exe shows a SmartScreen prompt." },

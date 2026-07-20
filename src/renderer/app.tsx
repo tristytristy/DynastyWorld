@@ -5,6 +5,7 @@ import { DynastyLayout } from './components/common/DynastyLayout';
 import { Dashboard } from './pages/Dashboard';
 import { CoachHub } from './pages/CoachHub';
 import { DynastyOverview } from './pages/DynastyOverview';
+import { TeamHubLayout } from './pages/TeamHubLayout';
 import { NcaaHub } from './pages/NcaaHub';
 import { Roster } from './pages/Roster';
 import { PlayerDetail } from './pages/PlayerDetail';
@@ -63,7 +64,10 @@ export function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dynasty/:id" element={<DynastyLayout />}>
                     <Route index element={<CoachHub />} />
-                    <Route path="team-hub" element={<DynastyOverview />} />
+                    <Route path="team-hub" element={<TeamHubLayout />}>
+                      <Route index element={<DynastyOverview />} />
+                      <Route path="history" element={<History />} />
+                    </Route>
                     <Route path="ncaa-hub" element={<NcaaHub />} />
                     <Route path="roster" element={<Roster />} />
                     <Route path="roster/:playerId" element={<PlayerDetail />} />
@@ -79,7 +83,6 @@ export function App() {
                       <Route path="weekly" element={<WeeklyHonors />} />
                     </Route>
                     <Route path="recruiting" element={<Recruiting />} />
-                    <Route path="history" element={<History />} />
                     <Route path="media" element={<Media />} />
                   </Route>
                 </Routes>

@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
 import { PageHeader } from '../components/ui/PageHeader';
-import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { formatAwardLabel } from '../lib/awardFormat';
@@ -72,18 +71,6 @@ function RecordBookRow({ category }: { category: ProgramHistoryRecordCategory })
   );
 }
 
-function ResumeLine({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-slate-200/70 py-3 last:border-b-0 dark:border-white/5">
-      <div>
-        <p className="text-sm text-slate-600 dark:text-slate-300">{label}</p>
-        {hint && <p className="text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
-      </div>
-      <p className="shrink-0 font-semibold text-slate-950 dark:text-white">{value}</p>
-    </div>
-  );
-}
-
 function LeagueHistoryRow({ year }: { year: LeagueHistoryYearEntry }) {
   return (
     <div className="rounded-xl border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-white/5">
@@ -125,92 +112,43 @@ function MilestoneRow({ milestone }: { milestone: ProgramHistoryMilestone }) {
   );
 }
 
-function DynastyResume({ history }: { history: ProgramHistoryOverview }) {
-  const career = history.headCoachCareer;
+/**
+ * Program-wide national awards + the coaching lineage that ran this program.
+ * These are genuine program history (who won national honors here, who has
+ * coached the program), kept when the coach's *personal* lifetime resume was
+ * moved out to Coach Hub — see the removed "Dynasty Resume" card (that record
+ * lives on Coach Hub's Career Record panel, its real home). Only renders when
+ * there's something to show.
+ */
+function ProgramHonors({ history }: { history: ProgramHistoryOverview }) {
+  const hasAwards = history.nationalAwards.length > 0;
+  const hasCoachLineage = history.coaches.length > 1;
+  if (!hasAwards && !hasCoachLineage) return null;
 
   return (
     <SurfaceCard>
-      <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-        Dynasty Resume
-      </p>
-      <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-        {history.headCoachName ?? 'Head coach'}&apos;s coaching resume.
-      </h3>
-      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-        The save&apos;s own lifetime coaching record for the current user-controlled coach — not re-sliced to just this
-        dynasty&apos;s seasons, same source as the Career Record panel on Coach Hub.
-      </p>
-
-      <div className="mt-4">
-        {career ? (
-          <>
-            <ResumeLine label="Career Record" value={formatRecord(career.wins, career.losses)} />
-            <ResumeLine
-              label="Conference Championship Games"
-              value={formatRecord(career.confChampWins, career.confChampLosses)}
-              hint={`${history.dynastyConferenceTitles} title${history.dynastyConferenceTitles === 1 ? '' : 's'} this dynasty`}
-            />
-            <ResumeLine
-              label="National Championship Games"
-              value={formatRecord(career.ncWins, career.ncLosses)}
-              hint={`${history.dynastyNationalTitles} title${history.dynastyNationalTitles === 1 ? '' : 's'} this dynasty`}
-            />
-            <ResumeLine
-              label="Bowl Games"
-              value={formatRecord(career.bowlWins, career.bowlLosses)}
-              hint={`${history.dynastyBowlAppearances} appearance${history.dynastyBowlAppearances === 1 ? '' : 's'} this dynasty`}
-            />
-            <ResumeLine label="Playoff Games" value={formatRecord(career.playoffWins, career.playoffLosses)} />
-            <ResumeLine label="Rivalry Games" value={formatRecord(career.rivalWins, career.rivalLosses)} />
-            <ResumeLine label="Top 25 Games" value={formatRecord(career.top25Wins, career.top25Losses)} />
-            <ResumeLine
-              label="Draft Picks Produced"
-              value={String(career.draftPicks)}
-              hint={`${career.firstRoundDraftPicks} first-round`}
-            />
-            <ResumeLine label="Top-5 Recruiting Classes" value={String(career.top5RecruitClasses)} />
-          </>
-        ) : (
-          <p className="py-3 text-sm text-slate-400 dark:text-slate-500">
-            The save doesn&apos;t resolve a career record for this coach yet.
-          </p>
-        )}
-        <ResumeLine label="Best Final AP Rank" value={formatRank(history.bestMediaRank)} hint="This dynasty's archive" />
-        <ResumeLine
-          label="Best Recruiting Class"
-          value={formatRank(history.bestRecruitingClassRank)}
-          hint="This dynasty's archive"
-        />
-      </div>
-
-      <div className="mt-5 border-t border-slate-200/80 pt-4 dark:border-white/10">
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-          Major National Awards
+      <p className="type-eyebrow text-slate-400 dark:text-slate-500">Major National Awards</p>
+      {hasAwards ? (
+        <div className="mt-2 space-y-2">
+          {history.nationalAwards.map((award, index) => (
+            <div key={`${award.seasonYear}-${award.awardType}-${index}`} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-slate-700 dark:text-slate-200">
+                <span className="font-semibold text-slate-950 dark:text-white">{formatAwardLabel(award.awardType)}</span>{' '}
+                — {award.playerName}
+              </span>
+              <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">{award.seasonYear}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
+          No leaguewide season awards won by this program in the archived seasons yet.
         </p>
-        {history.nationalAwards.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-            No leaguewide season awards won by this program in the archived seasons yet.
-          </p>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {history.nationalAwards.map((award, index) => (
-              <div key={`${award.seasonYear}-${award.awardType}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-slate-700 dark:text-slate-200">
-                  <span className="font-semibold text-slate-950 dark:text-white">{formatAwardLabel(award.awardType)}</span>{' '}
-                  — {award.playerName}
-                </span>
-                <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">{award.seasonYear}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
-      {history.coaches.length > 1 && (
+      {hasCoachLineage && (
         <div className="mt-5 border-t border-slate-200/80 pt-4 dark:border-white/10">
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-            Coaches Across This Archive
-          </p>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Coaches Across This Archive</p>
           <div className="mt-2 space-y-2">
             {history.coaches.map((coach) => (
               <div key={coach.coachName} className="flex items-center justify-between gap-3 text-sm">
@@ -268,14 +206,13 @@ export function History() {
         title={
           viewedLeagueTeamName
             ? `${viewedLeagueTeamName} — championships on record.`
-            : `The school record book and dynasty resume for ${history.teamName}.`
+            : `The program story and record book for ${history.teamName}.`
         }
         description={
           viewedLeagueTeamName
-            ? 'From the league history the save itself tracks — national and conference titles by year. The full record book, resume, and timeline are dynasty-scoped and available for your own program only.'
-            : "School records come straight from the save's built-in team record book. The dynasty resume, timeline, coaches, and milestones accumulate across your dynasty archive in the app."
+            ? 'From the league history the save itself tracks — national and conference titles by year. The full record book and timeline are tracked for your own program only.'
+            : "The program's history, with or without you as the coach — school records from the save's own book, plus the timeline, milestones, and league titles that accumulate across the archive."
         }
-        actions={<TeamSwitcher userTeamName={history.teamName} />}
       />
 
       {viewedLeagueTeamName && (
@@ -323,8 +260,7 @@ export function History() {
           Historical Summary
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatTile label="Seasons Coached" value={String(history.seasonsCoached)} />
-          <StatTile label="Career Record" value={formatRecord(history.dynastyWins, history.dynastyLosses)} />
+          <StatTile label="Program Record" value={formatRecord(history.dynastyWins, history.dynastyLosses)} />
           <StatTile
             label="Schools Coached"
             value={String(history.schoolsCoached.length)}
@@ -342,7 +278,7 @@ export function History() {
         )}
       </div>
 
-      <DynastyResume history={history} />
+      <ProgramHonors history={history} />
 
       <div>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">

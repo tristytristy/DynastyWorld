@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildTeamColorVars } from '../../lib/teamTheme';
 import { DEFAULT_THEME_PREFERENCE, useTheme } from '../../theme/ThemeProvider';
 import type { ColorMode } from '../../theme/themePreference';
+import { AnchoredMenuPanel } from './AnchoredMenuPanel';
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -138,7 +139,7 @@ function ColorField({
   );
 }
 
-export function PreferencesMenu() {
+export function PreferencesMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
   const {
     preference,
     appearance,
@@ -151,7 +152,7 @@ export function PreferencesMenu() {
   const [draftPrimary, setDraftPrimary] = useState(preference.customPrimary);
   const [draftSecondary, setDraftSecondary] = useState(preference.customSecondary);
   const isDark = appearance === 'dark';
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -161,32 +162,6 @@ export function PreferencesMenu() {
     setDraftPrimary(preference.customPrimary);
     setDraftSecondary(preference.customSecondary);
   }, [isOpen, preference.customPrimary, preference.customSecondary]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
 
   const normalizedPrimary = normalizeHex(draftPrimary);
   const normalizedSecondary = normalizeHex(draftSecondary);
@@ -260,20 +235,20 @@ export function PreferencesMenu() {
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+        className={triggerClassName ?? 'border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800'}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
         Preferences
       </button>
 
-      {isOpen && (
-        <div className={`absolute right-0 top-14 z-50 w-[30rem] ${isDark ? 'dark' : ''}`}>
-          <div className="relative isolate">
+      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} isDark={isDark}>
+        <div className="relative isolate">
             <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
             <div
               aria-hidden="true"
@@ -452,8 +427,7 @@ export function PreferencesMenu() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </AnchoredMenuPanel>
     </div>
   );
 }
