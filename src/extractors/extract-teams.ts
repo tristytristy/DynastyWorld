@@ -63,6 +63,29 @@ export interface TeamData {
    */
   schoolRecords: TeamSchoolRecordsData;
   /**
+   * The game's own computed position-group grades (0-99), the same numbers
+   * that drive the in-game Team Ratings screen — confirmed on a real save
+   * (Alabama 76-94 range, Akron 66-71 — sane, differentiated values, not
+   * placeholders). This is what "team needs" actually is: no separate
+   * need/grade field exists anywhere on Team, but a low position-group grade
+   * relative to the team's own overall IS the game's own signal for a thin
+   * spot on the roster.
+   */
+  positionGrades: {
+    qb: number;
+    rb: number;
+    wr: number;
+    te: number;
+    ol: number;
+    dl: number;
+    lb: number;
+    db: number;
+    st: number;
+    offense: number;
+    defense: number;
+    overall: number;
+  };
+  /**
    * Null if the team couldn't be matched to a conference. Team records carry no direct
    * conference-membership field — this is built by inverting Conference.TeamSlots (an
    * array-of-references, same pattern as other array tables in this codebase), not read
@@ -94,6 +117,18 @@ const FIELDS = [
   'TEAM_BACKGROUNDCOLORR2',
   'TEAM_BACKGROUNDCOLORG2',
   'TEAM_BACKGROUNDCOLORB2',
+  'TEAM_RATINGQB',
+  'TEAM_RATINGRB',
+  'TEAM_RATINGWR',
+  'TEAM_RATINGTE',
+  'TEAM_RATINGOL',
+  'TEAM_RATINGDL',
+  'TEAM_RATINGLB',
+  'TEAM_RATINGDB',
+  'TEAM_RATINGST',
+  'TEAM_RATINGOFF',
+  'TEAM_RATINGDEF',
+  'TEAM_RATINGOVR',
 ];
 
 const RECORD_FIELD_TO_STAT: Record<string, TeamRecordStatType> = {
@@ -175,6 +210,20 @@ function mapTeam(
       career: resolveRecordSet(franchise, r, 'CareerStatRecords'),
       season: resolveRecordSet(franchise, r, 'SeasonStatRecords'),
       game: resolveRecordSet(franchise, r, 'GameStatRecords'),
+    },
+    positionGrades: {
+      qb: Number(r.TEAM_RATINGQB),
+      rb: Number(r.TEAM_RATINGRB),
+      wr: Number(r.TEAM_RATINGWR),
+      te: Number(r.TEAM_RATINGTE),
+      ol: Number(r.TEAM_RATINGOL),
+      dl: Number(r.TEAM_RATINGDL),
+      lb: Number(r.TEAM_RATINGLB),
+      db: Number(r.TEAM_RATINGDB),
+      st: Number(r.TEAM_RATINGST),
+      offense: Number(r.TEAM_RATINGOFF),
+      defense: Number(r.TEAM_RATINGDEF),
+      overall: Number(r.TEAM_RATINGOVR),
     },
     conferenceName: conferenceByTeamIndex.get(teamIndex) ?? null,
   };

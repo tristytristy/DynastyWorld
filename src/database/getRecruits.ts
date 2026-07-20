@@ -7,6 +7,8 @@ import type {
   RecruitingClassSummary,
   RecruitingOverview,
   RecruitingTimelineEntry,
+  TeamNeedEntry,
+  TeamNeedsSummary,
 } from '../shared/types';
 
 /**
@@ -71,6 +73,26 @@ function rankOrNull(rank: number): number | null {
   return rank > 0 ? rank : null;
 }
 
+function buildTeamNeeds(grades: TeamData['positionGrades'] | undefined): TeamNeedsSummary | null {
+  if (!grades) return null;
+  const positions: TeamNeedEntry[] = (
+    [
+      ['QB', grades.qb],
+      ['RB', grades.rb],
+      ['WR', grades.wr],
+      ['TE', grades.te],
+      ['OL', grades.ol],
+      ['DL', grades.dl],
+      ['LB', grades.lb],
+      ['DB', grades.db],
+      ['ST', grades.st],
+    ] as const
+  )
+    .map(([position, rating]) => ({ position, rating }))
+    .sort((a, b) => a.rating - b.rating);
+  return { positions, offenseRating: grades.offense, defenseRating: grades.defense, overallRating: grades.overall };
+}
+
 /**
  * Reads this season's recruiting board snapshot for a dynasty (see
  * extract-recruits.ts — the user's own team's board, up to 35 real prospects,
@@ -129,5 +151,5 @@ export function getRecruits(dynastyId: string, seasonId?: number): RecruitingOve
     }))
     .sort((a, b) => a.week - b.week);
 
-  return { teamName, board, classSummary, timeline };
+  return { teamName, board, classSummary, timeline, teamNeeds: buildTeamNeeds(userTeam?.positionGrades) };
 }

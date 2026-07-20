@@ -30,16 +30,26 @@ function bucket(count: number, max: number): number {
 const [VB_X, VB_Y, VB_W, VB_H] = US_MAP_VIEWBOX.split(' ').map(Number);
 const MIN_SCALE = 1;
 const MAX_SCALE = 9;
+// Pan bounds get extra slack beyond the strict "keep content covering the
+// frame" minimum, per the reported fix: at the mathematically tight clamp,
+// a fast drag lands exactly on the boundary every time, which read as the
+// map "hitting a wall." A generous multiplier means you run out of drag
+// well before the numeric edge, so the clamp is never actually felt. The
+// container below clips (overflow-hidden) whatever this reveals beyond the
+// map content itself.
+const PAN_SLACK = 1.6;
 
-/** Clamp scale to range and keep the panned map from leaving the frame. */
+/** Clamp scale to range and keep the panned map from being dragged absurdly far off-frame. Guards against non-finite input so a transform can never receive NaN/Infinity. */
 function clampZoom(scale: number, x: number, y: number) {
-  const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+  const s = Number.isFinite(scale) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale)) : MIN_SCALE;
   if (s === 1) return { scale: 1, x: 0, y: 0 };
-  const shift = s - 1;
+  const shift = (s - 1) * PAN_SLACK;
+  const safeX = Number.isFinite(x) ? x : 0;
+  const safeY = Number.isFinite(y) ? y : 0;
   return {
     scale: s,
-    x: Math.max(-VB_W * shift, Math.min(VB_W * shift, x)),
-    y: Math.max(-VB_H * shift, Math.min(VB_H * shift, y)),
+    x: Math.max(-VB_W * shift, Math.min(VB_W * shift, safeX)),
+    y: Math.max(-VB_H * shift, Math.min(VB_H * shift, safeY)),
   };
 }
 
@@ -90,22 +100,51 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  function onMouseDown(e: React.MouseEvent) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Pointer Events + setPointerCapture (not mouse events): once captured, this
+  // element keeps receiving move/up events for that pointer no matter where
+  // the cursor physically goes — off the SVG, over the zoom buttons, even
+  // outside the window. That's the actual fix for the reported crash: plain
+  // mouse events stop arriving the instant the cursor leaves the element, so
+  // a fast drag toward the edge could leave `drag.current` set with nothing
+  // left to ever clear it, and the next render read stale/inconsistent state.
+  // Capture makes the drag session unconditionally well-formed.
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    if (e.button !== 0) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture can fail for a pointer id the browser doesn't recognize as
+      // active (seen with synthetic/edge-case input) — harmless; the drag
+      // still works via the plain move/up listeners below, just without the
+      // "keeps tracking outside the element" guarantee capture adds.
+    }
     drag.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+    setIsDragging(true);
   }
-  function onMouseMove(e: React.MouseEvent) {
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!drag.current || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const dx = ((e.clientX - drag.current.sx) / rect.width) * VB_W;
     const dy = ((e.clientY - drag.current.sy) / rect.height) * VB_H;
     setView((v) => clampZoom(v.scale, drag.current!.vx + dx, drag.current!.vy + dy));
   }
-  function endDrag() {
+  function endDrag(e?: React.PointerEvent<SVGSVGElement>) {
+    if (e) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Already released (e.g. pointercancel) — nothing to clean up.
+      }
+    }
     drag.current = null;
+    setIsDragging(false);
   }
 
   const btnClass =
-    'flex h-7 w-7 items-center justify-center border border-slate-300/80 bg-white/90 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-200 dark:hover:bg-slate-800';
+    'flex h-8 w-8 items-center justify-center border border-slate-300/80 bg-white/90 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-200 dark:hover:bg-slate-800';
 
   return (
     <div>
@@ -124,37 +163,21 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
         </p>
       </div>
 
-      <div className="relative mt-2 border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/5">
-        <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
-          <button type="button" aria-label="Zoom in" className={btnClass} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1.4)}>
-            +
-          </button>
-          <button type="button" aria-label="Zoom out" className={btnClass} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1 / 1.4)}>
-            −
-          </button>
-          <button
-            type="button"
-            aria-label="Reset zoom"
-            className={btnClass}
-            disabled={view.scale === 1}
-            onClick={() => setView({ scale: 1, x: 0, y: 0 })}
-          >
-            ⟳
-          </button>
-        </div>
+      {/* overflow-hidden masks the extra pan slack — the map can be dragged
+          somewhat past its content bounds (so the clamp is never felt as a
+          hard wall) without that slack ever being visible outside the box. */}
+      <div className="mt-2 overflow-hidden border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/5">
         <svg
           ref={svgRef}
           viewBox={US_MAP_VIEWBOX}
-          style={{ width: '100%', height: 'auto', display: 'block', cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+          style={{ width: '100%', height: 'auto', display: 'block', cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
           role="img"
           aria-label="Recruits by home state"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={endDrag}
-          onMouseLeave={() => {
-            endDrag();
-            setHover(null);
-          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onMouseLeave={() => setHover((h) => (isDragging ? h : null))}
         >
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
             {US_STATE_SHAPES.map((s) => {
@@ -169,13 +192,33 @@ function USGeoMap({ counts }: { counts: Map<string, number> }) {
                   strokeWidth={0.75}
                   vectorEffect="non-scaling-stroke"
                   opacity={hover === null || hover === s.name ? 1 : 0.75}
-                  onMouseEnter={() => setHover(s.name)}
+                  onPointerEnter={() => setHover(s.name)}
                   style={{ transition: 'opacity 120ms' }}
                 />
               );
             })}
           </g>
         </svg>
+      </div>
+
+      {/* Zoom controls live in their own row BELOW the map, never overlapping
+          content (they used to sit top-right over the northeastern states). */}
+      <div className="mt-2 flex items-center justify-end gap-1.5">
+        <button type="button" aria-label="Zoom out" className={btnClass} disabled={view.scale === 1} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1 / 1.4)}>
+          −
+        </button>
+        <button
+          type="button"
+          aria-label="Reset zoom"
+          className={btnClass}
+          disabled={view.scale === 1}
+          onClick={() => setView({ scale: 1, x: 0, y: 0 })}
+        >
+          ⟳
+        </button>
+        <button type="button" aria-label="Zoom in" className={btnClass} disabled={view.scale === MAX_SCALE} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1.4)}>
+          +
+        </button>
       </div>
     </div>
   );

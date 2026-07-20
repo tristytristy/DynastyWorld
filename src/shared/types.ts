@@ -1090,11 +1090,27 @@ export interface RecruitingTimelineEntry {
   stars: number;
 }
 
+/** One position group's grade (0-99) — the game's own computed rating, the same numbers behind the in-game Team Ratings screen. */
+export interface TeamNeedEntry {
+  position: 'QB' | 'RB' | 'WR' | 'TE' | 'OL' | 'DL' | 'LB' | 'DB' | 'ST';
+  rating: number;
+}
+
+export interface TeamNeedsSummary {
+  /** Ascending by rating — the weakest position group (biggest need) first. */
+  positions: TeamNeedEntry[];
+  offenseRating: number;
+  defenseRating: number;
+  overallRating: number;
+}
+
 export interface RecruitingOverview {
   teamName: string;
   board: RecruitBoardEntry[];
   classSummary: RecruitingClassSummary;
   timeline: RecruitingTimelineEntry[];
+  /** Null only if the team couldn't be resolved (matches classSummary's own rank-lookup fallback). */
+  teamNeeds: TeamNeedsSummary | null;
 }
 
 export interface ProgramHistoryRecordHolder {
