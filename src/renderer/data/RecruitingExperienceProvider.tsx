@@ -1,89 +1,65 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 /**
- * Recruiting "experience" preferences — app-side immersion settings that shape
- * how recruit data is shown, independent of any save.
+ * Recruiting "experience" preferences — app-side immersion settings for how
+ * recruit data is shown, independent of any save.
  *
- * - `hideUnscoutedStats`: a spoiler-free mode (EXPERIENCE → Recruiting) that
- *   hides a recruit's overall rating (the OVR column + panel Overall row). The
- *   save stores full ratings for every recruit regardless of scouting and
- *   there's no clean per-recruit "revealed" flag, so this is a deliberate
- *   app-level toggle, not a mirror of the game's scout progress. Persisted.
- * - Athletic-snapshot lock: the detailed athletic breakdown starts LOCKED and
- *   is revealed only on a deliberate unlock (with a warning). A recruit can be
- *   unlocked individually, or all at once; re-locking clears everything back to
- *   locked. Kept in memory (not persisted), so a fresh launch always defaults
- *   to locked — the immersion-safe default.
+ * Two INDEPENDENT reveal locks — a prospect's overall rating and their detailed
+ * athletic ratings — each start LOCKED and are revealed only on a deliberate
+ * unlock (with a warning). Revealing one never reveals the other. A stat can be
+ * unlocked for a single recruit or all at once; re-locking resets that stat
+ * back to fully locked. Kept in memory (not persisted), so a fresh launch
+ * always defaults to locked — the immersion-safe default. This mirrors how the
+ * game itself keeps ratings hidden until you scout; the save exposes full
+ * ratings regardless, so this is a deliberate app-level gate.
  */
-interface RecruitingExperienceValue {
-  hideUnscoutedStats: boolean;
-  setHideUnscoutedStats: (value: boolean) => void;
-
-  /** True when a recruit's athletic snapshot is revealed (individually or via unlock-all). */
-  isAthleticUnlocked: (playerId: number) => boolean;
-  athleticUnlockedAll: boolean;
-  unlockAthleticForRecruit: (playerId: number) => void;
-  unlockAthleticForAll: () => void;
-  /** Re-lock everything (individual unlocks + unlock-all) back to the default locked state. */
-  lockAllAthletic: () => void;
+interface LockControls {
+  unlockedAll: boolean;
+  isUnlocked: (playerId: number) => boolean;
+  unlockForRecruit: (playerId: number) => void;
+  unlockForAll: () => void;
+  lockAll: () => void;
 }
 
-const STORAGE_KEY = 'cfb.experience.hideUnscoutedStats';
+interface RecruitingExperienceValue {
+  ovr: LockControls;
+  athletic: LockControls;
+}
 
 const RecruitingExperienceContext = createContext<RecruitingExperienceValue | null>(null);
 
-export function RecruitingExperienceProvider({ children }: { children: ReactNode }) {
-  const [hideUnscoutedStats, setHideState] = useState<boolean>(
-    () => window.localStorage.getItem(STORAGE_KEY) === '1',
-  );
-  const [athleticUnlockedAll, setAthleticUnlockedAll] = useState(false);
+function useLockSet(): LockControls {
+  const [unlockedAll, setUnlockedAll] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<number>>(() => new Set());
 
-  const setHideUnscoutedStats = useCallback((value: boolean) => {
-    setHideState(value);
-    window.localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
-  }, []);
-
-  const isAthleticUnlocked = useCallback(
-    (playerId: number) => athleticUnlockedAll || unlockedIds.has(playerId),
-    [athleticUnlockedAll, unlockedIds],
+  const isUnlocked = useCallback(
+    (playerId: number) => unlockedAll || unlockedIds.has(playerId),
+    [unlockedAll, unlockedIds],
   );
-
-  const unlockAthleticForRecruit = useCallback((playerId: number) => {
+  const unlockForRecruit = useCallback((playerId: number) => {
     setUnlockedIds((prev) => {
       const next = new Set(prev);
       next.add(playerId);
       return next;
     });
   }, []);
-
-  const unlockAthleticForAll = useCallback(() => setAthleticUnlockedAll(true), []);
-
-  const lockAllAthletic = useCallback(() => {
-    setAthleticUnlockedAll(false);
+  const unlockForAll = useCallback(() => setUnlockedAll(true), []);
+  const lockAll = useCallback(() => {
+    setUnlockedAll(false);
     setUnlockedIds(new Set());
   }, []);
 
-  const value = useMemo(
-    () => ({
-      hideUnscoutedStats,
-      setHideUnscoutedStats,
-      isAthleticUnlocked,
-      athleticUnlockedAll,
-      unlockAthleticForRecruit,
-      unlockAthleticForAll,
-      lockAllAthletic,
-    }),
-    [
-      hideUnscoutedStats,
-      setHideUnscoutedStats,
-      isAthleticUnlocked,
-      athleticUnlockedAll,
-      unlockAthleticForRecruit,
-      unlockAthleticForAll,
-      lockAllAthletic,
-    ],
+  return useMemo(
+    () => ({ unlockedAll, isUnlocked, unlockForRecruit, unlockForAll, lockAll }),
+    [unlockedAll, isUnlocked, unlockForRecruit, unlockForAll, lockAll],
   );
+}
+
+export function RecruitingExperienceProvider({ children }: { children: ReactNode }) {
+  const ovr = useLockSet();
+  const athletic = useLockSet();
+
+  const value = useMemo(() => ({ ovr, athletic }), [ovr, athletic]);
 
   return <RecruitingExperienceContext.Provider value={value}>{children}</RecruitingExperienceContext.Provider>;
 }

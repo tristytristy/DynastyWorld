@@ -75,12 +75,32 @@ function LockIcon({ locked }: { locked: boolean }) {
   );
 }
 
+/** A compact lock/reveal pill — the shared control for the OVR and athletic reveals. */
+function LockPill({ unlocked, onClick, revealLabel = 'Reveal' }: { unlocked: boolean; onClick: () => void; revealLabel?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+        unlocked
+          ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-primary)] dark:text-white'
+          : 'border-slate-300/80 bg-slate-100/70 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white'
+      }`}
+      aria-label={unlocked ? 'Hide' : revealLabel}
+    >
+      <LockIcon locked={!unlocked} />
+      {unlocked ? 'Hide' : revealLabel}
+    </button>
+  );
+}
+
 function RecruitPanel({
   recruit,
   canEdit,
   onEdit,
   onOpenFull,
-  hideStats,
+  ovrUnlocked,
+  onOvrLockClick,
   athleticUnlocked,
   onAthleticLockClick,
 }: {
@@ -88,7 +108,8 @@ function RecruitPanel({
   canEdit: boolean;
   onEdit: (r: NationalRecruit) => void;
   onOpenFull: (r: NationalRecruit) => void;
-  hideStats: boolean;
+  ovrUnlocked: boolean;
+  onOvrLockClick: (r: NationalRecruit) => void;
   athleticUnlocked: boolean;
   onAthleticLockClick: (r: NationalRecruit) => void;
 }) {
@@ -162,8 +183,22 @@ function RecruitPanel({
             <Row k="Ideal Pitch" v={recruit.idealPitch || '—'} />
             <Row k="Offers" v={String(recruit.totalOffers)} />
             <Row k="NIL Value" v={formatNil(recruit.baseNilValue)} />
-            {!hideStats && <Row k="Overall" v={String(recruit.overallRating)} />}
+            <div className="flex items-center justify-between gap-3">
+              <dt className="shrink-0 text-slate-400 dark:text-slate-500">Overall</dt>
+              <dd>
+                {ovrUnlocked ? (
+                  <span className="font-semibold text-slate-900 dark:text-white">{recruit.overallRating}</span>
+                ) : (
+                  <LockPill unlocked={false} onClick={() => onOvrLockClick(recruit)} />
+                )}
+              </dd>
+            </div>
           </dl>
+          {ovrUnlocked && (
+            <button type="button" onClick={() => onOvrLockClick(recruit)} className="mt-1.5 text-[11px] text-slate-400 underline-offset-2 hover:underline dark:text-slate-500">
+              Hide overall
+            </button>
+          )}
         </div>
       </div>
 
@@ -200,19 +235,9 @@ function RecruitPanel({
       <div>
         <div className="flex items-center justify-between">
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Athletic snapshot</p>
-          <button
-            type="button"
-            onClick={() => onAthleticLockClick(recruit)}
-            className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
-              athleticUnlocked
-                ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-primary)] dark:text-white'
-                : 'border-slate-300/80 bg-slate-100/70 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white'
-            }`}
-            aria-label={athleticUnlocked ? 'Lock athletic ratings' : 'Unlock athletic ratings'}
-          >
-            <LockIcon locked={!athleticUnlocked} />
-            {athleticUnlocked ? 'Hide' : 'Reveal'}
-          </button>
+          <span aria-label={athleticUnlocked ? 'Lock athletic ratings' : 'Unlock athletic ratings'}>
+            <LockPill unlocked={athleticUnlocked} onClick={() => onAthleticLockClick(recruit)} />
+          </span>
         </div>
         {athleticUnlocked ? (
           <>
@@ -267,17 +292,11 @@ export function NationalRecruits() {
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const { openPlayerEditor } = useEditorModal();
-  const {
-    hideUnscoutedStats,
-    isAthleticUnlocked,
-    unlockAthleticForRecruit,
-    unlockAthleticForAll,
-    lockAllAthletic,
-  } = useRecruitingExperience();
+  const { ovr, athletic } = useRecruitingExperience();
 
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [pendingUnlock, setPendingUnlock] = useState<NationalRecruit | null>(null);
+  const [pendingUnlock, setPendingUnlock] = useState<{ recruit: NationalRecruit; stat: 'ovr' | 'athletic' } | null>(null);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
   const [stars, setStars] = useState('');
@@ -396,6 +415,16 @@ export function NationalRecruits() {
     });
   }
 
+  // Clicking a stat's lock: reveal (open the warning) when locked; re-lock all when unlocked.
+  function ovrLockClick(r: NationalRecruit) {
+    if (ovr.isUnlocked(r.playerId)) ovr.lockAll();
+    else setPendingUnlock({ recruit: r, stat: 'ovr' });
+  }
+  function athleticLockClick(r: NationalRecruit) {
+    if (athletic.isUnlocked(r.playerId)) athletic.lockAll();
+    else setPendingUnlock({ recruit: r, stat: 'athletic' });
+  }
+
   if (recruits === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading national recruits...</p>;
   }
@@ -490,7 +519,7 @@ export function NationalRecruits() {
                     <th className="sticky left-0 z-30 bg-[var(--team-primary)] px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">
                       <button type="button" onClick={() => toggleSort('nationalRank')} className="inline-flex items-center gap-1">Prospect{sortKey === 'nationalRank' && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}</button>
                     </th>
-                    {!hideUnscoutedStats && th('overallRating', 'OVR', true)}
+                    {th('overallRating', 'OVR', true)}
                     {th('positionRank', 'Pos Rk', true)}
                     {th('stateRank', 'St Rk', true)}
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Class</th>
@@ -521,7 +550,21 @@ export function NationalRecruits() {
                             </div>
                           </div>
                         </td>
-                        {!hideUnscoutedStats && <td className="tnum px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">{r.overallRating}</td>}
+                        <td className="px-3 py-2 text-right">
+                          {ovr.isUnlocked(r.playerId) ? (
+                            <span className="tnum font-semibold text-slate-900 dark:text-white">{r.overallRating}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); ovrLockClick(r); }}
+                              className="ml-auto inline-flex text-slate-400 transition hover:text-[var(--team-primary)] dark:text-slate-500"
+                              aria-label="Reveal overall rating"
+                              title="Overall hidden — click to reveal"
+                            >
+                              <LockIcon locked />
+                            </button>
+                          )}
+                        </td>
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.positionRank || '—'}</td>
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.stateRank || '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.classYear.replace(/JuniorCollege_/, 'JUCO ').replace('HighSchool', 'HS')}</td>
@@ -550,24 +593,26 @@ export function NationalRecruits() {
             canEdit={canEdit}
             onEdit={editRecruit}
             onOpenFull={openFull}
-            hideStats={hideUnscoutedStats}
-            athleticUnlocked={selected ? isAthleticUnlocked(selected.playerId) : false}
-            onAthleticLockClick={(r) => (isAthleticUnlocked(r.playerId) ? lockAllAthletic() : setPendingUnlock(r))}
+            ovrUnlocked={selected ? ovr.isUnlocked(selected.playerId) : false}
+            onOvrLockClick={ovrLockClick}
+            athleticUnlocked={selected ? athletic.isUnlocked(selected.playerId) : false}
+            onAthleticLockClick={athleticLockClick}
           />
         </div>
       </div>
 
       {pendingUnlock &&
         createPortal(
-          <AthleticUnlockModal
-            recruit={pendingUnlock}
+          <StatUnlockModal
+            recruit={pendingUnlock.recruit}
+            statLabel={pendingUnlock.stat === 'ovr' ? 'overall rating' : 'athletic ratings'}
             onCancel={() => setPendingUnlock(null)}
             onUnlockOne={() => {
-              unlockAthleticForRecruit(pendingUnlock.playerId);
+              (pendingUnlock.stat === 'ovr' ? ovr : athletic).unlockForRecruit(pendingUnlock.recruit.playerId);
               setPendingUnlock(null);
             }}
             onUnlockAll={() => {
-              unlockAthleticForAll();
+              (pendingUnlock.stat === 'ovr' ? ovr : athletic).unlockForAll();
               setPendingUnlock(null);
             }}
           />,
@@ -578,13 +623,15 @@ export function NationalRecruits() {
 }
 
 /** App-styled confirm before revealing a recruit's ratings — the game hides these until you scout, so this is a deliberate immersion break. */
-function AthleticUnlockModal({
+function StatUnlockModal({
   recruit,
+  statLabel,
   onCancel,
   onUnlockOne,
   onUnlockAll,
 }: {
   recruit: NationalRecruit;
+  statLabel: string;
   onCancel: () => void;
   onUnlockOne: () => void;
   onUnlockAll: () => void;
@@ -605,10 +652,10 @@ function AthleticUnlockModal({
           <span className="flex h-9 w-9 items-center justify-center border border-amber-300/70 bg-amber-100/70 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
             <LockIcon locked />
           </span>
-          <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">Reveal athletic ratings?</h3>
+          <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">Reveal {statLabel}?</h3>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-          The game keeps a prospect&apos;s detailed ratings hidden until you&apos;ve scouted them — revealing{' '}
+          The game keeps a prospect&apos;s {statLabel} hidden until you&apos;ve scouted them — revealing{' '}
           <span className="font-semibold text-slate-900 dark:text-white">{recruit.firstName} {recruit.lastName}</span>
           &apos;s numbers here can take some of that discovery (and immersion) out of your dynasty. You can always lock
           them again.

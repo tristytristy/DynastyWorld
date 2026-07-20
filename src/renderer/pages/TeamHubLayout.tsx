@@ -81,7 +81,6 @@ export function TeamHubLayout() {
         {tab('/statistics', 'Statistics')}
         {tab('/trends', 'Trends')}
         {tab('/transfers', 'Transfers')}
-        {tab('/recruiting', 'Recruiting')}
         {tab('/media', 'Media')}
         {tab('/team-awards', 'Awards')}
         {tab('/weekly-honors', 'Weekly Honors')}

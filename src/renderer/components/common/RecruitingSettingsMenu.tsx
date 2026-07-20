@@ -5,13 +5,25 @@ import { AnchoredMenuPanel } from './AnchoredMenuPanel';
 
 /**
  * Recruiting experience settings — the "Recruiting" entry under EXPERIENCE in
- * the sidebar. Currently the immersion (spoiler-free) toggle; a natural home
- * for future recruiting-play preferences.
+ * the sidebar. A master convenience over the per-recruit reveal locks: flip
+ * every recruit's overall + athletic ratings between fully revealed and fully
+ * hidden in one place. Fine-grained (per-recruit) reveals still live on the
+ * Recruits profile itself.
  */
 export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
   const { appearance } = useTheme();
   const isDark = appearance === 'dark';
-  const { hideUnscoutedStats, setHideUnscoutedStats } = useRecruitingExperience();
+  const { ovr, athletic } = useRecruitingExperience();
+  const revealAll = ovr.unlockedAll && athletic.unlockedAll;
+  const setRevealAll = (value: boolean) => {
+    if (value) {
+      ovr.unlockForAll();
+      athletic.unlockForAll();
+    } else {
+      ovr.lockAll();
+      athletic.lockAll();
+    }
+  };
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -56,19 +68,20 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
           <section className={`mt-5 rounded-xl border p-4 ${isDark ? 'border-slate-800/80 bg-slate-950/84' : 'border-slate-200/90 bg-white/72'}`}>
             <label className="flex cursor-pointer items-start justify-between gap-4">
               <span>
-                <span className={`text-sm font-semibold ${strong}`}>Spoiler-free scouting</span>
+                <span className={`text-sm font-semibold ${strong}`}>Reveal all recruit ratings</span>
                 <span className={`mt-1 block text-xs leading-5 ${subtle}`}>
-                  Hide a recruit&apos;s overall rating across the Recruits pages — recruit the way the game intends,
-                  judging prospects on rank, stars, and film. Ranks, stars, hometown, pipeline, and school interest stay
-                  visible. (Detailed athletic ratings have their own per-recruit lock on the profile.)
+                  A prospect&apos;s overall and athletic ratings start hidden across the Recruits pages — recruit the way
+                  the game intends, on rank, stars, and film. Turn this on to reveal every recruit&apos;s ratings at once,
+                  or leave it off and reveal prospects one at a time from their profile. Ranks, stars, hometown, pipeline,
+                  and school interest are always visible.
                 </span>
               </span>
               <input
                 type="checkbox"
-                checked={hideUnscoutedStats}
-                onChange={(e) => setHideUnscoutedStats(e.target.checked)}
+                checked={revealAll}
+                onChange={(e) => setRevealAll(e.target.checked)}
                 className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
-                aria-label="Hide recruit ratings until scouted"
+                aria-label="Reveal all recruit ratings"
               />
             </label>
           </section>

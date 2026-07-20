@@ -7,6 +7,7 @@ import { CoachHub } from './pages/CoachHub';
 import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
 import { NcaaHubLayout } from './pages/NcaaHubLayout';
+import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
 import { NcaaHub } from './pages/NcaaHub';
@@ -74,16 +75,19 @@ export function App() {
                       <Route path="statistics" element={<Statistics />} />
                       <Route path="trends" element={<DynastyTrends />} />
                       <Route path="transfers" element={<Transfers />} />
-                      <Route path="recruiting" element={<Recruiting />} />
                       <Route path="media" element={<Media />} />
                       <Route path="team-awards" element={<TeamAwards />} />
                       <Route path="weekly-honors" element={<WeeklyHonors />} />
                       <Route path="history" element={<History />} />
                     </Route>
                     {/* NCAA Hub section — the nation. */}
+                    <Route element={<RecruitHubLayout />}>
+                      <Route path="recruiting" element={<Recruiting />} />
+                      <Route path="recruits" element={<NationalRecruits />} />
+                    </Route>
+
                     <Route element={<NcaaHubLayout />}>
                       <Route path="ncaa-hub" element={<NcaaHub />} />
-                      <Route path="recruits" element={<NationalRecruits />} />
                       <Route path="standings" element={<Standings />} />
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />

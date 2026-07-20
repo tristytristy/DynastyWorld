@@ -22,9 +22,10 @@ function sectionTabClass(active: boolean): string {
 // membership, not URL prefix.
 const TEAM_PATHS = new Set([
   'team-hub', 'roster', 'schedule', 'statistics', 'trends', 'transfers',
-  'recruiting', 'media', 'team-awards', 'weekly-honors', 'history',
+  'media', 'team-awards', 'weekly-honors', 'history',
 ]);
-const LEAGUE_PATHS = new Set(['ncaa-hub', 'recruits', 'standings', 'annual-awards', 'all-america']);
+const LEAGUE_PATHS = new Set(['ncaa-hub', 'standings', 'annual-awards', 'all-america']);
+const RECRUIT_PATHS = new Set(['recruiting', 'recruits']);
 
 function SeasonSwitcher() {
   const { seasons, selectedSeasonId, setSelectedSeasonId } = useSelectedSeason();
@@ -77,11 +78,17 @@ function HistoryOnlySeasonBanner({ dynastyId }: { dynastyId: string }) {
   );
 }
 
-/** Top-level section nav: Coach Hub · Team Hub · NCAA Hub. Highlights by section membership since team/league pages keep flat URLs. */
+/** Top-level section nav: Coach Hub · Team Hub · NCAA Hub · Recruit Hub. Highlights by section membership since pages keep flat URLs. */
 function DynastyNav({ id }: { id: string }) {
   const location = useLocation();
   const sub = location.pathname.split(`/dynasty/${id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
-  const section = TEAM_PATHS.has(sub) ? 'team' : LEAGUE_PATHS.has(sub) ? 'league' : 'coach';
+  const section = TEAM_PATHS.has(sub)
+    ? 'team'
+    : LEAGUE_PATHS.has(sub)
+      ? 'league'
+      : RECRUIT_PATHS.has(sub)
+        ? 'recruit'
+        : 'coach';
 
   return (
     <nav className="rounded-xl border border-white/65 bg-white/76 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.38)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76">
@@ -94,6 +101,9 @@ function DynastyNav({ id }: { id: string }) {
         </Link>
         <Link to={`/dynasty/${id}/ncaa-hub`} className={sectionTabClass(section === 'league')}>
           NCAA Hub
+        </Link>
+        <Link to={`/dynasty/${id}/recruiting`} className={sectionTabClass(section === 'recruit')}>
+          Recruit Hub
         </Link>
         <SeasonSwitcher />
       </div>

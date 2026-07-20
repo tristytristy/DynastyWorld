@@ -9,12 +9,13 @@ const subTabClass = ({ isActive }: { isActive: boolean }) =>
   ].join(' ');
 
 /**
- * NCAA Hub shell — the league/national section (IA reorg 2026-07-19). The
- * counterpart to Team Hub: everything not tied to one program — the national
- * snapshot, standings, and the national award races — lives here as sub-tabs.
+ * Recruit Hub shell — a dedicated top-level section for everything recruiting
+ * (2026-07-20). Promoted out of NCAA Hub / Team Hub because recruiting is where
+ * players spend the most time and wanted it front-and-center: your own class
+ * (My Board) and the whole national pool (National Recruits) as sub-tabs.
  * Pathless layout route, so the pages keep their flat URLs.
  */
-export function NcaaHubLayout() {
+export function RecruitHubLayout() {
   const { id } = useParams<{ id: string }>();
   if (!id) return null;
 
@@ -27,17 +28,15 @@ export function NcaaHubLayout() {
   return (
     <div className="space-y-5">
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">NCAA Hub</p>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recruit Hub</p>
         <h2 className="mt-1 font-display text-section-title font-semibold text-slate-950 dark:text-white">
-          The nation — rankings, standings, and national honors.
+          Build your class — your board and the whole country.
         </h2>
       </div>
 
       <div className="flex items-center gap-1.5 overflow-x-auto border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
-        {tab('/ncaa-hub', 'Overview', true)}
-        {tab('/standings', 'Standings')}
-        {tab('/annual-awards', 'Annual Awards')}
-        {tab('/all-america', 'All-America & All-Conf')}
+        {tab('/recruiting', 'My Board')}
+        {tab('/recruits', 'National Recruits')}
       </div>
 
       <Outlet />
