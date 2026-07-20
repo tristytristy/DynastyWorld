@@ -33,6 +33,7 @@
     --grp-bugs: #e2445c;
     --grp-limits: #9b6bcf;
     --grp-shipped: #00c875;
+    --grp-ideas: #f4a340;
   }
 
   * { box-sizing: border-box; }
@@ -172,6 +173,7 @@
   .group-bugs   .group-head { background: var(--grp-bugs); }
   .group-limits .group-head { background: var(--grp-limits); }
   .group-shipped .group-head { background: var(--grp-shipped); }
+  .group-ideas  .group-head { background: var(--grp-ideas); }
 
   table.item-table {
     width: 100%;
@@ -201,6 +203,13 @@
 
   td.item-name { font-weight: 600; width: 24%; }
   td.item-notes { color: var(--text-muted); line-height: 1.5; }
+
+  /* Ready-to-run Claude Code prompt attached to an idea card. */
+  .idea-prompt { margin-top: 10px; border: 1px solid rgba(244,163,64,0.45); border-left: 3px solid var(--grp-ideas); background: rgba(244,163,64,0.07); border-radius: 6px; overflow: hidden; }
+  .idea-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; background: rgba(244,163,64,0.14); font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9a6a1c; }
+  .idea-prompt-head .idea-copy { cursor: pointer; border: 1px solid rgba(244,163,64,0.6); background: #fff; color: #9a6a1c; font: inherit; font-size: 10px; padding: 2px 9px; border-radius: 4px; }
+  .idea-prompt-head .idea-copy:hover { background: var(--grp-ideas); color: #fff; }
+  .idea-prompt code { display: block; padding: 9px 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.55; color: var(--text-main, #2b2f42); white-space: pre-wrap; }
   td.item-status { width: 130px; white-space: nowrap; }
   td.item-priority { width: 90px; color: var(--text-muted); font-size: 12px; }
 
@@ -563,6 +572,7 @@
      ========================================================================= */
 
   const GROUPS = {
+    ideas:   { label: 'Ideas — Suggested Features (not scheduled; each has a ready Claude Code prompt to kick it off)', shortLabel: 'Ideas', scope: 'actionable' },
     refine:  { label: 'Phase 3 — Awards/Rankings/Recruiting/Portraits/Statistics Refinement', shortLabel: 'Phase 3 Refinement', scope: 'actionable' },
     awards:  { label: 'Team Awards — Remaining Phases', shortLabel: 'Team Awards', scope: 'actionable' },
     stats:   { label: 'Statistics Page — Remaining Phases', shortLabel: 'Statistics', scope: 'actionable' },
@@ -589,6 +599,36 @@
   };
 
   const TASKS = [
+    // ---- Ideas: suggested features (grounded in real save data + what we already archive), each with a ready Claude Code prompt ----
+    { id: 'idea-trends', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Dynasty Trends dashboard — the archive as living charts',
+      notes: "Now that the archive holds several seasons, visualize the story we already store: program win-loss by season, weekly poll-rank trajectory (the ranking_history table already snapshots ranks on every sync), recruiting-class-rank trend, and points for and against. Probably the single most magical use of existing data — and the dataviz skill makes it look designed, not dumped.",
+      prompt: "Build a Dynasty Trends dashboard as a new sub-tab under Team Hub. Read the multi-season archive — season overviews, the ranking_history table, and per-season records — and render a small set of charts: program win-loss by season, weekly poll-rank trajectory, recruiting-class-rank trend, and points for and against per season. Load the dataviz skill FIRST for palette and chart rules, and make every chart theme-aware and consistent with the app hard-edged shape language. Measure what data is actually available against a disposable copy of a real save before building, and show honest empty states for seasons that lack full data." },
+    { id: 'idea-development', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Player Development tracking — watch them grow',
+      notes: "Per-season roster snapshots already capture every player's overall and attributes each year. Diff them to chart a player's growth curve across seasons, and surface program-wide Most Improved and Breakout leaders. Add a recruiting-star vs final-overall gem-and-bust view. This is the payoff of keeping the history the game throws away.",
+      prompt: "Add a Player Development view. Diff the per-season roster snapshots to chart each player's overall-rating and key-attribute progression across the seasons they appear in — shown on their bio as a new tab and as a program-wide Most Improved and Breakout leaderboard. Add a recruiting star-rating vs final-overall gem-and-bust analysis from recruit board data. Verify snapshot diffing and player-id stability on a multi-season real save copy first, and use the dataviz skill for the charts." },
+    { id: 'idea-transfers', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Transfer Portal tracker — who came and went (our differentiator)',
+      notes: "We are one of the only tools with per-season league-wide roster snapshots. Diff consecutive league snapshots by player id to detect who changed schools between seasons — transfers in and out, for your program or any team via the switcher, each linking to the player bio. Other apps cannot do this because they keep no league history.",
+      prompt: "Build a Transfer Portal tracker. Diff consecutive per-season league-wide roster snapshots by player id to detect players who changed schools between seasons, and present transfers in and transfers out for the user's program (and for any team via the existing team switcher), each row linking to that player's bio. This is a real differentiator — no other tool has our per-season league history. First investigate player-id stability across seasons on a real multi-season save so the diff is trustworthy, and flag honestly if ids are not stable." },
+    { id: 'idea-pipeline', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Recruiting Pipeline map — where your class comes from',
+      notes: "Recruits carry hometown and home state. Render an inline US map plus ranked bars of recruit origins, with star-rating distribution and position-group needs. A recruiting board becomes a scouting map — fully offline, inline SVG, no external tiles.",
+      prompt: "Create a Recruiting Pipeline visualization on the Recruiting page: an inline SVG US-state map (choropleth) plus ranked bars showing where the current class comes from using recruit hometown and home-state data, alongside star-rating distribution and position-group counts. Keep it fully offline with no external map tiles or fonts. Load the dataviz skill for map and color rules, and verify hometown and state fields exist and are populated on a real save before building." },
+    { id: 'idea-leaderboards', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'All-Time Program Leaderboards',
+      notes: "The save's built-in record book only exposes a single record per category. We store every archived season's player stats — aggregate them into real top-10 career and single-season leaderboards for the main categories, each entry linking to the player bio. The record book becomes a hall of fame.",
+      prompt: "Add All-Time Program Leaderboards under Team Hub, History: top-10 career and top-10 single-season lists for the main statistical categories, aggregated across every archived season's player stat snapshots (going beyond the single record the save's built-in book exposes). Link each entry to the player bio. Aggregate from the per-season stat snapshots and verify the career totals against a multi-season real save copy." },
+    { id: 'idea-rivalry', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Head-to-Head / Rivalry history',
+      notes: "From stored schedules and results, compute the series record, current streak, and average margin against every opponent the program has faced across the archive, with a game-by-game list linking to each Game page. Surface the biggest rivalries on Team Hub.",
+      prompt: "Build a Head-to-Head and Rivalry history view. For every opponent the program has faced across all archived seasons, compute the series record, current streak, and average scoring margin from the stored schedule results, with a game-by-game list that links to each Game page, and surface the strongest rivalries on Team Hub. Aggregate from the per-season schedule snapshots and verify against a multi-season real save." },
+    { id: 'idea-yearbook', group: 'ideas', status: 'planned', priority: 'Idea',
+      title: 'Season-in-Review yearbook (shareable export)',
+      notes: "Extend the existing HTML export into a self-contained per-season recap folding together final record and postseason result, poll finish, team leaders, award winners, milestones, and that season's tagged media gallery. A yearbook a user can actually share — optionally as a published Artifact.",
+      prompt: "Extend the existing HTML export into a shareable Season-in-Review yearbook: one self-contained page per season combining final record and postseason result, poll finish, team statistical leaders, award winners, key milestones, and that season's tagged media gallery from the Media feature. Reuse the htmlExport pipeline, keep everything self-contained with inline assets so it can be shared offline, and consider offering it as a published Artifact. Verify all inputs exist for a real completed season first." },
+
     // ---- Known bugs / tech debt ----
     { id: 'done-playtest-nav-batch-1', group: 'shipped', status: 'done', date: '2026-07-19',
       title: 'Playtest batch #1 — History→Team Hub subpage, team switcher, sidebar utility menus',
@@ -821,8 +861,23 @@
     return task.image ? ` <a href="${task.image}" target="_blank" class="shot-link">📷 Screenshot</a>` : '';
   }
 
+  function promptHtml(task) {
+    if (!task.prompt) return '';
+    return `<div class="idea-prompt"><div class="idea-prompt-head"><span>▶ Claude Code prompt</span><button type="button" class="idea-copy" onclick="copyPrompt(this)">Copy</button></div><code>${task.prompt}</code></div>`;
+  }
+
+  function copyPrompt(btn) {
+    const code = btn.closest('.idea-prompt').querySelector('code');
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  }
+  window.copyPrompt = copyPrompt;
+
   function renderBoardView() {
-    const order = ['awards', 'stats', 'bugs', 'limits', 'shipped'];
+    const order = ['ideas', 'awards', 'stats', 'bugs', 'limits', 'shipped'];
     document.getElementById('view-board').innerHTML = order.map((key) => {
       const g = GROUPS[key];
       const items = TASKS.filter((t) => t.group === key);
@@ -831,7 +886,7 @@
           <td class="item-name">${t.title}</td>
           <td class="item-status">${pillHtml(t.status)}</td>
           <td class="item-priority">${t.priority}</td>
-          <td class="item-notes">${t.notes}${shotLinkHtml(t)}</td>
+          <td class="item-notes">${t.notes}${shotLinkHtml(t)}${promptHtml(t)}</td>
         </tr>`).join('');
       return `
         <section class="board-group group-${key}${g.collapsedByDefault ? ' collapsed' : ''}" data-group="${g.scope}">
@@ -869,7 +924,7 @@
           <div class="kanban-card">
             <div class="kanban-card-group" style="color:var(--grp-${t.group})">${GROUPS[t.group].shortLabel}</div>
             <div class="kanban-card-title">${t.title}</div>
-            <div class="kanban-card-notes">${t.notes}</div>
+            <div class="kanban-card-notes">${t.notes}${promptHtml(t)}</div>
             <div class="kanban-card-footer">
               ${t.priority && t.priority !== '—' ? `<span class="kanban-priority">${t.priority}</span>` : ''}
               ${t.date ? `<span class="kanban-date">${t.date}</span>` : ''}
