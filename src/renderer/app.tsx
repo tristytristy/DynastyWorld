@@ -19,6 +19,7 @@ import { AnnualAwards } from './pages/awards/AnnualAwards';
 import { AllTeams } from './pages/awards/AllTeams';
 import { WeeklyHonors } from './pages/awards/WeeklyHonors';
 import { Recruiting } from './pages/Recruiting';
+import { NationalRecruits } from './pages/NationalRecruits';
 import { History } from './pages/History';
 import { Media } from './pages/Media';
 import { PlayerProfileModal } from './components/common/PlayerProfileModal';
@@ -82,6 +83,7 @@ export function App() {
                     {/* NCAA Hub section — the nation. */}
                     <Route element={<NcaaHubLayout />}>
                       <Route path="ncaa-hub" element={<NcaaHub />} />
+                      <Route path="recruits" element={<NationalRecruits />} />
                       <Route path="standings" element={<Standings />} />
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />

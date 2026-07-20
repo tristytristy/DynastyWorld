@@ -962,6 +962,51 @@ export interface LeagueTeamRoster {
   players: LeagueRosterPlayer[];
 }
 
+/** One school pursuing a recruit (from the recruit's top-schools list), with its 0-99 influence — the recruiting battle. */
+export interface NationalRecruitSchool {
+  teamIndex: number;
+  teamName: string;
+  influence: number;
+}
+
+/** A prospect from the league-wide recruit pool (the national Recruits browser). Renderer-facing mirror of extract-national-recruits.ts's NationalRecruitData. */
+export interface NationalRecruit {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  archetype: string;
+  stars: number;
+  overallRating: number;
+  developmentTrait: string;
+  heightInches: number;
+  weightPounds: number;
+  hometown: string;
+  homeState: string;
+  pipeline: string;
+  portraitAssetName: string | null;
+  classYear: string;
+  nationalRank: number;
+  positionRank: number;
+  stateRank: number;
+  recruitStage: string;
+  gemBust: string;
+  commitScore: number;
+  totalOffers: number;
+  dealbreaker: string;
+  idealPitch: string;
+  baseNilValue: number;
+  athletic: {
+    speed: number;
+    acceleration: number;
+    agility: number;
+    strength: number;
+    awareness: number;
+    jumping: number;
+  };
+  topSchools: NationalRecruitSchool[];
+}
+
 /** A viewed (any) team's championship honors for one season, from the leaguewide YearSummary snapshot — so Team Hub can show the same trophies the user's own team gets. */
 export interface LeagueTeamHonors {
   conferenceChampion: boolean;
@@ -1331,6 +1376,7 @@ export interface DynastyApi {
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
+    getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;

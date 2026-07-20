@@ -24,7 +24,7 @@ const TEAM_PATHS = new Set([
   'team-hub', 'roster', 'schedule', 'statistics', 'trends', 'transfers',
   'recruiting', 'media', 'team-awards', 'weekly-honors', 'history',
 ]);
-const LEAGUE_PATHS = new Set(['ncaa-hub', 'standings', 'annual-awards', 'all-america']);
+const LEAGUE_PATHS = new Set(['ncaa-hub', 'recruits', 'standings', 'annual-awards', 'all-america']);
 
 function SeasonSwitcher() {
   const { seasons, selectedSeasonId, setSelectedSeasonId } = useSelectedSeason();

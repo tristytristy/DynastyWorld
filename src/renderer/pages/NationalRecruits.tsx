@@ -1,0 +1,516 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { StatTile } from '../components/ui/StatTile';
+import { PlayerPortrait } from '../components/common/PlayerPortrait';
+import { TeamLogo } from '../components/common/TeamLogo';
+import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { usePlayerModal } from '../data/PlayerModalProvider';
+import { useEditorModal } from '../data/EditorModalProvider';
+import { useRecruitingExperience } from '../data/RecruitingExperienceProvider';
+import type { NationalRecruit } from '../../shared/types';
+
+/** Colored stage badge — each decision-funnel stage gets one accent, never color-alone (the label is always present). */
+const STAGE_STYLE: Record<string, { label: string; cls: string }> = {
+  Signed: { label: 'Signed', cls: 'border-emerald-300/70 bg-emerald-100/80 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' },
+  SoftCommitted: { label: 'Committed', cls: 'border-sky-300/70 bg-sky-100/80 text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300' },
+  Top3: { label: 'Top 3', cls: 'border-violet-300/70 bg-violet-100/80 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300' },
+  Top5: { label: 'Top 5', cls: 'border-amber-300/70 bg-amber-100/80 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300' },
+  Top10: { label: 'Top 10', cls: 'border-slate-300/80 bg-slate-100/80 text-slate-700 dark:border-slate-700 dark:bg-white/5 dark:text-slate-300' },
+  Battle: { label: 'Battle', cls: 'border-red-300/70 bg-red-100/80 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300' },
+};
+
+function StageBadge({ stage }: { stage: string }) {
+  const meta = STAGE_STYLE[stage] ?? { label: stage, cls: STAGE_STYLE.Top10.cls };
+  return <span className={`inline-flex items-center border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${meta.cls}`}>{meta.label}</span>;
+}
+
+function Stars({ n }: { n: number }) {
+  return <span className="text-amber-500 dark:text-amber-400" title={`${n} star`}>{'★'.repeat(n)}<span className="text-slate-300 dark:text-slate-600">{'★'.repeat(Math.max(0, 5 - n))}</span></span>;
+}
+
+function formatHeight(inches: number): string {
+  if (!inches) return '—';
+  return `${Math.floor(inches / 12)}'${inches % 12}"`;
+}
+
+function formatNil(k: number): string {
+  if (!k) return '—';
+  return k >= 1000 ? `$${(k / 1000).toFixed(1)}M` : `$${k}K`;
+}
+
+const FILTER_SELECT =
+  'border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200';
+
+const RENDER_CAP = 200;
+
+function distinct(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+type SortKey = 'nationalRank' | 'positionRank' | 'stateRank' | 'stars' | 'overallRating' | 'commitScore' | 'baseNilValue' | 'lastName';
+
+/** Small influence/rating bar with a value label. */
+function StatBar({ label, value, max = 99, accent }: { label: React.ReactNode; value: number; max?: number; accent: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="w-28 shrink-0 truncate text-xs text-slate-600 dark:text-slate-300">{label}</span>
+      <div className="relative h-2.5 flex-1 bg-slate-100 dark:bg-white/5">
+        <div className="absolute inset-y-0 left-0" style={{ width: `${Math.min(100, (value / max) * 100)}%`, background: accent }} />
+      </div>
+      <span className="tnum w-7 shrink-0 text-right text-xs font-semibold text-slate-900 dark:text-white">{value}</span>
+    </div>
+  );
+}
+
+function RecruitPanel({
+  recruit,
+  canEdit,
+  onEdit,
+  onOpenFull,
+  hideStats,
+}: {
+  recruit: NationalRecruit | null;
+  canEdit: boolean;
+  onEdit: (r: NationalRecruit) => void;
+  onOpenFull: (r: NationalRecruit) => void;
+  hideStats: boolean;
+}) {
+  if (!recruit) {
+    return (
+      <SurfaceCard className="text-sm text-slate-400 dark:text-slate-500">
+        Select a recruit to see their full scouting profile, school interest, and athletic snapshot.
+      </SurfaceCard>
+    );
+  }
+
+  const athleticRows: { label: string; value: number }[] = [
+    { label: 'Speed', value: recruit.athletic.speed },
+    { label: 'Acceleration', value: recruit.athletic.acceleration },
+    { label: 'Agility', value: recruit.athletic.agility },
+    { label: 'Strength', value: recruit.athletic.strength },
+    { label: 'Awareness', value: recruit.athletic.awareness },
+    { label: 'Jumping', value: recruit.athletic.jumping },
+  ];
+  const sortedAthletic = [...athleticRows].sort((a, b) => b.value - a.value);
+  const strengths = sortedAthletic.slice(0, 2);
+  const weaknesses = sortedAthletic.slice(-2).reverse();
+
+  return (
+    <SurfaceCard className="space-y-5">
+      {/* Hero */}
+      <div className="flex items-start gap-3">
+        <button type="button" onClick={() => onOpenFull(recruit)} className="shrink-0" title="Open full profile">
+          <PlayerPortrait player={recruit} size="lg" className="!h-16 !w-16" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <button type="button" onClick={() => onOpenFull(recruit)} className="text-left">
+            <h3 className="truncate text-lg font-bold tracking-tight text-slate-950 hover:underline dark:text-white">
+              {recruit.firstName} {recruit.lastName}
+            </h3>
+          </button>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+            <span className="border border-slate-300/80 px-1.5 py-0.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">{recruit.position}</span>
+            <Stars n={recruit.stars} />
+            <StageBadge stage={recruit.recruitStage} />
+            {recruit.gemBust === 'GEM' && <span className="border border-emerald-300/70 bg-emerald-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">Gem</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick summary */}
+      <div className="grid grid-cols-3 gap-2">
+        <StatTile label="National" value={recruit.nationalRank > 0 ? `#${recruit.nationalRank}` : 'NR'} />
+        <StatTile label={`${recruit.position} Rank`} value={recruit.positionRank > 0 ? `#${recruit.positionRank}` : 'NR'} />
+        <StatTile label="State Rank" value={recruit.stateRank > 0 ? `#${recruit.stateRank}` : 'NR'} />
+      </div>
+
+      {/* Cards */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Prospect</p>
+          <dl className="mt-2 space-y-1.5 text-sm">
+            <Row k="Class" v={recruit.classYear.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ')} />
+            <Row k="Archetype" v={recruit.archetype || '—'} />
+            <Row k="Height" v={formatHeight(recruit.heightInches)} />
+            <Row k="Weight" v={recruit.weightPounds ? `${recruit.weightPounds} lb` : '—'} />
+            <Row k="Hometown" v={`${recruit.hometown}, ${recruit.homeState}`} />
+            <Row k="Pipeline" v={recruit.pipeline || '—'} />
+          </dl>
+        </div>
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recruiting</p>
+          <dl className="mt-2 space-y-1.5 text-sm">
+            <Row k="Dev Trait" v={recruit.developmentTrait || '—'} />
+            <Row k="Dealbreaker" v={recruit.dealbreaker || '—'} />
+            <Row k="Ideal Pitch" v={recruit.idealPitch || '—'} />
+            <Row k="Offers" v={String(recruit.totalOffers)} />
+            <Row k="NIL Value" v={formatNil(recruit.baseNilValue)} />
+            {!hideStats && <Row k="Overall" v={String(recruit.overallRating)} />}
+          </dl>
+        </div>
+      </div>
+
+      {/* Commit score */}
+      <div>
+        <div className="flex items-baseline justify-between">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Commit score</p>
+          <span className="tnum text-xs font-semibold text-slate-900 dark:text-white">{recruit.commitScore}</span>
+        </div>
+        <div className="mt-2 h-2.5 bg-slate-100 dark:bg-white/5">
+          <div className="h-full bg-[var(--team-primary)]" style={{ width: `${Math.min(100, (recruit.commitScore / 1000) * 100)}%` }} />
+        </div>
+        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">The game&apos;s own commitment metric — higher means closer to a decision.</p>
+      </div>
+
+      {/* School interest */}
+      {recruit.topSchools.length > 0 && (
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">School interest</p>
+          <div className="mt-2 space-y-1.5">
+            {recruit.topSchools.slice(0, 8).map((s) => (
+              <StatBar
+                key={s.teamIndex}
+                label={<span className="inline-flex items-center gap-1.5"><TeamLogo team={{ assetName: s.teamName, label: s.teamName }} size="sm" className="!h-4 !w-4" />{s.teamName}</span>}
+                value={s.influence}
+                accent="var(--team-primary)"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Athletic snapshot */}
+      {!hideStats && (
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Athletic snapshot</p>
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+            <span className="text-slate-500 dark:text-slate-400">Strength: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{strengths.map((s) => s.label).join(', ')}</span></span>
+            <span className="text-slate-500 dark:text-slate-400">Work on: <span className="font-semibold text-amber-700 dark:text-amber-300">{weaknesses.map((s) => s.label).join(', ')}</span></span>
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {athleticRows.map((r) => (
+              <StatBar key={r.label} label={r.label} value={r.value} accent={r.value >= 85 ? '#059669' : r.value >= 70 ? '#2563eb' : '#94a3b8'} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+        <button
+          type="button"
+          onClick={() => onOpenFull(recruit)}
+          className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+        >
+          Full profile
+        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(recruit)}
+            className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            Edit recruit
+          </button>
+        )}
+      </div>
+    </SurfaceCard>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="shrink-0 text-slate-400 dark:text-slate-500">{k}</dt>
+      <dd className="truncate text-right font-medium text-slate-900 dark:text-white">{v}</dd>
+    </div>
+  );
+}
+
+export function NationalRecruits() {
+  const { id } = useParams<{ id: string }>();
+  const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
+  const { openPlayerModal } = usePlayerModal();
+  const { openPlayerEditor } = useEditorModal();
+  const { hideUnscoutedStats } = useRecruitingExperience();
+
+  const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [position, setPosition] = useState('');
+  const [stars, setStars] = useState('');
+  const [classYear, setClassYear] = useState('');
+  const [homeState, setHomeState] = useState('');
+  const [stage, setStage] = useState('');
+  const [gemOnly, setGemOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const canEdit = seasons.find((s) => s.id === seasonId)?.isCurrent === true;
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setRecruits(undefined);
+    setSelectedId(null);
+    window.api.db.getNationalRecruits(id, seasonId).then((r) => {
+      if (!cancelled) setRecruits(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, seasonId]);
+
+  const options = useMemo(() => {
+    const list = recruits ?? [];
+    return {
+      positions: distinct(list.map((r) => r.position)),
+      classes: distinct(list.map((r) => r.classYear)),
+      states: distinct(list.map((r) => r.homeState)),
+      stages: distinct(list.map((r) => r.recruitStage)),
+    };
+  }, [recruits]);
+
+  const filtered = useMemo(() => {
+    const list = recruits ?? [];
+    const q = search.trim().toLowerCase();
+    const result = list.filter((r) => {
+      if (position && r.position !== position) return false;
+      if (stars && r.stars !== Number(stars)) return false;
+      if (classYear && r.classYear !== classYear) return false;
+      if (homeState && r.homeState !== homeState) return false;
+      if (stage && r.recruitStage !== stage) return false;
+      if (gemOnly && r.gemBust !== 'GEM') return false;
+      if (q) {
+        const hay = `${r.firstName} ${r.lastName} ${r.hometown} ${r.homeState} ${r.pipeline} ${r.position}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const dir = sortDir === 'asc' ? 1 : -1;
+    result.sort((a, b) => {
+      // Ranks: 0/NR sorts to the bottom regardless of direction.
+      if (sortKey === 'nationalRank' || sortKey === 'positionRank' || sortKey === 'stateRank') {
+        const av = a[sortKey] || Infinity;
+        const bv = b[sortKey] || Infinity;
+        return (av - bv) * dir;
+      }
+      if (sortKey === 'lastName') return a.lastName.localeCompare(b.lastName) * dir;
+      return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
+    });
+    return result;
+  }, [recruits, search, position, stars, classYear, homeState, stage, gemOnly, sortKey, sortDir]);
+
+  const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
+
+  const dash = useMemo(() => {
+    const list = recruits ?? [];
+    return {
+      total: list.length,
+      fiveStar: list.filter((r) => r.stars === 5).length,
+      fourStar: list.filter((r) => r.stars === 4).length,
+      gems: list.filter((r) => r.gemBust === 'GEM').length,
+      states: new Set(list.map((r) => r.homeState).filter(Boolean)).size,
+      positions: new Set(list.map((r) => r.position).filter(Boolean)).size,
+    };
+  }, [recruits]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'stars' || key === 'overallRating' || key === 'commitScore' || key === 'baseNilValue' ? 'desc' : 'asc');
+    }
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setPosition('');
+    setStars('');
+    setClassYear('');
+    setHomeState('');
+    setStage('');
+    setGemOnly(false);
+  }
+
+  function openFull(r: NationalRecruit) {
+    if (!id) return;
+    openPlayerModal(id, r.playerId, seasonId, undefined, {
+      name: `${r.firstName} ${r.lastName}`,
+      position: r.position,
+      teamDisplayName: r.topSchools[0]?.teamName ?? 'Uncommitted',
+      portraitAssetName: r.portraitAssetName,
+    });
+  }
+
+  function editRecruit(r: NationalRecruit) {
+    if (!id) return;
+    openPlayerEditor({
+      dynastyId: id,
+      playerId: r.playerId,
+      playerLabel: `${r.firstName} ${r.lastName}`,
+      isRecruit: true,
+      onSaved: () => window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr)),
+    });
+  }
+
+  if (recruits === undefined) {
+    return <p className="text-slate-500 dark:text-slate-400">Loading national recruits...</p>;
+  }
+  if (recruits === null) {
+    return (
+      <SurfaceCard className="text-sm text-slate-400 dark:text-slate-500">
+        No national recruit data for this season — re-sync this dynasty to capture the full recruit pool. (Recruiting data is richest on a preseason/in-season save.)
+      </SurfaceCard>
+    );
+  }
+
+  const filtersActive = !!(search || position || stars || classYear || homeState || stage || gemOnly);
+  const shown = filtered.slice(0, RENDER_CAP);
+
+  const th = (key: SortKey, label: string, alignRight = false) => (
+    <th className={`whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] ${alignRight ? 'text-right' : 'text-left'}`}>
+      <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 transition hover:text-[var(--team-primary)] ${sortKey === key ? 'text-slate-900 dark:text-white' : ''}`}>
+        {label}
+        {sortKey === key && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+      </button>
+    </th>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recruits</p>
+        <h2 className="mt-1 font-display text-page-title font-bold text-slate-950 dark:text-white">Every prospect in the country.</h2>
+        <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+          The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.
+        </p>
+      </div>
+
+      {/* Dashboard */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <StatTile label="Recruits" value={dash.total.toLocaleString()} />
+        <StatTile label="5-Star" value={String(dash.fiveStar)} />
+        <StatTile label="4-Star" value={String(dash.fourStar)} />
+        <StatTile label="Gems" value={String(dash.gems)} />
+        <StatTile label="States" value={String(dash.states)} />
+        <StatTile label="Positions" value={String(dash.positions)} />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+        {/* Filters + table */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, town, state, pipeline..."
+              className={`${FILTER_SELECT} min-w-[13rem] flex-1`}
+            />
+            <select value={position} onChange={(e) => setPosition(e.target.value)} aria-label="Filter by position" className={FILTER_SELECT}>
+              <option value="">All positions</option>
+              {options.positions.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Filter by stars" className={FILTER_SELECT}>
+              <option value="">All stars</option>
+              {[5, 4, 3, 2, 1].map((s) => <option key={s} value={s}>{s}★</option>)}
+            </select>
+            <select value={homeState} onChange={(e) => setHomeState(e.target.value)} aria-label="Filter by state" className={FILTER_SELECT}>
+              <option value="">All states</option>
+              {options.states.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={classYear} onChange={(e) => setClassYear(e.target.value)} aria-label="Filter by class" className={FILTER_SELECT}>
+              <option value="">All classes</option>
+              {options.classes.map((c) => <option key={c} value={c}>{c.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ')}</option>)}
+            </select>
+            <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Filter by stage" className={FILTER_SELECT}>
+              <option value="">All stages</option>
+              {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
+            </select>
+            <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200">
+              <input type="checkbox" checked={gemOnly} onChange={(e) => setGemOnly(e.target.checked)} /> Gems
+            </label>
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="border border-slate-200/80 px-3 py-2 text-sm text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white">
+                Clear
+              </button>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''} ({dash.total.toLocaleString()} total)
+            {filtered.length > RENDER_CAP && ' — narrow with filters to see more'}
+          </p>
+
+          <SurfaceCard className="overflow-hidden p-0">
+            <div className="max-h-[70vh] overflow-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="sticky top-0 z-20 bg-[var(--team-primary)] text-[var(--team-on-primary)]">
+                  <tr>
+                    <th className="sticky left-0 z-30 bg-[var(--team-primary)] px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">
+                      <button type="button" onClick={() => toggleSort('nationalRank')} className="inline-flex items-center gap-1">Prospect{sortKey === 'nationalRank' && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}</button>
+                    </th>
+                    {!hideUnscoutedStats && th('overallRating', 'OVR', true)}
+                    {th('positionRank', 'Pos Rk', true)}
+                    {th('stateRank', 'St Rk', true)}
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Class</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Town</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">State</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Pipeline</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Stage</th>
+                    {th('commitScore', 'Commit', true)}
+                    {th('baseNilValue', 'NIL', true)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((r) => {
+                    const isSel = r.playerId === selectedId;
+                    return (
+                      <tr
+                        key={r.playerId}
+                        onClick={() => setSelectedId(r.playerId)}
+                        className={`cursor-pointer border-b border-slate-200/60 transition dark:border-white/5 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)]' : 'hover:bg-slate-50/80 dark:hover:bg-white/5'}`}
+                      >
+                        <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_12%,var(--surface-card,#fff))]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
+                          <div className="flex items-center gap-2.5">
+                            <span className="tnum w-6 shrink-0 text-right text-xs font-bold text-slate-400 dark:text-slate-500">{r.nationalRank || '—'}</span>
+                            <PlayerPortrait player={r} size="sm" className="!h-8 !w-8 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-900 dark:text-white">{r.firstName} {r.lastName}</p>
+                              <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500"><span className="font-bold text-slate-500 dark:text-slate-400">{r.position}</span> <Stars n={r.stars} /></p>
+                            </div>
+                          </div>
+                        </td>
+                        {!hideUnscoutedStats && <td className="tnum px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">{r.overallRating}</td>}
+                        <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.positionRank || '—'}</td>
+                        <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.stateRank || '—'}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.classYear.replace(/JuniorCollege_/, 'JUCO ').replace('HighSchool', 'HS')}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.hometown}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.homeState}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.pipeline || '—'}</td>
+                        <td className="whitespace-nowrap px-3 py-2"><StageBadge stage={r.recruitStage} /></td>
+                        <td className="tnum px-3 py-2 text-right text-slate-600 dark:text-slate-300">{r.commitScore || '—'}</td>
+                        <td className="tnum px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatNil(r.baseNilValue)}</td>
+                      </tr>
+                    );
+                  })}
+                  {shown.length === 0 && (
+                    <tr><td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-400 dark:text-slate-500">No recruits match these filters.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </SurfaceCard>
+        </div>
+
+        {/* Profile panel */}
+        <div className="xl:sticky xl:top-4 xl:self-start">
+          <RecruitPanel recruit={selected} canEdit={canEdit} onEdit={editRecruit} onOpenFull={openFull} hideStats={hideUnscoutedStats} />
+        </div>
+      </div>
+    </div>
+  );
+}

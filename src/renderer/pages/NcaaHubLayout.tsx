@@ -35,6 +35,7 @@ export function NcaaHubLayout() {
 
       <div className="flex items-center gap-1.5 overflow-x-auto border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
         {tab('/ncaa-hub', 'Overview', true)}
+        {tab('/recruits', 'Recruits')}
         {tab('/standings', 'Standings')}
         {tab('/annual-awards', 'Annual Awards')}
         {tab('/all-america', 'All-America & All-Conf')}

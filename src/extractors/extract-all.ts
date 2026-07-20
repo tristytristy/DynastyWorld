@@ -8,6 +8,7 @@ import { extractLeagueRoster, type LeagueRosterData } from './extract-league-ros
 import { extractLeagueSchedule, type LeagueGameData } from './extract-league-schedule';
 import { extractSchedule, type GameData } from './extract-schedule';
 import { extractRecruits, type RecruitData } from './extract-recruits';
+import { extractNationalRecruits, type NationalRecruitData } from './extract-national-recruits';
 import { extractStats, type PlayerStatsData } from './extract-stats';
 import { extractTeamStats, type TeamStatsData } from './extract-team-stats';
 import { extractKicking, type PlayerKickingStatsData } from './extract-kicking';
@@ -31,6 +32,8 @@ export interface ExtractionData {
   leagueSchedule: LeagueGameData[];
   schedule: GameData[];
   recruits: RecruitData[];
+  /** The whole league-wide recruit pool (~2,950 rows) — the national Recruits browser; distinct from `recruits` (the user's own 35-slot board). */
+  nationalRecruits: NationalRecruitData[];
   stats: PlayerStatsData[];
   teamStats: TeamStatsData | null;
   kicking: PlayerKickingStatsData[];
@@ -80,6 +83,7 @@ export async function extractAll(
 
   onProgress?.('recruits', 'start');
   const recruits = await extractRecruits(franchise, userTeam.teamIndex);
+  const nationalRecruits = await extractNationalRecruits(franchise);
   onProgress?.('recruits', 'done');
 
   onProgress?.('stats', 'start');
@@ -120,6 +124,7 @@ export async function extractAll(
     leagueSchedule,
     schedule,
     recruits,
+    nationalRecruits,
     stats,
     teamStats,
     kicking,

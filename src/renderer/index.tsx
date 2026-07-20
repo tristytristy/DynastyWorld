@@ -8,6 +8,7 @@ import { PlayerModalProvider } from './data/PlayerModalProvider';
 import { EditorModalProvider } from './data/EditorModalProvider';
 import { RecruitModalProvider } from './data/RecruitModalProvider';
 import { GameModalProvider } from './data/GameModalProvider';
+import { RecruitingExperienceProvider } from './data/RecruitingExperienceProvider';
 import { applyDesignTokens } from '../design/applyTokens';
 import './styles/globals.css';
 
@@ -23,7 +24,8 @@ if (!container) {
 createRoot(container).render(
   <React.StrictMode>
     <ThemeProvider>
-      <StadiumDataProvider>
+      <RecruitingExperienceProvider>
+       <StadiumDataProvider>
         <PlayerModalProvider>
           <EditorModalProvider>
             <RecruitModalProvider>
@@ -35,7 +37,8 @@ createRoot(container).render(
             </RecruitModalProvider>
           </EditorModalProvider>
         </PlayerModalProvider>
-      </StadiumDataProvider>
+       </StadiumDataProvider>
+      </RecruitingExperienceProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );

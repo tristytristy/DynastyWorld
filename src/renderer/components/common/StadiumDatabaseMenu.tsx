@@ -146,7 +146,7 @@ export function StadiumDatabaseMenu({ triggerClassName }: { triggerClassName?: s
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
-        Stadiums
+        Stadium
       </button>
 
       <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={42} isDark={isDark}>

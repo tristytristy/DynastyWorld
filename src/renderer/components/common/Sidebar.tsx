@@ -5,6 +5,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
+import { RecruitingSettingsMenu } from './RecruitingSettingsMenu';
 import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
@@ -134,8 +135,17 @@ export function Sidebar() {
             {isDark ? 'Light mode' : 'Dark mode'}
           </button>
           <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+
+          {/* EXPERIENCE group — how the app plays, distinct from workspace prefs. */}
+          <div className="pt-1">
+            <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Experience</p>
+            <div className="space-y-2">
+              <RecruitingSettingsMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+              <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            </div>
+          </div>
+
           <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-          <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
         </div>
       </nav>
     </aside>
