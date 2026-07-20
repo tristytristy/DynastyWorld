@@ -934,6 +934,10 @@ export interface LeagueTeamGame {
   teamScore: number | null;
   opponentScore: number | null;
   result: 'W' | 'L' | 'T' | null;
+  /** Same classification the user's own schedule uses — bowl/playoff, or conference vs non-conference by comparing both teams' conference membership (from the teams snapshot). */
+  gameType: 'conference' | 'non-conference' | 'bowl';
+  /** The conference name when gameType is 'conference' (for an in-conference badge); null otherwise. */
+  conferenceName: string | null;
 }
 
 export interface LeagueTeamRoster {

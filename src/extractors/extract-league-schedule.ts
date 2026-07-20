@@ -37,7 +37,13 @@ export async function extractLeagueSchedule(
     const away = resolveReference(franchise, r, 'AwayTeam');
     if (!home || !away) return;
 
-    const played = String(r.GameStatus) === 'Played';
+    // GameStatus is the winner enum ("HomeWon"/"AwayWon"), never the literal
+    // "Played" — the only non-played value is "Unplayed". Matching against
+    // "Played" (the previous check) nulled every score, so every non-user
+    // team's schedule read as all-Upcoming/0-0 even for fully-completed
+    // seasons; this mirrors extract-schedule.ts's own proven `!== 'Unplayed'`
+    // convention (which is why the user's OWN schedule always worked).
+    const played = String(r.GameStatus) !== 'Unplayed';
     const weekType = String(r.SeasonWeekType);
     const bowlResolved = weekType !== 'RegularSeason' ? resolveReference(franchise, r, 'BowlGame') : null;
 

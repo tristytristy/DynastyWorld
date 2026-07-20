@@ -6,6 +6,7 @@ import type { LeagueTeamGame, LeagueTeamRoster, LeagueTeamSummary } from '../sha
 interface TeamsSnapshotEntry {
   teamIndex: number;
   displayName: string;
+  conferenceName?: string | null;
 }
 
 function resolveSeasonId(dynastyId: string, seasonId?: number): number | undefined {
@@ -61,6 +62,12 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
   const games = getSnapshot<LeagueGameData[]>(resolved, 'leagueSchedule');
   if (!games) return null;
 
+  // Conference membership per team, same source (teams snapshot) and same
+  // classification rule the user's own schedule uses in getSchedule.ts — a
+  // game is 'conference' only when both teams share a conference.
+  const teams = getSnapshot<TeamsSnapshotEntry[]>(resolved, 'teams') ?? [];
+  const conferenceByTeamIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
+
   return games
     .filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex)
     .sort((a, b) => a.week - b.week)
@@ -68,6 +75,7 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
       const isHome = g.homeTeamIndex === teamIndex;
       const teamScore = isHome ? g.homeScore : g.awayScore;
       const opponentScore = isHome ? g.awayScore : g.homeScore;
+      const opponentIndex = isHome ? g.awayTeamIndex : g.homeTeamIndex;
       const result =
         teamScore === null || opponentScore === null
           ? null
@@ -76,6 +84,16 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
             : teamScore < opponentScore
               ? ('L' as const)
               : ('T' as const);
+
+      const ownConf = conferenceByTeamIndex.get(teamIndex) ?? null;
+      const oppConf = conferenceByTeamIndex.get(opponentIndex) ?? null;
+      const gameType: LeagueTeamGame['gameType'] =
+        g.weekType !== 'RegularSeason'
+          ? 'bowl'
+          : ownConf && oppConf && ownConf === oppConf
+            ? 'conference'
+            : 'non-conference';
+
       return {
         gameId: g.gameId,
         week: g.week,
@@ -86,6 +104,8 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         teamScore,
         opponentScore,
         result,
+        gameType,
+        conferenceName: gameType === 'conference' ? ownConf : null,
       };
     });
 }

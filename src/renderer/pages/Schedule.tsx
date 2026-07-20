@@ -155,7 +155,19 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
  * perspective. No stadiums/kickoff/game-detail links: those are only tracked
  * for the user's own games.
  */
+/** Type-column content for a league-view game: conference icon, bowl name, or a non-conference label — mirrors the user's own schedule's conference-icon treatment. */
+function LeagueTypeCell({ game, appearance }: { game: LeagueTeamGame; appearance: 'light' | 'dark' }) {
+  if (game.gameType === 'conference' && game.conferenceName) {
+    return <ConferenceMark conferenceName={game.conferenceName} background={appearance} context="table" alt={game.conferenceName} />;
+  }
+  if (game.gameType === 'bowl') {
+    return <span className="text-slate-600 dark:text-slate-300">{game.bowlName ?? (game.weekType === 'RegularSeason' ? '—' : game.weekType)}</span>;
+  }
+  return <span className="text-slate-400 dark:text-slate-500">Non-Conf</span>;
+}
+
 function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
+  const { appearance } = useTheme();
   const [games, setGames] = useState<LeagueTeamGame[] | null | undefined>(undefined);
 
   useEffect(() => {
@@ -213,7 +225,7 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{g.bowlName ?? (g.weekType === 'RegularSeason' ? '—' : g.weekType)}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400"><LeagueTypeCell game={g} appearance={appearance} /></td>
                     <td className="tnum px-4 py-3 text-right">
                       {g.result === null ? (
                         <span className="text-slate-400 dark:text-slate-500">Upcoming</span>
