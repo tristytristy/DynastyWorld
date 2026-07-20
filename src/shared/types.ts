@@ -734,6 +734,19 @@ export interface ConferenceStandingTeam {
   cfpRank: number | null;
   isUserTeam: boolean;
   isConferenceChampion: boolean;
+  /** The team's division within the conference, or null when the conference isn't divided this season. */
+  divisionName: string | null;
+  /** Division win-loss (division games only); shown alongside the conference record in a divided conference. */
+  divisionWins: number;
+  divisionLosses: number;
+  /** True for the team leading its division (the game's own division-standing #0). */
+  isDivisionLeader: boolean;
+}
+
+/** One division's ordered teams within a divided conference — present only on divided conferences. */
+export interface ConferenceDivisionGroup {
+  name: string;
+  teams: ConferenceStandingTeam[];
 }
 
 export interface ConferenceStandingsGroup {
@@ -741,6 +754,8 @@ export interface ConferenceStandingsGroup {
   conferenceName: string | null;
   label: string;
   teams: ConferenceStandingTeam[];
+  /** Non-null only when the conference has 2+ real named divisions — teams grouped and ordered by the game's own division standings. When set, the UI renders divisional sub-tables instead of the flat `teams` list. */
+  divisions: ConferenceDivisionGroup[] | null;
   top25Count: number;
   nonConferenceWins: number;
   nonConferenceLosses: number;

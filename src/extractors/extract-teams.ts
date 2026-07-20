@@ -92,6 +92,19 @@ export interface TeamData {
    * from a single field. Used to classify schedule games as conference/non-conference.
    */
   conferenceName: string | null;
+  /**
+   * The division within the conference (e.g. "East"/"West", "Division 1"/"Division 2"),
+   * or null when the conference isn't split into divisions this season. Built by
+   * resolving Conference.Divisions -> Division.Teams (each an array-of-references whose
+   * container table must be loaded before its slots resolve — the gotcha that made this
+   * look empty until the array table was read first). Only conferences with 2+ real
+   * named divisions are treated as divided downstream.
+   */
+  divisionName: string | null;
+  /** The game's own 0-based rank within the division (0 = division leader). Only meaningful when divisionName is set. */
+  divisionStanding: number;
+  divisionWins: number;
+  divisionLosses: number;
 }
 
 const FIELDS = [
@@ -105,6 +118,9 @@ const FIELDS = [
   'ConfLoss',
   'NonConfWin',
   'NonConfLoss',
+  'DivisionWin',
+  'DivisionLoss',
+  'CurSeasonDivStanding',
   'MediaPoll_CurrentRank',
   'CoachesPoll_CurrentRank',
   'CFPPoll_CurrentRank',
@@ -181,6 +197,7 @@ function mapTeam(
   franchise: OpenFranchise,
   r: FranchiseRecord,
   conferenceByTeamIndex: Map<number, string>,
+  divisionByTeamIndex: Map<number, string>,
 ): TeamData {
   const teamIndex = Number(r.TeamIndex);
   return {
@@ -226,43 +243,94 @@ function mapTeam(
       overall: Number(r.TEAM_RATINGOVR),
     },
     conferenceName: conferenceByTeamIndex.get(teamIndex) ?? null,
+    divisionName: divisionByTeamIndex.get(teamIndex) ?? null,
+    divisionStanding: Number(r.CurSeasonDivStanding),
+    divisionWins: Number(r.DivisionWin),
+    divisionLosses: Number(r.DivisionLoss),
   };
 }
 
 /**
- * Team records have no direct conference field. Each Conference record's TeamSlots
- * resolves to an array-row (same pattern as Player.SeasonStats) whose slot keys each
- * resolve to a member team — this inverts that structure into a flat teamIndex lookup.
+ * Resolves an array-of-references field to its container row, LOADING that
+ * container table's records first. The load is the crucial step: these array
+ * tables (Conference.TeamSlots, Conference.Divisions, Division.Teams) are
+ * separate tables whose records are lazy — reading a slot before the table is
+ * loaded silently yields an empty row, which is exactly what made division
+ * membership look absent until the container was read first.
  */
-async function buildConferenceMap(franchise: OpenFranchise): Promise<Map<number, string>> {
+async function resolveArrayRow(
+  franchise: OpenFranchise,
+  record: FranchiseRecord,
+  key: string,
+): Promise<FranchiseRecord | null> {
+  const ref = record.getReferenceDataByKey(key);
+  if (!ref || !ref.tableId) return null;
+  const table = franchise.getTableById(ref.tableId) as unknown as
+    | { records: FranchiseRecord[]; readRecords(): Promise<void> }
+    | null;
+  if (!table) return null;
+  await table.readRecords();
+  return table.records[ref.rowNumber] ?? null;
+}
+
+/**
+ * Team records have no direct conference/division field. Each Conference record's
+ * TeamSlots resolves to an array-row whose slot keys each resolve to a member team;
+ * its Divisions resolves to an array-row of Division records, each of which has its
+ * own Teams array-row of members. This inverts both structures into flat teamIndex
+ * lookups in a single pass.
+ */
+async function buildConferenceAndDivisionMaps(
+  franchise: OpenFranchise,
+): Promise<{ conferenceByTeamIndex: Map<number, string>; divisionByTeamIndex: Map<number, string> }> {
   const confTable = getLargestTable(franchise, 'Conference');
   await confTable.readRecords();
-  // TeamSlots references are resolved by table ID, which isn't guaranteed to land in
-  // the largest "Team" instance if the table is fragmented — preload every instance.
+  // References are resolved by table ID, which isn't guaranteed to land in the largest
+  // "Team" instance if the table is fragmented — preload every instance.
   await preloadAllInstances(franchise, 'Team');
 
-  const map = new Map<number, string>();
-  for (const conf of nonEmpty(confTable.records)) {
-    const slotsRef = conf.getReferenceDataByKey('TeamSlots');
-    if (!slotsRef) continue;
-    const slotsTable = franchise.getTableById(slotsRef.tableId) as unknown as { records: FranchiseRecord[] } | null;
-    if (!slotsTable) continue;
-    await (slotsTable as unknown as { readRecords(): Promise<void> }).readRecords();
-    const slotsRow = slotsTable.records[slotsRef.rowNumber];
-    if (!slotsRow) continue;
+  const conferenceByTeamIndex = new Map<number, string>();
+  const divisionByTeamIndex = new Map<number, string>();
 
+  const teamIndexOf = (ref: { tableId: number; rowNumber: number } | null): number | null => {
+    if (!ref || !ref.tableId) return null;
+    const teamTable = franchise.getTableById(ref.tableId) as unknown as { records: FranchiseRecord[] } | null;
+    const teamRec = teamTable?.records[ref.rowNumber];
+    return teamRec && !teamRec.isEmpty ? Number(teamRec.TeamIndex) : null;
+  };
+
+  for (const conf of nonEmpty(confTable.records)) {
     const conferenceName = String(conf.Name);
-    for (const slotKey of Object.keys(slotsRow.fields)) {
-      const teamRef = slotsRow.getReferenceDataByKey(slotKey);
-      if (!teamRef || !teamRef.tableId) continue;
-      const teamTable = franchise.getTableById(teamRef.tableId) as unknown as { records: FranchiseRecord[] } | null;
-      const teamRec = teamTable?.records[teamRef.rowNumber];
-      if (teamRec && !teamRec.isEmpty) {
-        map.set(Number(teamRec.TeamIndex), conferenceName);
+
+    const slotsRow = await resolveArrayRow(franchise, conf, 'TeamSlots');
+    if (slotsRow) {
+      for (const slotKey of Object.keys(slotsRow.fields)) {
+        const idx = teamIndexOf(slotsRow.getReferenceDataByKey(slotKey));
+        if (idx !== null) conferenceByTeamIndex.set(idx, conferenceName);
+      }
+    }
+
+    // Divisions: an array-row of Division records; each has a Name and its own
+    // Teams array-row. A conference may have a single unnamed/placeholder
+    // division (no real split) — those still map here, but downstream only
+    // treats a conference as "divided" when it has 2+ distinct real names.
+    const divisionsRow = await resolveArrayRow(franchise, conf, 'Divisions');
+    if (divisionsRow) {
+      for (const divKey of Object.keys(divisionsRow.fields)) {
+        const divRow = await resolveArrayRow(franchise, divisionsRow, divKey);
+        if (!divRow || divRow.isEmpty || !divRow.Name) continue;
+        const divisionName = String(divRow.Name);
+        const teamsRow = await resolveArrayRow(franchise, divRow, 'Teams');
+        if (!teamsRow) continue;
+        for (const teamKey of Object.keys(teamsRow.fields)) {
+          const idx = teamIndexOf(teamsRow.getReferenceDataByKey(teamKey));
+          if (idx !== null) divisionByTeamIndex.set(idx, divisionName);
+        }
       }
     }
   }
-  return map;
+
+  return { conferenceByTeamIndex, divisionByTeamIndex };
 }
 
 export async function extractTeams(franchise: OpenFranchise): Promise<TeamData[]> {
@@ -271,9 +339,9 @@ export async function extractTeams(franchise: OpenFranchise): Promise<TeamData[]
   await preloadAllInstances(franchise, 'PlayerStatRecords');
   await preloadAllInstances(franchise, 'PlayerStatRecord');
 
-  const conferenceByTeamIndex = await buildConferenceMap(franchise);
+  const { conferenceByTeamIndex, divisionByTeamIndex } = await buildConferenceAndDivisionMaps(franchise);
 
   return nonEmpty(table.records)
     .filter((r) => r.DisplayName)
-    .map((r) => mapTeam(franchise, r, conferenceByTeamIndex));
+    .map((r) => mapTeam(franchise, r, conferenceByTeamIndex, divisionByTeamIndex));
 }

@@ -2,6 +2,7 @@ import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './
 import type { ConferenceChampionshipData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
 import type {
+  ConferenceDivisionGroup,
   ConferenceStandingTeam,
   ConferenceStandingsGroup,
   StandingsOverview,
@@ -53,7 +54,9 @@ function comparePollRank(a: number | null, b: number | null): number {
  * this uses an honest, deterministic editorial sort: conference record first,
  * then overall record, then current AP rank, then team name.
  */
-type StandingSeed = Omit<ConferenceStandingTeam, 'place' | 'isConferenceChampion'>;
+type StandingSeed = Omit<ConferenceStandingTeam, 'place' | 'isConferenceChampion' | 'isDivisionLeader'> & {
+  divisionStanding: number;
+};
 
 function sortTeams(a: StandingSeed, b: StandingSeed): number {
   if (a.conferenceWins !== b.conferenceWins) return b.conferenceWins - a.conferenceWins;
@@ -65,6 +68,12 @@ function sortTeams(a: StandingSeed, b: StandingSeed): number {
   if (pollCompare !== 0) return pollCompare;
 
   return a.teamName.localeCompare(b.teamName);
+}
+
+/** Within a division, order by the game's own division standing (0 = leader); fall back to the shared editorial sort if standings are unset/tied. */
+function sortByDivision(a: StandingSeed, b: StandingSeed): number {
+  if (a.divisionStanding !== b.divisionStanding) return a.divisionStanding - b.divisionStanding;
+  return sortTeams(a, b);
 }
 
 function toStandingTeam(team: TeamData, userTeamIndex: number): StandingSeed {
@@ -79,6 +88,10 @@ function toStandingTeam(team: TeamData, userTeamIndex: number): StandingSeed {
     coachesPollRank: normalizeRank(team.coachesPollRank),
     cfpRank: normalizeRank(team.cfpRank),
     isUserTeam: team.teamIndex === userTeamIndex,
+    divisionName: team.divisionName,
+    divisionWins: team.divisionWins,
+    divisionLosses: team.divisionLosses,
+    divisionStanding: team.divisionStanding,
   };
 }
 
@@ -120,20 +133,46 @@ export function getStandings(dynastyId: string, seasonId?: number): StandingsOve
         conferenceChampionships.find((entry) => entry.conferenceName === group.conferenceName)?.winningTeamName ??
         null;
 
-      const teamsSorted = group.teams
-        .map((team) => toStandingTeam(team, userTeamIndex))
-        .sort(sortTeams)
-        .map((team, index) => ({
-          place: index + 1,
-          ...team,
-          isConferenceChampion: championTeamName === team.teamName,
-        }));
+      const seeds = group.teams.map((team) => toStandingTeam(team, userTeamIndex));
+
+      // A conference counts as "divided" only when its members carry 2+ distinct
+      // real division names — a single unnamed/placeholder division is not a split.
+      const divisionNames = [...new Set(seeds.map((s) => s.divisionName).filter((n): n is string => !!n))].sort();
+      const divided = divisionNames.length >= 2;
+
+      const finalize = (seed: StandingSeed, index: number, isDivisionLeader: boolean): ConferenceStandingTeam => ({
+        place: index + 1,
+        ...seed,
+        isConferenceChampion: championTeamName === seed.teamName,
+        isDivisionLeader,
+      });
+
+      let teamsSorted: ConferenceStandingTeam[];
+      let divisions: ConferenceDivisionGroup[] | null = null;
+
+      if (divided) {
+        divisions = divisionNames.map((name) => {
+          const divisionTeams = seeds
+            .filter((s) => s.divisionName === name)
+            .sort(sortByDivision)
+            .map((seed, index) => finalize(seed, index, seed.divisionStanding === 0));
+          return { name, teams: divisionTeams };
+        });
+        // Flat `teams` still provided (whole conference by conference record) so
+        // any consumer that ignores divisions keeps working.
+        teamsSorted = [...seeds].sort(sortTeams).map((seed, index) =>
+          finalize(seed, index, seed.divisionStanding === 0),
+        );
+      } else {
+        teamsSorted = [...seeds].sort(sortTeams).map((seed, index) => finalize(seed, index, false));
+      }
 
       return {
         id,
         conferenceName: group.conferenceName,
         label: group.conferenceName,
         teams: teamsSorted,
+        divisions,
         top25Count: teamsSorted.filter((team) => team.mediaPollRank !== null && team.mediaPollRank <= 25).length,
         nonConferenceWins: group.teams.reduce((sum, team) => sum + team.nonConfWins, 0),
         nonConferenceLosses: group.teams.reduce((sum, team) => sum + team.nonConfLosses, 0),
