@@ -8,6 +8,8 @@ module.exports = {
   },
   win: {
     target: ['nsis', 'portable'],
+    // Generated from public/Icon/ICON.png by scripts/make-icon.js — rerun that after changing the source art.
+    icon: 'build/icon.ico',
   },
   nsis: {
     oneClick: false,

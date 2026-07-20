@@ -2503,6 +2503,8 @@ Actionable items to address **before public release**, distinct from the long-te
 
 # Version History
 
+- **v2.83** (2026-07-19): **App icon + beta package.** User-supplied DH icon (public/Icon/ICON.png) converted to multi-size build/icon.ico by new scripts/make-icon.js and wired into electron-builder. Fresh 0.2.0 installers cut with all shipped features; icon verified in the built exe, and the packaged binary passed a fresh-import smoke test including schema migration #6 and a media tag round-trip. Beta-ready artifact: release/CFB Dynasty Hub Setup 0.2.0.exe.
+
 - **v2.82** (2026-07-19): **Media flows to player bios + game pages.** Tagged media auto-populates a new Media tab on every tagged player's bio (across all their seasons) and a Media section on the linked game's page. Shared read-only MediaGallery (grid + lightbox + links); display metadata resolved server-side against each item's own season. Fixed a real containing-block bug (backdrop-filter traps fixed overlays — lightbox now portals to body). Help topic updated. Details in DevLog.
 
 - **v2.81** (2026-07-19): **Media gallery.** New per-season Media tab: upload photos/videos (copied into the app's own library under userData, schema migration #6 for metadata — user data, survives re-syncs like Team Awards). Tag each item with the game it's from (links to the Game page), the players in it (searchable roster picker; chips link to player bios), and a description. Thumbnail grid with caption strips → lightbox with prev/next + arrow keys, native video playback, edit/delete. Uploads land in the selected season. Help topic added. Verified live end-to-end (seed → tag → links → delete round-trip). Details in DevLog.

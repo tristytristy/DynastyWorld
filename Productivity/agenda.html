@@ -590,6 +590,9 @@
 
   const TASKS = [
     // ---- Known bugs / tech debt ----
+    { id: 'done-app-icon-beta-package', group: 'shipped', status: 'done', date: '2026-07-19',
+      title: 'App icon + fresh 0.2.0 beta package — ready to distribute',
+      notes: "User-supplied DH icon converted to a multi-size Windows .ico by new scripts/make-icon.js (re-runnable; drop in new art and rerun) and wired into electron-builder. Fresh installers cut with every shipped feature (media gallery, bio/game media surfaces, league browse, team switcher, UX polish). Verified: icon extracted from the built exe shows the DH art; packaged binary passed a fresh-import smoke test (schema migration #6 applied, media add/tag/list round-trip). Distribute release/CFB Dynasty Hub Setup 0.2.0.exe (~1.2 GB); portable exe available as fallback. Known: unsigned exe shows a SmartScreen prompt." },
     { id: 'done-media-auto-surfaces', group: 'shipped', status: 'done', date: '2026-07-19',
       title: 'Media auto-populates player bios + game pages',
       notes: "Tags now do double duty: every tagged upload automatically appears on a new Media tab in each tagged player's bio (across all their seasons) and in a Media section on the linked game's page. Shared read-only MediaGallery component (grid, lightbox, prev/next, links to bios and game pages); display labels resolved server-side against each item's own season so a sophomore-year photo keeps its sophomore-year game label. Found and fixed a real CSS containing-block bug: ancestor backdrop-filter traps position-fixed overlays, so the lightbox now portals to document.body. Verified live on Chandler Alexander's bio and game 63's page. Screenshots: player-bio-media-tab / game-page-media-lightbox (2026-07-19)." },
