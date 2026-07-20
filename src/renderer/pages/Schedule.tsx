@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { useGameModal } from '../data/GameModalProvider';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
@@ -10,7 +11,6 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
-import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
 import { getBowlLogoPath } from '../lib/trophyAssetMapping';
 import type { LeagueTeamGame, ScheduleGame, ScheduleOverview } from '../../shared/types';
@@ -178,7 +178,6 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
         eyebrow="Schedule"
         title={`${teamName} schedule.`}
         description="From the league-wide season snapshot — results and opponents for any team in the country. Kickoff times, stadiums, and game detail are tracked for your own games only."
-        actions={<TeamSwitcher />}
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
@@ -237,7 +236,7 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
 
 export function Schedule() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { openGameModal } = useGameModal();
   const { selectedSeasonId: seasonId } = useSelectedSeason();
   const [overview, setOverview] = useState<ScheduleOverview | null | undefined>(undefined);
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
@@ -285,7 +284,6 @@ export function Schedule() {
         eyebrow="Schedule"
         title="Weekly flow, kickoff context, and results in one place."
         description="Review the full season board, move into game detail from any row, and keep key context visible while navigating between years."
-        actions={<TeamSwitcher userTeamName={overview.games[0]?.teamName} />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -319,7 +317,7 @@ export function Schedule() {
                 <GameRow
                   key={game.gameId}
                   game={game}
-                  onOpen={() => navigate(`/dynasty/${id}/schedule/${game.gameId}`)}
+                  onOpen={() => id && openGameModal(id, game.gameId, seasonId)}
                 />
               ))}
             </tbody>

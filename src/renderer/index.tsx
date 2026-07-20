@@ -7,6 +7,7 @@ import { StadiumDataProvider } from './data/StadiumDataProvider';
 import { PlayerModalProvider } from './data/PlayerModalProvider';
 import { EditorModalProvider } from './data/EditorModalProvider';
 import { RecruitModalProvider } from './data/RecruitModalProvider';
+import { GameModalProvider } from './data/GameModalProvider';
 import { applyDesignTokens } from '../design/applyTokens';
 import './styles/globals.css';
 
@@ -26,9 +27,11 @@ createRoot(container).render(
         <PlayerModalProvider>
           <EditorModalProvider>
             <RecruitModalProvider>
-              <HashRouter>
-                <App />
-              </HashRouter>
+              <GameModalProvider>
+                <HashRouter>
+                  <App />
+                </HashRouter>
+              </GameModalProvider>
             </RecruitModalProvider>
           </EditorModalProvider>
         </PlayerModalProvider>

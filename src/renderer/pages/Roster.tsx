@@ -10,7 +10,6 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
-import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import {
   CLASS_ORDER,
   POSITION_ORDER,
@@ -312,7 +311,6 @@ export function Roster() {
         eyebrow="Roster"
         title={viewedTeamName ? `${viewedTeamName} roster.` : 'Search, compare, and review every player in one pass.'}
         description="Use filters to narrow the board, switch between list and gallery views, and jump straight into individual player detail."
-        actions={<TeamSwitcher />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { PlayerNameButton, TeamLine } from './AwardsShared';
 import { formatAwardLabel, sortAnnualAwards } from '../../lib/awardFormat';
 import { getAwardTrophyPath } from '../../lib/trophyAssetMapping';
-import type { AwardsOutletContext } from './AwardsLayout';
+import { useAwardsOverview } from '../../data/useAwardsOverview';
 import type { HeismanCandidate, LeagueAward } from '../../../shared/types';
 
 function HeismanSection({
@@ -139,9 +138,12 @@ function AnnualAwardRow({ dynastyId, seasonId, award }: { dynastyId: string; sea
 
 /** National Heisman + the ~22 leaguewide annual awards — deliberately no All-American/All-Conference tables here (see AllTeams.tsx) or Team Awards (a separate, app-generated dataset). */
 export function AnnualAwards() {
-  const { dynastyId, seasonId, awards } = useOutletContext<AwardsOutletContext>();
-  const ordered = useMemo(() => sortAnnualAwards(awards.leagueAwards), [awards.leagueAwards]);
+  const { dynastyId, seasonId, awards } = useAwardsOverview();
+  const ordered = useMemo(() => sortAnnualAwards(awards?.leagueAwards ?? []), [awards]);
   const wonByTeam = useMemo(() => ordered.filter((a) => a.isUserTeam), [ordered]);
+
+  if (awards === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading awards...</p>;
+  if (awards === null) return <p className="text-slate-500 dark:text-slate-400">No awards recorded for this season yet.</p>;
 
   return (
     <div className="space-y-6">

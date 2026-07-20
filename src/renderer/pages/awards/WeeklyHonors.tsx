@@ -1,13 +1,15 @@
-import { useOutletContext } from 'react-router-dom';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { TeamLogo } from '../../components/common/TeamLogo';
 import { PlayerNameButton } from './AwardsShared';
 import { formatAwardLabel } from '../../lib/awardFormat';
-import type { AwardsOutletContext } from './AwardsLayout';
+import { useAwardsOverview } from '../../data/useAwardsOverview';
 
 /** The user's own team's weekly honors — uses whichever weekly-award fields the save actually populates (see extract-awards.ts); no weekly category is invented that isn't real leaguewide extracted data. */
 export function WeeklyHonors() {
-  const { dynastyId, seasonId, awards } = useOutletContext<AwardsOutletContext>();
+  const { dynastyId, seasonId, awards } = useAwardsOverview();
+
+  if (awards === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading honors...</p>;
+  if (awards === null) return <p className="text-slate-500 dark:text-slate-400">No honors recorded for this season yet.</p>;
   const { weeklyHonors } = awards;
 
   return (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useGameModal } from '../data/GameModalProvider';
 import type { MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { PageHeader } from '../components/ui/PageHeader';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -170,6 +171,7 @@ function MediaLightbox({
   onDeleted: (item: MediaItemWithPath) => void;
 }) {
   const { openPlayerModal } = usePlayerModal();
+  const { openGameModal } = useGameModal();
   const [editing, setEditing] = useState(false);
   const item = items[index];
 
@@ -307,13 +309,16 @@ function MediaLightbox({
                 <div>
                   <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game</p>
                   {game ? (
-                    <Link
-                      to={`/dynasty/${dynastyId}/schedule/${game.gameId}`}
-                      onClick={onClose}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        openGameModal(dynastyId, game.gameId, seasonId);
+                      }}
                       className="mt-1.5 inline-block border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
                     >
                       {gameLabel(game)} →
-                    </Link>
+                    </button>
                   ) : (
                     <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">Not linked to a game.</p>
                   )}

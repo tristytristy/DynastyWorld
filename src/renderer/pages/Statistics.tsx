@@ -10,7 +10,6 @@ import {
   type StatMode,
 } from '../components/common/StatisticsCategorySection';
 import { PlayerComparison, type ComparablePlayer } from '../components/common/PlayerComparison';
-import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { Button } from '../components/ui/Button';
@@ -615,7 +614,6 @@ export function Statistics() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-4 dark:border-slate-800/60">
-            <TeamSwitcher userTeamName={overview.teamName} />
             <Button variant="secondary" onClick={() => setCompareOpen(true)} disabled={comparablePlayers.length < 2}>
               Compare Players
             </Button>

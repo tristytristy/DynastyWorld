@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { ConferenceMark } from '../../components/common/ConferenceMark';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { StatTile } from '../../components/ui/StatTile';
 import { PlayerNameButton, TeamLine } from './AwardsShared';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getHonorKind, getHonorTier, type HonorKind, type HonorTier } from '../../lib/awardFormat';
-import type { AwardsOutletContext } from './AwardsLayout';
+import { useAwardsOverview } from '../../data/useAwardsOverview';
+import type { AwardsOverview } from '../../../shared/types';
 
-function TeamHonorSummary({ teamName, awards }: { teamName: string; awards: AwardsOutletContext['awards'] }) {
+function TeamHonorSummary({ teamName, awards }: { teamName: string; awards: AwardsOverview }) {
   const items = [
     { label: `${teamName} First Team All-Americans`, value: awards.teamHonorCounts.allAmericanFirst },
     { label: `${teamName} Second Team All-Americans`, value: awards.teamHonorCounts.allAmericanSecond },
@@ -40,7 +40,13 @@ const TIER_OPTIONS: { value: HonorTier; label: string }[] = [
 
 /** Honest label distinguishing this from "every school" — these are the leaguewide honor TEAMS (All-American/All-Conference rosters), not a school directory. */
 export function AllTeams() {
-  const { dynastyId, seasonId, awards } = useOutletContext<AwardsOutletContext>();
+  const { dynastyId, seasonId, awards } = useAwardsOverview();
+  if (awards === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading awards...</p>;
+  if (awards === null) return <p className="text-slate-500 dark:text-slate-400">No awards recorded for this season yet.</p>;
+  return <AllTeamsContent dynastyId={dynastyId} seasonId={seasonId} awards={awards} />;
+}
+
+function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; seasonId: number | undefined; awards: AwardsOverview }) {
   const { appearance } = useTheme();
   const [kind, setKind] = useState<HonorKind>('all-american');
   const [tier, setTier] = useState<HonorTier>('first');

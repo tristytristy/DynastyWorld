@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
@@ -11,7 +10,6 @@ import { getBowlLogoPath } from '../lib/trophyAssetMapping';
 import { gameImpactScore } from '../../shared/gameImpactScore';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
-import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
 import type {
   DefensiveGameLine,
@@ -204,11 +202,18 @@ function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): voi
   event.currentTarget.src = fallback;
 }
 
-export function GameDetail() {
-  const { id, gameId } = useParams<{ id: string; gameId: string }>();
+export function GameDetailContent({
+  dynastyId,
+  gameId,
+  seasonId,
+}: {
+  dynastyId: string;
+  gameId: number;
+  seasonId: number | undefined;
+}) {
+  const id = dynastyId;
   const { appearance } = useTheme();
   const { getStadium } = useStadiumData();
-  const { selectedSeasonId: seasonId } = useSelectedSeason();
   const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
@@ -233,14 +238,7 @@ export function GameDetail() {
   const game: ScheduleGame | undefined = schedule?.games.find((item) => item.gameId === Number(gameId));
 
   if (!game || !id) {
-    return (
-      <div className="space-y-4">
-        <p className="text-slate-500 dark:text-slate-400">Game not found.</p>
-        <Link to={`/dynasty/${id}/schedule`} className="text-brand-600 underline">
-          Back to Schedule
-        </Link>
-      </div>
-    );
+    return <p className="text-slate-500 dark:text-slate-400">Game not found.</p>;
   }
 
   const allEntries = (gamelog ?? []).filter((entry) => entry.gameId === game.gameId);
@@ -269,13 +267,6 @@ export function GameDetail() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to={`/dynasty/${id}/schedule`}
-        className="inline-flex text-sm font-medium text-slate-500 transition hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-      >
-        Back to Schedule
-      </Link>
-
       <SurfaceCard>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">

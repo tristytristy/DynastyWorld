@@ -114,7 +114,7 @@ function TeamAwardsSummaryCard({ dynastyId, seasonId }: { dynastyId: string; sea
           Team Awards
         </p>
         <Link
-          to={`/dynasty/${dynastyId}/awards/team`}
+          to={`/dynasty/${dynastyId}/team-awards`}
           className="text-xs font-semibold text-[var(--team-primary)] hover:underline"
         >
           View all &rarr;

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { DynastyLayout } from './components/common/DynastyLayout';
@@ -6,17 +6,15 @@ import { Dashboard } from './pages/Dashboard';
 import { CoachHub } from './pages/CoachHub';
 import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
+import { NcaaHubLayout } from './pages/NcaaHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
 import { NcaaHub } from './pages/NcaaHub';
 import { Roster } from './pages/Roster';
-import { PlayerDetail } from './pages/PlayerDetail';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
 import { Statistics } from './pages/Statistics';
 import { TeamAwards } from './pages/TeamAwards';
-import { GameDetail } from './pages/GameDetail';
-import { AwardsLayout } from './pages/awards/AwardsLayout';
 import { AnnualAwards } from './pages/awards/AnnualAwards';
 import { AllTeams } from './pages/awards/AllTeams';
 import { WeeklyHonors } from './pages/awards/WeeklyHonors';
@@ -24,6 +22,7 @@ import { Recruiting } from './pages/Recruiting';
 import { History } from './pages/History';
 import { Media } from './pages/Media';
 import { PlayerProfileModal } from './components/common/PlayerProfileModal';
+import { GameDetailModal } from './components/common/GameDetailModal';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
 import { angledClip } from './components/ui/angledClip';
@@ -66,28 +65,27 @@ export function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dynasty/:id" element={<DynastyLayout />}>
                     <Route index element={<CoachHub />} />
-                    <Route path="team-hub" element={<TeamHubLayout />}>
-                      <Route index element={<DynastyOverview />} />
+                    {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
+                    <Route element={<TeamHubLayout />}>
+                      <Route path="team-hub" element={<DynastyOverview />} />
+                      <Route path="roster" element={<Roster />} />
+                      <Route path="schedule" element={<Schedule />} />
+                      <Route path="statistics" element={<Statistics />} />
                       <Route path="trends" element={<DynastyTrends />} />
                       <Route path="transfers" element={<Transfers />} />
+                      <Route path="recruiting" element={<Recruiting />} />
+                      <Route path="media" element={<Media />} />
+                      <Route path="team-awards" element={<TeamAwards />} />
+                      <Route path="weekly-honors" element={<WeeklyHonors />} />
                       <Route path="history" element={<History />} />
                     </Route>
-                    <Route path="ncaa-hub" element={<NcaaHub />} />
-                    <Route path="roster" element={<Roster />} />
-                    <Route path="roster/:playerId" element={<PlayerDetail />} />
-                    <Route path="schedule" element={<Schedule />} />
-                    <Route path="schedule/:gameId" element={<GameDetail />} />
-                    <Route path="standings" element={<Standings />} />
-                    <Route path="statistics" element={<Statistics />} />
-                    <Route path="awards" element={<AwardsLayout />}>
-                      <Route index element={<Navigate to="annual" replace />} />
-                      <Route path="annual" element={<AnnualAwards />} />
-                      <Route path="all-teams" element={<AllTeams />} />
-                      <Route path="team" element={<TeamAwards />} />
-                      <Route path="weekly" element={<WeeklyHonors />} />
+                    {/* NCAA Hub section — the nation. */}
+                    <Route element={<NcaaHubLayout />}>
+                      <Route path="ncaa-hub" element={<NcaaHub />} />
+                      <Route path="standings" element={<Standings />} />
+                      <Route path="annual-awards" element={<AnnualAwards />} />
+                      <Route path="all-america" element={<AllTeams />} />
                     </Route>
-                    <Route path="recruiting" element={<Recruiting />} />
-                    <Route path="media" element={<Media />} />
                   </Route>
                 </Routes>
               </div>
@@ -97,6 +95,7 @@ export function App() {
       </div>
 
       <PlayerProfileModal />
+      <GameDetailModal />
       <RecruitProfileModal />
       <EditorModalHost />
     </div>

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
 import type { MediaItemResolved } from '../../../shared/types';
 import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
+import { useGameModal } from '../../data/GameModalProvider';
 
 /** Absolute on-disk path → a URL the (file://-origin) renderer can load. Shared with the Media page. */
 export function mediaFileUrl(absolutePath: string): string {
@@ -32,6 +32,7 @@ export function MediaGallery({
   omitPlayerId?: number;
 }) {
   const { openPlayerModal } = usePlayerModal();
+  const { openGameModal } = useGameModal();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const item = lightboxIndex !== null ? items[lightboxIndex] : undefined;
 
@@ -178,13 +179,16 @@ export function MediaGallery({
                 {!hideGameChip && item.gameLabel && item.gameId !== null && (
                   <div>
                     <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game</p>
-                    <Link
-                      to={`/dynasty/${dynastyId}/schedule/${item.gameId}`}
-                      onClick={() => setLightboxIndex(null)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLightboxIndex(null);
+                        openGameModal(dynastyId, item.gameId!, item.seasonId);
+                      }}
                       className="mt-1.5 inline-block border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
                     >
                       {item.gameLabel} →
-                    </Link>
+                    </button>
                   </div>
                 )}
 
