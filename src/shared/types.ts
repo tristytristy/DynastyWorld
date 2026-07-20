@@ -983,6 +983,55 @@ export interface MediaItemResolved extends MediaItemWithPath {
   taggedPlayers: MediaTaggedPlayer[];
 }
 
+/** One season's row in the Dynasty Trends dashboard — assembled server-side from that season's snapshots + ranking_history. */
+export interface DynastyTrendSeason {
+  seasonId: number;
+  seasonYear: number;
+  hasFullData: boolean;
+  wins: number | null;
+  losses: number | null;
+  /** Summed from the season's schedule results (null if no games played / no schedule). */
+  pointsFor: number | null;
+  pointsAgainst: number | null;
+  recruitingClassRank: number | null;
+  /** Final poll ranks for the season (last recorded week, else the season-overview current rank). */
+  finalMediaRank: number | null;
+  finalCoachesRank: number | null;
+  finalCfpRank: number | null;
+  /** Week-by-week poll ranks accumulated across syncs (ranking_history) — the only real weekly trend the save can't provide on its own. */
+  rankingWeeks: { week: number; mediaRank: number | null; coachesRank: number | null; cfpRank: number | null }[];
+}
+
+export interface DynastyTrends {
+  teamName: string;
+  /** Oldest → newest. */
+  seasons: DynastyTrendSeason[];
+}
+
+/** One school-to-school move detected by diffing consecutive league-roster snapshots (same PresentationId, different team). */
+export interface TransferEntry {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  portraitAssetName: string | null;
+  fromTeam: string;
+  toTeam: string;
+  /** The season the player shows up on their new team. */
+  seasonYear: number;
+  toSeasonId: number;
+  /** The player's team index in the destination season — lets the bio modal resolve the full league profile. */
+  toTeamIndex: number;
+}
+
+export interface TeamTransfers {
+  teamName: string;
+  transfersIn: TransferEntry[];
+  transfersOut: TransferEntry[];
+  /** Consecutive season pairs available to diff. 0 = need a second synced season before anything can show. */
+  seasonPairsAvailable: number;
+}
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -1238,6 +1287,8 @@ export interface DynastyApi {
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
+    getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
+    getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
     getTeamAwardResults: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;

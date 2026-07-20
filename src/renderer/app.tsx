@@ -6,6 +6,8 @@ import { Dashboard } from './pages/Dashboard';
 import { CoachHub } from './pages/CoachHub';
 import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
+import { DynastyTrends } from './pages/DynastyTrends';
+import { Transfers } from './pages/Transfers';
 import { NcaaHub } from './pages/NcaaHub';
 import { Roster } from './pages/Roster';
 import { PlayerDetail } from './pages/PlayerDetail';
@@ -66,6 +68,8 @@ export function App() {
                     <Route index element={<CoachHub />} />
                     <Route path="team-hub" element={<TeamHubLayout />}>
                       <Route index element={<DynastyOverview />} />
+                      <Route path="trends" element={<DynastyTrends />} />
+                      <Route path="transfers" element={<Transfers />} />
                       <Route path="history" element={<History />} />
                     </Route>
                     <Route path="ncaa-hub" element={<NcaaHub />} />

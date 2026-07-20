@@ -27,6 +27,12 @@ export function TeamHubLayout() {
           <NavLink to={`/dynasty/${id}/team-hub`} end className={subTabClass}>
             Overview
           </NavLink>
+          <NavLink to={`/dynasty/${id}/team-hub/trends`} className={subTabClass}>
+            Trends
+          </NavLink>
+          <NavLink to={`/dynasty/${id}/team-hub/transfers`} className={subTabClass}>
+            Transfers
+          </NavLink>
           <NavLink to={`/dynasty/${id}/team-hub/history`} className={subTabClass}>
             History
           </NavLink>

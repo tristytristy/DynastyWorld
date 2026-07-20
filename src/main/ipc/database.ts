@@ -51,6 +51,8 @@ import { getAwards } from '../../database/getAwards';
 import { getRankings } from '../../database/getRankings';
 import { getRecruits } from '../../database/getRecruits';
 import { getLeagueTeams, getLeagueTeamRoster, getLeagueTeamSchedule } from '../../database/getLeagueRoster';
+import { getDynastyTrends } from '../../database/getDynastyTrends';
+import { getTransfers } from '../../database/getTransfers';
 import {
   confirmTeamAwardWinner,
   finalizeTeamAwards,
@@ -262,6 +264,14 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.getLeagueTeamSchedule, async (_event, dynastyId: string, teamIndex: number, seasonId?: number) => {
     return getLeagueTeamSchedule(dynastyId, teamIndex, seasonId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.getDynastyTrends, async (_event, dynastyId: string) => {
+    return getDynastyTrends(dynastyId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.getTransfers, async (_event, dynastyId: string, focusTeamName: string) => {
+    return getTransfers(dynastyId, focusTeamName) ?? null;
   });
 
 
