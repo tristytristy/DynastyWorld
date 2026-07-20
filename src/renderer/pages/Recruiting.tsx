@@ -7,6 +7,7 @@ import { EditButton } from '../components/common/CoachCard';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitModal } from '../data/RecruitModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { RecruitingPipeline } from '../components/charts/RecruitingPipeline';
 import type { RecruitBoardEntry, RecruitBoardStage, RecruitingOverview } from '../../shared/types';
 
 const STAGE_ORDER: { stage: RecruitBoardStage; label: string; hint: string; showLogo: boolean }[] = [
@@ -373,21 +374,16 @@ export function Recruiting() {
             />
           </div>
 
-          {classSummary.positionBreakdown.length > 0 && (
-            <SurfaceCard>
-              <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Class by Position</h3>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {classSummary.positionBreakdown.map((p) => (
-                  <span
-                    key={p.position}
-                    className="border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-                  >
-                    {p.position} <span className="font-semibold text-slate-950 dark:text-white">{p.count}</span>
-                  </span>
-                ))}
-              </div>
-            </SurfaceCard>
-          )}
+          <SurfaceCard>
+            <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Recruiting Pipeline</h3>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Where the incoming class comes from and what it&apos;s made of — home state, star rating, and position,
+              straight from the board.
+            </p>
+            <div className="mt-4">
+              <RecruitingPipeline board={recruiting.board} />
+            </div>
+          </SurfaceCard>
 
           {recruiting.timeline.length > 0 && (
             <SurfaceCard>
