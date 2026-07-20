@@ -62,8 +62,17 @@ const HELP_TOPICS: HelpTopic[] = [
           make sure your <em>last</em> sync before advancing catches the finished product.
         </p>
         <p>
-          Missed one anyway? You&apos;re not out of luck. The next time you sync, the app automatically recovers
-          league-wide history for any season it skipped — see the next section.
+          Miss one anyway? The next time you sync, the app recovers that year&apos;s <em>league-wide</em> history —
+          the national champion, each conference&apos;s champion, and the major awards — onto the History tab (this is
+          a &quot;History Only&quot; season; see the next section). That&apos;s the limit of what can come back, though:
+          your own team&apos;s roster, schedule, and game-by-game stats for a skipped season are gone for good, because
+          the save file simply doesn&apos;t keep them. Recovering the trophies is a nice consolation, not a substitute
+          for syncing — a complete archive only happens if you sync every season.
+        </p>
+        <p>
+          For the fullest experience, start the app on a <strong>fresh dynasty</strong> and sync from season one. If
+          you first import a save that&apos;s already several years deep, only the current season comes in with full
+          detail — every year before it can be recovered as History Only at best.
         </p>
       </>
     ),
