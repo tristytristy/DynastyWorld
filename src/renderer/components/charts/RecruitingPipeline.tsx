@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RecruitBoardEntry } from '../../../shared/types';
 import { useTheme } from '../../theme/ThemeProvider';
+import { US_MAP_VIEWBOX, US_STATE_SHAPES } from './usStatesGeo';
 
 /** Full state name → 2-letter code. The save stores home state as a full name ("Texas") — confirmed on a real save. */
 const STATE_TO_CODE: Record<string, string> = {
@@ -15,49 +16,96 @@ const STATE_TO_CODE: Record<string, string> = {
   Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY', 'District of Columbia': 'DC',
 };
 
-/** Tile-grid layout [row, col] — a stylized US map so tiny states stay visible and it needs no embedded geo paths (fully offline). West→east, north→south. */
-const STATE_GRID: Record<string, [number, number]> = {
-  AK: [0, 0], ME: [0, 10],
-  VT: [1, 9], NH: [1, 10],
-  WA: [2, 0], ID: [2, 1], MT: [2, 2], ND: [2, 3], MN: [2, 4], WI: [2, 5], MI: [2, 6], NY: [2, 8], MA: [2, 9],
-  OR: [3, 0], NV: [3, 1], WY: [3, 2], SD: [3, 3], IA: [3, 4], IL: [3, 5], IN: [3, 6], OH: [3, 7], PA: [3, 8], NJ: [3, 9], CT: [3, 10],
-  CA: [4, 0], UT: [4, 1], CO: [4, 2], NE: [4, 3], MO: [4, 4], KY: [4, 5], WV: [4, 6], VA: [4, 7], MD: [4, 8], DE: [4, 9], RI: [4, 10],
-  AZ: [5, 1], NM: [5, 2], KS: [5, 3], AR: [5, 4], TN: [5, 5], NC: [5, 6], SC: [5, 7], DC: [5, 8],
-  OK: [6, 3], LA: [6, 4], MS: [6, 5], AL: [6, 6], GA: [6, 7],
-  HI: [7, 0], TX: [7, 3], FL: [7, 8],
-};
-
 // Sequential blue ramp (magnitude, light→dark). Monotonic lightness per the
 // dataviz sequential rule; theme-aware — light mode darkens with count, dark
 // mode brightens with count against the darker surface.
 const RAMP_LIGHT = ['#dbeafe', '#93c5fd', '#60a5fa', '#3b82f6', '#1d4ed8'];
 const RAMP_DARK = ['#1e3a63', '#2560c4', '#3b82f6', '#5b9bf5', '#93c5fd'];
 
-const CELL = 30;
-const GAP = 4;
-const STEP = CELL + GAP;
-const COLS = 11;
-const ROWS = 8;
-
 function bucket(count: number, max: number): number {
   if (count <= 0 || max <= 0) return -1;
   return Math.min(4, Math.floor(((count - 1) / max) * 5));
 }
 
-function USTileMap({ counts }: { counts: Map<string, number> }) {
+const [VB_X, VB_Y, VB_W, VB_H] = US_MAP_VIEWBOX.split(' ').map(Number);
+const MIN_SCALE = 1;
+const MAX_SCALE = 9;
+
+/** Clamp scale to range and keep the panned map from leaving the frame. */
+function clampZoom(scale: number, x: number, y: number) {
+  const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+  if (s === 1) return { scale: 1, x: 0, y: 0 };
+  const shift = s - 1;
+  return {
+    scale: s,
+    x: Math.max(-VB_W * shift, Math.min(VB_W * shift, x)),
+    y: Math.max(-VB_H * shift, Math.min(VB_H * shift, y)),
+  };
+}
+
+/** Real geographic US choropleth (bundled state shapes — fully offline) with wheel/button zoom and drag-to-pan. States shade by recruit count; hover shows the count. */
+function USGeoMap({ counts }: { counts: Map<string, number> }) {
   const { appearance } = useTheme();
   const isDark = appearance === 'dark';
   const ramp = isDark ? RAMP_DARK : RAMP_LIGHT;
-  const emptyFill = isDark ? '#172234' : '#eef2f7';
-  const emptyLabel = isDark ? '#3f4d63' : '#a9b4c4';
-  const [hover, setHover] = useState<string | null>(null);
+  const emptyFill = isDark ? '#1a2536' : '#eef2f7';
+  const stroke = isDark ? '#0b1220' : '#ffffff';
 
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const drag = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null);
   const max = Math.max(0, ...counts.values());
-  const codeToName = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const [name, code] of Object.entries(STATE_TO_CODE)) m.set(code, name);
-    return m;
+
+  function zoomToward(cx: number, cy: number, factor: number) {
+    setView((v) => {
+      const ns = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor));
+      if (ns === 1) return { scale: 1, x: 0, y: 0 };
+      const wx = (cx - v.x) / v.scale;
+      const wy = (cy - v.y) / v.scale;
+      return clampZoom(ns, cx - wx * ns, cy - wy * ns);
+    });
+  }
+
+  // Wheel zoom toward the cursor. Non-passive listener so preventDefault works;
+  // uses the functional setState form so it needs no external deps.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const rect = el!.getBoundingClientRect();
+      const cx = ((e.clientX - rect.left) / rect.width) * VB_W + VB_X;
+      const cy = ((e.clientY - rect.top) / rect.height) * VB_H + VB_Y;
+      const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+      setView((v) => {
+        const ns = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor));
+        if (ns === 1) return { scale: 1, x: 0, y: 0 };
+        const wx = (cx - v.x) / v.scale;
+        const wy = (cy - v.y) / v.scale;
+        return clampZoom(ns, cx - wx * ns, cy - wy * ns);
+      });
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
+
+  function onMouseDown(e: React.MouseEvent) {
+    drag.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!drag.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - drag.current.sx) / rect.width) * VB_W;
+    const dy = ((e.clientY - drag.current.sy) / rect.height) * VB_H;
+    setView((v) => clampZoom(v.scale, drag.current!.vx + dx, drag.current!.vy + dy));
+  }
+  function endDrag() {
+    drag.current = null;
+  }
+
+  const btnClass =
+    'flex h-7 w-7 items-center justify-center border border-slate-300/80 bg-white/90 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-200 dark:hover:bg-slate-800';
 
   return (
     <div>
@@ -66,50 +114,69 @@ function USTileMap({ counts }: { counts: Map<string, number> }) {
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {hover ? (
             <>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">{codeToName.get(hover) ?? hover}</span>{' '}
-              — {counts.get(hover) ?? 0} recruit{(counts.get(hover) ?? 0) === 1 ? '' : 's'}
+              <span className="font-semibold text-slate-800 dark:text-slate-100">{hover}</span> —{' '}
+              {counts.get((US_STATE_SHAPES.find((s) => s.name === hover)?.code) ?? '') ?? 0} recruit
+              {(counts.get(US_STATE_SHAPES.find((s) => s.name === hover)?.code ?? '') ?? 0) === 1 ? '' : 's'}
             </>
           ) : (
-            'Hover a state'
+            'Scroll or drag to zoom · hover a state'
           )}
         </p>
       </div>
-      <svg
-        viewBox={`0 0 ${COLS * STEP - GAP} ${ROWS * STEP - GAP}`}
-        style={{ width: '100%', height: 'auto', maxWidth: 460, marginTop: 12 }}
-        role="img"
-        aria-label="Recruits by home state"
-      >
-        {Object.entries(STATE_GRID).map(([code, [r, c]]) => {
-          const n = counts.get(code) ?? 0;
-          const b = bucket(n, max);
-          const fill = b < 0 ? emptyFill : ramp[b];
-          // Label stays readable across the ramp: white on the two darkest steps, dark ink otherwise.
-          const labelFill =
-            b < 0 ? emptyLabel : isDark ? (b <= 1 ? '#93a4bd' : '#0b1220') : b >= 3 ? '#ffffff' : '#1e293b';
-          return (
-            <g
-              key={code}
-              onMouseEnter={() => setHover(code)}
-              onMouseLeave={() => setHover(null)}
-              opacity={hover === null || hover === code ? 1 : 0.72}
-            >
-              <rect x={c * STEP} y={r * STEP} width={CELL} height={CELL} rx={3} fill={fill} />
-              <text
-                x={c * STEP + CELL / 2}
-                y={r * STEP + CELL / 2 + 3.5}
-                textAnchor="middle"
-                fontSize={10}
-                fontWeight={600}
-                fill={labelFill}
-                style={{ pointerEvents: 'none' }}
-              >
-                {code}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+
+      <div className="relative mt-2 border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/5">
+        <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
+          <button type="button" aria-label="Zoom in" className={btnClass} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1.4)}>
+            +
+          </button>
+          <button type="button" aria-label="Zoom out" className={btnClass} onClick={() => zoomToward(VB_X + VB_W / 2, VB_Y + VB_H / 2, 1 / 1.4)}>
+            −
+          </button>
+          <button
+            type="button"
+            aria-label="Reset zoom"
+            className={btnClass}
+            disabled={view.scale === 1}
+            onClick={() => setView({ scale: 1, x: 0, y: 0 })}
+          >
+            ⟳
+          </button>
+        </div>
+        <svg
+          ref={svgRef}
+          viewBox={US_MAP_VIEWBOX}
+          style={{ width: '100%', height: 'auto', display: 'block', cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+          role="img"
+          aria-label="Recruits by home state"
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={endDrag}
+          onMouseLeave={() => {
+            endDrag();
+            setHover(null);
+          }}
+        >
+          <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+            {US_STATE_SHAPES.map((s) => {
+              const n = counts.get(s.code) ?? 0;
+              const b = bucket(n, max);
+              return (
+                <path
+                  key={s.code}
+                  d={s.path}
+                  fill={b < 0 ? emptyFill : ramp[b]}
+                  stroke={stroke}
+                  strokeWidth={0.75}
+                  vectorEffect="non-scaling-stroke"
+                  opacity={hover === null || hover === s.name ? 1 : 0.75}
+                  onMouseEnter={() => setHover(s.name)}
+                  style={{ transition: 'opacity 120ms' }}
+                />
+              );
+            })}
+          </g>
+        </svg>
+      </div>
     </div>
   );
 }
@@ -193,7 +260,7 @@ export function RecruitingPipeline({ board }: { board: RecruitBoardEntry[] }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <USTileMap counts={stateCounts} />
+      <USGeoMap counts={stateCounts} />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Panel title="Top states">
           {topStates.length > 0 ? (

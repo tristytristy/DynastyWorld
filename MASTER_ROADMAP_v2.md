@@ -2503,7 +2503,9 @@ Actionable items to address **before public release**, distinct from the long-te
 
 # Version History
 
-- **v2.87** (2026-07-19): **Recruiting Pipeline visualization.** A section on the Recruiting page: an offline inline-SVG US tile-grid choropleth (recruits by home state, sequential blue ramp, theme-aware, hover) plus ranked bars for top states, star-rating distribution (gold), and position counts — all from the board's real hometown/state/star data (verified populated first). Built via the dataviz skill. Fully offline, both themes. Details in DevLog.
+- **v2.88** (2026-07-19): **Recruiting Pipeline map → real geographic choropleth with zoom.** Replaced the tile-grid with an inline-SVG US-state map using actual state outlines (@svg-maps/usa, MIT, bundled locally so the app stays fully offline), shaded by recruit count, with zoom (buttons + cursor-anchored wheel) and drag-to-pan (crisp non-scaling borders). Ranked bars unchanged. Both themes. Details in DevLog.
+
+- **v2.87** (2026-07-19): **Recruiting Pipeline visualization.** A section on the Recruiting page: an offline inline-SVG US choropleth (recruits by home state, sequential blue ramp, theme-aware, hover) plus ranked bars for top states, star-rating distribution (gold), and position counts — all from the board's real hometown/state/star data (verified populated first). Built via the dataviz skill. Fully offline, both themes. Details in DevLog.
 
 - **v2.86** (2026-07-19): **Information-architecture reorganization.** Ten flat dynasty tabs → three scope-based sections: Coach Hub (person), Team Hub (the team, with a persistent logo/name/record/switcher masthead + all team pages as sub-tabs), NCAA Hub (the nation: standings + national awards). Awards split by scope (Team Awards + Weekly Honors → Team Hub; Annual + All-America → NCAA Hub), removing the only 3-level nest. Game box score converted from a route to a portaled modal; legacy player-detail route retired. Built with pathless layout shells so pages keep flat URLs and existing links survive. Verified live. Details in DevLog.
 
