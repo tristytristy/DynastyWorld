@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
@@ -63,18 +64,33 @@ function StatBar({ label, value, max = 99, accent }: { label: React.ReactNode; v
   );
 }
 
+function LockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="11" width="16" height="10" rx="1" />
+      {locked
+        ? <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        : <path d="M8 11V7a4 4 0 0 1 7.4-2" />}
+    </svg>
+  );
+}
+
 function RecruitPanel({
   recruit,
   canEdit,
   onEdit,
   onOpenFull,
   hideStats,
+  athleticUnlocked,
+  onAthleticLockClick,
 }: {
   recruit: NationalRecruit | null;
   canEdit: boolean;
   onEdit: (r: NationalRecruit) => void;
   onOpenFull: (r: NationalRecruit) => void;
   hideStats: boolean;
+  athleticUnlocked: boolean;
+  onAthleticLockClick: (r: NationalRecruit) => void;
 }) {
   if (!recruit) {
     return (
@@ -180,41 +196,59 @@ function RecruitPanel({
         </div>
       )}
 
-      {/* Athletic snapshot */}
-      {!hideStats && (
-        <div>
+      {/* Athletic snapshot — locked by default; revealed only on a deliberate unlock. */}
+      <div>
+        <div className="flex items-center justify-between">
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Athletic snapshot</p>
-          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
-            <span className="text-slate-500 dark:text-slate-400">Strength: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{strengths.map((s) => s.label).join(', ')}</span></span>
-            <span className="text-slate-500 dark:text-slate-400">Work on: <span className="font-semibold text-amber-700 dark:text-amber-300">{weaknesses.map((s) => s.label).join(', ')}</span></span>
-          </div>
-          <div className="mt-2 space-y-1.5">
-            {athleticRows.map((r) => (
-              <StatBar key={r.label} label={r.label} value={r.value} accent={r.value >= 85 ? '#059669' : r.value >= 70 ? '#2563eb' : '#94a3b8'} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
-        <button
-          type="button"
-          onClick={() => onOpenFull(recruit)}
-          className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-        >
-          Full profile
-        </button>
-        {canEdit && (
           <button
             type="button"
-            onClick={() => onEdit(recruit)}
-            className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+            onClick={() => onAthleticLockClick(recruit)}
+            className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+              athleticUnlocked
+                ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-primary)] dark:text-white'
+                : 'border-slate-300/80 bg-slate-100/70 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white'
+            }`}
+            aria-label={athleticUnlocked ? 'Lock athletic ratings' : 'Unlock athletic ratings'}
           >
-            Edit recruit
+            <LockIcon locked={!athleticUnlocked} />
+            {athleticUnlocked ? 'Hide' : 'Reveal'}
+          </button>
+        </div>
+        {athleticUnlocked ? (
+          <>
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+              <span className="text-slate-500 dark:text-slate-400">Strength: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{strengths.map((s) => s.label).join(', ')}</span></span>
+              <span className="text-slate-500 dark:text-slate-400">Work on: <span className="font-semibold text-amber-700 dark:text-amber-300">{weaknesses.map((s) => s.label).join(', ')}</span></span>
+            </div>
+            <div className="mt-2 space-y-1.5">
+              {athleticRows.map((r) => (
+                <StatBar key={r.label} label={r.label} value={r.value} accent={r.value >= 85 ? '#059669' : r.value >= 70 ? '#2563eb' : '#94a3b8'} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onAthleticLockClick(recruit)}
+            className="mt-2 flex w-full items-center justify-center gap-2 border border-dashed border-slate-300/80 bg-slate-50/60 py-3 text-xs text-slate-400 transition hover:border-[var(--team-primary)]/60 hover:text-slate-600 dark:border-slate-700 dark:bg-white/5 dark:text-slate-500 dark:hover:text-slate-300"
+          >
+            <LockIcon locked /> Athletic ratings hidden — click to reveal
           </button>
         )}
       </div>
+
+      {/* Action — edit (full width); the name/portrait opens the full profile. */}
+      {canEdit && (
+        <div className="border-t border-slate-200/70 pt-4 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => onEdit(recruit)}
+            className="w-full border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            Edit recruit
+          </button>
+        </div>
+      )}
     </SurfaceCard>
   );
 }
@@ -233,17 +267,23 @@ export function NationalRecruits() {
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const { openPlayerEditor } = useEditorModal();
-  const { hideUnscoutedStats } = useRecruitingExperience();
+  const {
+    hideUnscoutedStats,
+    isAthleticUnlocked,
+    unlockAthleticForRecruit,
+    unlockAthleticForAll,
+    lockAllAthletic,
+  } = useRecruitingExperience();
 
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [pendingUnlock, setPendingUnlock] = useState<NationalRecruit | null>(null);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
   const [stars, setStars] = useState('');
   const [classYear, setClassYear] = useState('');
   const [homeState, setHomeState] = useState('');
   const [stage, setStage] = useState('');
-  const [gemOnly, setGemOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -281,7 +321,6 @@ export function NationalRecruits() {
       if (classYear && r.classYear !== classYear) return false;
       if (homeState && r.homeState !== homeState) return false;
       if (stage && r.recruitStage !== stage) return false;
-      if (gemOnly && r.gemBust !== 'GEM') return false;
       if (q) {
         const hay = `${r.firstName} ${r.lastName} ${r.hometown} ${r.homeState} ${r.pipeline} ${r.position}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -301,19 +340,20 @@ export function NationalRecruits() {
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, gemOnly, sortKey, sortDir]);
+  }, [recruits, search, position, stars, classYear, homeState, stage, sortKey, sortDir]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
   const dash = useMemo(() => {
     const list = recruits ?? [];
+    const byStar = (n: number) => list.filter((r) => r.stars === n).length;
     return {
       total: list.length,
-      fiveStar: list.filter((r) => r.stars === 5).length,
-      fourStar: list.filter((r) => r.stars === 4).length,
-      gems: list.filter((r) => r.gemBust === 'GEM').length,
-      states: new Set(list.map((r) => r.homeState).filter(Boolean)).size,
-      positions: new Set(list.map((r) => r.position).filter(Boolean)).size,
+      s5: byStar(5),
+      s4: byStar(4),
+      s3: byStar(3),
+      s2: byStar(2),
+      s1: byStar(1),
     };
   }, [recruits]);
 
@@ -333,7 +373,6 @@ export function NationalRecruits() {
     setClassYear('');
     setHomeState('');
     setStage('');
-    setGemOnly(false);
   }
 
   function openFull(r: NationalRecruit) {
@@ -368,7 +407,7 @@ export function NationalRecruits() {
     );
   }
 
-  const filtersActive = !!(search || position || stars || classYear || homeState || stage || gemOnly);
+  const filtersActive = !!(search || position || stars || classYear || homeState || stage);
   const shown = filtered.slice(0, RENDER_CAP);
 
   const th = (key: SortKey, label: string, alignRight = false) => (
@@ -390,26 +429,27 @@ export function NationalRecruits() {
         </p>
       </div>
 
-      {/* Dashboard */}
+      {/* Dashboard — full star distribution of the national pool. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Recruits" value={dash.total.toLocaleString()} />
-        <StatTile label="5-Star" value={String(dash.fiveStar)} />
-        <StatTile label="4-Star" value={String(dash.fourStar)} />
-        <StatTile label="Gems" value={String(dash.gems)} />
-        <StatTile label="States" value={String(dash.states)} />
-        <StatTile label="Positions" value={String(dash.positions)} />
+        <StatTile label="5-Star" value={dash.s5.toLocaleString()} />
+        <StatTile label="4-Star" value={dash.s4.toLocaleString()} />
+        <StatTile label="3-Star" value={dash.s3.toLocaleString()} />
+        <StatTile label="2-Star" value={dash.s2.toLocaleString()} />
+        <StatTile label="1-Star" value={dash.s1.toLocaleString()} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         {/* Filters + table */}
         <div className="space-y-3">
+          {/* Search on its own full-width row, filters beneath it. */}
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, town, state, pipeline..."
+            className={`${FILTER_SELECT} w-full`}
+          />
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, town, state, pipeline..."
-              className={`${FILTER_SELECT} min-w-[13rem] flex-1`}
-            />
             <select value={position} onChange={(e) => setPosition(e.target.value)} aria-label="Filter by position" className={FILTER_SELECT}>
               <option value="">All positions</option>
               {options.positions.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -430,9 +470,6 @@ export function NationalRecruits() {
               <option value="">All stages</option>
               {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
             </select>
-            <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200">
-              <input type="checkbox" checked={gemOnly} onChange={(e) => setGemOnly(e.target.checked)} /> Gems
-            </label>
             {filtersActive && (
               <button type="button" onClick={clearFilters} className="border border-slate-200/80 px-3 py-2 text-sm text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white">
                 Clear
@@ -508,7 +545,96 @@ export function NationalRecruits() {
 
         {/* Profile panel */}
         <div className="xl:sticky xl:top-4 xl:self-start">
-          <RecruitPanel recruit={selected} canEdit={canEdit} onEdit={editRecruit} onOpenFull={openFull} hideStats={hideUnscoutedStats} />
+          <RecruitPanel
+            recruit={selected}
+            canEdit={canEdit}
+            onEdit={editRecruit}
+            onOpenFull={openFull}
+            hideStats={hideUnscoutedStats}
+            athleticUnlocked={selected ? isAthleticUnlocked(selected.playerId) : false}
+            onAthleticLockClick={(r) => (isAthleticUnlocked(r.playerId) ? lockAllAthletic() : setPendingUnlock(r))}
+          />
+        </div>
+      </div>
+
+      {pendingUnlock &&
+        createPortal(
+          <AthleticUnlockModal
+            recruit={pendingUnlock}
+            onCancel={() => setPendingUnlock(null)}
+            onUnlockOne={() => {
+              unlockAthleticForRecruit(pendingUnlock.playerId);
+              setPendingUnlock(null);
+            }}
+            onUnlockAll={() => {
+              unlockAthleticForAll();
+              setPendingUnlock(null);
+            }}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/** App-styled confirm before revealing a recruit's ratings — the game hides these until you scout, so this is a deliberate immersion break. */
+function AthleticUnlockModal({
+  recruit,
+  onCancel,
+  onUnlockOne,
+  onUnlockAll,
+}: {
+  recruit: NationalRecruit;
+  onCancel: () => void;
+  onUnlockOne: () => void;
+  onUnlockAll: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
+      <div className="corner-cut relative w-full max-w-md border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center border border-amber-300/70 bg-amber-100/70 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+            <LockIcon locked />
+          </span>
+          <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">Reveal athletic ratings?</h3>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          The game keeps a prospect&apos;s detailed ratings hidden until you&apos;ve scouted them — revealing{' '}
+          <span className="font-semibold text-slate-900 dark:text-white">{recruit.firstName} {recruit.lastName}</span>
+          &apos;s numbers here can take some of that discovery (and immersion) out of your dynasty. You can always lock
+          them again.
+        </p>
+        <div className="mt-5 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onUnlockOne}
+            className="w-full bg-[var(--team-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95"
+          >
+            Reveal only this recruit
+          </button>
+          <button
+            type="button"
+            onClick={onUnlockAll}
+            className="w-full border border-slate-200/80 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            Reveal all recruits
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+          >
+            Keep hidden
+          </button>
         </div>
       </div>
     </div>

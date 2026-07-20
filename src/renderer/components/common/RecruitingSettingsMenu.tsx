@@ -58,9 +58,9 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
               <span>
                 <span className={`text-sm font-semibold ${strong}`}>Spoiler-free scouting</span>
                 <span className={`mt-1 block text-xs leading-5 ${subtle}`}>
-                  Hide a recruit&apos;s overall and athletic ratings across the Recruits pages — recruit the way the game
-                  intends, judging prospects on rank, stars, and film until you decide their value. Ranks, stars,
-                  hometown, pipeline, and school interest stay visible.
+                  Hide a recruit&apos;s overall rating across the Recruits pages — recruit the way the game intends,
+                  judging prospects on rank, stars, and film. Ranks, stars, hometown, pipeline, and school interest stay
+                  visible. (Detailed athletic ratings have their own per-recruit lock on the profile.)
                 </span>
               </span>
               <input
