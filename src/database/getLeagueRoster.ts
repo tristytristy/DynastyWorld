@@ -1,7 +1,8 @@
 import { getSeasonsByDynasty, getSnapshot } from './helpers';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
-import type { LeagueTeamGame, LeagueTeamRoster, LeagueTeamSummary } from '../shared/types';
+import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
+import type { LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary } from '../shared/types';
 
 interface TeamsSnapshotEntry {
   teamIndex: number;
@@ -108,4 +109,38 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         conferenceName: gameType === 'conference' ? ownConf : null,
       };
     });
+}
+
+/**
+ * Any team's championship honors for a season — conference title and/or
+ * national title — read from the leaguewide `yearSummary` snapshot (the same
+ * completed-year data behind the user's own trophy case and the standings
+ * conference-champion flag). Lets Team Hub show the same trophies for any
+ * program the user browses to, not just their own. Returns all-false when the
+ * season isn't decided yet (no yearSummary) so a mid-season browse simply
+ * shows no trophy rather than a wrong one.
+ */
+export function getLeagueTeamHonors(dynastyId: string, teamIndex: number, seasonId?: number): LeagueTeamHonors | null {
+  const resolved = resolveSeasonId(dynastyId, seasonId);
+  if (resolved === undefined) return null;
+
+  const teams = getSnapshot<TeamsSnapshotEntry[]>(resolved, 'teams') ?? [];
+  const teamName = teams.find((t) => t.teamIndex === teamIndex)?.displayName;
+  if (!teamName) return { conferenceChampion: false, conferenceName: null, nationalChampion: false };
+
+  const yearSummary = getSnapshot<YearSummaryData>(resolved, 'yearSummary');
+  // Conference champions: prefer the rich yearSummary array; fall back to the
+  // standalone conferenceChampionship snapshot (same leaguewide data) so a
+  // season synced before yearSummary was captured still resolves a title.
+  const confChampions: ConferenceChampionshipData[] =
+    yearSummary?.conferenceChampions ??
+    getSnapshot<ConferenceChampionshipData[]>(resolved, 'conferenceChampionship') ??
+    [];
+  const confChamp = confChampions.find((c) => c.winningTeamName === teamName) ?? null;
+
+  return {
+    conferenceChampion: confChamp !== null,
+    conferenceName: confChamp?.conferenceName ?? null,
+    nationalChampion: yearSummary?.nationalChampion?.teamName === teamName,
+  };
 }

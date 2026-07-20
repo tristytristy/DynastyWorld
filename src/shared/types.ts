@@ -947,6 +947,14 @@ export interface LeagueTeamRoster {
   players: LeagueRosterPlayer[];
 }
 
+/** A viewed (any) team's championship honors for one season, from the leaguewide YearSummary snapshot — so Team Hub can show the same trophies the user's own team gets. */
+export interface LeagueTeamHonors {
+  conferenceChampion: boolean;
+  /** The conference the team won, for the trophy asset lookup; null when not a conference champion. */
+  conferenceName: string | null;
+  nationalChampion: boolean;
+}
+
 /** One media-gallery item (schema v6) — user-uploaded image/video with optional game + player links. Metadata only; the file lives under <userData>/media/<dynastyId>/. */
 export interface MediaItem {
   id: number;
@@ -1307,6 +1315,7 @@ export interface DynastyApi {
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
+    getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;

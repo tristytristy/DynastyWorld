@@ -99,14 +99,17 @@ function GameRow({ game }: { game: GameSummary }) {
 function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
   const [games, setGames] = useState<import('../../shared/types').LeagueTeamGame[] | null | undefined>(undefined);
   const [roster, setRoster] = useState<import('../../shared/types').LeagueTeamRoster | null | undefined>(undefined);
+  const [honors, setHonors] = useState<import('../../shared/types').LeagueTeamHonors | null>(null);
   const { openPlayerModal } = usePlayerModal();
 
   useEffect(() => {
     let cancelled = false;
     setGames(undefined);
     setRoster(undefined);
+    setHonors(null);
     window.api.db.getLeagueTeamSchedule(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setGames(r));
     window.api.db.getLeagueTeamRoster(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setRoster(r));
+    window.api.db.getLeagueTeamHonors(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setHonors(r));
     return () => {
       cancelled = true;
     };
@@ -120,9 +123,23 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
       ? (roster.players.reduce((s, p) => s + p.overallRating, 0) / roster.players.length).toFixed(1)
       : '—';
 
+  // The same trophies the user's own team earns — built from the leaguewide
+  // YearSummary, so any browsed program shows its national/conference titles.
+  const teamTrophies: Trophy[] = [];
+  if (honors?.nationalChampion) {
+    teamTrophies.push({ kind: 'national-championship', label: 'National Champions', assetKey: null });
+  }
+  if (honors?.conferenceChampion && honors.conferenceName) {
+    teamTrophies.push({
+      kind: 'conference-championship',
+      label: `${honors.conferenceName} Champions`,
+      assetKey: honors.conferenceName,
+    });
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Trophies, ranking history, and game detail are tracked for your own team only." />
+      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Ranking history and game detail are tracked for your own team only." />
       <div className="flex items-center gap-4">
         <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
         <div className="grid flex-1 gap-3 sm:grid-cols-3">
@@ -131,6 +148,16 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
           <StatTile label="Average OVR" value={avgOvr} />
         </div>
       </div>
+      {teamTrophies.length > 0 && (
+        <SurfaceCard>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Trophy case</p>
+          <div className="mt-3 flex flex-wrap gap-6">
+            {teamTrophies.map((trophy) => (
+              <TrophyBadge key={trophy.kind} trophy={trophy} />
+            ))}
+          </div>
+        </SurfaceCard>
+      )}
       <SurfaceCard>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">Top players</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
