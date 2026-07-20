@@ -7,6 +7,7 @@ import { registerDatabaseHandlers } from './ipc/database';
 import { registerExtractionHandlers } from './ipc/extraction';
 import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
+import { registerMediaHandlers } from './ipc/media';
 import {
   initDatabase,
   DatabaseCorruptedError,
@@ -372,6 +373,7 @@ app
       registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
+      registerMediaHandlers();
       try {
         const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
         const { dynasty } = persistExtraction(process.env.DIAGNOSTIC_IMPORT_PATH, extraction);
@@ -391,6 +393,7 @@ app
       registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
+      registerMediaHandlers();
       Menu.setApplicationMenu(buildMenu());
 
       const win = createWindow();
@@ -501,6 +504,7 @@ app
       registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
+      registerMediaHandlers();
       Menu.setApplicationMenu(buildMenu());
 
       sendSplashProgress(splash, { percent: 85, status: 'Opening hub...' });

@@ -3,6 +3,7 @@ import schemaV2 from './schema_v2_ranking_history.sql';
 import schemaV3 from './schema_v3_season_team.sql';
 import schemaV4 from './schema_v4_season_history_only.sql';
 import schemaV5 from './schema_v5_team_awards.sql';
+import schemaV6 from './schema_v6_media.sql';
 
 export interface Migration {
   version: number;
@@ -20,4 +21,5 @@ export const MIGRATIONS: Migration[] = [
   { version: 3, name: 'season_team', sql: schemaV3 },
   { version: 4, name: 'season_history_only', sql: schemaV4 },
   { version: 5, name: 'team_awards', sql: schemaV5 },
+  { version: 6, name: 'media', sql: schemaV6 },
 ];

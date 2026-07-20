@@ -943,6 +943,31 @@ export interface LeagueTeamRoster {
   players: LeagueRosterPlayer[];
 }
 
+/** One media-gallery item (schema v6) — user-uploaded image/video with optional game + player links. Metadata only; the file lives under <userData>/media/<dynastyId>/. */
+export interface MediaItem {
+  id: number;
+  seasonId: number;
+  fileName: string;
+  mediaType: 'image' | 'video';
+  /** Save-native SeasonGame gameId — same id ScheduleGame and the /schedule/:gameId route use. Null = not linked to a game. */
+  gameId: number | null;
+  description: string;
+  /** Tagged players, as the same opaque roster player ids used app-wide; names resolve from that season's roster snapshot. */
+  playerIds: number[];
+  createdAt: string;
+}
+
+/** MediaItem plus the absolute on-disk path, resolved by the media IPC layer so the renderer can build a file:// URL. */
+export interface MediaItemWithPath extends MediaItem {
+  absolutePath: string;
+}
+
+export interface MediaItemPatch {
+  gameId: number | null;
+  description: string;
+  playerIds: number[];
+}
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -1246,6 +1271,15 @@ export interface DynastyApi {
       filters: PortraitFilters,
       page: number,
     ) => Promise<PortraitSearchResponse>;
+  };
+  media: {
+    /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
+    pickFiles: () => Promise<string[] | null>;
+    /** Copies the given files into the dynasty's media library and creates their DB rows. Split from pickFiles so verification runs can add files without a native dialog. */
+    addFiles: (dynastyId: string, seasonId: number, filePaths: string[]) => Promise<MediaItemWithPath[]>;
+    list: (dynastyId: string, seasonId?: number) => Promise<MediaItemWithPath[] | undefined>;
+    update: (id: number, patch: MediaItemPatch) => Promise<void>;
+    remove: (id: number) => Promise<void>;
   };
 }
 

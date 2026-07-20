@@ -83,6 +83,13 @@ const api: DynastyApi = {
     searchPortraits: (kind, query, filters, page) =>
       ipcRenderer.invoke(IPC.editor.searchPortraits, kind, query, filters, page),
   },
+  media: {
+    pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
+    addFiles: (dynastyId, seasonId, filePaths) => ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),
+    list: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.list, dynastyId, seasonId),
+    update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
+    remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

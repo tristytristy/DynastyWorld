@@ -19,6 +19,7 @@ import { AllTeams } from './pages/awards/AllTeams';
 import { WeeklyHonors } from './pages/awards/WeeklyHonors';
 import { Recruiting } from './pages/Recruiting';
 import { History } from './pages/History';
+import { Media } from './pages/Media';
 import { PlayerProfileModal } from './components/common/PlayerProfileModal';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
@@ -79,6 +80,7 @@ export function App() {
                     </Route>
                     <Route path="recruiting" element={<Recruiting />} />
                     <Route path="history" element={<History />} />
+                    <Route path="media" element={<Media />} />
                   </Route>
                 </Routes>
               </div>

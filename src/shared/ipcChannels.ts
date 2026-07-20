@@ -59,4 +59,11 @@ export const IPC = {
     saveRecruit: 'editor:saveRecruit',
     searchPortraits: 'editor:searchPortraits',
   },
+  media: {
+    pickFiles: 'media:pickFiles',
+    addFiles: 'media:addFiles',
+    list: 'media:list',
+    update: 'media:update',
+    remove: 'media:remove',
+  },
 } as const;

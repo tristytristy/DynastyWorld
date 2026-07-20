@@ -126,6 +126,9 @@ export function DynastyLayout() {
             <NavLink to={`/dynasty/${id}/history`} className={tabClass}>
               History
             </NavLink>
+            <NavLink to={`/dynasty/${id}/media`} className={tabClass}>
+              Media
+            </NavLink>
             <SeasonSwitcher />
           </div>
         </nav>

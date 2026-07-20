@@ -170,6 +170,29 @@ const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'media',
+    title: 'The Media gallery',
+    content: (
+      <>
+        <p>
+          The <strong>Media</strong> tab is a per-season gallery for your dynasty&apos;s screenshots and clips. Use{' '}
+          <strong>Add photos / videos</strong> to pick files — they&apos;re copied into the app&apos;s own library, so
+          the gallery keeps working even if you move or delete the originals.
+        </p>
+        <p>
+          Click any thumbnail to open the viewer, then <strong>Edit details</strong> to pick which game it&apos;s from,
+          tag the players in it, and write a description. Tagged players link straight to their player bios, and a
+          linked game jumps to that game&apos;s page. Use the arrow keys (or the on-screen arrows) to move through the
+          gallery.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Uploads land in whichever season the Season dropdown is set to — switch seasons first if you&apos;re
+          backfilling older memories. Supported: PNG/JPG/WebP/GIF images and MP4/WebM video.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'good-to-know',
     title: 'A few honest limitations',
     content: (
