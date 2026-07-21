@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildTeamColorVars } from '../../lib/teamTheme';
 import { DEFAULT_THEME_PREFERENCE, useTheme } from '../../theme/ThemeProvider';
+import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import type { ColorMode } from '../../theme/themePreference';
 import { CenteredModalPanel } from './CenteredModalPanel';
 
@@ -148,6 +149,17 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
     setCustomColors,
     resolveColorVars,
   } = useTheme();
+  const { ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing } = useRecruitingExperience();
+  const revealAll = ovr.unlockedAll && athletic.unlockedAll;
+  const setRevealAll = (value: boolean) => {
+    if (value) {
+      ovr.unlockForAll();
+      athletic.unlockForAll();
+    } else {
+      ovr.lockAll();
+      athletic.lockAll();
+    }
+  };
   const [isOpen, setIsOpen] = useState(false);
   const [draftPrimary, setDraftPrimary] = useState(preference.customPrimary);
   const [draftSecondary, setDraftSecondary] = useState(preference.customSecondary);
@@ -239,7 +251,9 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
         <p className={`text-sm leading-6 ${subtleTextClass}`}>
           Adjust appearance, choose how accent colors are sourced, and set a custom palette that matches how you want to work.
         </p>
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-6">
+          <div className="space-y-4">
+            <p className={`type-eyebrow ${subtleTextClass}`}>Interface</p>
                 <section className={sectionClass}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -386,7 +400,50 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
                     </button>
                   </div>
                 </section>
-              </div>
+          </div>
+
+          <div className="space-y-4">
+            <p className={`type-eyebrow ${subtleTextClass}`}>Recruiting</p>
+            <section className={sectionClass}>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className={`text-sm font-semibold ${strongTextClass}`}>Reveal all recruit ratings</span>
+                  <span className={`mt-1 block text-xs leading-5 ${subtleTextClass}`}>
+                    A prospect&apos;s overall and athletic ratings start hidden across the Recruits pages — recruit the way
+                    the game intends, on rank, stars, and film. Turn this on to reveal every recruit&apos;s ratings at once,
+                    or leave it off and reveal prospects one at a time from their profile.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={revealAll}
+                  onChange={(e) => setRevealAll(e.target.checked)}
+                  className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
+                  aria-label="Reveal all recruit ratings"
+                />
+              </label>
+            </section>
+            <section className={`rounded-xl border p-4 ${isDark ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-amber-400/50 bg-amber-50/70'}`}>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className={`text-sm font-semibold ${strongTextClass}`}>Experimental save editing</span>
+                  <span className={`mt-1 block text-xs leading-5 ${subtleTextClass}`}>
+                    Unlocks tools that write directly to your dynasty save — currently <strong>Force Commit</strong>. Every
+                    write backs up your save first and is verified before it&apos;s kept, but this is experimental. Off by
+                    default; turning it off hides these tools without affecting the rest of the Recruit Hub.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={experimentalSaveEditing}
+                  onChange={(e) => setExperimentalSaveEditing(e.target.checked)}
+                  className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-amber-500"
+                  aria-label="Enable experimental save editing"
+                />
+              </label>
+            </section>
+          </div>
+        </div>
       </CenteredModalPanel>
     </div>
   );

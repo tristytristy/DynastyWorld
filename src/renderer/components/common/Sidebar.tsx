@@ -5,7 +5,6 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
-import { RecruitingSettingsMenu } from './RecruitingSettingsMenu';
 import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
@@ -138,15 +137,8 @@ export function Sidebar() {
             {isDark ? 'Light mode' : 'Dark mode'}
           </button>
 
-          {/* Experience — how recruiting/immersion behaves. */}
-          <div>
-            <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Experience</p>
-            <div className="space-y-2">
-              <RecruitingSettingsMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            </div>
-          </div>
-
-          {/* Tools — workspace utilities. */}
+          {/* Tools — workspace utilities. Recruiting/immersion settings now live
+              inside Preferences (Phase 5 grouping), so there's a single settings hub. */}
           <div>
             <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
             <div className="space-y-2">
