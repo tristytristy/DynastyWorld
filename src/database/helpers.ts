@@ -322,32 +322,6 @@ export function getSeasonByYear(dynastyId: string, seasonYear: number): Season |
   return row ? mapSeason(row) : undefined;
 }
 
-export type UpdateSeasonInput = Partial<
-  Omit<Season, 'id' | 'dynastyId' | 'seasonYear' | 'extractedAt'>
->;
-
-export function updateSeason(id: number, patch: UpdateSeasonInput): void {
-  const { clause, values } = buildSetClause({
-    is_current: patch.isCurrent === undefined ? undefined : patch.isCurrent ? 1 : 0,
-    final_record_wins: patch.finalRecordWins,
-    final_record_losses: patch.finalRecordLosses,
-    final_record_ties: patch.finalRecordTies,
-    conference_record_wins: patch.conferenceRecordWins,
-    conference_record_losses: patch.conferenceRecordLosses,
-    final_ranking_ap: patch.finalRankingAp,
-    final_ranking_coaches: patch.finalRankingCoaches,
-    final_ranking_cfp: patch.finalRankingCfp,
-    bowl_game_name: patch.bowlGameName,
-    bowl_result: patch.bowlResult,
-    conference_championship:
-      patch.conferenceChampionship === undefined ? undefined : patch.conferenceChampionship ? 1 : 0,
-    national_championship:
-      patch.nationalChampionship === undefined ? undefined : patch.nationalChampionship ? 1 : 0,
-  });
-  if (!clause) return;
-  run(`UPDATE seasons SET ${clause} WHERE id = ?`, [...values, id]);
-}
-
 // ---- Season snapshots -----------------------------------------------------
 
 export function saveSnapshot(

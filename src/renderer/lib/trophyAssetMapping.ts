@@ -90,7 +90,7 @@ const CONFERENCE_TROPHY_FILES: Record<string, string> = {
  * BEST_SR/MOST_VERSATILE correction), not save-provided. All-American tiers
  * and weekly Player-of-the-Week honors intentionally have no entry here -
  * they're not single-winner awards, so they render as text-only badges
- * instead (see awardFormat.ts's isMarqueeAward).
+ * instead.
  */
 const AWARD_TROPHY_FILES: Record<string, string> = {
   HEISMAN: 'trophies_HeismanMemorialTrophy.png',
@@ -178,7 +178,7 @@ export function getTrophyImagePath(trophy: Trophy): string | null {
   }
 }
 
-/** null for anything without dedicated trophy art (All-American tiers, weekly honors - see awardFormat.ts's isMarqueeAward) - those render as text-only badges instead. */
+/** null for anything without dedicated trophy art (All-American tiers, weekly honors) - those render as text-only badges instead. */
 export function getAwardTrophyPath(awardType: string): string | null {
   const file = AWARD_TROPHY_FILES[awardType];
   return file ? `${AWARDS_BASE_PATH}/${file}` : null;

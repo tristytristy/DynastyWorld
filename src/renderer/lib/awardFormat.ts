@@ -122,11 +122,6 @@ export function formatAwardLabel(awardType: string): string {
   return AWARD_LABELS[awardType] ?? formatAllAmerican(awardType) ?? formatWeeklyHonor(awardType) ?? awardType;
 }
 
-/** True for the ~24 leaguewide single-winner season awards (has dedicated trophy art); false for All-American tiers and weekly honors (text-only). */
-export function isMarqueeAward(awardType: string): boolean {
-  return awardType in AWARD_LABELS;
-}
-
 /** Collapses repeat weekly honors (e.g. three separate "Offensive Player of the Week" entries) into one labeled count each, so a season of nods doesn't render as a wall of duplicate badges. */
 export function groupWeeklyHonors(awards: { awardType: string }[]): { label: string; count: number }[] {
   const counts = new Map<string, number>();

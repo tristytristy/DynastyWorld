@@ -1,7 +1,9 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const { version: APP_VERSION } = require('./package.json');
 
 // Persistent on-disk cache — after the first build, an unchanged-source
 // rebuild (the common case when opening the app via the launcher) drops from
@@ -144,6 +146,9 @@ const rendererConfig = {
     ],
   },
   plugins: [
+    // Bakes the package.json version in at build time so the UI can show it
+    // without a runtime IPC round-trip (single source of truth: package.json).
+    new webpack.DefinePlugin({ __APP_VERSION__: JSON.stringify(APP_VERSION) }),
     new HtmlWebpackPlugin({
       template: './public/index.html',
     }),

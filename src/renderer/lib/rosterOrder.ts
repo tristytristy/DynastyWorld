@@ -40,12 +40,6 @@ export function unitForPosition(position: string): Unit {
 }
 
 /** Conventional offensive skill positions — HB is this game's real position code for running back, not "RB". */
-const SKILL_POSITIONS = new Set<string>(['QB', 'HB', 'WR', 'TE']);
-
-export function isSkillPosition(position: string): boolean {
-  return SKILL_POSITIONS.has(position);
-}
-
 export function positionSortIndex(position: string): number {
   const idx = (POSITION_ORDER as readonly string[]).indexOf(position);
   return idx === -1 ? POSITION_ORDER.length : idx;
