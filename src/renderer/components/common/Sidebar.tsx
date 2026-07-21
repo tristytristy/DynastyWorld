@@ -126,8 +126,9 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Utility controls, docked at the bottom (mt-auto) so they sit far from the Dynasty list at the top. */}
-        <div className="mt-auto space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+        {/* Utility controls, docked at the bottom (mt-auto), grouped by intent
+            (Phase 2): Experience = how the app plays; Tools = workspace utilities. */}
+        <div className="mt-auto space-y-4 border-t border-slate-200/70 pt-4 dark:border-white/10">
           <button
             type="button"
             onClick={toggleAppearance}
@@ -136,18 +137,24 @@ export function Sidebar() {
           >
             {isDark ? 'Light mode' : 'Dark mode'}
           </button>
-          <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
 
-          {/* EXPERIENCE group — how the app plays, distinct from workspace prefs. */}
-          <div className="pt-1">
+          {/* Experience — how recruiting/immersion behaves. */}
+          <div>
             <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Experience</p>
             <div className="space-y-2">
               <RecruitingSettingsMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-              <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             </div>
           </div>
 
-          <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+          {/* Tools — workspace utilities. */}
+          <div>
+            <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
+            <div className="space-y-2">
+              <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+              <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+              <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            </div>
+          </div>
         </div>
       </nav>
     </aside>
