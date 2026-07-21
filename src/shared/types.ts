@@ -1020,6 +1020,12 @@ export interface LeagueRosterPlayer extends RosterPlayer {
   seasonStat: { playerId: number; category: 'offense' | 'defense'; season: OffensiveStatLine | DefensiveStatLine | null } | null;
 }
 
+/** A league player flattened for the national Players page — a LeagueRosterPlayer with its team name + conference joined on. */
+export interface NationalPlayer extends LeagueRosterPlayer {
+  teamDisplayName: string;
+  conferenceName: string | null;
+}
+
 export interface LeagueTeamGame {
   gameId: number;
   week: number;
@@ -1458,6 +1464,7 @@ export interface DynastyApi {
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
     getLeagueTeamOverview: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<SeasonOverview | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
+    getAllLeaguePlayers: (dynastyId: string, seasonId?: number) => Promise<NationalPlayer[] | null>;
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
     getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;

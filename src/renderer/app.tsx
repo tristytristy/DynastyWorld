@@ -21,6 +21,7 @@ import { AnnualAwards } from './pages/awards/AnnualAwards';
 import { AllTeams } from './pages/awards/AllTeams';
 import { WeeklyHonors } from './pages/awards/WeeklyHonors';
 import { NationalRecruits } from './pages/NationalRecruits';
+import { NationalPlayers } from './pages/NationalPlayers';
 import { History } from './pages/History';
 import { Media } from './pages/Media';
 import { PlayerProfileModal } from './components/common/PlayerProfileModal';
@@ -89,6 +90,7 @@ export function App() {
 
                     <Route element={<NcaaHubLayout />}>
                       <Route path="ncaa-hub" element={<NcaaHub />} />
+                      <Route path="players" element={<NationalPlayers />} />
                       <Route path="standings" element={<Standings />} />
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />

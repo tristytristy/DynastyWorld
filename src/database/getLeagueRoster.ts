@@ -3,7 +3,7 @@ import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
 import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
-import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, SeasonOverview } from '../shared/types';
+import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, NationalPlayer, SeasonOverview } from '../shared/types';
 
 interface TeamsSnapshotEntry {
   teamIndex: number;
@@ -119,6 +119,34 @@ export function getLeagueTeamRoster(dynastyId: string, teamIndex: number, season
     .map((p) => ({ ...p, seasonStat: statByPlayer.get(p.id) ?? null }));
 
   return { teamIndex, displayName, seasonId: resolved, players };
+}
+
+/**
+ * Every player in the league for a season — the national counterpart to the
+ * Team Hub roster. Same per-team league snapshot the browse pages use, but
+ * flattened across all teams with each player's team name + conference joined
+ * on (for the national Players page's Team column + team/conference filters).
+ * Players whose team index doesn't resolve to a real team (free-agent/pool
+ * placeholders) are dropped so the list is genuinely "players on NCAA teams".
+ */
+export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): NationalPlayer[] | null {
+  const resolved = resolveSeasonId(dynastyId, seasonId);
+  if (resolved === undefined) return null;
+  const league = getSnapshot<LeagueRosterData>(resolved, 'leagueRoster');
+  if (!league) return null;
+  const teams = getSnapshot<TeamsSnapshotEntry[]>(resolved, 'teams') ?? [];
+  const nameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
+  const confByIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
+  const statByPlayer = new Map(league.stats.map((s) => [s.playerId, s]));
+
+  return league.players
+    .filter((p) => nameByIndex.has(p.teamIndex))
+    .map((p) => ({
+      ...p,
+      teamDisplayName: nameByIndex.get(p.teamIndex) as string,
+      conferenceName: confByIndex.get(p.teamIndex) ?? null,
+      seasonStat: statByPlayer.get(p.id) ?? null,
+    }));
 }
 
 /** Any team's season schedule from the league-wide game snapshot, mapped relative to that team (their opponent, their W/L). */

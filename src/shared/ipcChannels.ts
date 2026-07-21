@@ -30,6 +30,7 @@ export const IPC = {
     getLeagueTeams: 'db:getLeagueTeams',
     getLeagueTeamOverview: 'db:getLeagueTeamOverview',
     getLeagueTeamRoster: 'db:getLeagueTeamRoster',
+    getAllLeaguePlayers: 'db:getAllLeaguePlayers',
     getLeagueTeamSchedule: 'db:getLeagueTeamSchedule',
     getLeagueTeamHonors: 'db:getLeagueTeamHonors',
     getNationalRecruits: 'db:getNationalRecruits',
