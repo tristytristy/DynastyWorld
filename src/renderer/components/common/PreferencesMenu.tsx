@@ -1,24 +1,9 @@
-import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildTeamColorVars } from '../../lib/teamTheme';
-import { DEFAULT_THEME_PREFERENCE, useTheme } from '../../theme/ThemeProvider';
+import type { ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import { useTheme } from '../../theme/ThemeProvider';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import type { ColorMode } from '../../theme/themePreference';
 import { CenteredModalPanel } from './CenteredModalPanel';
-
-const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
-
-function isHexColor(value: string): boolean {
-  return HEX_PATTERN.test(value.trim());
-}
-
-function normalizeHex(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-  return trimmed.startsWith('#') ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`;
-}
 
 function SegmentButton({
   label,
@@ -90,65 +75,64 @@ function ThemeModeButton({
   );
 }
 
-function ColorField({
-  label,
-  value,
-  isDark,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  isDark: boolean;
-  onChange: (value: string) => void;
-}) {
-  const colorValue = isHexColor(value) ? value : '#2563eb';
-
+function ChevronIcon({ open }: { open: boolean }) {
   return (
-    <label className="space-y-2">
-      <span className={`type-eyebrow ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-        {label}
-      </span>
-      <div
-        className={`flex items-center gap-3 rounded-xl border p-2 ${
-          isDark
-            ? 'border-slate-800/85 bg-slate-950/84'
-            : 'border-slate-200/90 bg-white/82'
-        }`}
-      >
-        <input
-          type="color"
-          value={colorValue}
-          onChange={(event) => onChange(event.target.value)}
-          className={`h-11 w-12 cursor-pointer rounded-lg border bg-transparent p-1 ${
-            isDark ? 'border-slate-700' : 'border-slate-300'
-          }`}
-          aria-label={`${label} color picker`}
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="#2563eb"
-          spellCheck={false}
-          className={`flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400 ${
-            isDark ? 'text-slate-100' : 'text-slate-700'
-          }`}
-          aria-label={`${label} hex value`}
-        />
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-base ${open ? 'rotate-90' : ''}`}
+      aria-hidden="true"
+    >
+      <path d="M7.5 4.5 13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * A settings card whose body collapses. The collapse toggle is the title row;
+ * an optional always-visible `accessory` (a switch, a segmented rail) stays in
+ * the header so the live state is readable even when the explanatory body is
+ * folded away.
+ */
+function CollapsibleSection({
+  title,
+  isDark,
+  outerClass,
+  accessory,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  isDark: boolean;
+  outerClass: string;
+  accessory?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={outerClass}>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-expanded={open}
+          className={`flex flex-1 items-center gap-2 text-left ${isDark ? 'text-white' : 'text-slate-900'}`}
+        >
+          <ChevronIcon open={open} />
+          <h3 className="text-sm font-semibold">{title}</h3>
+        </button>
+        {accessory}
       </div>
-    </label>
+      {open && <div className="mt-3">{children}</div>}
+    </section>
   );
 }
 
 export function PreferencesMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
-  const {
-    preference,
-    appearance,
-    setAppearance,
-    setColorMode,
-    setCustomColors,
-    resolveColorVars,
-  } = useTheme();
+  const { preference, appearance, setAppearance, setColorMode } = useTheme();
   const { ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing } = useRecruitingExperience();
   const revealAll = ovr.unlockedAll && athletic.unlockedAll;
   const setRevealAll = (value: boolean) => {
@@ -161,78 +145,19 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
     }
   };
   const [isOpen, setIsOpen] = useState(false);
-  const [draftPrimary, setDraftPrimary] = useState(preference.customPrimary);
-  const [draftSecondary, setDraftSecondary] = useState(preference.customSecondary);
   const isDark = appearance === 'dark';
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setDraftPrimary(preference.customPrimary);
-    setDraftSecondary(preference.customSecondary);
-  }, [isOpen, preference.customPrimary, preference.customSecondary]);
-
-  const normalizedPrimary = normalizeHex(draftPrimary);
-  const normalizedSecondary = normalizeHex(draftSecondary);
-  const customColorsValid = isHexColor(normalizedPrimary) && isHexColor(normalizedSecondary);
-
-  const previewVars = useMemo(
-    () =>
-      buildTeamColorVars(
-        customColorsValid ? normalizedPrimary : preference.customPrimary,
-        customColorsValid ? normalizedSecondary : preference.customSecondary,
-      ),
-    [
-      customColorsValid,
-      normalizedPrimary,
-      normalizedSecondary,
-      preference.customPrimary,
-      preference.customSecondary,
-    ],
-  );
-
-  const currentVars = resolveColorVars();
-  const previewStyle = previewVars as unknown as CSSProperties;
-  const currentStyle = currentVars as unknown as CSSProperties;
 
   const sectionClass = isDark
     ? 'rounded-xl border border-slate-800/80 bg-slate-950/84 p-4'
     : 'rounded-xl border border-slate-200/90 bg-white/72 p-4';
+  const amberSectionClass = isDark
+    ? 'rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4'
+    : 'rounded-xl border border-amber-400/50 bg-amber-50/70 p-4';
   const railClass = isDark
     ? 'flex border border-slate-800/85 bg-slate-950/90 p-1'
     : 'flex border border-slate-200/90 bg-white/88 p-1';
   const subtleTextClass = isDark ? 'text-slate-400' : 'text-slate-500';
-  const strongTextClass = isDark ? 'text-white' : 'text-slate-900';
-  const badgeClass = isDark
-    ? 'border border-slate-700/85 px-3 py-1 type-eyebrow text-slate-300'
-    : 'border border-slate-300/80 px-3 py-1 type-eyebrow text-slate-500';
-  const previewCardClass = isDark
-    ? 'overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-[0_22px_50px_-40px_rgba(2,6,23,0.9)]'
-    : 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_22px_50px_-40px_rgba(15,23,42,0.45)]';
-  const secondaryButtonClass = isDark
-    ? 'border border-slate-700/85 bg-slate-950/92 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-900'
-    : 'border border-slate-300/80 bg-white/92 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100';
-
-  function handleApplyCustomColors() {
-    if (!customColorsValid) {
-      return;
-    }
-    setCustomColors(normalizedPrimary, normalizedSecondary);
-    setColorMode('custom');
-  }
-
-  function handleResetColors() {
-    setCustomColors(
-      DEFAULT_THEME_PREFERENCE.customPrimary,
-      DEFAULT_THEME_PREFERENCE.customSecondary,
-    );
-    setColorMode(DEFAULT_THEME_PREFERENCE.colorMode);
-    setDraftPrimary(DEFAULT_THEME_PREFERENCE.customPrimary);
-    setDraftSecondary(DEFAULT_THEME_PREFERENCE.customSecondary);
-  }
 
   return (
     <div className="relative">
@@ -249,199 +174,110 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
 
       <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} eyebrow="Experience Settings" title="Customize your workspace.">
         <p className={`text-sm leading-6 ${subtleTextClass}`}>
-          Adjust appearance, choose how accent colors are sourced, and set a custom palette that matches how you want to work.
+          Adjust appearance and how the recruiting experience behaves. Tap any section header to fold it away.
         </p>
         <div className="mt-4 space-y-6">
           <div className="space-y-4">
             <p className={`type-eyebrow ${subtleTextClass}`}>Interface</p>
-                <section className={sectionClass}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className={`text-sm font-semibold ${strongTextClass}`}>Appearance</h3>
-                      <p className={`mt-1 text-xs ${subtleTextClass}`}>Pick the base canvas for the app.</p>
-                    </div>
-                    <div className={railClass}>
-                      <SegmentButton
-                        label="Light"
-                        active={appearance === 'light'}
-                        isDark={isDark}
-                        onClick={() => setAppearance('light')}
-                      />
-                      <SegmentButton
-                        label="Dark"
-                        active={appearance === 'dark'}
-                        isDark={isDark}
-                        onClick={() => setAppearance('dark')}
-                      />
-                    </div>
-                  </div>
-                </section>
 
-                <section className={`space-y-3 ${sectionClass}`}>
-                  <div>
-                    <h3 className={`text-sm font-semibold ${strongTextClass}`}>Theme Source</h3>
-                    <p className={`mt-1 text-xs ${subtleTextClass}`}>
-                      Choose whether accent colors follow the active dynasty, the default app palette, or your own custom values.
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    <ThemeModeButton
-                      label="Team Mode"
-                      value="team"
-                      description="Use the active dynasty's team colors in dynasty views while the shell keeps its shared structure."
-                      active={preference.colorMode === 'team'}
-                      isDark={isDark}
-                      onSelect={setColorMode}
-                    />
-                    <ThemeModeButton
-                      label="Default Mode"
-                      value="default"
-                      description="Keep the app on the built-in brand palette for a steady, neutral presentation."
-                      active={preference.colorMode === 'default'}
-                      isDark={isDark}
-                      onSelect={setColorMode}
-                    />
-                    <ThemeModeButton
-                      label="Custom Mode"
-                      value="custom"
-                      description="Set your own palette and let the app preserve readable contrast across surfaces."
-                      active={preference.colorMode === 'custom'}
-                      isDark={isDark}
-                      onSelect={setColorMode}
-                    />
-                  </div>
-                </section>
+            <CollapsibleSection
+              title="Appearance"
+              isDark={isDark}
+              outerClass={sectionClass}
+              accessory={
+                <div className={railClass}>
+                  <SegmentButton
+                    label="Light"
+                    active={appearance === 'light'}
+                    isDark={isDark}
+                    onClick={() => setAppearance('light')}
+                  />
+                  <SegmentButton
+                    label="Dark"
+                    active={appearance === 'dark'}
+                    isDark={isDark}
+                    onClick={() => setAppearance('dark')}
+                  />
+                </div>
+              }
+            >
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>Pick the base canvas for the app.</p>
+            </CollapsibleSection>
 
-                <section className={sectionClass}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className={`text-sm font-semibold ${strongTextClass}`}>Custom Palette</h3>
-                      <p className={`mt-1 text-xs ${subtleTextClass}`}>
-                        Enter full hex values like #2563eb. Apply stays disabled until both values are valid.
-                      </p>
-                    </div>
-                    <span className={badgeClass}>Guardrails on</span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <ColorField label="Primary" value={draftPrimary} isDark={isDark} onChange={setDraftPrimary} />
-                    <ColorField label="Secondary" value={draftSecondary} isDark={isDark} onChange={setDraftSecondary} />
-                  </div>
-
-                  {!customColorsValid && (
-                    <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
-                      Both custom colors must be valid #RRGGBB values before they can become the active palette.
-                    </p>
-                  )}
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className={`mb-2 type-eyebrow ${subtleTextClass}`}>
-                        Current Theme
-                      </p>
-                      <div style={currentStyle} className={previewCardClass}>
-                        <div className="bg-[var(--team-primary)] px-4 py-4 text-[var(--team-on-primary)]">
-                          <p className="text-xs uppercase tracking-[0.24em] opacity-80">Active Accent</p>
-                          <p className="mt-2 text-lg font-semibold">See how the current palette reads on live surfaces.</p>
-                        </div>
-                        <div className="space-y-2 px-4 py-4">
-                          <p className="text-sm text-[var(--team-text-light)] dark:text-[var(--team-text-dark)]">
-                            Preview how accents, text, and cards balance inside the workspace.
-                          </p>
-                          <div className="flex gap-2">
-                            <span className={`border px-2.5 py-1 text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
-                              Primary
-                            </span>
-                            <span className={`border px-2.5 py-1 text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
-                              Contrast safe
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className={`mb-2 type-eyebrow ${subtleTextClass}`}>
-                        Draft Preview
-                      </p>
-                      <div style={previewStyle} className={previewCardClass}>
-                        <div className="bg-[var(--team-primary)] px-4 py-4 text-[var(--team-on-primary)]">
-                          <p className="text-xs uppercase tracking-[0.24em] opacity-80">Draft Accent</p>
-                          <p className="mt-2 text-lg font-semibold">Review your custom palette before it goes live.</p>
-                        </div>
-                        <div className="space-y-2 px-4 py-4">
-                          <p className="text-sm text-[var(--team-text-light)] dark:text-[var(--team-text-dark)]">
-                            The preview uses the same contrast logic as the live app.
-                          </p>
-                          <div className="flex gap-2">
-                            <span className={`border px-2.5 py-1 text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
-                              Preview
-                            </span>
-                            <span className={`border px-2.5 py-1 text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
-                              Ready
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={handleApplyCustomColors}
-                      disabled={!customColorsValid}
-                      className="bg-[var(--team-primary)] px-4 py-2 text-sm font-medium text-[var(--team-on-primary)] transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Apply Custom Palette
-                    </button>
-                    <button type="button" onClick={handleResetColors} className={secondaryButtonClass}>
-                      Reset to Defaults
-                    </button>
-                  </div>
-                </section>
+            <CollapsibleSection title="Theme Source" isDark={isDark} outerClass={sectionClass}>
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                Choose whether accent colors follow the active dynasty or the default app palette.
+              </p>
+              <div className="mt-3 space-y-3">
+                <ThemeModeButton
+                  label="Team Mode"
+                  value="team"
+                  description="Use the active dynasty's team colors in dynasty views while the shell keeps its shared structure."
+                  active={preference.colorMode === 'team'}
+                  isDark={isDark}
+                  onSelect={setColorMode}
+                />
+                <ThemeModeButton
+                  label="Default Mode"
+                  value="default"
+                  description="Keep the app on the built-in brand palette for a steady, neutral presentation."
+                  active={preference.colorMode === 'default'}
+                  isDark={isDark}
+                  onSelect={setColorMode}
+                />
+              </div>
+            </CollapsibleSection>
           </div>
 
           <div className="space-y-4">
             <p className={`type-eyebrow ${subtleTextClass}`}>Recruiting</p>
-            <section className={sectionClass}>
-              <label className="flex cursor-pointer items-start justify-between gap-4">
-                <span>
-                  <span className={`text-sm font-semibold ${strongTextClass}`}>Reveal all recruit ratings</span>
-                  <span className={`mt-1 block text-xs leading-5 ${subtleTextClass}`}>
-                    A prospect&apos;s overall and athletic ratings start hidden across the Recruits pages — recruit the way
-                    the game intends, on rank, stars, and film. Turn this on to reveal every recruit&apos;s ratings at once,
-                    or leave it off and reveal prospects one at a time from their profile.
-                  </span>
-                </span>
+
+            <CollapsibleSection
+              title="Reveal all recruit ratings"
+              isDark={isDark}
+              outerClass={sectionClass}
+              accessory={
                 <input
+                  id="pref-reveal-all"
                   type="checkbox"
                   checked={revealAll}
                   onChange={(e) => setRevealAll(e.target.checked)}
-                  className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
+                  className="h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
                   aria-label="Reveal all recruit ratings"
                 />
+              }
+            >
+              <label htmlFor="pref-reveal-all" className={`block cursor-pointer text-xs leading-5 ${subtleTextClass}`}>
+                A prospect&apos;s overall and athletic ratings start hidden across the Recruits pages — recruit the way
+                the game intends, on rank, stars, and film. Turn this on to reveal every recruit&apos;s ratings at once,
+                or leave it off and reveal prospects one at a time from their profile.
               </label>
-            </section>
-            <section className={`rounded-xl border p-4 ${isDark ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-amber-400/50 bg-amber-50/70'}`}>
-              <label className="flex cursor-pointer items-start justify-between gap-4">
-                <span>
-                  <span className={`text-sm font-semibold ${strongTextClass}`}>Experimental save editing</span>
-                  <span className={`mt-1 block text-xs leading-5 ${subtleTextClass}`}>
-                    Unlocks tools that write directly to your dynasty save — currently <strong>Force Commit</strong>. Every
-                    write backs up your save first and is verified before it&apos;s kept, but this is experimental. Off by
-                    default; turning it off hides these tools without affecting the rest of the Recruit Hub.
-                  </span>
-                </span>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Experimental save editing"
+              isDark={isDark}
+              outerClass={amberSectionClass}
+              accessory={
                 <input
+                  id="pref-experimental-editing"
                   type="checkbox"
                   checked={experimentalSaveEditing}
                   onChange={(e) => setExperimentalSaveEditing(e.target.checked)}
-                  className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-amber-500"
+                  className="h-5 w-5 shrink-0 cursor-pointer accent-amber-500"
                   aria-label="Enable experimental save editing"
                 />
+              }
+            >
+              <label
+                htmlFor="pref-experimental-editing"
+                className={`block cursor-pointer text-xs leading-5 ${subtleTextClass}`}
+              >
+                Unlocks tools that write directly to your dynasty save — currently <strong>Force Commit</strong>. Every
+                write backs up your save first and is verified before it&apos;s kept, but this is experimental. Off by
+                default; turning it off hides these tools without affecting the rest of the Recruit Hub.
               </label>
-            </section>
+            </CollapsibleSection>
           </div>
         </div>
       </CenteredModalPanel>

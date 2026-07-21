@@ -118,8 +118,17 @@
   }
 
   .dark body {
-    background-color: #0d0f12;
-    background-image: linear-gradient(180deg, #15181c 0%, #0d0f12 55%, #08090b 100%);
+    /* Near-black system base (was charcoal). A single, restrained accent glow
+       bleeds up from the bottom-right corner, tinted with the active theme's
+       primary (team color in Team Mode) — subtle, never overpowering. */
+    background-color: #0a0a0a;
+    background-image:
+      radial-gradient(
+        120% 130% at 100% 100%,
+        color-mix(in srgb, var(--team-primary) 14%, transparent) 0%,
+        transparent 52%
+      ),
+      linear-gradient(180deg, #0c0d10 0%, #0a0a0a 60%);
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;

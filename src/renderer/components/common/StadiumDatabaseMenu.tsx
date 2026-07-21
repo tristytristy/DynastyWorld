@@ -4,6 +4,7 @@ import { useStadiumData } from '../../data/StadiumDataProvider';
 import { DEFAULT_TEAM_STADIUMS } from '../../lib/stadiumData';
 import { canonicalKey } from '../../lib/assetMapping';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import { useConfirm } from '../../data/ConfirmDialogProvider';
 
 interface TeamEntry {
   key: string;
@@ -31,6 +32,7 @@ export function StadiumDatabaseMenu({ triggerClassName }: { triggerClassName?: s
   const isDark = appearance === 'dark';
   const { overrides, getStadium, getDefaultStadium, isOverridden, setOverride, resetOverride, resetAllOverrides } =
     useStadiumData();
+  const confirm = useConfirm();
 
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -116,8 +118,15 @@ export function StadiumDatabaseMenu({ triggerClassName }: { triggerClassName?: s
     resetOverride(draftTeam);
   }
 
-  function handleResetAll() {
-    if (window.confirm('Reset every stadium correction back to the built-in defaults? This cannot be undone.')) {
+  async function handleResetAll() {
+    const confirmed = await confirm({
+      eyebrow: 'Reset stadiums',
+      title: 'Reset every correction?',
+      message: 'Every stadium correction returns to the built-in defaults. This cannot be undone.',
+      confirmLabel: 'Reset all',
+      tone: 'danger',
+    });
+    if (confirmed) {
       resetAllOverrides();
       setSelectedKey(null);
     }

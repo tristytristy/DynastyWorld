@@ -8,10 +8,27 @@ import { Button } from '../components/ui/Button';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
+import { useConfirm } from '../data/ConfirmDialogProvider';
+
+const DELETE_MEDIA_CONFIRM = {
+  eyebrow: 'Delete media',
+  title: 'Delete this media?',
+  message: 'The file is removed from this dynasty’s library and cannot be undone.',
+  confirmLabel: 'Delete',
+  tone: 'danger' as const,
+};
 
 /** Absolute on-disk path → a URL the (file://-origin) renderer can load. */
 function fileUrl(absolutePath: string): string {
   return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
+      <path d="M4 6h12M8 6V4.5A1.5 1.5 0 0 1 9.5 3h1A1.5 1.5 0 0 1 12 4.5V6m1.5 0-.4 9a1.5 1.5 0 0 1-1.5 1.4H8.4A1.5 1.5 0 0 1 6.9 15L6.5 6M9 9v5M11 9v5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function gameLabel(game: ScheduleGame): string {
@@ -49,10 +66,20 @@ function MediaDetailsForm({
   const [playerQuery, setPlayerQuery] = useState('');
 
   const filteredRoster = useMemo(() => {
-    const q = playerQuery.trim().toLowerCase();
-    const matches = q
-      ? roster.filter((p) => playerLabel(p).toLowerCase().includes(q) || p.position.toLowerCase() === q)
-      : roster;
+    const raw = playerQuery.trim();
+    let matches: RosterPlayer[];
+    if (raw.startsWith('#')) {
+      // Jersey-number search — for when you recognize the number in the shot
+      // but not the name. Exact match on the digits after "#", so a shared
+      // number (two players can wear the same one in CFB) surfaces everyone.
+      const numQuery = raw.slice(1).trim();
+      matches = numQuery === '' ? roster : roster.filter((p) => String(p.jerseyNumber) === numQuery);
+    } else if (raw) {
+      const q = raw.toLowerCase();
+      matches = roster.filter((p) => playerLabel(p).toLowerCase().includes(q) || p.position.toLowerCase() === q);
+    } else {
+      matches = roster;
+    }
     // Tagged players float to the top so the current selection is always visible.
     return [...matches].sort((a, b) => {
       const at = playerIds.includes(a.id) ? 0 : 1;
@@ -103,8 +130,8 @@ function MediaDetailsForm({
           type="text"
           value={playerQuery}
           onChange={(e) => setPlayerQuery(e.target.value)}
-          placeholder="Search roster..."
-          aria-label="Search players to tag"
+          placeholder="Search roster, or #number..."
+          aria-label="Search players to tag — start with # to search by jersey number"
           className={`${inputClass} mt-1.5`}
         />
         <div className="mt-1.5 max-h-48 overflow-y-auto border border-slate-200/80 dark:border-slate-800">
@@ -123,7 +150,12 @@ function MediaDetailsForm({
                     : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
                 }`}
               >
-                <span className="min-w-0 flex-1 truncate">{playerLabel(player)}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  <span className={`tnum mr-1.5 ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+                    #{player.jerseyNumber}
+                  </span>
+                  {playerLabel(player)}
+                </span>
                 <span className={`shrink-0 text-xs ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
                   {player.position} {player.overallRating}
                 </span>
@@ -172,6 +204,7 @@ function MediaLightbox({
 }) {
   const { openPlayerModal } = usePlayerModal();
   const { openGameModal } = useGameModal();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   const item = items[index];
 
@@ -356,10 +389,8 @@ function MediaLightbox({
                   </Button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (window.confirm('Delete this media? The file is removed from the library and cannot be undone.')) {
-                        onDeleted(item);
-                      }
+                    onClick={async () => {
+                      if (await confirm(DELETE_MEDIA_CONFIRM)) onDeleted(item);
                     }}
                     className="border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-red-400 dark:hover:bg-red-950/60"
                   >
@@ -377,6 +408,7 @@ function MediaLightbox({
 
 export function Media() {
   const { id } = useParams<{ id: string }>();
+  const confirm = useConfirm();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const [items, setItems] = useState<MediaItemWithPath[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
@@ -464,11 +496,8 @@ export function Media() {
             const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
             const caption = game ? gameLabel(game) : item.description || 'Add details';
             return (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                onClick={() => setLightboxIndex(index)}
-                aria-label={`Open media: ${caption}`}
                 className="group relative aspect-video overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
               >
                 {item.mediaType === 'video' ? (
@@ -487,15 +516,34 @@ export function Media() {
                     draggable={false}
                   />
                 )}
-                <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6">
+                {/* Full-tile click target opens the lightbox. Sits above the media
+                    but below the bottom bar's interactive controls (the trash). */}
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(index)}
+                  aria-label={`Open media: ${caption}`}
+                  className="absolute inset-0 z-10"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (await confirm(DELETE_MEDIA_CONFIRM)) handleDeleted(item);
+                    }}
+                    aria-label={`Delete media: ${caption}`}
+                    title="Delete"
+                    className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
+                  >
+                    <TrashIcon />
+                  </button>
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
                   {item.playerIds.length > 0 && (
                     <span className="tnum shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
                       {item.playerIds.length} tagged
                     </span>
                   )}
-                </span>
-              </button>
+                </div>
+              </div>
             );
           })}
         </div>

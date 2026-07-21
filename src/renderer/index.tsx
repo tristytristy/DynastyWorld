@@ -9,6 +9,7 @@ import { EditorModalProvider } from './data/EditorModalProvider';
 import { RecruitModalProvider } from './data/RecruitModalProvider';
 import { GameModalProvider } from './data/GameModalProvider';
 import { RecruitingExperienceProvider } from './data/RecruitingExperienceProvider';
+import { ConfirmDialogProvider } from './data/ConfirmDialogProvider';
 import { applyDesignTokens } from '../design/applyTokens';
 import './styles/globals.css';
 
@@ -26,7 +27,8 @@ createRoot(container).render(
     <ThemeProvider>
       <RecruitingExperienceProvider>
        <StadiumDataProvider>
-        <PlayerModalProvider>
+        <ConfirmDialogProvider>
+         <PlayerModalProvider>
           <EditorModalProvider>
             <RecruitModalProvider>
               <GameModalProvider>
@@ -36,7 +38,8 @@ createRoot(container).render(
               </GameModalProvider>
             </RecruitModalProvider>
           </EditorModalProvider>
-        </PlayerModalProvider>
+         </PlayerModalProvider>
+        </ConfirmDialogProvider>
        </StadiumDataProvider>
       </RecruitingExperienceProvider>
     </ThemeProvider>

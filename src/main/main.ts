@@ -129,6 +129,7 @@ function createWindow(): BrowserWindow {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -227,51 +228,6 @@ function sendSplashProgress(splash: BrowserWindow, payload: SplashProgressPayloa
   if (!splash.isDestroyed()) {
     splash.webContents.send('splash:progress', payload);
   }
-}
-
-function buildMenu(): Menu {
-  return Menu.buildFromTemplate([
-    {
-      label: 'File',
-      submenu: [{ role: 'quit' }],
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
-    },
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'About College Football 27 Dynasty Hub',
-          click: () => {
-            const options = {
-              type: 'info' as const,
-              title: 'About',
-              message: 'College Football 27 Dynasty Hub',
-              detail: `Version ${app.getVersion()}`,
-            };
-            const parent = BrowserWindow.getFocusedWindow();
-            if (parent) {
-              dialog.showMessageBox(parent, options);
-            } else {
-              dialog.showMessageBox(options);
-            }
-          },
-        },
-      ],
-    },
-  ]);
 }
 
 /**
@@ -394,7 +350,9 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
-      Menu.setApplicationMenu(buildMenu());
+      // No application menu — the app is a self-contained hub with its own
+      // in-window chrome, so the native File/View/Help bar is removed entirely.
+      Menu.setApplicationMenu(null);
 
       const win = createWindow();
       showWhenReady(win, () => {
@@ -505,7 +463,9 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
-      Menu.setApplicationMenu(buildMenu());
+      // No application menu — the app is a self-contained hub with its own
+      // in-window chrome, so the native File/View/Help bar is removed entirely.
+      Menu.setApplicationMenu(null);
 
       sendSplashProgress(splash, { percent: 85, status: 'Opening hub...' });
       const win = createWindow();

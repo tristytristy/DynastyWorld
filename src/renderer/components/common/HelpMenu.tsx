@@ -193,7 +193,13 @@ const HELP_TOPICS: HelpTopic[] = [
           Click any thumbnail to open the viewer, then <strong>Edit details</strong> to pick which game it&apos;s from,
           tag the players in it, and write a description. Tagged players link straight to their player bios, and a
           linked game jumps to that game&apos;s page. Use the arrow keys (or the on-screen arrows) to move through the
-          gallery.
+          gallery. To delete a shot without opening it, use the small <strong>trash button</strong> on the
+          bottom-left of its thumbnail.
+        </p>
+        <p>
+          When tagging players, if you don&apos;t know a name, search by jersey number instead: start your search
+          with <strong>#</strong> (e.g. <em>#17</em>) and the roster filters to whoever wears that number — handy when
+          you recognize the number in the picture but not the face.
         </p>
         <p>
           Tags do double duty: anything you tag automatically shows up on the <strong>Media tab of each tagged

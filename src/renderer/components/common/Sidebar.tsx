@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { TeamLogo } from './TeamLogo';
-import { useTheme } from '../../theme/ThemeProvider';
 import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
@@ -42,8 +41,6 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 export function Sidebar() {
   const location = useLocation();
-  const { appearance, toggleAppearance } = useTheme();
-  const isDark = appearance === 'dark';
   const [dynasties, setDynasties] = useState<DynastySummary[]>([]);
   const [expanded, setExpanded] = useState(true);
 
@@ -63,7 +60,7 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-[290px] shrink-0 overflow-y-auto lg:block">
-      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-[#15181c]">
+      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-[#0e0f12]">
         <div className="space-y-1">
           <div className="flex items-center gap-1">
             <NavLink to="/" end className={({ isActive }) => `flex-1 ${navClass(isActive)}`}>
@@ -104,6 +101,19 @@ export function Sidebar() {
           )}
         </div>
 
+        {/* Tools — workspace utilities, kept directly under the dynasty menu so
+            they're always reachable without scrolling a long page to the bottom.
+            Recruiting/immersion + theme settings live inside Preferences (single
+            settings hub), so the sidebar itself no longer carries a theme toggle. */}
+        <div className="mt-6 border-t border-slate-200/70 pt-4 dark:border-white/10">
+          <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
+          <div className="space-y-2">
+            <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+          </div>
+        </div>
+
         {UPCOMING_LINKS.length > 0 && (
           <div className="mt-6 border border-slate-200/80 bg-slate-50/85 p-4 dark:border-white/5 dark:bg-white/5">
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">
@@ -125,29 +135,6 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Utility controls, docked at the bottom (mt-auto), grouped by intent
-            (Phase 2): Experience = how the app plays; Tools = workspace utilities. */}
-        <div className="mt-auto space-y-4 border-t border-slate-200/70 pt-4 dark:border-white/10">
-          <button
-            type="button"
-            onClick={toggleAppearance}
-            className={UTILITY_TRIGGER_CLASS}
-            aria-label="Toggle dark mode"
-          >
-            {isDark ? 'Light mode' : 'Dark mode'}
-          </button>
-
-          {/* Tools — workspace utilities. Recruiting/immersion settings now live
-              inside Preferences (Phase 5 grouping), so there's a single settings hub. */}
-          <div>
-            <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
-            <div className="space-y-2">
-              <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-              <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-              <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            </div>
-          </div>
-        </div>
       </nav>
     </aside>
   );

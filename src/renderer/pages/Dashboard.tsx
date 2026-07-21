@@ -8,6 +8,7 @@ import { buildTeamColorVars } from '../lib/teamTheme';
 import { angledClip } from '../components/ui/angledClip';
 import { EXTRACTION_STEPS } from '../../shared/types';
 import type { DynastySummary, ExtractionStep, ExtractionStepStatus } from '../../shared/types';
+import { useConfirm } from '../data/ConfirmDialogProvider';
 
 const ANGLED_PANEL = angledClip('1.1rem');
 
@@ -86,6 +87,7 @@ const CARD_ICON_BUTTON_CLASS =
   'inline-flex h-9 w-9 shrink-0 items-center justify-center border border-slate-300/80 bg-white/90 text-slate-600 shadow-[0_12px_30px_-14px_rgba(15,23,42,0.5)] backdrop-blur-md transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-300 dark:hover:bg-white/10';
 
 export function Dashboard() {
+  const confirm = useConfirm();
   const [dynasties, setDynasties] = useState<DynastySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -119,9 +121,14 @@ export function Dashboard() {
   async function handleDelete(event: MouseEvent, dynastyId: string) {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.confirm('Delete this dynasty? This removes all imported data and cannot be undone.')) {
-      return;
-    }
+    const confirmed = await confirm({
+      eyebrow: 'Delete dynasty',
+      title: 'Delete this dynasty?',
+      message: 'This removes all imported data for this dynasty and cannot be undone.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     setDeletingId(dynastyId);
     await window.api.db.deleteDynasty(dynastyId);
     setDynasties((prev) => prev.filter((d) => d.id !== dynastyId));
@@ -203,9 +210,12 @@ export function Dashboard() {
     // tracked exact path); it only does real work when the path is new.
     const candidate = await window.api.db.checkDynastyMatch(filePath);
     if (candidate) {
-      const shouldLink = window.confirm(
-        `This looks like the same dynasty as "${candidate.label}" (currently season ${candidate.currentSeasonYear}), just from a different file. Link this file to that dynasty as season ${candidate.newSeasonYear} instead of creating a new one?`,
-      );
+      const shouldLink = await confirm({
+        eyebrow: 'Link dynasty',
+        title: `Link to "${candidate.label}"?`,
+        message: `This looks like the same dynasty as "${candidate.label}" (currently season ${candidate.currentSeasonYear}), just from a different file. Link this file to that dynasty as season ${candidate.newSeasonYear} instead of creating a new one?`,
+        confirmLabel: 'Link file',
+      });
       if (shouldLink) {
         try {
           const result = await window.api.db.relinkDynasty(candidate.dynastyId, filePath);
