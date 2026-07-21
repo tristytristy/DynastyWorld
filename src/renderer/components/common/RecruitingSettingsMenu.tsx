@@ -27,9 +27,6 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const panelShellClass = isDark
-    ? 'border border-slate-800/90 bg-slate-950/96 shadow-[0_44px_120px_-44px_rgba(2,6,23,0.9)] backdrop-blur-2xl'
-    : 'border border-white/72 bg-white/90 shadow-[0_40px_120px_-44px_rgba(15,23,42,0.45)] backdrop-blur-2xl';
   const strong = isDark ? 'text-white' : 'text-slate-900';
   const subtle = isDark ? 'text-slate-400' : 'text-slate-500';
 
@@ -46,26 +43,9 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
         Recruiting
       </button>
 
-      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={26} isDark={isDark}>
-        <div className={`relative overflow-hidden p-5 ${panelShellClass}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className={`type-eyebrow ${subtle}`}>Experience · Recruiting</p>
-              <h2 className={`mt-2 text-xl font-semibold tracking-tight ${strong}`}>How you scout.</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className={isDark
-                ? 'border border-slate-700/85 bg-slate-950/94 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-300 transition hover:bg-slate-900 hover:text-white'
-                : 'border border-slate-300/85 bg-white/92 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800'}
-              aria-label="Close recruiting settings"
-            >
-              Close
-            </button>
-          </div>
-
-          <section className={`mt-5 rounded-xl border p-4 ${isDark ? 'border-slate-800/80 bg-slate-950/84' : 'border-slate-200/90 bg-white/72'}`}>
+      <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={26} eyebrow="Experience · Recruiting" title="How you scout.">
+        <div className="space-y-4">
+          <section className={`rounded-xl border p-4 ${isDark ? 'border-slate-800/80 bg-slate-950/84' : 'border-slate-200/90 bg-white/72'}`}>
             <label className="flex cursor-pointer items-start justify-between gap-4">
               <span>
                 <span className={`text-sm font-semibold ${strong}`}>Reveal all recruit ratings</span>
@@ -86,7 +66,7 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
             </label>
           </section>
 
-          <section className={`mt-4 rounded-xl border p-4 ${isDark ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-amber-400/50 bg-amber-50/70'}`}>
+          <section className={`rounded-xl border p-4 ${isDark ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-amber-400/50 bg-amber-50/70'}`}>
             <label className="flex cursor-pointer items-start justify-between gap-4">
               <span>
                 <span className={`text-sm font-semibold ${strong}`}>Experimental save editing</span>
@@ -109,6 +89,7 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
           </section>
         </div>
       </CenteredModalPanel>
+      {/* end recruiting settings modal */}
     </div>
   );
 }

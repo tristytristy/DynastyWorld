@@ -186,15 +186,6 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
   const previewStyle = previewVars as unknown as CSSProperties;
   const currentStyle = currentVars as unknown as CSSProperties;
 
-  const panelUnderlayClass = isDark
-    ? 'bg-slate-950/78 shadow-[0_42px_120px_-44px_rgba(2,6,23,0.88)] backdrop-blur-[52px] backdrop-saturate-[1.55] backdrop-brightness-[0.28]'
-    : 'bg-white/18 shadow-[0_42px_120px_-44px_rgba(15,23,42,0.72)] backdrop-blur-[44px] backdrop-saturate-[1.8] backdrop-brightness-[0.68]';
-  const panelGradientClass = isDark
-    ? 'border border-slate-700/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.92)_0%,rgba(15,23,42,0.78)_18%,rgba(2,6,23,0.96)_100%)]'
-    : 'border border-white/38 bg-[linear-gradient(180deg,rgba(255,255,255,0.52)_0%,rgba(255,255,255,0.22)_16%,rgba(248,250,252,0.9)_100%)]';
-  const panelShellClass = isDark
-    ? 'border border-slate-800/90 bg-slate-950/96 shadow-[0_44px_120px_-44px_rgba(2,6,23,0.9)] backdrop-blur-2xl'
-    : 'border border-white/72 bg-white/80 shadow-[0_40px_120px_-44px_rgba(15,23,42,0.45)] backdrop-blur-2xl';
   const sectionClass = isDark
     ? 'rounded-xl border border-slate-800/80 bg-slate-950/84 p-4'
     : 'rounded-xl border border-slate-200/90 bg-white/72 p-4';
@@ -212,9 +203,6 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
   const secondaryButtonClass = isDark
     ? 'border border-slate-700/85 bg-slate-950/92 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-900'
     : 'border border-slate-300/80 bg-white/92 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100';
-  const closeButtonClass = isDark
-    ? 'border border-slate-700/85 bg-slate-950/94 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-300 transition hover:bg-slate-900 hover:text-white'
-    : 'border border-slate-300/85 bg-white/92 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800';
 
   function handleApplyCustomColors() {
     if (!customColorsValid) {
@@ -247,37 +235,11 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
         Preferences
       </button>
 
-      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} isDark={isDark}>
-        <div className="relative isolate">
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
-            <div
-              aria-hidden="true"
-              className={`pointer-events-none absolute inset-[1px] ${panelGradientClass}`}
-            />
-            <div className={`relative overflow-hidden p-5 ${panelShellClass}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className={`type-eyebrow ${subtleTextClass}`}>
-                    Experience Settings
-                  </p>
-                  <h2 className={`mt-2 text-xl font-semibold tracking-tight ${strongTextClass}`}>
-                    Customize your workspace.
-                  </h2>
-                  <p className={`mt-2 text-sm leading-6 ${subtleTextClass}`}>
-                    Adjust appearance, choose how accent colors are sourced, and set a custom palette that matches how you want to work.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className={closeButtonClass}
-                  aria-label="Close preferences"
-                >
-                  Close
-                </button>
-              </div>
-
-              <div className="mt-5 space-y-4">
+      <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} eyebrow="Experience Settings" title="Customize your workspace.">
+        <p className={`text-sm leading-6 ${subtleTextClass}`}>
+          Adjust appearance, choose how accent colors are sourced, and set a custom palette that matches how you want to work.
+        </p>
+        <div className="mt-4 space-y-4">
                 <section className={sectionClass}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -425,8 +387,6 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
                   </div>
                 </section>
               </div>
-            </div>
-          </div>
       </CenteredModalPanel>
     </div>
   );
