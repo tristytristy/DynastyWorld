@@ -308,7 +308,7 @@ function RecruitPanel({
             Force Commit to User Team
           </button>
           <p className="mt-1.5 text-[11px] text-amber-700/70 dark:text-amber-300/60">
-            Experimental — hard-commits him to your team (backed up + verified first).
+            Experimental — signs him + enrolls him in your class (backed up + verified first).
           </p>
         </div>
       )}
@@ -1030,10 +1030,11 @@ function ForceCommitModal({
                 to commit to <span className="font-semibold text-slate-900 dark:text-white">{userTeamName}</span>?
               </p>
               <div className="border border-amber-400/50 bg-amber-50/70 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-200">
-                This puts the recruit into the same <strong>hard-commit</strong> state the game gives a natural commit —
-                scholarship offered, NIL met, and your school the clear leader — then lets the game sign &amp; roster him at
-                Signing Day. Your save is backed up first and the write is verified on reopen; if it doesn&apos;t verify, the
-                backup is restored automatically. Sim through Signing Day to confirm he sticks.
+                Two writes: (1) marks him <strong>Signed</strong> to your school (scholarship offered, NIL met, you the
+                clear leader) so he reads as signed in-game, and (2) adds him to your team&apos;s incoming-class list
+                (<strong>CommittedPlayers</strong>) — the list the game actually rosters from next season. Your save is
+                backed up first and the write is verified on reopen; if it doesn&apos;t verify, the backup is restored
+                automatically. Sim to next season and check your roster to confirm he sticks.
               </div>
             </>
           )}

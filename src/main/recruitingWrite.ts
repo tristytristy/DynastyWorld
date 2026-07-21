@@ -200,14 +200,96 @@ function setTopSchoolsUserLeader(
   }
 }
 
-/** Reopens the just-saved file and confirms the commit actually persisted on disk. */
-async function validateForceCommit(savePath: string, playerId: number): Promise<boolean> {
+type ArrayContainerTable = { records: FranchiseRecord[]; readRecords(): Promise<void> } | null;
+
+/** Resolves a team's CommittedPlayers array-container row (the incoming-class list), or null. */
+async function resolveCommittedPlayers(
+  franchise: OpenFranchise,
+  userTeamIndex: number,
+): Promise<FranchiseRecord | null> {
+  const teamTable = getLargestTable(franchise, 'Team');
+  await teamTable.readRecords();
+  const team = nonEmpty(teamTable.records).find((r) => Number(r.TeamIndex) === userTeamIndex);
+  if (!team) return null;
+  const rd = team.getReferenceDataByKey('CommittedPlayers');
+  if (!rd || !rd.tableId) return null;
+  const contTable = franchise.getTableById(rd.tableId) as unknown as ArrayContainerTable;
+  if (!contTable) return null;
+  await contTable.readRecords();
+  return contTable.records[rd.rowNumber] ?? null;
+}
+
+/** True if the player (by PresentationId) is already in the team's CommittedPlayers list. */
+function committedPlayersHas(franchise: OpenFranchise, cont: FranchiseRecord, playerId: number): boolean {
+  for (const k of Object.keys(cont.fields)) {
+    const slot = cont.getReferenceDataByKey(k);
+    if (!slot || !slot.tableId) continue;
+    const t = franchise.getTableById(slot.tableId) as unknown as { records: FranchiseRecord[] } | null;
+    const p = t?.records?.[slot.rowNumber];
+    if (p && !p.isEmpty && Number(p.PresentationId) === playerId) return true;
+  }
+  return false;
+}
+
+/**
+ * Adds the player to the user team's CommittedPlayers list — the array the game
+ * actually enrolls the incoming class from at the offseason rollover. Verified
+ * (APPSTATEFORCETRANSFER): natural signs are in it; a force-sign that was NOT in
+ * it got dropped. This is a reference-write into an existing empty array slot
+ * (the safe edit class — same as the top-school swap — NOT record creation like
+ * board-add). Returns why it couldn't add so the caller can warn.
+ */
+async function addToCommittedPlayers(
+  franchise: OpenFranchise,
+  userTeamIndex: number,
+  playerId: number,
+  changes: ForceCommitFieldChange[],
+): Promise<{ added: boolean; already?: boolean; reason?: string }> {
+  const playerTable = getLargestTable(franchise, 'Player');
+  await playerTable.readRecords();
+  const rowIndex = playerTable.records.findIndex((r) => !r.isEmpty && Number(r.PresentationId) === playerId);
+  if (rowIndex < 0) return { added: false, reason: 'player row not found in the Player table' };
+  const rec = playerTable.records[rowIndex];
+  const playerName = `${String(rec.FirstName)} ${String(rec.LastName)}`;
+
+  const cont = await resolveCommittedPlayers(franchise, userTeamIndex);
+  if (!cont) return { added: false, reason: 'team has no readable CommittedPlayers list' };
+
+  if (committedPlayersHas(franchise, cont, playerId)) return { added: true, already: true };
+
+  // First empty slot (all-zero reference); no slot => the class list is full.
+  const emptyKey = Object.keys(cont.fields).find((k) => /^0+$/.test(String(cont[k])));
+  if (!emptyKey) return { added: false, reason: 'the incoming class list is full (no free slot)' };
+
+  // getBinaryReferenceToRecord exists at runtime (used to build the 32-bit array-slot
+  // reference) but isn't in the lib's TS types, so reach it through a cast.
+  const refBuilder = playerTable as unknown as { getBinaryReferenceToRecord(index: number): string };
+  cont[emptyKey] = refBuilder.getBinaryReferenceToRecord(rowIndex);
+  changes.push({ field: 'Team.CommittedPlayers', before: '(not enrolled)', after: `${playerName} enrolled` });
+  return { added: true };
+}
+
+/**
+ * Reopens the just-saved file and confirms the write persisted: recruit Signed,
+ * still on the board, and (when enrollment was possible) present in the team's
+ * CommittedPlayers list. `expectEnrolled` is false when the class list was full
+ * so we don't roll back the look-signed edits over an enrollment we couldn't do.
+ */
+async function validateForceCommit(
+  savePath: string,
+  playerId: number,
+  userTeamIndex: number,
+  expectEnrolled: boolean,
+): Promise<boolean> {
   const franchise = await openFranchiseFile(savePath);
   await preloadAllInstances(franchise, 'Player');
   const recruit = await findRecruitByPlayerId(franchise, playerId);
-  if (!recruit || String(recruit.RecruitStage) !== 'HardCommitted') return false;
+  if (!recruit || String(recruit.RecruitStage) !== 'Signed') return false;
   const board = await findBoardEntryForRecruit(franchise, playerId);
-  return !!board;
+  if (!board) return false;
+  if (!expectEnrolled) return true;
+  const cont = await resolveCommittedPlayers(franchise, userTeamIndex);
+  return !!cont && committedPlayersHas(franchise, cont, playerId);
 }
 
 export async function forceCommitRecruit(dynastyId: string, playerId: number): Promise<ForceCommitResult> {
@@ -255,41 +337,31 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
       changes.push({ field, before, after: String(rec[field]) });
     };
 
-    // Replicate the NATURAL hard-commit state, verified on a real mid-season save
-    // (APPMASTERMID): a recruit the game has hard-committed is RecruitStage=
-    // HardCommitted with the board entry still ScholarshipStatus=Offered and
-    // CommittedWeekNumber=0 — NOT Signed/Committed. The game promotes hard-commits
-    // to Signed and rosters them at Signing Day. Forcing Signed/Committed mid-cycle
-    // (as the first version did) put the recruit in a state no natural recruit has,
-    // which is why it never rostered. So here we only: ensure a scholarship is
-    // offered, meet the NIL, mark the recruit HardCommitted with a strong commit
-    // score, and make the user's team the clear leader — then the game's own
-    // Signing Day processing signs and rosters him like any other hard-commit.
-
-    // Match the natural commit state EXACTLY. Verified at portal/signing week
-    // (APPMASTERPORTALW1): every naturally-signed board recruit keeps
-    // ScholarshipStatus=Offered and CommittedWeekNumber=0 — the ONLY fields that
-    // differed on the stuck force-sign (Tim Addington) were Committed + week 10.
-    // So force those two back to the natural values (this also repairs a recruit
-    // stuck in the old state on a re-force).
+    // ---- 1) Make it LOOK signed (recruiting UI) ----
+    // Natural-signed board recruits keep ScholarshipStatus=Offered and
+    // CommittedWeekNumber=0 (verified at signing week — the only fields that
+    // differed on the stuck force-sign were Committed + week 10). Force those to
+    // the natural values (also repairs a recruit stuck in the old state), meet
+    // NIL, mark the recruit Signed with a strong commit score, and make the
+    // user's team the sole influence leader.
     set(board, 'ScholarshipStatus', 'Offered');
     set(board, 'CommittedWeekNumber', 0);
-    // Meet the recruit's NIL so affordability isn't the blocker.
     const nilExpectation = Number(board.NILExpectation);
     set(board, 'CurrentNILOffer', Math.max(0, Math.min(1023, Math.max(Number(board.CurrentNILOffer), nilExpectation))));
-
-    // Recruit row: hard-commit with a strong commit score (kept within the
-    // natural range). The game promotes HardCommitted -> Signed at Signing Day,
-    // so a recruit forced during the season lands in the natural signed state.
-    set(recruit, 'RecruitStage', 'HardCommitted');
+    set(recruit, 'RecruitStage', 'Signed');
     set(recruit, 'CommitScore', Math.max(Number(recruit.CommitScore), 400));
-
-    // Top schools: make the user's team the clear, sole influence leader.
     setTopSchoolsUserLeader(franchise, recruit, userTeamIndex, changes);
+
+    // ---- 2) Make it ACTUALLY roster (the real mechanism) ----
+    // The game enrolls the incoming class from Team.CommittedPlayers at the
+    // offseason rollover; a force-sign that never lands in that list gets dropped
+    // (verified — natural signs were in it, the force-sign wasn't). Add him — a
+    // safe reference-write into an existing empty array slot, not record creation.
+    const enroll = await addToCommittedPlayers(franchise, userTeamIndex, playerId, changes);
 
     await franchise.save(dynasty.savePath, {});
 
-    const validated = await validateForceCommit(dynasty.savePath, playerId);
+    const validated = await validateForceCommit(dynasty.savePath, playerId, userTeamIndex, enroll.added);
     if (!validated) {
       // Roll back to the untouched pre-edit backup — never leave a half-applied write.
       fs.copyFileSync(backup.filePath, dynasty.savePath);
@@ -305,9 +377,14 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
     const extraction = await extractAll(dynasty.savePath);
     persistExtraction(dynasty.savePath, extraction);
 
+    const enrollNote = enroll.added
+      ? enroll.already
+        ? 'He was already in your incoming class.'
+        : 'Enrolled in your incoming class — this is the part that actually rosters him.'
+      : `WARNING: could not enroll him (${enroll.reason}) — he'll read as signed but may not roster.`;
     return {
       success: true,
-      message: `Hard-committed to ${destinationTeamName}. Sim through Signing Day — the game should sign & roster him like any natural hard-commit.`,
+      message: `Signed to ${destinationTeamName}. ${enrollNote} Sim to next season and check the roster.`,
       destinationTeamName,
       changedFields: changes,
       validated: true,
