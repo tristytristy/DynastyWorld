@@ -430,6 +430,10 @@ export interface Coach {
   seasonsWithTeam: number;
   /** JobSecurityStatus enum: "Safe" | "SafeForNow" | "Low" | "HotSeat" | "Invalid". */
   currentJobSecurityStatus: string;
+  /** Contract terms off the Coach record (same fields the coach editor writes). */
+  contractSalary: number;
+  contractLength: number;
+  contractYearsRemaining: number;
   /** Personality enum, e.g. "Leader", "Intense", "Unpredictable". */
   personality: string;
   /** Save-native lifetime coaching record — see CareerCoachStats. Null when the save doesn't resolve a career record for this coach. */

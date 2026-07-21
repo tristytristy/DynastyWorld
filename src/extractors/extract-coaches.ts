@@ -74,6 +74,10 @@ export interface CoachData {
   seasonsWithTeam: number;
   /** JobSecurityStatus enum: "Safe" | "SafeForNow" | "Low" | "HotSeat" | "Invalid". */
   currentJobSecurityStatus: string;
+  /** Contract terms straight off the Coach record (same fields the coach editor writes). */
+  contractSalary: number;
+  contractLength: number;
+  contractYearsRemaining: number;
   /** Personality enum, e.g. "Leader", "Intense", "Unpredictable". */
   personality: string;
   /**
@@ -98,6 +102,9 @@ const FIELDS = [
   'DominantArchetype',
   'SeasonsWithTeam',
   'CurrentJobSecurityStatus',
+  'ContractSalary',
+  'ContractLength',
+  'ContractYearsRemaining',
   'Personality',
   'CareerStats',
 ];
@@ -155,6 +162,9 @@ export async function extractCoaches(franchise: OpenFranchise): Promise<CoachDat
         dominantArchetype: String(r.DominantArchetype),
         seasonsWithTeam: Number(r.SeasonsWithTeam),
         currentJobSecurityStatus: String(r.CurrentJobSecurityStatus),
+        contractSalary: Number(r.ContractSalary),
+        contractLength: Number(r.ContractLength),
+        contractYearsRemaining: Number(r.ContractYearsRemaining),
         personality: String(r.Personality),
         careerStats: careerStatsResolved ? mapCareerCoachStats(careerStatsResolved.record) : null,
       };

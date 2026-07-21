@@ -12,11 +12,8 @@ import type {
   Coach,
   CoachOverview,
   ProgramHistoryOverview,
-  RosterPlayer,
   ScheduleOverview,
   SeasonOverview,
-  TeamAwardDefinitionSummary,
-  TeamAwardResult,
 } from '../../shared/types';
 
 const nationalChampionshipTrophyPath = getTrophyImagePath({
@@ -78,68 +75,13 @@ function buildCoachResumeMap(
   return map;
 }
 
-/** Compact, self-contained summary (own fetch, matching this app's per-page-fetch convention) — how many enabled awards are decided this season, plus a quick MVP callout, with a link to the full Team Awards page for the details. */
-function TeamAwardsSummaryCard({ dynastyId, seasonId }: { dynastyId: string; seasonId?: number }) {
-  const [results, setResults] = useState<TeamAwardResult[] | undefined>(undefined);
-  const [definitions, setDefinitions] = useState<TeamAwardDefinitionSummary[] | undefined>(undefined);
-  const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (!dynastyId || seasonId === undefined) return;
-    let cancelled = false;
-    window.api.db.getTeamAwardResults(dynastyId, seasonId).then((r) => !cancelled && setResults(r));
-    window.api.db.getTeamAwardDefinitions().then((d) => !cancelled && setDefinitions(d));
-    window.api.db.getRoster(dynastyId, seasonId).then((r) => !cancelled && setRoster(r));
-    return () => {
-      cancelled = true;
-    };
-  }, [dynastyId, seasonId]);
-
-  if (results === undefined || definitions === undefined || seasonId === undefined) return null;
-
-  const enabledIds = definitions.filter((d) => d.enabled && !d.retired).map((d) => d.id);
-  const decided = results.filter(
-    (r) => enabledIds.includes(r.awardDefinitionId) && (r.status === 'confirmed' || r.status === 'finalized'),
-  );
-  const mvpResult = results.find(
-    (r) => r.awardDefinitionId === 'mvp' && (r.status === 'confirmed' || r.status === 'finalized'),
-  );
-  const mvpWinnerId = mvpResult ? mvpResult.selectedWinnerId ?? mvpResult.recommendedWinnerId : null;
-  const mvpWinner = mvpWinnerId !== null ? roster?.find((p) => p.id === mvpWinnerId) : null;
-
-  return (
-    <SurfaceCard>
-      <div className="flex items-center justify-between gap-3">
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-          Team Awards
-        </p>
-        <Link
-          to={`/dynasty/${dynastyId}/team-awards`}
-          className="text-xs font-semibold text-[var(--team-primary)] hover:underline"
-        >
-          View all &rarr;
-        </Link>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-6">
-        <div>
-          <p className="proportional-nums text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-            {decided.length}/{enabledIds.length}
-          </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">decided this season</p>
-        </div>
-        {mvpWinner ? (
-          <div>
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">MVP</p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              {mvpWinner.firstName} {mvpWinner.lastName}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400 dark:text-slate-500">MVP not yet confirmed.</p>
-        )}
-      </div>
-    </SurfaceCard>
-  );
+/** JobSecurityStatus enum → a short performance evaluation for the contract card. */
+function jobSecurityEvaluation(status: string): { label: string; tone: 'good' | 'ok' | 'warn' | 'bad' } {
+  if (status === 'Safe') return { label: 'Exceeding expectations', tone: 'good' };
+  if (status === 'SafeForNow') return { label: 'Meeting expectations', tone: 'ok' };
+  if (status === 'Low') return { label: 'At risk', tone: 'warn' };
+  if (status === 'HotSeat') return { label: 'Critical — on the hot seat', tone: 'bad' };
+  return { label: spaceCamelCase(status), tone: 'ok' };
 }
 
 export function CoachHub() {
@@ -291,6 +233,59 @@ export function CoachHub() {
 
       {userCoach && (
         <SurfaceCard>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Contract</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            {overview.teamName} — {spaceCamelCase(userCoach.position)}
+          </h3>
+          {(() => {
+            const evalResult = jobSecurityEvaluation(userCoach.currentJobSecurityStatus);
+            const toneClass =
+              evalResult.tone === 'good'
+                ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                : evalResult.tone === 'warn'
+                  ? 'border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'
+                  : evalResult.tone === 'bad'
+                    ? 'border-red-300/70 bg-red-100/70 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300'
+                    : 'border-slate-300/70 bg-slate-100/70 text-slate-700 dark:border-slate-700 dark:bg-white/5 dark:text-slate-300';
+            const yearOf =
+              userCoach.contractLength > 0
+                ? Math.min(userCoach.contractLength, Math.max(1, userCoach.contractLength - userCoach.contractYearsRemaining + 1))
+                : 0;
+            return (
+              <>
+                <div className="mt-3 inline-flex items-center gap-2">
+                  <span className={`border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${toneClass}`}>
+                    {evalResult.label}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatTile
+                    label="Contract year"
+                    value={userCoach.contractLength > 0 ? `${yearOf} of ${userCoach.contractLength}` : 'Not available'}
+                  />
+                  <StatTile
+                    label="Years remaining"
+                    value={userCoach.contractLength > 0 ? String(userCoach.contractYearsRemaining) : '—'}
+                  />
+                  <StatTile
+                    label="Contract length"
+                    value={userCoach.contractLength > 0 ? `${userCoach.contractLength} yr${userCoach.contractLength === 1 ? '' : 's'}` : '—'}
+                  />
+                  <StatTile label="Job security" value={jobSecurityLabel(userCoach.currentJobSecurityStatus)} />
+                </div>
+                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                  Contract terms are read straight from the save. AD-goal expectations and per-goal milestones aren&apos;t
+                  exposed as readable targets in the save data, so the job-security status above is the game&apos;s own
+                  standing evaluation of the coach.
+                </p>
+              </>
+            );
+          })()}
+        </SurfaceCard>
+      )}
+
+      {userCoach && (
+        <SurfaceCard>
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">
             Career Record
           </p>
@@ -325,8 +320,6 @@ export function CoachHub() {
           )}
         </SurfaceCard>
       )}
-
-      {id && <TeamAwardsSummaryCard dynastyId={id} seasonId={seasonId} />}
 
       <SurfaceCard>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">

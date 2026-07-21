@@ -28,6 +28,9 @@ function toCoach(c: CoachData, teamNameByIndex: Map<number, string>): Coach {
     dominantArchetype: c.dominantArchetype,
     seasonsWithTeam: c.seasonsWithTeam,
     currentJobSecurityStatus: c.currentJobSecurityStatus,
+    contractSalary: c.contractSalary ?? 0,
+    contractLength: c.contractLength ?? 0,
+    contractYearsRemaining: c.contractYearsRemaining ?? 0,
     personality: c.personality,
     careerStats: c.careerStats,
   };
