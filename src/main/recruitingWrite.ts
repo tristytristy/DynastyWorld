@@ -152,13 +152,6 @@ async function teamNameByIndex(franchise: OpenFranchise, teamIndex: number): Pro
   return t ? String(t.DisplayName) : `Team ${teamIndex}`;
 }
 
-async function getCurrentWeek(franchise: OpenFranchise): Promise<number> {
-  const table = getLargestTable(franchise, 'SeasonInfo');
-  await table.readRecords();
-  const info = table.records[0];
-  return info ? Number(info.CurrentWeek) : 0;
-}
-
 /** The board entry (UserRecruitTarget) for a recruit, matched by resolved Player id. Undefined if not on the user's board. */
 async function findBoardEntryForRecruit(franchise: OpenFranchise, playerId: number): Promise<FranchiseRecord | undefined> {
   const table = getLargestTable(franchise, 'UserRecruitTarget');
@@ -212,9 +205,9 @@ async function validateForceCommit(savePath: string, playerId: number): Promise<
   const franchise = await openFranchiseFile(savePath);
   await preloadAllInstances(franchise, 'Player');
   const recruit = await findRecruitByPlayerId(franchise, playerId);
-  if (!recruit || String(recruit.RecruitStage) !== 'Signed') return false;
+  if (!recruit || String(recruit.RecruitStage) !== 'HardCommitted') return false;
   const board = await findBoardEntryForRecruit(franchise, playerId);
-  return !!board && String(board.ScholarshipStatus) === 'Committed';
+  return !!board;
 }
 
 export async function forceCommitRecruit(dynastyId: string, playerId: number): Promise<ForceCommitResult> {
@@ -241,9 +234,9 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
     const recruit = await findRecruitByPlayerId(franchise, playerId);
     if (!recruit) return { success: false, code: 'NOT_FOUND', message: 'Recruit not found in the save file.' };
 
-    if (String(recruit.RecruitStage) === 'Signed') {
-      return { success: false, code: 'ALREADY_SIGNED', message: 'This recruit is already signed — nothing to force.' };
-    }
+    // No "already signed" block: re-forcing is allowed so a recruit stuck in the
+    // old Signed state (or committed elsewhere) can be moved to the natural
+    // hard-commit state for the user's team.
 
     const board = await findBoardEntryForRecruit(franchise, playerId);
     if (!board) {
@@ -262,18 +255,32 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
       changes.push({ field, before, after: String(rec[field]) });
     };
 
-    // 1) Board entry: the real committed state the roster conversion reads.
-    const week = Math.max(1, Math.min(31, (await getCurrentWeek(franchise)) || 1));
-    set(board, 'ScholarshipStatus', 'Committed');
-    set(board, 'CommittedWeekNumber', week);
+    // Replicate the NATURAL hard-commit state, verified on a real mid-season save
+    // (APPMASTERMID): a recruit the game has hard-committed is RecruitStage=
+    // HardCommitted with the board entry still ScholarshipStatus=Offered and
+    // CommittedWeekNumber=0 — NOT Signed/Committed. The game promotes hard-commits
+    // to Signed and rosters them at Signing Day. Forcing Signed/Committed mid-cycle
+    // (as the first version did) put the recruit in a state no natural recruit has,
+    // which is why it never rostered. So here we only: ensure a scholarship is
+    // offered, meet the NIL, mark the recruit HardCommitted with a strong commit
+    // score, and make the user's team the clear leader — then the game's own
+    // Signing Day processing signs and rosters him like any other hard-commit.
+
+    // Ensure a scholarship is on the table (required to sign) — but never force
+    // 'Committed', which natural hard-commits don't have until Signing Day.
+    if (!['Offered', 'Committed'].includes(String(board.ScholarshipStatus))) {
+      set(board, 'ScholarshipStatus', 'Offered');
+    }
+    // Meet the recruit's NIL so affordability isn't the blocker.
     const nilExpectation = Number(board.NILExpectation);
     set(board, 'CurrentNILOffer', Math.max(0, Math.min(1023, Math.max(Number(board.CurrentNILOffer), nilExpectation))));
 
-    // 2) Recruit row: lock the funnel to Signed with a maxed commit score.
-    set(recruit, 'RecruitStage', 'Signed');
-    set(recruit, 'CommitScore', 888);
+    // Recruit row: hard-commit with a strong commit score (kept within the
+    // natural hard-commit range, not an absurd value).
+    set(recruit, 'RecruitStage', 'HardCommitted');
+    set(recruit, 'CommitScore', Math.max(Number(recruit.CommitScore), 400));
 
-    // 3) Top schools: make the user's team the clear, sole influence leader.
+    // Top schools: make the user's team the clear, sole influence leader.
     setTopSchoolsUserLeader(franchise, recruit, userTeamIndex, changes);
 
     await franchise.save(dynasty.savePath, {});
@@ -296,7 +303,7 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
 
     return {
       success: true,
-      message: `Committed to ${destinationTeamName}. Sim a season and check the roster to confirm it holds.`,
+      message: `Hard-committed to ${destinationTeamName}. Sim through Signing Day — the game should sign & roster him like any natural hard-commit.`,
       destinationTeamName,
       changedFields: changes,
       validated: true,

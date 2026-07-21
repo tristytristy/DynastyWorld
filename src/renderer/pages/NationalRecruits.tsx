@@ -298,7 +298,7 @@ function RecruitPanel({
       {/* EXPERIMENTAL — Force Commit. Gated behind the experimental-save-editing
           flag, and only for a boarded recruit who isn't already signed (the safe
           case: editing an existing board entry, never creating one). */}
-      {canEdit && experimentalSaveEditing && recruit.onUserBoard && recruit.recruitStage !== 'Signed' && (
+      {canEdit && experimentalSaveEditing && recruit.onUserBoard && (
         <div className="border-t border-amber-400/30 pt-4">
           <button
             type="button"
@@ -308,7 +308,7 @@ function RecruitPanel({
             Force Commit to User Team
           </button>
           <p className="mt-1.5 text-[11px] text-amber-700/70 dark:text-amber-300/60">
-            Experimental — writes a real commit to your save (backed up + verified first).
+            Experimental — hard-commits him to your team (backed up + verified first).
           </p>
         </div>
       )}
@@ -609,9 +609,9 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
                       <tr
                         key={r.playerId}
                         onClick={() => setSelectedId(r.playerId)}
-                        className={`cursor-pointer border-b border-slate-200/60 transition dark:border-white/5 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)]' : 'hover:bg-slate-50/80 dark:hover:bg-white/5'}`}
+                        className={`cursor-pointer border-b border-slate-200/60 transition dark:border-white/5 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_28%,transparent)]' : 'hover:bg-slate-50/80 dark:hover:bg-white/5'}`}
                       >
-                        <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_12%,var(--surface-card,#fff))]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
+                        <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'border-l-[3px] border-l-[var(--team-primary)] bg-[color:color-mix(in_srgb,var(--team-primary)_28%,var(--surface-card,#fff))]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
                           <div className="flex items-center gap-2.5">
                             <span className="tnum w-6 shrink-0 text-right text-xs font-bold text-slate-400 dark:text-slate-500">{r.nationalRank || '—'}</span>
                             <PlayerPortrait player={r} size="sm" className="!h-8 !w-8 shrink-0" />
@@ -1030,10 +1030,10 @@ function ForceCommitModal({
                 to commit to <span className="font-semibold text-slate-900 dark:text-white">{userTeamName}</span>?
               </p>
               <div className="border border-amber-400/50 bg-amber-50/70 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-200">
-                This directly modifies your dynasty save — it writes a real committed state (scholarship + NIL met + your
-                school as the clear leader). Your save is backed up first and the write is verified on reopen; if it
-                doesn&apos;t verify, the backup is restored automatically. Whether the commit survives an in-game season is
-                still being confirmed.
+                This puts the recruit into the same <strong>hard-commit</strong> state the game gives a natural commit —
+                scholarship offered, NIL met, and your school the clear leader — then lets the game sign &amp; roster him at
+                Signing Day. Your save is backed up first and the write is verified on reopen; if it doesn&apos;t verify, the
+                backup is restored automatically. Sim through Signing Day to confirm he sticks.
               </div>
             </>
           )}
