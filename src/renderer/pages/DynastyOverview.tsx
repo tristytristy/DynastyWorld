@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { PageHeader } from '../components/ui/PageHeader';
 import { StatTile } from '../components/ui/StatTile';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { TopPlayersCard } from '../components/common/TopPlayersCard';
@@ -16,7 +15,7 @@ import {
   getPostseasonAppearanceImagePath,
   getTrophyImagePath,
 } from '../lib/trophyAssetMapping';
-import type { BowlAppearance, GameSummary, RankingsOverview, RosterPlayer, SeasonOverview, TeamTrophies, Trophy } from '../../shared/types';
+import type { BowlAppearance, GameSummary, LeagueTeamHonors, LeagueTeamRoster, RankingsOverview, RosterPlayer, SeasonOverview, TeamTrophies, Trophy } from '../../shared/types';
 
 function rankLabel(rank: number | null): string {
   return rank === null ? 'Unranked' : `#${rank}`;
@@ -109,20 +108,26 @@ function GameRow({ game }: { game: GameSummary }) {
   );
 }
 
-/** League-mode Team Hub — identity, record, and roster leaders for any team from the per-season league snapshots. Full hub features (trophies, rankings history, recent games detail) are user-team only. */
+/**
+ * League-mode Team Hub — now identical in layout to the user's own Team Hub:
+ * the full overview (record, conference record, poll ranks, recruiting-class
+ * rank, prestige, recent/upcoming games, top players, trophies), all sourced
+ * from the same per-season snapshots via getLeagueTeamOverview. The only thing
+ * still user-team-only is season-high ranking history (not tracked leaguewide).
+ */
 function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
-  const [games, setGames] = useState<import('../../shared/types').LeagueTeamGame[] | null | undefined>(undefined);
-  const [roster, setRoster] = useState<import('../../shared/types').LeagueTeamRoster | null | undefined>(undefined);
-  const [honors, setHonors] = useState<import('../../shared/types').LeagueTeamHonors | null>(null);
+  const [overview, setOverview] = useState<SeasonOverview | null | undefined>(undefined);
+  const [roster, setRoster] = useState<LeagueTeamRoster | null | undefined>(undefined);
+  const [honors, setHonors] = useState<LeagueTeamHonors | null>(null);
   const { openPlayerModal } = usePlayerModal();
   const { openTeamBudgetEditor } = useEditorModal();
 
   useEffect(() => {
     let cancelled = false;
-    setGames(undefined);
+    setOverview(undefined);
     setRoster(undefined);
     setHonors(null);
-    window.api.db.getLeagueTeamSchedule(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setGames(r));
+    window.api.db.getLeagueTeamOverview(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setOverview(r));
     window.api.db.getLeagueTeamRoster(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setRoster(r));
     window.api.db.getLeagueTeamHonors(dynastyId, teamIndex, seasonId).then((r) => !cancelled && setHonors(r));
     return () => {
@@ -130,16 +135,12 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
     };
   }, [dynastyId, teamIndex, seasonId]);
 
-  const wins = (games ?? []).filter((g) => g.result === 'W').length;
-  const losses = (games ?? []).filter((g) => g.result === 'L').length;
   const topPlayers = [...(roster?.players ?? [])].sort((a, b) => b.overallRating - a.overallRating).slice(0, 10);
   const avgOvr =
     roster && roster.players.length > 0
       ? (roster.players.reduce((s, p) => s + p.overallRating, 0) / roster.players.length).toFixed(1)
       : '—';
 
-  // The same trophies the user's own team earns — built from the leaguewide
-  // YearSummary, so any browsed program shows its national/conference titles.
   const teamTrophies: Trophy[] = [];
   if (honors?.nationalChampion) {
     teamTrophies.push({ kind: 'national-championship', label: 'National Champions', assetKey: null });
@@ -152,30 +153,87 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
     });
   }
 
+  if (overview === undefined) {
+    return <p className="text-slate-500 dark:text-slate-400">Loading Team Hub...</p>;
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Ranking history and game detail are tracked for your own team only." />
-        <BudgetButton onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })} />
-      </div>
-      <div className="flex items-center gap-4">
-        <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
-        <div className="grid flex-1 gap-3 sm:grid-cols-3">
-          <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
-          <StatTile label="Roster" value={String(roster?.players.length ?? 0)} />
-          <StatTile label="Average OVR" value={avgOvr} />
-        </div>
-      </div>
-      {teamTrophies.length > 0 && (
-        <SurfaceCard>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Trophy case</p>
-          <div className="mt-3 flex flex-wrap gap-6">
-            {teamTrophies.map((trophy) => (
-              <TrophyBadge key={trophy.kind} trophy={trophy} />
-            ))}
+      <SurfaceCard>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-6">
+            <div className="flex items-center gap-4">
+              <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
+              <div>
+                <p className="type-eyebrow text-slate-400 dark:text-slate-500">Team Hub</p>
+                <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">{teamName}</h2>
+              </div>
+            </div>
+            {teamTrophies.length > 0 && (
+              <div className="flex flex-wrap items-center gap-4 border-l border-slate-200/80 pl-6 dark:border-slate-800">
+                {teamTrophies.map((trophy) => (
+                  <TrophyBadge key={trophy.kind} trophy={trophy} />
+                ))}
+              </div>
+            )}
           </div>
+          <BudgetButton onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })} />
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(37,99,235,0.85)]">
+          <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
+          <div className="mt-3 flex flex-wrap items-end gap-4">
+            <p className="proportional-nums text-5xl font-semibold tracking-tight">
+              {overview?.record.wins ?? 0}-{overview?.record.losses ?? 0}
+            </p>
+            <p className="text-sm opacity-80">
+              Conference {overview?.conferenceRecord.wins ?? 0}-{overview?.conferenceRecord.losses ?? 0}
+            </p>
+          </div>
+        </div>
+      </SurfaceCard>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <StatTile label="Conference record" value={`${overview?.conferenceRecord.wins ?? 0}-${overview?.conferenceRecord.losses ?? 0}`} />
+        <StatTile label="Media poll" value={rankLabel(overview?.rankings.media ?? null)} />
+        <StatTile label="Coaches poll" value={rankLabel(overview?.rankings.coaches ?? null)} />
+        <StatTile label="CFP rank" value={rankLabel(overview?.rankings.cfp ?? null)} />
+        <StatTile label="Recruiting class" value={rankLabel(overview?.recruitingClassRank ?? null)} />
+        <StatTile label="Program prestige" value={overview?.teamPrestige == null ? 'Not available' : String(overview.teamPrestige)} />
+        <StatTile label="Roster" value={String(roster?.players.length ?? 0)} />
+        <StatTile label="Average OVR" value={avgOvr} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SurfaceCard>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recent games</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Latest results</h3>
+          {!overview || overview.recentGames.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games played yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {overview.recentGames.map((game) => (
+                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+              ))}
+            </ul>
+          )}
         </SurfaceCard>
-      )}
+
+        <SurfaceCard>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Upcoming games</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">What is next</h3>
+          {!overview || overview.upcomingGames.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games scheduled.</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {overview.upcomingGames.map((game) => (
+                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+              ))}
+            </ul>
+          )}
+        </SurfaceCard>
+      </div>
+
       <TopPlayersCard
         players={roster?.players ?? []}
         onSelect={(p) =>

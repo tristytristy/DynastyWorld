@@ -1,8 +1,9 @@
-import { getSeasonsByDynasty, getSnapshot } from './helpers';
+import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot } from './helpers';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
 import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
-import type { LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary } from '../shared/types';
+import type { TeamData } from '../extractors/extract-teams';
+import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, SeasonOverview } from '../shared/types';
 
 interface TeamsSnapshotEntry {
   teamIndex: number;
@@ -14,6 +15,70 @@ function resolveSeasonId(dynastyId: string, seasonId?: number): number | undefin
   const seasons = getSeasonsByDynasty(dynastyId);
   if (seasonId !== undefined) return seasons.find((s) => s.id === seasonId)?.id;
   return seasons.find((s) => s.isCurrent)?.id ?? seasons[0]?.id;
+}
+
+/**
+ * A full Team-Hub overview for ANY team (not just the user's), built from the
+ * same `teams` + `leagueSchedule` snapshots the browse pages already use. Lets
+ * a non-user Team Hub show the identical picture the user's does — record,
+ * conference record, poll ranks, recruiting-class rank, prestige, and recent/
+ * upcoming games. (Season-high ranking history stays user-only — it's not
+ * tracked leaguewide.) Returns the same SeasonOverview shape so one render path
+ * serves both.
+ */
+export function getLeagueTeamOverview(
+  dynastyId: string,
+  teamIndex: number,
+  seasonId?: number,
+): SeasonOverview | undefined {
+  const resolved = resolveSeasonId(dynastyId, seasonId);
+  if (resolved === undefined) return undefined;
+  const dynasty = getDynastyById(dynastyId);
+  const season = getSeasonById(resolved);
+  const teams = getSnapshot<TeamData[]>(resolved, 'teams') ?? [];
+  const team = teams.find((t) => t.teamIndex === teamIndex);
+  if (!team || !dynasty || !season) return undefined;
+
+  const games = getSnapshot<LeagueGameData[]>(resolved, 'leagueSchedule') ?? [];
+  const teamGames = games.filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex);
+  const toSummary = (g: LeagueGameData): GameSummary => {
+    const isHome = g.homeTeamIndex === teamIndex;
+    const teamScore = isHome ? g.homeScore : g.awayScore;
+    const opponentScore = isHome ? g.awayScore : g.homeScore;
+    const played = teamScore !== null && opponentScore !== null;
+    let result: GameSummary['result'] = null;
+    if (played) result = teamScore > opponentScore ? 'W' : teamScore < opponentScore ? 'L' : 'T';
+    return {
+      week: g.week,
+      opponent: (isHome ? g.awayTeamName : g.homeTeamName) ?? 'TBD',
+      isHome,
+      status: played ? 'Played' : 'Unplayed',
+      teamScore: played ? teamScore : null,
+      opponentScore: played ? opponentScore : null,
+      result,
+    };
+  };
+  const played = teamGames.filter((g) => g.homeScore !== null && g.awayScore !== null).sort((a, b) => a.week - b.week);
+  const upcoming = teamGames.filter((g) => g.homeScore === null || g.awayScore === null).sort((a, b) => a.week - b.week);
+
+  return {
+    dynastyId: dynasty.id,
+    dynastyLabel: dynasty.label,
+    teamName: team.displayName,
+    seasonYear: season.seasonYear,
+    lastSyncedAt: season.extractedAt,
+    record: { wins: team.confWins + team.nonConfWins, losses: team.confLosses + team.nonConfLosses },
+    conferenceRecord: { wins: team.confWins, losses: team.confLosses },
+    rankings: {
+      media: team.mediaPollRank > 0 ? team.mediaPollRank : null,
+      coaches: team.coachesPollRank > 0 ? team.coachesPollRank : null,
+      cfp: team.cfpRank > 0 ? team.cfpRank : null,
+    },
+    recruitingClassRank: team.topClassRank > 0 ? team.topClassRank : null,
+    teamPrestige: team.teamPrestige > 0 ? team.teamPrestige : null,
+    recentGames: played.slice(-3).reverse().map(toSummary),
+    upcomingGames: upcoming.slice(0, 3).map(toSummary),
+  };
 }
 
 /** Every team in the league with a roster in this season's league snapshot — for the browse entry list. */

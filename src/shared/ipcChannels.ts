@@ -28,6 +28,7 @@ export const IPC = {
     getRankings: 'db:getRankings',
     getRecruits: 'db:getRecruits',
     getLeagueTeams: 'db:getLeagueTeams',
+    getLeagueTeamOverview: 'db:getLeagueTeamOverview',
     getLeagueTeamRoster: 'db:getLeagueTeamRoster',
     getLeagueTeamSchedule: 'db:getLeagueTeamSchedule',
     getLeagueTeamHonors: 'db:getLeagueTeamHonors',

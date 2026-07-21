@@ -1456,6 +1456,7 @@ export interface DynastyApi {
     getRankings: (dynastyId: string, seasonId?: number) => Promise<RankingsOverview | null>;
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
+    getLeagueTeamOverview: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<SeasonOverview | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
