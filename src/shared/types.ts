@@ -123,8 +123,9 @@ export interface RecruitEditFields {
   stateRank: number;
 }
 
-/** One editable top-school slot for a recruit — the school (by TeamIndex) and its 0-99 interest. Order matches the recruit's TopSchoolsList slots. */
+/** One editable top-school slot for a recruit. `originalTeamIndex` identifies which slot (the team currently in it); `teamIndex` is the team to write (same = influence-only edit, different = swap). */
 export interface RecruitTopSchoolEdit {
+  originalTeamIndex: number;
   teamIndex: number;
   influence: number;
 }

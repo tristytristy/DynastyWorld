@@ -90,18 +90,20 @@ export async function saveRecruitInfluence(
     if (RECRUIT_STAGES.includes(edit.stage)) recruit.RecruitStage = edit.stage;
     recruit.CommitScore = Math.max(0, Math.round(edit.commitScore));
 
-    // Match each edit to its slot by TeamId (a recruit's top schools are distinct
-    // teams) — order-independent, since the browser sorts top schools by influence
-    // while the save stores them in native slot order.
-    const influenceByTeam = new Map(edit.topSchools.map((s) => [s.teamIndex, s.influence]));
+    // Each edit is keyed by the team CURRENTLY in the slot (originalTeamIndex) —
+    // order-independent (the browser sorts by influence; the save stores native
+    // slot order) and swap-safe: writing a different teamIndex changes which
+    // school is in that slot (e.g. dropping a rival in for the user's team).
+    const editByOriginalTeam = new Map(edit.topSchools.map((s) => [s.originalTeamIndex, s]));
     const list = resolveReferenceWithTable(franchise, recruit, 'TopSchoolsList');
     if (list) {
       for (const slotKey of Object.keys(list.record.fields)) {
         const entry = resolveReferenceWithTable(franchise, list.record, slotKey);
         if (!entry) continue;
-        const next = influenceByTeam.get(Number(entry.record.TeamId));
-        if (next === undefined) continue;
-        entry.record.TeamInfluence = Math.max(0, Math.min(99, Math.round(next)));
+        const target = editByOriginalTeam.get(Number(entry.record.TeamId));
+        if (!target) continue;
+        entry.record.TeamId = target.teamIndex;
+        entry.record.TeamInfluence = Math.max(0, Math.min(99, Math.round(target.influence)));
       }
     }
     return true;

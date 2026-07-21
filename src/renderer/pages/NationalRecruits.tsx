@@ -675,11 +675,21 @@ function RecruitInfluenceModal({
 }) {
   const [stage, setStage] = useState(recruit.recruitStage);
   const [commitScore, setCommitScore] = useState(recruit.commitScore);
-  const [influences, setInfluences] = useState<Record<number, number>>(
-    () => Object.fromEntries(recruit.topSchools.map((s) => [s.teamIndex, s.influence])),
+  // Each slot keeps its ORIGINAL team (identifies the slot on write) plus the
+  // currently-chosen team + influence — swapping the team forces a different
+  // school into that slot (e.g. your own program).
+  const [slots, setSlots] = useState(
+    () => recruit.topSchools.map((s) => ({ originalTeamIndex: s.teamIndex, teamIndex: s.teamIndex, influence: s.influence })),
   );
+  const [teams, setTeams] = useState<{ teamIndex: number; displayName: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.api.db.getLeagueTeams(dynastyId).then((list) => {
+      if (list) setTeams([...list].sort((a, b) => a.displayName.localeCompare(b.displayName)));
+    });
+  }, [dynastyId]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -689,13 +699,17 @@ function RecruitInfluenceModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, saving]);
 
+  function updateSlot(originalTeamIndex: number, patch: Partial<{ teamIndex: number; influence: number }>) {
+    setSlots((prev) => prev.map((s) => (s.originalTeamIndex === originalTeamIndex ? { ...s, ...patch } : s)));
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
     const result = await window.api.editor.saveRecruitInfluence(dynastyId, recruit.playerId, {
       stage,
       commitScore,
-      topSchools: recruit.topSchools.map((s) => ({ teamIndex: s.teamIndex, influence: influences[s.teamIndex] ?? s.influence })),
+      topSchools: slots,
     });
     if (result.success) {
       onSaved();
@@ -704,6 +718,12 @@ function RecruitInfluenceModal({
       setSaving(false);
     }
   }
+
+  // Names for the dropdown; ensure any team currently in a slot is always selectable even if not in the league list.
+  const teamName = (idx: number) =>
+    teams.find((t) => t.teamIndex === idx)?.displayName ??
+    recruit.topSchools.find((s) => s.teamIndex === idx)?.teamName ??
+    `Team ${idx}`;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
@@ -746,24 +766,36 @@ function RecruitInfluenceModal({
             </div>
           </section>
 
-          {/* Top-school interest */}
-          {recruit.topSchools.length > 0 && (
+          {/* Top-school interest — the team can be swapped (force a school in), influence 0–99. */}
+          {slots.length > 0 && (
             <section>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">School interest (0–99)</p>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">School interest — swap a team or set interest (0–99)</p>
               <div className="mt-2 space-y-2">
-                {recruit.topSchools.map((s) => (
-                  <div key={s.teamIndex} className="flex items-center gap-3">
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                      <TeamLogo team={{ assetName: s.teamName, label: s.teamName }} size="sm" className="!h-5 !w-5 shrink-0" />
-                      <span className="truncate">{s.teamName}</span>
-                    </span>
+                {slots.map((slot) => (
+                  <div key={slot.originalTeamIndex} className="flex items-center gap-2">
+                    <TeamLogo team={{ assetName: teamName(slot.teamIndex), label: teamName(slot.teamIndex) }} size="sm" className="!h-5 !w-5 shrink-0" />
+                    <select
+                      value={slot.teamIndex}
+                      onChange={(e) => updateSlot(slot.originalTeamIndex, { teamIndex: Number(e.target.value) })}
+                      className="min-w-0 flex-1 border border-slate-200/80 bg-white/80 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-white"
+                      aria-label={`Top school (was ${teamName(slot.originalTeamIndex)})`}
+                    >
+                      {/* keep the current team selectable even if the league list hasn't loaded */}
+                      {!teams.some((t) => t.teamIndex === slot.teamIndex) && (
+                        <option value={slot.teamIndex}>{teamName(slot.teamIndex)}</option>
+                      )}
+                      {teams.map((t) => (
+                        <option key={t.teamIndex} value={t.teamIndex}>{t.displayName}</option>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       min={0}
                       max={99}
-                      value={influences[s.teamIndex] ?? s.influence}
-                      onChange={(e) => setInfluences((prev) => ({ ...prev, [s.teamIndex]: Number(e.target.value) }))}
-                      className="w-20 border border-slate-200/80 bg-white/80 px-2 py-1.5 text-right text-sm text-slate-900 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-white"
+                      value={slot.influence}
+                      onChange={(e) => updateSlot(slot.originalTeamIndex, { influence: Number(e.target.value) })}
+                      className="w-16 shrink-0 border border-slate-200/80 bg-white/80 px-2 py-1.5 text-right text-sm text-slate-900 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-white"
+                      aria-label="Interest"
                     />
                   </div>
                 ))}
