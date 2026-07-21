@@ -123,6 +123,28 @@ export interface TeamBudgetEdit {
   remainingProgramPoints: number;
 }
 
+/** One before/after field mutation, for the Force Commit change log. */
+export interface ForceCommitFieldChange {
+  field: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * Result of the EXPERIMENTAL Force Commit action. `code` disambiguates the
+ * blocked cases (recruit not on board, already signed, no user team) so the UI
+ * can explain them precisely. On success, `changedFields` is the full write log
+ * and `validated` reflects the post-write reopen check.
+ */
+export interface ForceCommitResult {
+  success: boolean;
+  message: string;
+  code?: 'NOT_ON_BOARD' | 'ALREADY_SIGNED' | 'NO_USER_TEAM' | 'NOT_FOUND' | 'VALIDATION_FAILED';
+  destinationTeamName?: string;
+  changedFields?: ForceCommitFieldChange[];
+  validated?: boolean;
+}
+
 export interface CoachEditFields {
   firstName: string;
   lastName: string;
@@ -1481,6 +1503,8 @@ export interface DynastyApi {
     saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
     getTeamBudget: (dynastyId: string, teamIndex: number) => Promise<TeamBudgetData | null>;
     saveTeamBudget: (dynastyId: string, teamIndex: number, edit: TeamBudgetEdit) => Promise<SaveEditResult>;
+    /** EXPERIMENTAL — force a boarded recruit to commit to the user's team. */
+    forceCommitRecruit: (dynastyId: string, playerId: number) => Promise<ForceCommitResult>;
     searchPortraits: (
       kind: 'player' | 'coach',
       query: string,

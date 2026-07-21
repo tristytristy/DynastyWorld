@@ -13,7 +13,7 @@ import { AnchoredMenuPanel } from './AnchoredMenuPanel';
 export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
   const { appearance } = useTheme();
   const isDark = appearance === 'dark';
-  const { ovr, athletic } = useRecruitingExperience();
+  const { ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing } = useRecruitingExperience();
   const revealAll = ovr.unlockedAll && athletic.unlockedAll;
   const setRevealAll = (value: boolean) => {
     if (value) {
@@ -82,6 +82,28 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
                 onChange={(e) => setRevealAll(e.target.checked)}
                 className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
                 aria-label="Reveal all recruit ratings"
+              />
+            </label>
+          </section>
+
+          <section className={`mt-4 rounded-xl border p-4 ${isDark ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-amber-400/50 bg-amber-50/70'}`}>
+            <label className="flex cursor-pointer items-start justify-between gap-4">
+              <span>
+                <span className={`text-sm font-semibold ${strong}`}>Experimental save editing</span>
+                <span className={`mt-1 block text-xs leading-5 ${subtle}`}>
+                  Unlocks tools that write directly to your dynasty save — currently <strong>Force Commit</strong>, which
+                  forces a recruit already on your board to commit to your team. Every write backs up your save first and
+                  is verified before it&apos;s kept, but this is experimental: the commit is proven at the save-file level,
+                  yet whether it survives an in-game season is still being confirmed. Off by default; turning it off hides
+                  these tools without affecting the rest of the Recruit Hub.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={experimentalSaveEditing}
+                onChange={(e) => setExperimentalSaveEditing(e.target.checked)}
+                className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-amber-500"
+                aria-label="Enable experimental save editing"
               />
             </label>
           </section>

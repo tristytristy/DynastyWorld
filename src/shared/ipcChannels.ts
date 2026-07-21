@@ -64,6 +64,7 @@ export const IPC = {
     saveRecruitInfluence: 'editor:saveRecruitInfluence',
     getTeamBudget: 'editor:getTeamBudget',
     saveTeamBudget: 'editor:saveTeamBudget',
+    forceCommitRecruit: 'editor:forceCommitRecruit',
     searchPortraits: 'editor:searchPortraits',
   },
   media: {

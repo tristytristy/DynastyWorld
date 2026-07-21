@@ -1,3 +1,4 @@
+import fs from 'fs';
 import {
   getLargestTable,
   nonEmpty,
@@ -11,7 +12,12 @@ import { getDynastyById } from '../database/helpers';
 import { extractAll } from '../extractors/extract-all';
 import { persistExtraction } from '../database/importExtraction';
 import { backupSaveFile } from './editorWrite';
-import type { RecruitInfluenceEdit, SaveEditResult } from '../shared/types';
+import type {
+  ForceCommitFieldChange,
+  ForceCommitResult,
+  RecruitInfluenceEdit,
+  SaveEditResult,
+} from '../shared/types';
 
 /** Valid RecruitStage enum values (the decision funnel), verified on real saves. */
 export const RECRUIT_STAGES = ['Top10', 'Top5', 'Top3', 'SoftCommitted', 'Signed'];
@@ -108,4 +114,196 @@ export async function saveRecruitInfluence(
     }
     return true;
   });
+}
+
+// ---------------------------------------------------------------------------
+// EXPERIMENTAL: Force Commit
+//
+// Forces a recruit who is ALREADY on the user's board to commit to the user's
+// team, by writing the real committed state the offseason roster conversion
+// reads — NOT just the cosmetic Recruit.RecruitStage. See the reference memory
+// "recruit sign->roster mechanism": a recruit rosters only when his board entry
+// (UserRecruitTarget) reaches ScholarshipStatus=Committed + CommittedWeekNumber,
+// with his NIL met and the user's school the clear influence leader.
+//
+// SAFETY: every field written here is an edit on an EXISTING record (the board
+// entry, the Recruit row, its ProspectTargetSchool slots) — never a record
+// CREATION, which is the board-add path that crashes the game. Recruits not on
+// the board are refused (they'd need a board row created in-game first). The
+// whole write is backed up first, validated on reopen, and rolled back from the
+// backup if validation fails.
+// ---------------------------------------------------------------------------
+
+function findUserTeamIndexFromSave(franchise: OpenFranchise): number | undefined {
+  const table = getLargestTable(franchise, 'Coach');
+  const user = nonEmpty(table.records).find((c) => String(c.IsUserControlled) === 'true');
+  return user ? Number(user.TeamIndex) : undefined;
+}
+
+function teamNameByIndex(franchise: OpenFranchise, teamIndex: number): string {
+  const table = getLargestTable(franchise, 'Team');
+  const t = nonEmpty(table.records).find((r) => Number(r.TeamIndex) === teamIndex);
+  return t ? String(t.DisplayName) : `Team ${teamIndex}`;
+}
+
+function getCurrentWeek(franchise: OpenFranchise): number {
+  const table = getLargestTable(franchise, 'SeasonInfo');
+  const info = table.records[0];
+  return info ? Number(info.CurrentWeek) : 0;
+}
+
+/** The board entry (UserRecruitTarget) for a recruit, matched by resolved Player id. Undefined if not on the user's board. */
+function findBoardEntryForRecruit(franchise: OpenFranchise, playerId: number): FranchiseRecord | undefined {
+  const table = getLargestTable(franchise, 'UserRecruitTarget');
+  for (const b of nonEmpty(table.records)) {
+    const rec = resolveReferenceWithTable(franchise, b, 'Recruit');
+    if (!rec) continue;
+    const player = resolveReferenceWithTable(franchise, rec.record, 'Player');
+    if (player && Number(player.record.PresentationId) === playerId) return b;
+  }
+  return undefined;
+}
+
+/** Make the user's team the sole top-influence school (99), capping every other school below it to break ties; swaps the user's team into the weakest slot if it isn't already present. Logs each change. */
+function setTopSchoolsUserLeader(
+  franchise: OpenFranchise,
+  recruit: FranchiseRecord,
+  userTeamIndex: number,
+  changes: ForceCommitFieldChange[],
+): void {
+  const list = resolveReferenceWithTable(franchise, recruit, 'TopSchoolsList');
+  if (!list) return;
+
+  const slots: { slotKey: string; entry: FranchiseRecord }[] = [];
+  for (const slotKey of Object.keys(list.record.fields)) {
+    const entry = resolveReferenceWithTable(franchise, list.record, slotKey);
+    if (entry) slots.push({ slotKey, entry: entry.record });
+  }
+  if (slots.length === 0) return;
+
+  let userSlot = slots.find((s) => Number(s.entry.TeamId) === userTeamIndex);
+  if (!userSlot) {
+    // Swap the user's team into the lowest-influence slot (order-independent).
+    userSlot = slots.reduce((lo, s) => (Number(s.entry.TeamInfluence) < Number(lo.entry.TeamInfluence) ? s : lo), slots[0]);
+    const before = String(userSlot.entry.TeamId);
+    userSlot.entry.TeamId = userTeamIndex;
+    changes.push({ field: `TopSchool.TeamId`, before, after: String(userSlot.entry.TeamId) });
+  }
+
+  for (const s of slots) {
+    const before = String(s.entry.TeamInfluence);
+    s.entry.TeamInfluence = s === userSlot ? 99 : Math.min(Number(s.entry.TeamInfluence), 60);
+    if (String(s.entry.TeamInfluence) !== before) {
+      changes.push({ field: `TopSchool.TeamInfluence (${s === userSlot ? 'user' : 'rival'})`, before, after: String(s.entry.TeamInfluence) });
+    }
+  }
+}
+
+/** Reopens the just-saved file and confirms the commit actually persisted on disk. */
+async function validateForceCommit(savePath: string, playerId: number): Promise<boolean> {
+  const franchise = await openFranchiseFile(savePath);
+  await preloadAllInstances(franchise, 'Player');
+  const recruit = await findRecruitByPlayerId(franchise, playerId);
+  if (!recruit || String(recruit.RecruitStage) !== 'Signed') return false;
+  const board = findBoardEntryForRecruit(franchise, playerId);
+  return !!board && String(board.ScholarshipStatus) === 'Committed';
+}
+
+export async function forceCommitRecruit(dynastyId: string, playerId: number): Promise<ForceCommitResult> {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty) return { success: false, message: 'Dynasty not found.' };
+
+  const backup = backupSaveFile(dynastyId);
+  if (!backup.success || !backup.filePath) {
+    return { success: false, message: `Aborted — could not back up the save first: ${backup.message}` };
+  }
+
+  try {
+    const franchise = await openFranchiseFile(dynasty.savePath);
+    await preloadAllInstances(franchise, 'ProspectTargetSchool[]');
+    await preloadAllInstances(franchise, 'ProspectTargetSchool');
+    await preloadAllInstances(franchise, 'Player');
+
+    const userTeamIndex = findUserTeamIndexFromSave(franchise);
+    if (userTeamIndex === undefined) {
+      return { success: false, code: 'NO_USER_TEAM', message: 'Could not identify your user-controlled team in the save.' };
+    }
+    const destinationTeamName = teamNameByIndex(franchise, userTeamIndex);
+
+    const recruit = await findRecruitByPlayerId(franchise, playerId);
+    if (!recruit) return { success: false, code: 'NOT_FOUND', message: 'Recruit not found in the save file.' };
+
+    if (String(recruit.RecruitStage) === 'Signed') {
+      return { success: false, code: 'ALREADY_SIGNED', message: 'This recruit is already signed — nothing to force.' };
+    }
+
+    const board = findBoardEntryForRecruit(franchise, playerId);
+    if (!board) {
+      return {
+        success: false,
+        code: 'NOT_ON_BOARD',
+        message:
+          "This recruit isn't on your recruiting board. Add him to your board inside College Football 27 first — creating a board entry from outside the game corrupts the save (a known crash).",
+      };
+    }
+
+    const changes: ForceCommitFieldChange[] = [];
+    const set = (rec: FranchiseRecord, field: string, value: string | number): void => {
+      const before = String(rec[field]);
+      rec[field] = value;
+      changes.push({ field, before, after: String(rec[field]) });
+    };
+
+    // 1) Board entry: the real committed state the roster conversion reads.
+    const week = Math.max(1, Math.min(31, getCurrentWeek(franchise) || 1));
+    set(board, 'ScholarshipStatus', 'Committed');
+    set(board, 'CommittedWeekNumber', week);
+    const nilExpectation = Number(board.NILExpectation);
+    set(board, 'CurrentNILOffer', Math.max(0, Math.min(1023, Math.max(Number(board.CurrentNILOffer), nilExpectation))));
+
+    // 2) Recruit row: lock the funnel to Signed with a maxed commit score.
+    set(recruit, 'RecruitStage', 'Signed');
+    set(recruit, 'CommitScore', 888);
+
+    // 3) Top schools: make the user's team the clear, sole influence leader.
+    setTopSchoolsUserLeader(franchise, recruit, userTeamIndex, changes);
+
+    await franchise.save(dynasty.savePath, {});
+
+    const validated = await validateForceCommit(dynasty.savePath, playerId);
+    if (!validated) {
+      // Roll back to the untouched pre-edit backup — never leave a half-applied write.
+      fs.copyFileSync(backup.filePath, dynasty.savePath);
+      return {
+        success: false,
+        code: 'VALIDATION_FAILED',
+        message: 'The write did not verify on reopen — your pre-edit save was automatically restored. No changes were kept.',
+        changedFields: changes,
+        validated: false,
+      };
+    }
+
+    const extraction = await extractAll(dynasty.savePath);
+    persistExtraction(dynasty.savePath, extraction);
+
+    return {
+      success: true,
+      message: `Committed to ${destinationTeamName}. Sim a season and check the roster to confirm it holds.`,
+      destinationTeamName,
+      changedFields: changes,
+      validated: true,
+    };
+  } catch (err) {
+    // On any mid-write error the on-disk file may be untouched (save writes at
+    // the end), but restore from backup regardless so the user is never worse off.
+    try {
+      fs.copyFileSync(backup.filePath, dynasty.savePath);
+    } catch {
+      /* backup file itself is still safe on disk for manual restore */
+    }
+    return {
+      success: false,
+      message: `Force Commit failed (your pre-edit backup is safe: ${backup.filePath}). ${err instanceof Error ? err.message : ''}`.trim(),
+    };
+  }
 }

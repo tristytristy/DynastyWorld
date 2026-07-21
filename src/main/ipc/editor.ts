@@ -10,6 +10,7 @@ import type {
   RecruitEditData,
   RecruitEditFields,
   RecruitInfluenceEdit,
+  ForceCommitResult,
   SaveEditResult,
   SaveFileBackupResult,
   TeamBudgetData,
@@ -27,7 +28,7 @@ import {
   saveTeamBudget,
   searchPortraits,
 } from '../editorWrite';
-import { saveRecruitInfluence } from '../recruitingWrite';
+import { forceCommitRecruit, saveRecruitInfluence } from '../recruitingWrite';
 
 export function registerEditorHandlers(): void {
   ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
@@ -101,6 +102,13 @@ export function registerEditorHandlers(): void {
     IPC.editor.saveTeamBudget,
     async (_event, dynastyId: string, teamIndex: number, edit: TeamBudgetEdit): Promise<SaveEditResult> => {
       return saveTeamBudget(dynastyId, teamIndex, edit);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.forceCommitRecruit,
+    async (_event, dynastyId: string, playerId: number): Promise<ForceCommitResult> => {
+      return forceCommitRecruit(dynastyId, playerId);
     },
   );
 

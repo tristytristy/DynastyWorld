@@ -9,7 +9,8 @@ import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitingExperience } from '../data/RecruitingExperienceProvider';
-import type { NationalRecruit } from '../../shared/types';
+import { useViewedTeamOptional } from '../data/ViewedTeamProvider';
+import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
 
 /** Colored stage badge — each decision-funnel stage gets one accent, never color-alone (the label is always present). */
 const STAGE_STYLE: Record<string, { label: string; cls: string }> = {
@@ -104,6 +105,8 @@ function RecruitPanel({
   onOvrLockClick,
   athleticUnlocked,
   onAthleticLockClick,
+  experimentalSaveEditing,
+  onForceCommit,
 }: {
   recruit: NationalRecruit | null;
   canEdit: boolean;
@@ -114,6 +117,8 @@ function RecruitPanel({
   onOvrLockClick: (r: NationalRecruit) => void;
   athleticUnlocked: boolean;
   onAthleticLockClick: (r: NationalRecruit) => void;
+  experimentalSaveEditing: boolean;
+  onForceCommit: (r: NationalRecruit) => void;
 }) {
   if (!recruit) {
     return (
@@ -288,6 +293,30 @@ function RecruitPanel({
           </button>
         </div>
       )}
+
+      {/* EXPERIMENTAL — Force Commit. Gated behind the experimental-save-editing
+          flag, and only for a boarded recruit who isn't already signed (the safe
+          case: editing an existing board entry, never creating one). */}
+      {canEdit && experimentalSaveEditing && recruit.onUserBoard && recruit.recruitStage !== 'Signed' && (
+        <div className="border-t border-amber-400/30 pt-4">
+          <button
+            type="button"
+            onClick={() => onForceCommit(recruit)}
+            className="w-full border border-amber-500/60 bg-amber-500/[0.08] px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-500/[0.16] dark:text-amber-300"
+          >
+            Force Commit to User Team
+          </button>
+          <p className="mt-1.5 text-[11px] text-amber-700/70 dark:text-amber-300/60">
+            Experimental — writes a real commit to your save (backed up + verified first).
+          </p>
+        </div>
+      )}
+      {canEdit && experimentalSaveEditing && !recruit.onUserBoard && (
+        <p className="border-t border-slate-200/70 pt-4 text-[11px] text-slate-400 dark:border-white/10 dark:text-slate-500">
+          Add this recruit to your board <strong>in-game</strong> to enable Force Commit — creating a board entry from
+          outside the game corrupts the save.
+        </p>
+      )}
     </SurfaceCard>
   );
 }
@@ -306,7 +335,8 @@ export function NationalRecruits() {
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const { openPlayerEditor } = useEditorModal();
-  const { ovr, athletic } = useRecruitingExperience();
+  const { ovr, athletic, experimentalSaveEditing } = useRecruitingExperience();
+  const [forceCommitRecruit, setForceCommitRecruit] = useState<NationalRecruit | null>(null);
 
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -613,6 +643,8 @@ export function NationalRecruits() {
             onOvrLockClick={ovrLockClick}
             athleticUnlocked={selected ? athletic.isUnlocked(selected.playerId) : false}
             onAthleticLockClick={athleticLockClick}
+            experimentalSaveEditing={experimentalSaveEditing}
+            onForceCommit={setForceCommitRecruit}
           />
         </div>
       </div>
@@ -646,6 +678,18 @@ export function NationalRecruits() {
               setEditingRecruit(null);
               window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr));
             }}
+          />,
+          document.body,
+        )}
+
+      {forceCommitRecruit &&
+        id &&
+        createPortal(
+          <ForceCommitModal
+            dynastyId={id}
+            recruit={forceCommitRecruit}
+            onClose={() => setForceCommitRecruit(null)}
+            onDone={() => window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr))}
           />,
           document.body,
         )}
@@ -885,6 +929,150 @@ function StatUnlockModal({
           >
             Keep hidden
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * EXPERIMENTAL Force Commit confirmation. Shows the recruit, the destination
+ * (the user's team), and an explicit warning that this writes to the save;
+ * on confirm it calls the backend (which backs up, writes the committed board
+ * state, and validates on reopen), then shows the result + the change log.
+ */
+function ForceCommitModal({
+  dynastyId,
+  recruit,
+  onClose,
+  onDone,
+}: {
+  dynastyId: string;
+  recruit: NationalRecruit;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const viewedTeam = useViewedTeamOptional();
+  const userTeamName = viewedTeam?.userTeamName ?? 'your team';
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ForceCommitResult | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, busy]);
+
+  async function run() {
+    setBusy(true);
+    const r = await window.api.editor.forceCommitRecruit(dynastyId, recruit.playerId);
+    setResult(r);
+    setBusy(false);
+    if (r.success) onDone();
+  }
+
+  const done = result !== null;
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => !busy && onClose()} aria-hidden="true" />
+      <div className="corner-cut relative flex max-h-[88vh] w-full max-w-md flex-col border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 p-5 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <PlayerPortrait player={recruit} size="sm" className="!h-10 !w-10" />
+            <div>
+              <p className="type-eyebrow text-amber-600 dark:text-amber-400">Experimental · Force Commit</p>
+              <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">
+                {recruit.firstName} {recruit.lastName}
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          {!done && (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <StatTile label="Position" value={recruit.position} />
+                <StatTile label="Stars" value={'★'.repeat(recruit.stars) || '—'} />
+                <StatTile label="Destination" value={userTeamName} />
+              </div>
+              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Force <span className="font-semibold text-slate-900 dark:text-white">{recruit.firstName} {recruit.lastName}</span>{' '}
+                to commit to <span className="font-semibold text-slate-900 dark:text-white">{userTeamName}</span>?
+              </p>
+              <div className="border border-amber-400/50 bg-amber-50/70 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-200">
+                This directly modifies your dynasty save — it writes a real committed state (scholarship + NIL met + your
+                school as the clear leader). Your save is backed up first and the write is verified on reopen; if it
+                doesn&apos;t verify, the backup is restored automatically. Whether the commit survives an in-game season is
+                still being confirmed.
+              </div>
+            </>
+          )}
+
+          {done && result && (
+            <>
+              <div
+                className={`border px-3 py-2.5 text-sm ${
+                  result.success
+                    ? 'border-emerald-300/70 bg-emerald-50/70 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+                    : 'border-red-300/70 bg-red-50/70 text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300'
+                }`}
+              >
+                {result.message}
+              </div>
+              {result.changedFields && result.changedFields.length > 0 && (
+                <div>
+                  <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+                    Changes {result.validated ? 'written' : 'attempted'}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {result.changedFields.map((c, i) => (
+                      <li key={i} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-0.5 dark:border-white/5">
+                        <span className="shrink-0 font-mono text-slate-500 dark:text-slate-400">{c.field}</span>
+                        <span className="tnum text-right text-slate-800 dark:text-slate-200">
+                          {c.before} <span className="text-slate-400">→</span> {c.after}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 p-5 dark:border-white/10">
+          {!done ? (
+            <>
+              <button
+                type="button"
+                onClick={() => !busy && onClose()}
+                disabled={busy}
+                className="px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 disabled:opacity-50 dark:text-slate-400 dark:hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={run}
+                disabled={busy}
+                className="border border-amber-500/60 bg-amber-500/[0.12] px-5 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-500/[0.22] disabled:opacity-60 dark:text-amber-300"
+              >
+                {busy ? 'Committing…' : 'Force Commit'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-[var(--team-primary)] px-5 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95"
+            >
+              Done
+            </button>
+          )}
         </div>
       </div>
     </div>

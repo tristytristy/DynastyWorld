@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+
+const EXPERIMENTAL_SAVE_EDITING_KEY = 'cfb.experimentalSaveEditing';
 
 /**
  * Recruiting "experience" preferences — app-side immersion settings for how
@@ -24,6 +26,14 @@ interface LockControls {
 interface RecruitingExperienceValue {
   ovr: LockControls;
   athletic: LockControls;
+  /**
+   * Master gate for EXPERIMENTAL save-writing recruiting tools (currently Force
+   * Commit). Persisted, defaults OFF — these directly mutate the dynasty save,
+   * so they stay hidden until the user opts in. Turning it off hides the tools
+   * without removing the rest of the Recruit Hub.
+   */
+  experimentalSaveEditing: boolean;
+  setExperimentalSaveEditing: (value: boolean) => void;
 }
 
 const RecruitingExperienceContext = createContext<RecruitingExperienceValue | null>(null);
@@ -59,7 +69,28 @@ export function RecruitingExperienceProvider({ children }: { children: ReactNode
   const ovr = useLockSet();
   const athletic = useLockSet();
 
-  const value = useMemo(() => ({ ovr, athletic }), [ovr, athletic]);
+  const [experimentalSaveEditing, setExperimentalSaveEditingState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(EXPERIMENTAL_SAVE_EDITING_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const setExperimentalSaveEditing = useCallback((value: boolean) => {
+    setExperimentalSaveEditingState(value);
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPERIMENTAL_SAVE_EDITING_KEY, String(experimentalSaveEditing));
+    } catch {
+      /* ignore persistence failure */
+    }
+  }, [experimentalSaveEditing]);
+
+  const value = useMemo(
+    () => ({ ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing }),
+    [ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing],
+  );
 
   return <RecruitingExperienceContext.Provider value={value}>{children}</RecruitingExperienceContext.Provider>;
 }
