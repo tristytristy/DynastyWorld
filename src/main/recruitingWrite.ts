@@ -134,27 +134,35 @@ export async function saveRecruitInfluence(
 // backup if validation fails.
 // ---------------------------------------------------------------------------
 
-function findUserTeamIndexFromSave(franchise: OpenFranchise): number | undefined {
+async function findUserTeamIndexFromSave(franchise: OpenFranchise): Promise<number | undefined> {
   const table = getLargestTable(franchise, 'Coach');
-  const user = nonEmpty(table.records).find((c) => String(c.IsUserControlled) === 'true');
+  await table.readRecords();
+  // IsUserControlled reads back as a real boolean here, so compare loosely to
+  // both true and the string 'true' rather than assuming one representation.
+  const user = nonEmpty(table.records).find(
+    (c) => c.IsUserControlled === true || String(c.IsUserControlled) === 'true',
+  );
   return user ? Number(user.TeamIndex) : undefined;
 }
 
-function teamNameByIndex(franchise: OpenFranchise, teamIndex: number): string {
+async function teamNameByIndex(franchise: OpenFranchise, teamIndex: number): Promise<string> {
   const table = getLargestTable(franchise, 'Team');
+  await table.readRecords();
   const t = nonEmpty(table.records).find((r) => Number(r.TeamIndex) === teamIndex);
   return t ? String(t.DisplayName) : `Team ${teamIndex}`;
 }
 
-function getCurrentWeek(franchise: OpenFranchise): number {
+async function getCurrentWeek(franchise: OpenFranchise): Promise<number> {
   const table = getLargestTable(franchise, 'SeasonInfo');
+  await table.readRecords();
   const info = table.records[0];
   return info ? Number(info.CurrentWeek) : 0;
 }
 
 /** The board entry (UserRecruitTarget) for a recruit, matched by resolved Player id. Undefined if not on the user's board. */
-function findBoardEntryForRecruit(franchise: OpenFranchise, playerId: number): FranchiseRecord | undefined {
+async function findBoardEntryForRecruit(franchise: OpenFranchise, playerId: number): Promise<FranchiseRecord | undefined> {
   const table = getLargestTable(franchise, 'UserRecruitTarget');
+  await table.readRecords();
   for (const b of nonEmpty(table.records)) {
     const rec = resolveReferenceWithTable(franchise, b, 'Recruit');
     if (!rec) continue;
@@ -205,7 +213,7 @@ async function validateForceCommit(savePath: string, playerId: number): Promise<
   await preloadAllInstances(franchise, 'Player');
   const recruit = await findRecruitByPlayerId(franchise, playerId);
   if (!recruit || String(recruit.RecruitStage) !== 'Signed') return false;
-  const board = findBoardEntryForRecruit(franchise, playerId);
+  const board = await findBoardEntryForRecruit(franchise, playerId);
   return !!board && String(board.ScholarshipStatus) === 'Committed';
 }
 
@@ -224,11 +232,11 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
     await preloadAllInstances(franchise, 'ProspectTargetSchool');
     await preloadAllInstances(franchise, 'Player');
 
-    const userTeamIndex = findUserTeamIndexFromSave(franchise);
+    const userTeamIndex = await findUserTeamIndexFromSave(franchise);
     if (userTeamIndex === undefined) {
       return { success: false, code: 'NO_USER_TEAM', message: 'Could not identify your user-controlled team in the save.' };
     }
-    const destinationTeamName = teamNameByIndex(franchise, userTeamIndex);
+    const destinationTeamName = await teamNameByIndex(franchise, userTeamIndex);
 
     const recruit = await findRecruitByPlayerId(franchise, playerId);
     if (!recruit) return { success: false, code: 'NOT_FOUND', message: 'Recruit not found in the save file.' };
@@ -237,7 +245,7 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
       return { success: false, code: 'ALREADY_SIGNED', message: 'This recruit is already signed — nothing to force.' };
     }
 
-    const board = findBoardEntryForRecruit(franchise, playerId);
+    const board = await findBoardEntryForRecruit(franchise, playerId);
     if (!board) {
       return {
         success: false,
@@ -255,7 +263,7 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
     };
 
     // 1) Board entry: the real committed state the roster conversion reads.
-    const week = Math.max(1, Math.min(31, getCurrentWeek(franchise) || 1));
+    const week = Math.max(1, Math.min(31, (await getCurrentWeek(franchise)) || 1));
     set(board, 'ScholarshipStatus', 'Committed');
     set(board, 'CommittedWeekNumber', week);
     const nilExpectation = Number(board.NILExpectation);
