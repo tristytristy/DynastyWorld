@@ -349,6 +349,7 @@ export function NationalRecruits() {
   const [classYear, setClassYear] = useState('');
   const [homeState, setHomeState] = useState('');
   const [stage, setStage] = useState('');
+  const [board, setBoard] = useState(''); // '' = all, 'on' = on my board, 'off' = not on board
   const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -386,6 +387,8 @@ export function NationalRecruits() {
       if (classYear && r.classYear !== classYear) return false;
       if (homeState && r.homeState !== homeState) return false;
       if (stage && r.recruitStage !== stage) return false;
+      if (board === 'on' && !r.onUserBoard) return false;
+      if (board === 'off' && r.onUserBoard) return false;
       if (q) {
         const hay = `${r.firstName} ${r.lastName} ${r.hometown} ${r.homeState} ${r.pipeline} ${r.position}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -405,7 +408,7 @@ export function NationalRecruits() {
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, sortKey, sortDir]);
+  }, [recruits, search, position, stars, classYear, homeState, stage, board, sortKey, sortDir]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
@@ -438,6 +441,7 @@ export function NationalRecruits() {
     setClassYear('');
     setHomeState('');
     setStage('');
+    setBoard('');
   }
 
   function openFull(r: NationalRecruit) {
@@ -482,7 +486,7 @@ export function NationalRecruits() {
     );
   }
 
-  const filtersActive = !!(search || position || stars || classYear || homeState || stage);
+  const filtersActive = !!(search || position || stars || classYear || homeState || stage || board);
   const shown = filtered.slice(0, RENDER_CAP);
 
   const th = (key: SortKey, label: string, alignRight = false) => (
@@ -544,6 +548,11 @@ export function NationalRecruits() {
             <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Filter by stage" className={FILTER_SELECT}>
               <option value="">All stages</option>
               {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
+            </select>
+            <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board status" className={FILTER_SELECT}>
+              <option value="">All recruits</option>
+              <option value="on">On my board</option>
+              <option value="off">Not on board</option>
             </select>
             {filtersActive && (
               <button type="button" onClick={clearFilters} className="border border-slate-200/80 px-3 py-2 text-sm text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white">
