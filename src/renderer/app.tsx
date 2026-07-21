@@ -59,10 +59,11 @@ export function App() {
 
             <main
               style={ANGLED_PANEL}
-              className="relative flex-1 overflow-hidden border border-white/60 bg-white/76 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76"
+              className="relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-[#111316]/86"
             >
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]" />
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[linear-gradient(180deg,rgba(37,99,235,0),rgba(37,99,235,0.9),rgba(37,99,235,0))]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0))]" />
+              {/* Signature left edge — now the selected team's color, so the program is present in the chrome itself. */}
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[linear-gradient(180deg,transparent,var(--team-primary),transparent)] opacity-90" />
               <div className="relative h-full overflow-y-auto p-5 md:p-8">
                 <Routes>
                   <Route path="/" element={<Dashboard />} />

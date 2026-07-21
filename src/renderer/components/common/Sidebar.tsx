@@ -62,7 +62,7 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-[290px] shrink-0 overflow-y-auto lg:block">
-      <nav className="flex h-full flex-col border border-white/65 bg-white/70 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.38)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/70">
+      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-[#15181c]/88">
         <div className="space-y-1">
           <div className="flex items-center gap-1">
             <NavLink to="/" end className={({ isActive }) => `flex-1 ${navClass(isActive)}`}>

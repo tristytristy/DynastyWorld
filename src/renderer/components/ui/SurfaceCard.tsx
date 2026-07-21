@@ -35,7 +35,7 @@ export function SurfaceCard({
   surface?: SurfaceLevel;
 }) {
   return (
-    <section className={`corner-cut border p-5 backdrop-blur-2xl ${SURFACE_CLASSES[surface]} ${className}`}>
+    <section className={`corner-cut border p-5 backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${className}`}>
       {children}
     </section>
   );

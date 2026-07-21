@@ -62,33 +62,45 @@
    * or the SurfaceCard component (Phase 2).
    */
   :root {
-    --surface-primary: rgba(255, 255, 255, 0.82);
-    --surface-primary-border: rgba(148, 163, 184, 0.28);
-    --surface-raised: rgba(255, 255, 255, 0.94);
-    --surface-raised-border: rgba(148, 163, 184, 0.34);
-    --surface-interactive-hover: rgba(241, 245, 249, 0.9);
-    --surface-overlay: rgba(255, 255, 255, 0.96);
-    --surface-overlay-border: rgba(255, 255, 255, 0.7);
+    --surface-primary: rgba(252, 252, 253, 0.92);
+    --surface-primary-border: rgba(15, 23, 42, 0.1);
+    --surface-raised: #ffffff;
+    --surface-raised-border: rgba(15, 23, 42, 0.12);
+    --surface-interactive-hover: rgba(240, 241, 244, 0.95);
+    --surface-overlay: #ffffff;
+    --surface-overlay-border: rgba(15, 23, 42, 0.12);
   }
 
+  /**
+   * Phase 10 (analog-neomorphic pass, 2026-07-21): surfaces moved from glassy
+   * translucent-navy to a matte, near-opaque graphite — neutral gray, not the
+   * old blue-slate. Fine borders + high opacity give a tactile "layered
+   * material" read instead of frosted glass; box-shadow depth isn't used
+   * because the signature corner-cut clip would clip it, so depth comes from
+   * the border + the retuned ground beneath.
+   */
   .dark {
-    --surface-primary: rgba(15, 23, 42, 0.62);
-    --surface-primary-border: rgba(148, 163, 184, 0.14);
-    --surface-raised: rgba(15, 23, 42, 0.88);
-    --surface-raised-border: rgba(148, 163, 184, 0.2);
-    --surface-interactive-hover: rgba(30, 41, 59, 0.72);
-    --surface-overlay: rgba(2, 6, 23, 0.94);
-    --surface-overlay-border: rgba(255, 255, 255, 0.1);
+    --surface-primary: rgba(23, 26, 30, 0.9);
+    --surface-primary-border: rgba(255, 255, 255, 0.09);
+    --surface-raised: rgba(28, 31, 36, 0.97);
+    --surface-raised-border: rgba(255, 255, 255, 0.12);
+    --surface-interactive-hover: rgba(38, 42, 48, 0.85);
+    --surface-overlay: #15181c;
+    --surface-overlay-border: rgba(255, 255, 255, 0.12);
   }
 
+  /**
+   * Phase 10: the ground is a restrained, near-neutral matte gray — a premium
+   * athletics archive / coaching-office feel, not the old blue-cyan glass
+   * gradient. A single soft vertical falloff (lighter top, deeper bottom) reads
+   * like even overhead light on a physical surface; team color stays out of the
+   * ground entirely and lives only in accents.
+   */
   body {
     @apply font-sans antialiased text-slate-950 dark:text-slate-100;
     min-height: 100%;
-    background-color: #edf2f8;
-    background-image:
-      linear-gradient(135deg, rgba(37, 99, 235, 0.16), transparent 26%),
-      linear-gradient(225deg, rgba(14, 165, 233, 0.14), transparent 24%),
-      linear-gradient(180deg, #f8fbff 0%, #edf2f8 42%, #e5ebf4 100%);
+    background-color: #e8eaed;
+    background-image: linear-gradient(180deg, #f3f4f6 0%, #e8eaed 55%, #e0e3e7 100%);
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;
@@ -96,11 +108,8 @@
   }
 
   .dark body {
-    background-color: #08111f;
-    background-image:
-      linear-gradient(135deg, rgba(59, 130, 246, 0.14), transparent 24%),
-      linear-gradient(225deg, rgba(14, 165, 233, 0.12), transparent 22%),
-      linear-gradient(180deg, #0d1727 0%, #08111f 46%, #050b14 100%);
+    background-color: #0d0f12;
+    background-image: linear-gradient(180deg, #15181c 0%, #0d0f12 55%, #08090b 100%);
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;
