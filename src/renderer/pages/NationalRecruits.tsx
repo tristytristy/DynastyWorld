@@ -331,7 +331,14 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
-export function NationalRecruits() {
+/**
+ * The recruit browser — table on the left, full profile panel on the right,
+ * with all the recruiting controls (Edit recruiting / Edit recruit / Force
+ * Commit / reveal locks). Used for the whole national pool (`/recruits`) and,
+ * with `boardOnly`, as the My Board page (`/recruiting`) scoped to the user's
+ * board so both pages navigate identically.
+ */
+export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
@@ -349,7 +356,7 @@ export function NationalRecruits() {
   const [classYear, setClassYear] = useState('');
   const [homeState, setHomeState] = useState('');
   const [stage, setStage] = useState('');
-  const [board, setBoard] = useState(''); // '' = all, 'on' = on my board, 'off' = not on board
+  const [board, setBoard] = useState(boardOnly ? 'on' : ''); // '' = all, 'on' = on my board, 'off' = not on board
   const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -441,7 +448,7 @@ export function NationalRecruits() {
     setClassYear('');
     setHomeState('');
     setStage('');
-    setBoard('');
+    setBoard(boardOnly ? 'on' : ''); // keep the board scope on the My Board page
   }
 
   function openFull(r: NationalRecruit) {
@@ -486,7 +493,7 @@ export function NationalRecruits() {
     );
   }
 
-  const filtersActive = !!(search || position || stars || classYear || homeState || stage || board);
+  const filtersActive = !!(search || position || stars || classYear || homeState || stage || (!boardOnly && board));
   const shown = filtered.slice(0, RENDER_CAP);
 
   const th = (key: SortKey, label: string, alignRight = false) => (
@@ -501,22 +508,28 @@ export function NationalRecruits() {
   return (
     <div className="space-y-5">
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recruits</p>
-        <h2 className="mt-1 font-display text-page-title font-bold text-slate-950 dark:text-white">Every prospect in the country.</h2>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">{boardOnly ? 'My Board' : 'Recruits'}</p>
+        <h2 className="mt-1 font-display text-page-title font-bold text-slate-950 dark:text-white">
+          {boardOnly ? 'Your recruiting board.' : 'Every prospect in the country.'}
+        </h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.
+          {boardOnly
+            ? 'Every prospect on your board — filter and sort, then open one for their school interest, athletic snapshot, and the same editing + Force Commit controls as the national browser.'
+            : 'The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.'}
         </p>
       </div>
 
-      {/* Dashboard — full star distribution of the national pool. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Recruits" value={dash.total.toLocaleString()} />
-        <StatTile label="5-Star" value={dash.s5.toLocaleString()} />
-        <StatTile label="4-Star" value={dash.s4.toLocaleString()} />
-        <StatTile label="3-Star" value={dash.s3.toLocaleString()} />
-        <StatTile label="2-Star" value={dash.s2.toLocaleString()} />
-        <StatTile label="1-Star" value={dash.s1.toLocaleString()} />
-      </div>
+      {/* Dashboard — star distribution (national pool only; the board is small enough that the count line suffices there). */}
+      {!boardOnly && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <StatTile label="Recruits" value={dash.total.toLocaleString()} />
+          <StatTile label="5-Star" value={dash.s5.toLocaleString()} />
+          <StatTile label="4-Star" value={dash.s4.toLocaleString()} />
+          <StatTile label="3-Star" value={dash.s3.toLocaleString()} />
+          <StatTile label="2-Star" value={dash.s2.toLocaleString()} />
+          <StatTile label="1-Star" value={dash.s1.toLocaleString()} />
+        </div>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         {/* Filters + table */}
@@ -549,11 +562,13 @@ export function NationalRecruits() {
               <option value="">All stages</option>
               {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
             </select>
-            <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board status" className={FILTER_SELECT}>
-              <option value="">All recruits</option>
-              <option value="on">On my board</option>
-              <option value="off">Not on board</option>
-            </select>
+            {!boardOnly && (
+              <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board status" className={FILTER_SELECT}>
+                <option value="">All recruits</option>
+                <option value="on">On my board</option>
+                <option value="off">Not on board</option>
+              </select>
+            )}
             {filtersActive && (
               <button type="button" onClick={clearFilters} className="border border-slate-200/80 px-3 py-2 text-sm text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white">
                 Clear
@@ -562,7 +577,8 @@ export function NationalRecruits() {
           </div>
 
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''} ({dash.total.toLocaleString()} total)
+            Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''}
+            {boardOnly ? ' on your board' : ` (${dash.total.toLocaleString()} total)`}
             {filtered.length > RENDER_CAP && ' — narrow with filters to see more'}
           </p>
 
