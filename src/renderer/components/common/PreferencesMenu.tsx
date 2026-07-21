@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildTeamColorVars } from '../../lib/teamTheme';
 import { DEFAULT_THEME_PREFERENCE, useTheme } from '../../theme/ThemeProvider';
 import type { ColorMode } from '../../theme/themePreference';
-import { AnchoredMenuPanel } from './AnchoredMenuPanel';
+import { CenteredModalPanel } from './CenteredModalPanel';
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -247,7 +247,7 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
         Preferences
       </button>
 
-      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} isDark={isDark}>
+      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} isDark={isDark}>
         <div className="relative isolate">
             <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
             <div
@@ -427,7 +427,7 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
               </div>
             </div>
           </div>
-      </AnchoredMenuPanel>
+      </CenteredModalPanel>
     </div>
   );
 }

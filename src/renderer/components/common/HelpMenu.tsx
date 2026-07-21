@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
-import { AnchoredMenuPanel } from './AnchoredMenuPanel';
+import { CenteredModalPanel } from './CenteredModalPanel';
 
 interface HelpTopic {
   id: string;
@@ -270,7 +270,7 @@ export function HelpMenu({ triggerClassName }: { triggerClassName?: string } = {
         Help
       </button>
 
-      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={46} isDark={isDark}>
+      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={46} isDark={isDark}>
         <div className="relative isolate">
             <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
             <div aria-hidden="true" className={`pointer-events-none absolute inset-[1px] ${panelGradientClass}`} />
@@ -314,7 +314,7 @@ export function HelpMenu({ triggerClassName }: { triggerClassName?: string } = {
               </div>
             </div>
           </div>
-      </AnchoredMenuPanel>
+      </CenteredModalPanel>
     </div>
   );
 }

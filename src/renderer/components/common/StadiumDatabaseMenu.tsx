@@ -3,7 +3,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useStadiumData } from '../../data/StadiumDataProvider';
 import { DEFAULT_TEAM_STADIUMS } from '../../lib/stadiumData';
 import { canonicalKey } from '../../lib/assetMapping';
-import { AnchoredMenuPanel } from './AnchoredMenuPanel';
+import { CenteredModalPanel } from './CenteredModalPanel';
 
 interface TeamEntry {
   key: string;
@@ -149,7 +149,7 @@ export function StadiumDatabaseMenu({ triggerClassName }: { triggerClassName?: s
         Stadium
       </button>
 
-      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={42} isDark={isDark}>
+      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={42} isDark={isDark}>
         <div className="relative isolate">
             <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${panelUnderlayClass}`} />
             <div aria-hidden="true" className={`pointer-events-none absolute inset-[1px] ${panelGradientClass}`} />
@@ -319,7 +319,7 @@ export function StadiumDatabaseMenu({ triggerClassName }: { triggerClassName?: s
               </div>
             </div>
           </div>
-      </AnchoredMenuPanel>
+      </CenteredModalPanel>
     </div>
   );
 }

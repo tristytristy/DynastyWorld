@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
-import { AnchoredMenuPanel } from './AnchoredMenuPanel';
+import { CenteredModalPanel } from './CenteredModalPanel';
 
 /**
  * Recruiting experience settings — the "Recruiting" entry under EXPERIENCE in
@@ -46,7 +46,7 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
         Recruiting
       </button>
 
-      <AnchoredMenuPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={26} isDark={isDark}>
+      <CenteredModalPanel anchorRef={triggerRef} open={isOpen} onClose={() => setIsOpen(false)} widthRem={26} isDark={isDark}>
         <div className={`relative overflow-hidden p-5 ${panelShellClass}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -108,7 +108,7 @@ export function RecruitingSettingsMenu({ triggerClassName }: { triggerClassName?
             </label>
           </section>
         </div>
-      </AnchoredMenuPanel>
+      </CenteredModalPanel>
     </div>
   );
 }
