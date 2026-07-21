@@ -9,6 +9,7 @@ import type {
   PortraitSearchResponse,
   RecruitEditData,
   RecruitEditFields,
+  RecruitInfluenceEdit,
   SaveEditResult,
   SaveFileBackupResult,
 } from '../../shared/types';
@@ -22,6 +23,7 @@ import {
   saveRecruitEdits,
   searchPortraits,
 } from '../editorWrite';
+import { saveRecruitInfluence } from '../recruitingWrite';
 
 export function registerEditorHandlers(): void {
   ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
@@ -73,6 +75,13 @@ export function registerEditorHandlers(): void {
     IPC.editor.saveRecruit,
     async (_event, dynastyId: string, playerId: number, fields: RecruitEditFields): Promise<SaveEditResult> => {
       return saveRecruitEdits(dynastyId, playerId, fields);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.saveRecruitInfluence,
+    async (_event, dynastyId: string, playerId: number, edit: RecruitInfluenceEdit): Promise<SaveEditResult> => {
+      return saveRecruitInfluence(dynastyId, playerId, edit);
     },
   );
 

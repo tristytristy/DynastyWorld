@@ -84,6 +84,8 @@ const api: DynastyApi = {
     getRecruit: (dynastyId, playerId) => ipcRenderer.invoke(IPC.editor.getRecruit, dynastyId, playerId),
     saveRecruit: (dynastyId, playerId, fields) =>
       ipcRenderer.invoke(IPC.editor.saveRecruit, dynastyId, playerId, fields),
+    saveRecruitInfluence: (dynastyId, playerId, edit) =>
+      ipcRenderer.invoke(IPC.editor.saveRecruitInfluence, dynastyId, playerId, edit),
     searchPortraits: (kind, query, filters, page) =>
       ipcRenderer.invoke(IPC.editor.searchPortraits, kind, query, filters, page),
   },

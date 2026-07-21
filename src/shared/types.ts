@@ -123,6 +123,19 @@ export interface RecruitEditFields {
   stateRank: number;
 }
 
+/** One editable top-school slot for a recruit — the school (by TeamIndex) and its 0-99 interest. Order matches the recruit's TopSchoolsList slots. */
+export interface RecruitTopSchoolEdit {
+  teamIndex: number;
+  influence: number;
+}
+
+/** Step-1 recruiting write payload — a prospect's decision funnel (verified round-trip safe): commitment stage, commit score, and each top school's interest. Writes Recruit.RecruitStage/CommitScore + ProspectTargetSchool.TeamId/TeamInfluence. */
+export interface RecruitInfluenceEdit {
+  stage: string;
+  commitScore: number;
+  topSchools: RecruitTopSchoolEdit[];
+}
+
 export interface RecruitEditData {
   playerId: number;
   fields: RecruitEditFields;
@@ -1421,6 +1434,7 @@ export interface DynastyApi {
     ) => Promise<SaveEditResult>;
     getRecruit: (dynastyId: string, playerId: number) => Promise<RecruitEditData | null>;
     saveRecruit: (dynastyId: string, playerId: number, fields: RecruitEditFields) => Promise<SaveEditResult>;
+    saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
     searchPortraits: (
       kind: 'player' | 'coach',
       query: string,

@@ -98,6 +98,7 @@ function RecruitPanel({
   recruit,
   canEdit,
   onEdit,
+  onEditRecruiting,
   onOpenFull,
   ovrUnlocked,
   onOvrLockClick,
@@ -107,6 +108,7 @@ function RecruitPanel({
   recruit: NationalRecruit | null;
   canEdit: boolean;
   onEdit: (r: NationalRecruit) => void;
+  onEditRecruiting: (r: NationalRecruit) => void;
   onOpenFull: (r: NationalRecruit) => void;
   ovrUnlocked: boolean;
   onOvrLockClick: (r: NationalRecruit) => void;
@@ -262,15 +264,22 @@ function RecruitPanel({
         )}
       </div>
 
-      {/* Action — edit (full width); the name/portrait opens the full profile. */}
+      {/* Actions — recruiting edits + full player edit. The name/portrait opens the full profile. */}
       {canEdit && (
-        <div className="border-t border-slate-200/70 pt-4 dark:border-white/10">
+        <div className="flex gap-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => onEditRecruiting(recruit)}
+            className="flex-1 bg-[var(--team-primary)] px-3 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95"
+          >
+            Edit recruiting
+          </button>
           <button
             type="button"
             onClick={() => onEdit(recruit)}
-            className="w-full border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+            className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
           >
-            Edit recruit
+            Edit ratings
           </button>
         </div>
       )}
@@ -297,6 +306,7 @@ export function NationalRecruits() {
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pendingUnlock, setPendingUnlock] = useState<{ recruit: NationalRecruit; stat: 'ovr' | 'athletic' } | null>(null);
+  const [editingRecruit, setEditingRecruit] = useState<NationalRecruit | null>(null);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
   const [stars, setStars] = useState('');
@@ -592,6 +602,7 @@ export function NationalRecruits() {
             recruit={selected}
             canEdit={canEdit}
             onEdit={editRecruit}
+            onEditRecruiting={setEditingRecruit}
             onOpenFull={openFull}
             ovrUnlocked={selected ? ovr.isUnlocked(selected.playerId) : false}
             onOvrLockClick={ovrLockClick}
@@ -618,6 +629,161 @@ export function NationalRecruits() {
           />,
           document.body,
         )}
+
+      {editingRecruit &&
+        id &&
+        createPortal(
+          <RecruitInfluenceModal
+            dynastyId={id}
+            recruit={editingRecruit}
+            onClose={() => setEditingRecruit(null)}
+            onSaved={() => {
+              setEditingRecruit(null);
+              window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr));
+            }}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/** The stage options for the commitment dropdown — the decision funnel, verified enum values. */
+const STAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Top10', label: 'Top 10' },
+  { value: 'Top5', label: 'Top 5' },
+  { value: 'Top3', label: 'Top 3' },
+  { value: 'SoftCommitted', label: 'Committed (soft)' },
+  { value: 'Signed', label: 'Signed' },
+];
+
+/**
+ * Recruiting editor — Step-1 write features (verified round-trip safe): a
+ * prospect's commitment stage + commit score, and each top school's interest.
+ * Writes through the auto-backup path; on success the browser re-syncs.
+ */
+function RecruitInfluenceModal({
+  dynastyId,
+  recruit,
+  onClose,
+  onSaved,
+}: {
+  dynastyId: string;
+  recruit: NationalRecruit;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [stage, setStage] = useState(recruit.recruitStage);
+  const [commitScore, setCommitScore] = useState(recruit.commitScore);
+  const [influences, setInfluences] = useState<Record<number, number>>(
+    () => Object.fromEntries(recruit.topSchools.map((s) => [s.teamIndex, s.influence])),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !saving) onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const result = await window.api.editor.saveRecruitInfluence(dynastyId, recruit.playerId, {
+      stage,
+      commitScore,
+      topSchools: recruit.topSchools.map((s) => ({ teamIndex: s.teamIndex, influence: influences[s.teamIndex] ?? s.influence })),
+    });
+    if (result.success) {
+      onSaved();
+    } else {
+      setError(result.message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => !saving && onClose()} aria-hidden="true" />
+      <div className="corner-cut relative flex max-h-[88vh] w-full max-w-lg flex-col border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 p-5 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <PlayerPortrait player={recruit} size="sm" className="!h-10 !w-10" />
+            <div>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Edit recruiting</p>
+              <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{recruit.firstName} {recruit.lastName}</h3>
+            </div>
+          </div>
+          <button type="button" onClick={() => !saving && onClose()} className="border border-slate-300/85 bg-white/92 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900">Close</button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          {/* Commitment */}
+          <section>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Commitment</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="mb-1 block text-xs text-slate-400 dark:text-slate-500">Stage</span>
+                <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${FILTER_SELECT} w-full`}>
+                  {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {!STAGE_OPTIONS.some((o) => o.value === stage) && <option value={stage}>{stage}</option>}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-xs text-slate-400 dark:text-slate-500">Commit score</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={1000}
+                  value={commitScore}
+                  onChange={(e) => setCommitScore(Number(e.target.value))}
+                  className={`${FILTER_SELECT} w-full`}
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* Top-school interest */}
+          {recruit.topSchools.length > 0 && (
+            <section>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">School interest (0–99)</p>
+              <div className="mt-2 space-y-2">
+                {recruit.topSchools.map((s) => (
+                  <div key={s.teamIndex} className="flex items-center gap-3">
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                      <TeamLogo team={{ assetName: s.teamName, label: s.teamName }} size="sm" className="!h-5 !w-5 shrink-0" />
+                      <span className="truncate">{s.teamName}</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={influences[s.teamIndex] ?? s.influence}
+                      onChange={(e) => setInfluences((prev) => ({ ...prev, [s.teamIndex]: Number(e.target.value) }))}
+                      className="w-20 border border-slate-200/80 bg-white/80 px-2 py-1.5 text-right text-sm text-slate-900 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-white"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {error && <p className="border border-red-300/70 bg-red-100/70 px-3 py-2 text-sm text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 p-5 dark:border-white/10">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">A backup of your save is made automatically before writing.</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => !saving && onClose()} disabled={saving} className="px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 disabled:opacity-50 dark:text-slate-400 dark:hover:text-white">Cancel</button>
+            <button type="button" onClick={save} disabled={saving} className="bg-[var(--team-primary)] px-5 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95 disabled:opacity-60">
+              {saving ? 'Saving…' : 'Save to dynasty'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -61,6 +61,7 @@ export const IPC = {
     saveCoach: 'editor:saveCoach',
     getRecruit: 'editor:getRecruit',
     saveRecruit: 'editor:saveRecruit',
+    saveRecruitInfluence: 'editor:saveRecruitInfluence',
     searchPortraits: 'editor:searchPortraits',
   },
   media: {
