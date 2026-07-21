@@ -14,7 +14,8 @@
     "package": "npm run build:prod && electron-builder",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "manual": "electron docs/manual/make-manual-pdf.js"
   },
   "dependencies": {
     "madden-franchise": "^4.3.1",

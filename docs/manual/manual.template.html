@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dynasty Hub — User Manual</title>
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400; font-style: normal; src: url(__INTER400__) format('woff2'); font-display: block; }
+  @font-face { font-family: 'Inter'; font-weight: 500; font-style: normal; src: url(__INTER500__) format('woff2'); font-display: block; }
+  @font-face { font-family: 'Inter'; font-weight: 600; font-style: normal; src: url(__INTER600__) format('woff2'); font-display: block; }
+  @font-face { font-family: 'Inter'; font-weight: 700; font-style: normal; src: url(__INTER700__) format('woff2'); font-display: block; }
+
+  :root {
+    --paper: #FBF9F4;
+    --paper-2: #F3EFE6;
+    --ink: #1B1A18;
+    --muted: #6E6A61;
+    --gold: #C39B45;
+    --gold-deep: #92702A;
+    --gold-soft: #F0E7D0;
+    --black: #0B0B0C;
+    --hairline: #E6DFD1;
+    --warn: #B04528;
+    --warn-bg: #F8EBE4;
+    --tip: #4C7A3F;
+    --tip-bg: #ECF1E6;
+  }
+
+  * { box-sizing: border-box; }
+
+  @page { size: Letter; margin: 0; }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+
+  /* ---- Page scaffolding ---- */
+  .page {
+    position: relative;
+    width: 8.5in;
+    min-height: 11in;
+    padding: 0.9in 0.85in 0.95in;
+    background: var(--paper);
+    overflow: hidden;
+  }
+  .page + .page { break-before: page; }
+
+  .cut { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%); }
+  .cut-sm { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%); }
+
+  /* ---- Typography ---- */
+  h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  p { margin: 0 0 0.62rem; }
+  strong { font-weight: 700; color: var(--ink); }
+  em { font-style: normal; color: var(--gold-deep); font-weight: 600; }
+  .eyebrow { font-size: 8pt; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: var(--gold-deep); }
+  .lead { font-size: 12pt; line-height: 1.65; color: #38352F; }
+  .muted { color: var(--muted); }
+
+  /* ---- Cover ---- */
+  .cover {
+    padding: 0;
+    background: var(--black);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  .cover .glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(90% 70% at 100% 100%, rgba(195,155,69,0.34), transparent 55%),
+      radial-gradient(70% 50% at 0% 0%, rgba(195,155,69,0.10), transparent 55%);
+  }
+  .cover .frame { position: absolute; inset: 0.35in; border: 1px solid rgba(255,255,255,0.14); }
+  .cover .frame::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 26px; height: 26px; background: var(--black); border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14); transform: translate(0,0); }
+  .cover-inner { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; padding: 1.1in 0.95in 1in; }
+  .cover-logo { width: 4.7in; max-width: 78%; height: auto; display: block; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.55)); }
+  .cover-spacer { flex: 1; }
+  .cover .kicker { font-size: 9pt; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold); }
+  .cover h1 { font-size: 46pt; line-height: 0.98; letter-spacing: -0.02em; margin: 0.12in 0 0.16in; }
+  .cover .sub { font-size: 12.5pt; color: rgba(255,255,255,0.72); max-width: 5in; line-height: 1.55; }
+  .cover .rule { width: 1.1in; height: 3px; background: var(--gold); margin: 0.3in 0 0.28in; }
+  .cover .meta { display: flex; gap: 0.5in; font-size: 9.5pt; color: rgba(255,255,255,0.62); }
+  .cover .meta b { color: #fff; font-weight: 600; display: block; font-size: 11pt; margin-bottom: 1px; }
+
+  /* ---- Contents ---- */
+  .toc-grid { margin-top: 0.4in; column-count: 2; column-gap: 0.5in; }
+  .toc-item { break-inside: avoid; display: flex; gap: 0.16in; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+  .toc-num { font-weight: 700; color: var(--gold-deep); font-size: 9.5pt; min-width: 0.32in; }
+  .toc-title { font-weight: 600; font-size: 10.5pt; }
+  .toc-desc { display: block; font-weight: 400; font-size: 8.5pt; color: var(--muted); }
+
+  /* ---- Section header ---- */
+  .sec-head { position: relative; background: var(--black); color: #fff; padding: 0.32in 0.34in; margin: 0 0 0.34in; }
+  .sec-head .num { font-size: 9pt; font-weight: 700; letter-spacing: 0.28em; color: var(--gold); }
+  .sec-head h2 { font-size: 22pt; line-height: 1.02; margin-top: 6px; }
+  .sec-head .tag { position: absolute; top: 0.32in; right: 0.34in; font-size: 8pt; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+
+  h3.sub { font-size: 13pt; color: var(--ink); margin: 0.28in 0 0.08in; padding-left: 0.16in; border-left: 3px solid var(--gold); }
+  h4.mini { font-size: 10.5pt; color: var(--gold-deep); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.2in 0 0.05in; }
+
+  ul, ol { margin: 0 0 0.62rem; padding-left: 1.15rem; }
+  li { margin: 0.14rem 0; }
+  ul.clean { list-style: none; padding-left: 0; }
+  ul.clean li { position: relative; padding-left: 0.28in; margin: 0.13rem 0; }
+  ul.clean li::before { content: ''; position: absolute; left: 0; top: 0.34em; width: 8px; height: 8px; background: var(--gold); }
+
+  /* ---- Cards & callouts ---- */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin: 0.12in 0; }
+  .card { background: #fff; border: 1px solid var(--hairline); padding: 0.2in 0.22in; }
+  .card .ct { font-weight: 700; font-size: 10.5pt; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+  .card .ct .dot { width: 9px; height: 9px; background: var(--gold); flex: none; }
+  .card p { font-size: 9.5pt; color: #46433C; margin: 0; }
+
+  .callout { position: relative; padding: 0.2in 0.24in 0.2in 0.5in; margin: 0.16in 0; background: var(--gold-soft); border: 1px solid #E7D6A6; }
+  .callout::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--gold); }
+  .callout .lbl { font-size: 8pt; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold-deep); margin-bottom: 3px; }
+  .callout p { margin: 0; font-size: 9.7pt; }
+  .callout.warn { background: var(--warn-bg); border-color: #ECC9BC; }
+  .callout.warn::before { background: var(--warn); }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.tip { background: var(--tip-bg); border-color: #CFE0C2; }
+  .callout.tip::before { background: var(--tip); }
+  .callout.tip .lbl { color: var(--tip); }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 0.1in 0; }
+  .steps li { position: relative; padding: 0.02in 0 0.16in 0.5in; margin: 0; }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 0.32in; height: 0.32in; background: var(--black); color: var(--gold); font-weight: 700; font-size: 10pt; display: flex; align-items: center; justify-content: center; }
+  .steps li:not(:last-child)::after { content: ''; position: absolute; left: calc(0.16in - 1px); top: 0.32in; bottom: 0; width: 2px; background: var(--hairline); }
+
+  .kbd { font-family: 'Inter', monospace; font-weight: 600; font-size: 9pt; background: #fff; border: 1px solid var(--hairline); border-bottom-width: 2px; padding: 1px 6px; }
+
+  .fnav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.1in 0 0.16in; }
+  .chip { font-size: 8.5pt; font-weight: 600; padding: 3px 9px; background: #fff; border: 1px solid var(--hairline); color: #46433C; }
+  .chip .g { color: var(--gold-deep); }
+
+  .footer-note { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.5in; display: flex; justify-content: space-between; font-size: 7.5pt; letter-spacing: 0.14em; text-transform: uppercase; color: #B7AF9E; border-top: 1px solid var(--hairline); padding-top: 7px; }
+
+  .credit-row { display: flex; justify-content: space-between; gap: 0.3in; padding: 0.13in 0; border-bottom: 1px solid var(--hairline); }
+  .credit-row .k { font-weight: 700; font-size: 10pt; }
+  .credit-row .v { color: var(--muted); font-size: 9.5pt; text-align: right; max-width: 4.2in; }
+
+  .end { text-align: center; padding-top: 1.4in; }
+  .end img { width: 3.2in; opacity: 0.95; }
+  .end .tl { margin-top: 0.4in; font-size: 9pt; letter-spacing: 0.28em; text-transform: uppercase; color: var(--gold-deep); }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page cover">
+  <div class="glow"></div>
+  <div class="frame"></div>
+  <div class="cover-inner">
+    <img class="cover-logo" src="__LOGO_MARK__" alt="College Football 27 Dynasty Hub" />
+    <div class="cover-spacer"></div>
+    <div class="kicker">Official Companion · User Manual</div>
+    <h1>Dynasty<br/>Hub.</h1>
+    <div class="sub">Everything your College Football 27 dynasty deserves — its record, its stars, its story — kept safe, season after season.</div>
+    <div class="rule"></div>
+    <div class="meta">
+      <div><b>Version __VERSION__</b>Desktop app · Windows</div>
+      <div><b>Read me first</b>Written for players of every level</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTENTS ============ -->
+<section class="page">
+  <div class="eyebrow">Contents</div>
+  <h1 style="font-size:30pt; margin:6px 0 2px;">What's inside</h1>
+  <p class="muted" style="max-width:5in;">This manual walks you through the whole app, one piece at a time. Read it start to finish, or jump to whatever you need.</p>
+  <div class="toc-grid">
+    <div class="toc-item"><span class="toc-num">01</span><span><span class="toc-title">Welcome</span><span class="toc-desc">What Dynasty Hub is (and isn't)</span></span></div>
+    <div class="toc-item"><span class="toc-num">02</span><span><span class="toc-title">Getting Started</span><span class="toc-desc">Install, import, and the one habit that matters</span></span></div>
+    <div class="toc-item"><span class="toc-num">03</span><span><span class="toc-title">How It's Organized</span><span class="toc-desc">The four hubs and the season picker</span></span></div>
+    <div class="toc-item"><span class="toc-num">04</span><span><span class="toc-title">The Dashboard</span><span class="toc-desc">Your dynasties and their controls</span></span></div>
+    <div class="toc-item"><span class="toc-num">05</span><span><span class="toc-title">Coach Hub</span><span class="toc-desc">Your coach's career, staff, and timeline</span></span></div>
+    <div class="toc-item"><span class="toc-num">06</span><span><span class="toc-title">Team Hub</span><span class="toc-desc">Your program, season by season</span></span></div>
+    <div class="toc-item"><span class="toc-num">07</span><span><span class="toc-title">NCAA Hub</span><span class="toc-desc">The whole nation — including every player</span></span></div>
+    <div class="toc-item"><span class="toc-num">08</span><span><span class="toc-title">Recruit Hub</span><span class="toc-desc">Your board and the national pool</span></span></div>
+    <div class="toc-item"><span class="toc-num">09</span><span><span class="toc-title">The Media Gallery</span><span class="toc-desc">Screenshots and clips, tagged and linked</span></span></div>
+    <div class="toc-item"><span class="toc-num">10</span><span><span class="toc-title">Editing Players &amp; Coaches</span><span class="toc-desc">The one place the app writes to your save</span></span></div>
+    <div class="toc-item"><span class="toc-num">11</span><span><span class="toc-title">Preferences &amp; Tools</span><span class="toc-desc">Make it look and feel the way you want</span></span></div>
+    <div class="toc-item"><span class="toc-num">12</span><span><span class="toc-title">Experimental Features</span><span class="toc-desc">Powerful tools — and how they stay safe</span></span></div>
+    <div class="toc-item"><span class="toc-num">13</span><span><span class="toc-title">Tips &amp; Best Practices</span><span class="toc-desc">Get the most out of it</span></span></div>
+    <div class="toc-item"><span class="toc-num">14</span><span><span class="toc-title">Honest Limitations</span><span class="toc-desc">What it can't do, and why</span></span></div>
+    <div class="toc-item"><span class="toc-num">15</span><span><span class="toc-title">Credits &amp; Thanks</span><span class="toc-desc">Who and what made this</span></span></div>
+  </div>
+  <div class="footer-note"><span>Dynasty Hub — User Manual</span><span>Version __VERSION__</span></div>
+</section>
+
+<!-- ============ 01 WELCOME ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 01</div><h2>Welcome</h2><div class="tag">Start here</div></div>
+  <p class="lead">Dynasty Hub is a companion app for <strong>EA Sports College Football 27</strong>. It reads your dynasty save and turns it into a clean, browsable archive — your roster, schedule, stats, standings, recruiting, awards, and more — that you can explore any time, without the game running.</p>
+
+  <h3 class="sub">The single most important idea</h3>
+  <p>The app <strong>reads</strong> your save. It does not change your game. Importing, syncing, and browsing never touch your dynasty — they just take a snapshot and show it to you beautifully.</p>
+  <p>There is exactly one exception, and it only happens when you deliberately ask for it: the <em>editing</em> tools (Section 10) and the <em>experimental</em> tools (Section 12) can write back to your save. Everywhere else, you can click around with zero risk.</p>
+
+  <div class="callout tip">
+    <div class="lbl">In plain terms</div>
+    <p>Think of it like a scrapbook that fills itself in from your game. Looking through the scrapbook never changes the game. Only the clearly-marked "edit" buttons do — and even those back up your save first.</p>
+  </div>
+
+  <h3 class="sub">Why you'd want it</h3>
+  <div class="cards">
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>A real history</div><p>The game only remembers this season. Dynasty Hub keeps every season you sync, so year 12 can still look back at year 1.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Everything in one place</div><p>Roster, schedule, stats, recruiting, awards, standings, and the whole nation's players — all a click apart.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Your story, shareable</div><p>Tag screenshots to games and players, and export a self-contained web page of your dynasty's history.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Made to look good</div><p>Your team's colors run through the whole app, so it always feels like <em>your</em> program.</p></div>
+  </div>
+  <div class="footer-note"><span>01 · Welcome</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 02 GETTING STARTED ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 02</div><h2>Getting Started</h2><div class="tag">Setup</div></div>
+  <p class="lead">Three short steps and you're in: install the app, import your save, then get into the habit of syncing. Here's each one.</p>
+
+  <h3 class="sub">Step 1 — Install</h3>
+  <p>Run the installer (<span class="kbd">CFB Dynasty Hub Setup</span>) or the portable version. Because the app isn't signed by a big publisher, Windows may show a blue <strong>SmartScreen</strong> warning the first time. That's normal for small apps — click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+
+  <h3 class="sub">Step 2 — Import your dynasty</h3>
+  <ol class="steps">
+    <li>Open Dynasty Hub. You'll land on the <strong>Dashboard</strong>.</li>
+    <li>Click <strong>Import Dynasty</strong> and pick your save file. EA's saves usually have no file extension you'll recognize, so the picker shows everything — just choose your dynasty file.</li>
+    <li>The app reads it and builds your first season. Done.</li>
+  </ol>
+  <p class="muted">Your save file is never modified by importing. The app only makes its own private copy of the information it needs.</p>
+
+  <h3 class="sub">Step 3 — The one habit that matters: sync every season</h3>
+  <p>A <strong>sync</strong> captures your save exactly as it looks right now. Once you advance to the next year in-game, this season's detail is gone from the save forever — the game only ever keeps the current state.</p>
+  <div class="callout">
+    <div class="lbl">The golden rule</div>
+    <p>Sync once near the <strong>end of every season</strong> — after your bowl or playoff and awards — right before you advance. That's when the season's story is complete: final record, postseason result, and every award locked in.</p>
+  </div>
+  <p>Syncing more than once in a season is completely safe; it just refreshes that year's data in place. Nothing is ever duplicated. And it's one click — no file picker — because the app already knows where your save lives.</p>
+
+  <h4 class="mini">If you miss a season</h4>
+  <p>The next time you sync, the app recovers that year's <strong>league-wide</strong> facts — the national champion, each conference champion, and the major awards — as a <strong>“History Only”</strong> season. Your own team's roster and game-by-game stats for a skipped year can't come back, because the save simply doesn't keep them. Recovering the trophies is a nice consolation, not a substitute for syncing.</p>
+
+  <div class="callout tip">
+    <div class="lbl">Best possible archive</div>
+    <p>Start the app on a <strong>brand-new dynasty</strong> and sync from season one. If you first import a save that's already several years deep, only the current season arrives in full detail.</p>
+  </div>
+  <div class="footer-note"><span>02 · Getting Started</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 03 ORGANIZATION ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 03</div><h2>How It's Organized</h2><div class="tag">The map</div></div>
+  <p class="lead">The app is split into four <strong>hubs</strong>, grouped by whose story they tell. Once you know the four, you always know where to look.</p>
+
+  <div class="cards">
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Coach Hub</div><p>The person. Your coach's career, record, staff, and season-by-season timeline — even across different schools.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Team Hub</div><p>Your program. Roster, schedule, statistics, trends, transfers, media, awards, and history for the selected season.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>NCAA Hub</div><p>The nation. National rankings, every team's players, standings, national awards, All-America teams, and the record book.</p></div>
+    <div class="card cut-sm"><div class="ct"><span class="dot"></span>Recruit Hub</div><p>The future. Your recruiting board and the entire national pool of prospects, with the tools to work them.</p></div>
+  </div>
+
+  <h3 class="sub">Getting around</h3>
+  <p>The <strong>top tabs</strong> switch between hubs. Inside each hub, a row of smaller tabs picks the page. The <strong>left sidebar</strong> lists your dynasties (switch programs with one click) and holds your <strong>Tools</strong> — Preferences, Stadiums, and Help.</p>
+
+  <h3 class="sub">The season picker</h3>
+  <p>Once a dynasty has more than one tracked season, a <strong>Season dropdown</strong> appears next to the tabs. Pick any year to see the app exactly as it stood then. Two kinds of season can appear:</p>
+  <ul class="clean">
+    <li><strong>A normal season</strong> — synced while it was live. Full detail: roster, schedule, standings, stats, awards, staff, everything.</li>
+    <li><strong>A History Only season</strong> — recovered after the fact. You'll see that year's champions and major awards on the History tab, but not your own roster or game logs (see Section 02).</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="lbl">Remember it this way</div>
+    <p>Coach Hub answers “who is this coach?” Team Hub answers “how is this season going?” NCAA Hub answers “what's happening around the country?” Recruit Hub answers “who's coming next?”</p>
+  </div>
+  <div class="footer-note"><span>03 · How It's Organized</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 04 DASHBOARD ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 04</div><h2>The Dashboard</h2><div class="tag">Home base</div></div>
+  <p class="lead">The Dashboard is the first thing you see. Every dynasty you've imported shows up here as a card, and each card carries a small row of buttons.</p>
+
+  <h3 class="sub">What each button does</h3>
+  <ul class="clean">
+    <li><strong>Sync</strong> — re-reads the exact save on record, no file picker. Your everyday button; use it before advancing each season.</li>
+    <li><strong>Export</strong> — saves a self-contained web page of your dynasty's history (record book, résumé, timeline, milestones) that opens in any browser, no app required. Great for sharing.</li>
+    <li><strong>Backup</strong> — makes a timestamped copy of your <em>actual game save</em>, stored safely outside the game folder. Worth doing before any editing session.</li>
+    <li><strong>Delete</strong> — removes the dynasty from the app only. It never touches your game save.</li>
+  </ul>
+
+  <h3 class="sub">Import &amp; Relink</h3>
+  <p>The big <strong>Import Dynasty</strong> button adds a save. If you rename, move, or restore your save file, the app matches dynasties by their exact file location — so a moved file can look brand-new. When it notices, the app offers to <strong>link</strong> the file to the existing dynasty instead of making a duplicate. Just confirm the prompt.</p>
+
+  <div class="callout">
+    <div class="lbl">Good to know</div>
+    <p>Import, Sync, Export, Backup, and Delete are all safe for your game. The only tools that ever write into your save are the editing and experimental features, covered in Sections 10 and 12.</p>
+  </div>
+  <div class="footer-note"><span>04 · The Dashboard</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 05 COACH HUB ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 05</div><h2>Coach Hub</h2><div class="tag">The person</div></div>
+  <p class="lead">Coach Hub is your coach's career page. It's the story of <em>you</em> — not just this team, but everywhere you've been.</p>
+
+  <h3 class="sub">What you'll find</h3>
+  <ul class="clean">
+    <li><strong>Profile &amp; lifetime record</strong> — tracked by the game across your entire career, not just what you've imported here.</li>
+    <li><strong>Season-high rankings</strong> — the best your team reached in the Media, Coaches, and Playoff polls this season.</li>
+    <li><strong>Your staff</strong> — the coordinators and assistants around you.</li>
+    <li><strong>Career timeline</strong> — every season you've coached, in order, even across different schools if you've moved on.</li>
+  </ul>
+  <p>Click the pencil on any coach card to open the editor (see Section 10).</p>
+  <div class="footer-note"><span>05 · Coach Hub</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 06 TEAM HUB ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 06</div><h2>Team Hub</h2><div class="tag">Your program</div></div>
+  <p class="lead">Team Hub is your program for the selected season. A persistent masthead shows the logo, name, and record; the tabs below take you everywhere.</p>
+  <div class="fnav">
+    <span class="chip"><span class="g">▸</span> Overview</span><span class="chip"><span class="g">▸</span> Roster</span><span class="chip"><span class="g">▸</span> Schedule</span><span class="chip"><span class="g">▸</span> Statistics</span><span class="chip"><span class="g">▸</span> Trends</span><span class="chip"><span class="g">▸</span> Transfers</span><span class="chip"><span class="g">▸</span> Media</span><span class="chip"><span class="g">▸</span> Team Awards</span><span class="chip"><span class="g">▸</span> Weekly Honors</span><span class="chip"><span class="g">▸</span> History</span>
+  </div>
+
+  <h4 class="mini">Overview</h4>
+  <p>The season at a glance: record, conference record, poll ranks, recruiting-class rank, prestige, roster size, and average overall — plus recent and upcoming games, top players, and any trophies won.</p>
+
+  <h4 class="mini">Roster</h4>
+  <p>Every player on your team. Search by name, filter by unit, position, or class, and sort by any column. Switch between a compact <strong>List</strong> and a visual <strong>Gallery</strong>. Click any player to open their full profile; on the current season, a pencil lets you edit them.</p>
+
+  <h4 class="mini">Schedule</h4>
+  <p>Your full slate — opponents, ranks, home/away, results, and running record. Conference games, rivalries, and bowls are marked, and each row opens the game's box score.</p>
+
+  <h4 class="mini">Statistics</h4>
+  <p>Team and player leaders across passing, rushing, receiving, defense, kicking, punting, and returns — with leader cards that put a face and number to each category.</p>
+
+  <h4 class="mini">Trends</h4>
+  <p>Charts that track how your program moves across the seasons you've synced — the payoff of syncing every year.</p>
+
+  <h4 class="mini">Transfers</h4>
+  <p>Who came and who left through the transfer portal, season over season.</p>
+
+  <h4 class="mini">Media, Team Awards, Weekly Honors, History</h4>
+  <p>Media is your season photo &amp; clip gallery (Section 09). Team Awards and Weekly Honors collect the hardware your players earned. History is your program's trophy case and season-by-season résumé — the long view of the whole dynasty.</p>
+  <div class="footer-note"><span>06 · Team Hub</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 07 NCAA HUB ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 07</div><h2>NCAA Hub</h2><div class="tag">The nation</div></div>
+  <p class="lead">The NCAA Hub zooms out from your team to the whole country. Same clean look, national scope.</p>
+  <div class="fnav">
+    <span class="chip"><span class="g">▸</span> Overview</span><span class="chip"><span class="g">▸</span> Players</span><span class="chip"><span class="g">▸</span> Standings</span><span class="chip"><span class="g">▸</span> Annual Awards</span><span class="chip"><span class="g">▸</span> All-America &amp; All-Conf</span><span class="chip"><span class="g">▸</span> Record Book</span>
+  </div>
+
+  <h4 class="mini">Overview</h4>
+  <p>A national snapshot — the top of the polls and the shape of the season around the country.</p>
+
+  <h4 class="mini">Players — every player in the nation</h4>
+  <p>This is the national twin of your team Roster: <strong>every player in the country</strong> in one searchable place — thousands of them. It works exactly like your own roster, with the same search, filters, sorting, and List/Gallery views, plus two extras for the national scope: filter by <strong>conference</strong> or <strong>team</strong>, and a <strong>Team column</strong> with logos. Because the field is enormous, it shows a batch at a time (sorted by overall by default) and asks you to narrow with filters or search to see more. Click anyone to open their full profile.</p>
+
+  <h4 class="mini">Standings</h4>
+  <p>Every conference's standings, including divisions where they exist, with conference champions marked once a season is decided.</p>
+
+  <h4 class="mini">Annual Awards &amp; All-America</h4>
+  <p>The national, single-winner awards (Heisman and the rest) and the All-America and All-Conference teams. Winners from <em>your</em> program are highlighted so they're easy to spot.</p>
+
+  <h4 class="mini">Record Book</h4>
+  <p>The league's built-in career and single-season records.</p>
+  <div class="footer-note"><span>07 · NCAA Hub</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 08 RECRUIT HUB ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 08</div><h2>Recruit Hub</h2><div class="tag">The future</div></div>
+  <p class="lead">The Recruit Hub is where next year's team takes shape. Two pages: your own board, and the entire national pool.</p>
+
+  <h4 class="mini">My Board</h4>
+  <p>Every prospect you've added to your board in-game — filter and sort them, then open one for their school interest, an athletic snapshot, and the editing tools.</p>
+
+  <h4 class="mini">National Recruits</h4>
+  <p>The whole country's recruiting pool for the season — around three thousand prospects. Filter by position, stars, class, home state, or commitment stage, and open any prospect's full profile.</p>
+
+  <h4 class="mini">Hidden ratings, by design</h4>
+  <p>To keep recruiting true to the spirit of the game, a prospect's <strong>overall</strong> and <strong>athletic</strong> ratings start hidden — you scout on rank, stars, and film. You can reveal one prospect at a time from their profile, or flip on <strong>Reveal all recruit ratings</strong> in Preferences to see everything at once. Your choice.</p>
+
+  <div class="callout warn">
+    <div class="lbl">Experimental · Force Commit</div>
+    <p>An optional, experimental tool can force a boarded recruit to commit to your team so they actually join next season. It writes to your save, so it's off until you enable <strong>Experimental save editing</strong> in Preferences — and it always backs up and verifies first. Full safety details are in Section 12.</p>
+  </div>
+  <div class="footer-note"><span>08 · Recruit Hub</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 09 MEDIA ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 09</div><h2>The Media Gallery</h2><div class="tag">Your memories</div></div>
+  <p class="lead">The Media tab (inside Team Hub) is a per-season gallery for your dynasty's screenshots and clips — and it does clever things once you tag them.</p>
+
+  <h3 class="sub">Adding &amp; organizing</h3>
+  <ol class="steps">
+    <li>Click <strong>Add photos / videos</strong> and pick your files. They're copied into the app's own library, so the gallery keeps working even if you move or delete the originals.</li>
+    <li>Click a thumbnail to open the viewer, then <strong>Edit details</strong> to pick which game it's from, tag the players in it, and write a description.</li>
+    <li>Move through the gallery with the on-screen arrows or your keyboard's <span class="kbd">←</span> <span class="kbd">→</span> keys.</li>
+  </ol>
+
+  <h3 class="sub">Two handy touches</h3>
+  <ul class="clean">
+    <li><strong>Search by number.</strong> When tagging, if you don't know a name, start your search with <span class="kbd">#</span> (for example <span class="kbd">#17</span>) and the roster filters to whoever wears that number.</li>
+    <li><strong>Delete from the grid.</strong> Each thumbnail has a small trash button in its bottom-left corner, so you can remove a shot without opening it.</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="lbl">Tags do double duty</div>
+    <p>Anything you tag automatically appears on the <strong>Media tab of each tagged player's profile</strong> and in a <strong>Media section on the linked game's page</strong> — no extra work. Supported files: PNG, JPG, WebP, GIF images and MP4 / WebM video.</p>
+  </div>
+  <div class="footer-note"><span>09 · The Media Gallery</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 10 EDITING ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 10</div><h2>Editing Players &amp; Coaches</h2><div class="tag">Write access</div></div>
+  <p class="lead">This is the one place the app is <strong>not</strong> read-only. The pencil icon on any player or coach card opens an editor that genuinely writes back to your save.</p>
+
+  <h3 class="sub">What you can edit</h3>
+  <p>Ratings, physical and mental attributes, skill caps, and portraits for players; profile details for coaches. Recruits have their own editable fields too. Changes take effect the next time you load that save in the game.</p>
+
+  <h3 class="sub">Only on the current season</h3>
+  <p>Editing is offered only on the <strong>live, current season</strong>. A past season is a frozen snapshot — there's nothing real left to write a change back to.</p>
+
+  <div class="callout warn">
+    <div class="lbl">Before you edit</div>
+    <p>Run <strong>Backup</strong> first (Dashboard) so you always have a clean copy to return to. It only takes a second and it's the difference between “oops” and “disaster.”</p>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">One honest caveat</div>
+    <p>A coach's portrait updates correctly inside the app, but the field that controls a coach's in-game face behaves inconsistently in the save format, so it isn't written — the change may not carry into the game. Player portraits don't have this problem and update reliably.</p>
+  </div>
+  <div class="footer-note"><span>10 · Editing Players &amp; Coaches</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 11 PREFERENCES ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 11</div><h2>Preferences &amp; Tools</h2><div class="tag">Make it yours</div></div>
+  <p class="lead">At the bottom-left, under your dynasty list, the <strong>Tools</strong> group holds Preferences, Stadiums, and Help. Each section in Preferences folds away if you want a tidier view.</p>
+
+  <h3 class="sub">Preferences</h3>
+  <ul class="clean">
+    <li><strong>Appearance</strong> — switch between Light and Dark. (There's no separate toggle cluttering the sidebar; it lives here.)</li>
+    <li><strong>Theme Source</strong> — <em>Team</em> colors follow your active dynasty; <em>Default</em> keeps a steady neutral palette.</li>
+    <li><strong>Reveal all recruit ratings</strong> — show every prospect's hidden ratings at once, or leave them hidden and reveal one at a time.</li>
+    <li><strong>Experimental save editing</strong> — unlocks tools that write to your save (currently Force Commit). Off by default; see Section 12.</li>
+  </ul>
+
+  <h3 class="sub">Stadiums</h3>
+  <p>A small database of stadium names and locations used around the app. If one is wrong or missing, correct it here — your edits are saved on your computer and apply across every dynasty. This never changes your save file.</p>
+
+  <h3 class="sub">Help</h3>
+  <p>A built-in, plain-language how-to guide that grows over time. If something in the app isn't obvious, check Help first.</p>
+  <div class="footer-note"><span>11 · Preferences &amp; Tools</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 12 EXPERIMENTAL ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 12</div><h2>Experimental Features</h2><div class="tag">Handle with care</div></div>
+  <p class="lead">Some tools reach further than reading — they write into your dynasty save. They're powerful, genuinely useful, and clearly separated so you're never surprised by them.</p>
+
+  <h3 class="sub">How they stay safe</h3>
+  <ul class="clean">
+    <li><strong>Opt-in.</strong> They're hidden until you turn on <strong>Experimental save editing</strong> in Preferences.</li>
+    <li><strong>Backed up.</strong> Every write makes a fresh backup of your save first.</li>
+    <li><strong>Verified.</strong> After writing, the app reopens the save and checks the change actually took. If it didn't, it restores your backup automatically.</li>
+  </ul>
+
+  <h3 class="sub">Force Commit</h3>
+  <p>Force Commit takes a recruit already on your board and locks them to your team, so they truly join your roster the following season. It marks them signed to your school and adds them to your incoming class — the list the game actually enrolls from.</p>
+
+  <div class="callout warn">
+    <div class="lbl">The one rule that matters</div>
+    <p>Run experimental tools with <strong>College Football 27 fully closed</strong>, then reload the save in-game afterward. If the game is running while the app writes, its autosave can overwrite the change or show stale information. Close the game, force the commit, then open the game and load the save.</p>
+  </div>
+  <p class="muted">Experimental means exactly that: it works, and it's built defensively, but it's newer than the rest of the app. The backups are your safety net — keep one before a session, and you can always step back.</p>
+  <div class="footer-note"><span>12 · Experimental Features</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 13 TIPS ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 13</div><h2>Tips &amp; Best Practices</h2><div class="tag">Pro moves</div></div>
+  <p class="lead">A short list that will make your archive better and your life easier.</p>
+  <ul class="clean">
+    <li><strong>Sync at the end of every season.</strong> It's the whole game. One click before you advance, every year.</li>
+    <li><strong>Start fresh for the fullest history.</strong> A new dynasty synced from year one gives you complete detail for every season.</li>
+    <li><strong>Back up before editing.</strong> Two seconds now saves you a headache later.</li>
+    <li><strong>Close the game before experimental writes.</strong> Then reload the save afterward.</li>
+    <li><strong>Tag your media as you go.</strong> Tagged shots flow automatically onto player and game pages — a little effort now, a rich archive later.</li>
+    <li><strong>Use the season dropdown.</strong> It's a time machine for your whole dynasty.</li>
+    <li><strong>Export and share.</strong> The history export is a single web page anyone can open — no app needed.</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="lbl">If you only remember one thing</div>
+    <p>Sync every season before you advance. Everything good about this app is built on that one habit.</p>
+  </div>
+  <div class="footer-note"><span>13 · Tips &amp; Best Practices</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 14 LIMITATIONS ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 14</div><h2>Honest Limitations</h2><div class="tag">Straight talk</div></div>
+  <p class="lead">A good tool tells you what it can't do. Here's the honest list — most of these exist because the information simply isn't in the save file.</p>
+  <ul class="clean">
+    <li><strong>Opponent player stats.</strong> Box scores show detailed stats for your own team only; the save doesn't store opposing players' game stats.</li>
+    <li><strong>Poll history.</strong> Rankings reflect the current week at the moment you sync — there's no week-by-week trend from before the app started tracking your dynasty.</li>
+    <li><strong>History-Only seasons stay that way.</strong> A skipped season can't become a full one after the fact; the underlying roster and stats no longer exist in the save.</li>
+    <li><strong>Recruit photos.</strong> Prospects don't have portrait art in the save, so their profiles show a clean initials placeholder rather than a made-up face.</li>
+    <li><strong>Coach in-game faces.</strong> As noted in Section 10, a coach's portrait doesn't reliably write back to the game.</li>
+  </ul>
+  <p class="muted">None of these are oversights to fix later — they're the honest edges of what the save file makes possible.</p>
+  <div class="footer-note"><span>14 · Honest Limitations</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+<!-- ============ 15 CREDITS ============ -->
+<section class="page">
+  <div class="sec-head cut"><div class="num">SECTION 15</div><h2>Credits &amp; Thanks</h2><div class="tag">Made with care</div></div>
+  <p class="lead">Dynasty Hub stands on the shoulders of a lot of good work. Thank you to everyone whose tools made it possible.</p>
+
+  <div class="credit-row"><span class="k">The game</span><span class="v">EA Sports College Football 27 — the dynasties this app celebrates.</span></div>
+  <div class="credit-row"><span class="k">Save reading &amp; writing</span><span class="v">madden-franchise by bep713 — the library that decodes the save format.</span></div>
+  <div class="credit-row"><span class="k">App framework</span><span class="v">Electron, React, and TypeScript — the desktop foundation.</span></div>
+  <div class="credit-row"><span class="k">Local database</span><span class="v">sql.js — the private, on-device archive of your seasons.</span></div>
+  <div class="credit-row"><span class="k">Typeface</span><span class="v">Inter by Rasmus Andersson (SIL Open Font License) — the type throughout.</span></div>
+  <div class="credit-row"><span class="k">Styling</span><span class="v">Tailwind CSS — the design system under the hood.</span></div>
+  <div class="credit-row"><span class="k">Built with</span><span class="v">Claude (Anthropic) — pair-programmed feature by feature.</span></div>
+  <div class="credit-row"><span class="k">And you</span><span class="v">The coach whose dynasty gives all of this a reason to exist.</span></div>
+
+  <div class="callout" style="margin-top:0.3in;">
+    <div class="lbl">A note on affiliation</div>
+    <p>Dynasty Hub is an unofficial, fan-made companion. It is not affiliated with, endorsed by, or sponsored by Electronic Arts or EA Sports. All game names and trademarks belong to their respective owners.</p>
+  </div>
+
+  <div class="end">
+    <img src="__LOGO_MARK__" alt="Dynasty Hub" />
+    <div class="tl">Now go build a dynasty · Version __VERSION__</div>
+  </div>
+  <div class="footer-note"><span>15 · Credits &amp; Thanks</span><span>Dynasty Hub · v__VERSION__</span></div>
+</section>
+
+</body>
+</html>
