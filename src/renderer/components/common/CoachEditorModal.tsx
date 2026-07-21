@@ -173,6 +173,16 @@ export function CoachEditorModal({
                   className={INPUT_CLASS}
                 />
               </Field>
+              <Field label="Coach Points">
+                <input
+                  type="number"
+                  min={0}
+                  max={4000}
+                  value={draft.coachPoints}
+                  onChange={(e) => update({ coachPoints: Number(e.target.value) })}
+                  className={INPUT_CLASS}
+                />
+              </Field>
               <Field label="Contract Salary">
                 <input
                   type="number"

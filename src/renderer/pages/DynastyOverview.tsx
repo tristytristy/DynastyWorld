@@ -9,6 +9,7 @@ import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
+import { useEditorModal } from '../data/EditorModalProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   getBowlLogoPath,
@@ -71,6 +72,19 @@ function BowlAppearanceBadge({ bowl }: { bowl: BowlAppearance }) {
   );
 }
 
+/** Shared affordance for opening the program-budget editor (Program Points / NIL funding). */
+function BudgetButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center gap-2 border border-slate-300/80 bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:border-[var(--team-primary)] hover:text-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300"
+    >
+      Program budget
+    </button>
+  );
+}
+
 function GameRow({ game }: { game: GameSummary }) {
   const resultColor =
     game.result === 'W'
@@ -101,6 +115,7 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
   const [roster, setRoster] = useState<import('../../shared/types').LeagueTeamRoster | null | undefined>(undefined);
   const [honors, setHonors] = useState<import('../../shared/types').LeagueTeamHonors | null>(null);
   const { openPlayerModal } = usePlayerModal();
+  const { openTeamBudgetEditor } = useEditorModal();
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +154,10 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Ranking history and game detail are tracked for your own team only." />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader eyebrow="Team Hub" title={`${teamName}.`} description="A league-snapshot view of this program — record, roster strength, and top players. Ranking history and game detail are tracked for your own team only." />
+        <BudgetButton onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })} />
+      </div>
       <div className="flex items-center gap-4">
         <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
         <div className="grid flex-1 gap-3 sm:grid-cols-3">
@@ -203,6 +221,7 @@ export function DynastyOverview() {
   const [trophies, setTrophies] = useState<TeamTrophies | null | undefined>(undefined);
   const [rankings, setRankings] = useState<RankingsOverview | null | undefined>(undefined);
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const { openTeamBudgetEditor } = useEditorModal();
 
   useEffect(() => {
     if (!id) return;
@@ -245,6 +264,12 @@ export function DynastyOverview() {
     );
   }
 
+  // The user's own teamIndex isn't on SeasonOverview, but overview.teamName IS
+  // userTeam.displayName (see getSeasonOverview) — the same field leagueTeams
+  // carries — so this resolves the index for the budget editor. Null (button
+  // hidden) only when league snapshots predate this season.
+  const userTeamIndex = id ? (leagueTeams?.find((t) => t.displayName === overview.teamName)?.teamIndex ?? null) : null;
+
   return (
     <div className="space-y-6">
       <SurfaceCard>
@@ -271,6 +296,12 @@ export function DynastyOverview() {
             )}
 
           </div>
+
+          {userTeamIndex !== null && id && (
+            <BudgetButton
+              onClick={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
+            />
+          )}
         </div>
 
         <div className="mt-6 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(37,99,235,0.85)]">

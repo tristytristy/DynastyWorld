@@ -12,15 +12,19 @@ import type {
   RecruitInfluenceEdit,
   SaveEditResult,
   SaveFileBackupResult,
+  TeamBudgetData,
+  TeamBudgetEdit,
 } from '../../shared/types';
 import {
   backupSaveFile,
   getCoachEditData,
   getPlayerEditData,
   getRecruitEditData,
+  getTeamBudgetData,
   saveCoachEdits,
   savePlayerEdits,
   saveRecruitEdits,
+  saveTeamBudget,
   searchPortraits,
 } from '../editorWrite';
 import { saveRecruitInfluence } from '../recruitingWrite';
@@ -85,6 +89,20 @@ export function registerEditorHandlers(): void {
     },
   );
 
+
+  ipcMain.handle(
+    IPC.editor.getTeamBudget,
+    async (_event, dynastyId: string, teamIndex: number): Promise<TeamBudgetData | null> => {
+      return getTeamBudgetData(dynastyId, teamIndex);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.saveTeamBudget,
+    async (_event, dynastyId: string, teamIndex: number, edit: TeamBudgetEdit): Promise<SaveEditResult> => {
+      return saveTeamBudget(dynastyId, teamIndex, edit);
+    },
+  );
 
   ipcMain.handle(
     IPC.editor.searchPortraits,

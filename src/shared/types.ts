@@ -69,6 +69,12 @@ export interface PlayerEditFields {
   recruitingDealbreaker: string;
   /** Player.IdealRecruitingPitch — the pitch this recruit most wants to hear (enum). */
   idealRecruitingPitch: string;
+  /**
+   * Player.BaseNILValue — the recruit's NIL demand (in $K). Signed 11-bit field,
+   * real range [-255, 1023]; top prospects sit ~130-165. Lowering it is what lets
+   * a low-prestige program actually meet a recruit's NIL and keep him committed.
+   */
+  nilDemand: number;
   isImpactPlayer: boolean;
   isCreated: boolean;
   isUserControlled: boolean;
@@ -88,11 +94,42 @@ export interface PlayerEditData {
   fields: PlayerEditFields;
 }
 
+/**
+ * A team's program-points budget (the coach-HUD "Program Points"). NIL isn't a
+ * separate pool — it's a spending category funded out of these points, so raising
+ * the budget/unspent points is how a program affords bigger NIL deals. Read fresh
+ * from the Team record on modal open (like the coach editor), not from the snapshot.
+ */
+export interface TeamBudgetFields {
+  /** Team.ProgramPointBudget — total program points for the year. Cap 25,000. Editable. */
+  programPointBudget: number;
+  /** Team.RemainingProgramPoints — unspent points (the blue diamond in the HUD). Editable. */
+  remainingProgramPoints: number;
+  /** Team.NILProgramPointsSpent — read-only context: points currently allocated to NIL. */
+  nilProgramPointsSpent: number;
+  /** Team.TeamPrestige — read-only context: prestige that drives baseline NIL capacity. */
+  teamPrestige: number;
+}
+
+export interface TeamBudgetData {
+  teamIndex: number;
+  teamName: string;
+  fields: TeamBudgetFields;
+}
+
+/** Only the two writable budget fields — the other TeamBudgetFields are display-only context. */
+export interface TeamBudgetEdit {
+  programPointBudget: number;
+  remainingProgramPoints: number;
+}
+
 export interface CoachEditFields {
   firstName: string;
   lastName: string;
   personality: string;
   coachPrestige: number;
+  /** Coach.CoachPoints — the coach's recruiting/coach points (the coach-HUD number). Unsigned 12-bit, clamped [0, 4000]. */
+  coachPoints: number;
   contractSalary: number;
   contractLength: number;
   contractYearsRemaining: number;
@@ -1442,6 +1479,8 @@ export interface DynastyApi {
     getRecruit: (dynastyId: string, playerId: number) => Promise<RecruitEditData | null>;
     saveRecruit: (dynastyId: string, playerId: number, fields: RecruitEditFields) => Promise<SaveEditResult>;
     saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
+    getTeamBudget: (dynastyId: string, teamIndex: number) => Promise<TeamBudgetData | null>;
+    saveTeamBudget: (dynastyId: string, teamIndex: number, edit: TeamBudgetEdit) => Promise<SaveEditResult>;
     searchPortraits: (
       kind: 'player' | 'coach',
       query: string,

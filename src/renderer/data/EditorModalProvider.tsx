@@ -28,11 +28,20 @@ interface CoachEditorState {
   onSaved?: () => void;
 }
 
+interface TeamBudgetEditorState {
+  dynastyId: string;
+  teamIndex: number;
+  teamLabel: string;
+  onSaved?: () => void;
+}
+
 interface EditorModalContextValue {
   playerState: PlayerEditorState | null;
   coachState: CoachEditorState | null;
+  teamBudgetState: TeamBudgetEditorState | null;
   openPlayerEditor: (state: PlayerEditorState) => void;
   openCoachEditor: (state: CoachEditorState) => void;
+  openTeamBudgetEditor: (state: TeamBudgetEditorState) => void;
   closeEditor: () => void;
 }
 
@@ -58,25 +67,43 @@ const EditorModalContext = createContext<EditorModalContextValue | null>(null);
 export function EditorModalProvider({ children }: { children: ReactNode }) {
   const [playerState, setPlayerState] = useState<PlayerEditorState | null>(null);
   const [coachState, setCoachState] = useState<CoachEditorState | null>(null);
+  const [teamBudgetState, setTeamBudgetState] = useState<TeamBudgetEditorState | null>(null);
 
   const openPlayerEditor = useCallback((state: PlayerEditorState) => {
     setCoachState(null);
+    setTeamBudgetState(null);
     setPlayerState(state);
   }, []);
 
   const openCoachEditor = useCallback((state: CoachEditorState) => {
     setPlayerState(null);
+    setTeamBudgetState(null);
     setCoachState(state);
+  }, []);
+
+  const openTeamBudgetEditor = useCallback((state: TeamBudgetEditorState) => {
+    setPlayerState(null);
+    setCoachState(null);
+    setTeamBudgetState(state);
   }, []);
 
   const closeEditor = useCallback(() => {
     setPlayerState(null);
     setCoachState(null);
+    setTeamBudgetState(null);
   }, []);
 
   const value = useMemo<EditorModalContextValue>(
-    () => ({ playerState, coachState, openPlayerEditor, openCoachEditor, closeEditor }),
-    [playerState, coachState, openPlayerEditor, openCoachEditor, closeEditor],
+    () => ({
+      playerState,
+      coachState,
+      teamBudgetState,
+      openPlayerEditor,
+      openCoachEditor,
+      openTeamBudgetEditor,
+      closeEditor,
+    }),
+    [playerState, coachState, teamBudgetState, openPlayerEditor, openCoachEditor, openTeamBudgetEditor, closeEditor],
   );
 
   return <EditorModalContext.Provider value={value}>{children}</EditorModalContext.Provider>;

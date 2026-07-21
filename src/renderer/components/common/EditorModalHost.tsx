@@ -1,10 +1,11 @@
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { PlayerEditorModal } from './PlayerEditorModal';
 import { CoachEditorModal } from './CoachEditorModal';
+import { TeamBudgetModal } from './TeamBudgetModal';
 
 /** Mounted once at the app root (see app.tsx) — same reasoning as PlayerProfileModal. */
 export function EditorModalHost() {
-  const { playerState, coachState, closeEditor } = useEditorModal();
+  const { playerState, coachState, teamBudgetState, closeEditor } = useEditorModal();
 
   if (playerState) {
     return (
@@ -29,6 +30,18 @@ export function EditorModalHost() {
         coachLabel={coachState.coachLabel}
         onClose={closeEditor}
         onSaved={coachState.onSaved}
+      />
+    );
+  }
+
+  if (teamBudgetState) {
+    return (
+      <TeamBudgetModal
+        dynastyId={teamBudgetState.dynastyId}
+        teamIndex={teamBudgetState.teamIndex}
+        teamLabel={teamBudgetState.teamLabel}
+        onClose={closeEditor}
+        onSaved={teamBudgetState.onSaved}
       />
     );
   }

@@ -32,6 +32,8 @@ import type {
   RecruitEditFields,
   SaveEditResult,
   SaveFileBackupResult,
+  TeamBudgetData,
+  TeamBudgetEdit,
 } from '../shared/types';
 
 /** Matches extract-roster.ts's documented empirical offset — kept in sync so the editor round-trips the same "real" pounds value the rest of the app already displays. */
@@ -73,6 +75,7 @@ function readPlayerFields(r: FranchiseRecord): PlayerEditFields {
     role: String(r.Role),
     recruitingDealbreaker: String(r.RecruitingDealbreaker),
     idealRecruitingPitch: String(r.IdealRecruitingPitch),
+    nilDemand: Number(r.BaseNILValue),
     isImpactPlayer: Boolean(r.IsImpactPlayer),
     isCreated: Boolean(r.IsCreated),
     isUserControlled: Boolean(r.IsUserControlled),
@@ -100,6 +103,9 @@ function writePlayerFields(r: FranchiseRecord, fields: PlayerEditFields): void {
   r.Role = fields.role;
   r.RecruitingDealbreaker = fields.recruitingDealbreaker;
   r.IdealRecruitingPitch = fields.idealRecruitingPitch;
+  // BaseNILValue is a signed 11-bit field ([-255, 1023]); clamp so an out-of-range
+  // entry can't wrap to a garbage value the way an unclamped write once did.
+  r.BaseNILValue = clamp(Math.round(fields.nilDemand), -255, 1023);
   r.IsImpactPlayer = fields.isImpactPlayer;
   r.IsCreated = fields.isCreated;
   r.IsUserControlled = fields.isUserControlled;
@@ -136,6 +142,7 @@ function readCoachFields(r: FranchiseRecord): CoachEditFields {
     lastName: String(r.LastName),
     personality: String(r.Personality),
     coachPrestige: Number(r.CoachPrestigeScore),
+    coachPoints: Number(r.CoachPoints),
     contractSalary: Number(r.ContractSalary),
     contractLength: Number(r.ContractLength),
     contractYearsRemaining: Number(r.ContractYearsRemaining),
@@ -152,6 +159,9 @@ function writeCoachFields(
   r.LastName = fields.lastName;
   r.Personality = fields.personality;
   r.CoachPrestigeScore = fields.coachPrestige;
+  // CoachPoints is an unsigned 12-bit field (max 4095); clamp to PocketScout's
+  // proven [0, 4000] so an over-range entry can't wrap to garbage.
+  r.CoachPoints = clamp(Math.round(fields.coachPoints), 0, 4000);
   r.ContractSalary = fields.contractSalary;
   r.ContractLength = fields.contractLength;
   r.ContractYearsRemaining = fields.contractYearsRemaining;
@@ -399,6 +409,85 @@ export function saveCoachEdits(
     (record, f) => writeCoachFields(record, f, openedFranchise),
     fields,
   );
+}
+
+/**
+ * The game caps a program's total points at 25,000 (matches PocketScout's own
+ * limit) — clamping here keeps a fat-fingered entry from producing a nonsense
+ * budget in the coach HUD.
+ */
+const MAX_PROGRAM_POINT_BUDGET = 25000;
+
+async function findTeamRecord(
+  franchise: Awaited<ReturnType<typeof openFranchiseFile>>,
+  teamIndex: number,
+): Promise<FranchiseRecord | undefined> {
+  const table = getLargestTable(franchise, 'Team');
+  await table.readRecords();
+  return nonEmpty(table.records).find((r) => r.DisplayName && Number(r.TeamIndex) === teamIndex);
+}
+
+export async function getTeamBudgetData(dynastyId: string, teamIndex: number): Promise<TeamBudgetData | null> {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty) return null;
+  const franchise = await openFranchiseFile(dynasty.savePath);
+  const record = await findTeamRecord(franchise, teamIndex);
+  if (!record) return null;
+  return {
+    teamIndex,
+    teamName: String(record.DisplayName),
+    fields: {
+      programPointBudget: Number(record.ProgramPointBudget),
+      remainingProgramPoints: Number(record.RemainingProgramPoints),
+      nilProgramPointsSpent: Number(record.NILProgramPointsSpent),
+      teamPrestige: Number(record.TeamPrestige),
+    },
+  };
+}
+
+/**
+ * Writes a team's program-points budget. Only two plain integer fields are
+ * touched — ProgramPointBudget and RemainingProgramPoints (unspent ≤ total) —
+ * exactly the pair PocketScout's "Increase NIL Budget" edits, round-trip
+ * verified on a disposable save. Auto-backs up first (this touches the Team
+ * table the main player/coach editor never does), aborting the write if the
+ * backup fails.
+ */
+export async function saveTeamBudget(
+  dynastyId: string,
+  teamIndex: number,
+  edit: TeamBudgetEdit,
+): Promise<SaveEditResult> {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty) return { success: false, message: 'Dynasty not found.' };
+
+  const backup = backupSaveFile(dynastyId);
+  if (!backup.success) {
+    return { success: false, message: `Aborted — could not back up the save first: ${backup.message}` };
+  }
+
+  try {
+    const franchise = await openFranchiseFile(dynasty.savePath);
+    const record = await findTeamRecord(franchise, teamIndex);
+    if (!record) return { success: false, message: 'Team not found in the save file.' };
+
+    const budget = clamp(Math.round(edit.programPointBudget), 0, MAX_PROGRAM_POINT_BUDGET);
+    const remaining = clamp(Math.round(edit.remainingProgramPoints), 0, budget);
+    record.ProgramPointBudget = budget;
+    record.RemainingProgramPoints = remaining;
+
+    await franchise.save(dynasty.savePath, {});
+
+    const extraction = await extractAll(dynasty.savePath);
+    persistExtraction(dynasty.savePath, extraction);
+
+    return { success: true, message: 'Saved.' };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Save failed (your pre-edit backup is safe: ${backup.filePath ?? 'save-backups'}). ${err instanceof Error ? err.message : ''}`.trim(),
+    };
+  }
 }
 
 export function backupSaveFile(dynastyId: string): SaveFileBackupResult {

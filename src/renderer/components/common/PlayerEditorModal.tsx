@@ -184,6 +184,16 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
         <Field label="Ideal Pitch">
           <EnumSelect value={draft.idealRecruitingPitch} options={IDEAL_PITCH_OPTIONS} onChange={(v) => update({ idealRecruitingPitch: v })} />
         </Field>
+        <Field label="NIL Demand ($K)">
+          <input
+            type="number"
+            min={-255}
+            max={1023}
+            value={draft.nilDemand}
+            onChange={(e) => update({ nilDemand: Number(e.target.value) })}
+            className={INPUT_CLASS}
+          />
+        </Field>
         <Field label="Impact Player">
           <select
             value={String(draft.isImpactPlayer)}
