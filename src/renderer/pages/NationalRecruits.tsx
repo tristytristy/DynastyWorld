@@ -10,6 +10,7 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitingExperience } from '../data/RecruitingExperienceProvider';
 import { useViewedTeamOptional } from '../data/ViewedTeamProvider';
+import { formatClassYearShort } from '../lib/recruitFormat';
 import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
 
 /** Colored stage badge — each decision-funnel stage gets one accent, never color-alone (the label is always present). */
@@ -565,8 +566,8 @@ export function NationalRecruits() {
                       <button type="button" onClick={() => toggleSort('nationalRank')} className="inline-flex items-center gap-1">Prospect{sortKey === 'nationalRank' && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}</button>
                     </th>
                     {th('overallRating', 'OVR', true)}
-                    {th('positionRank', 'Pos Rk', true)}
-                    {th('stateRank', 'St Rk', true)}
+                    {th('positionRank', 'Pos', true)}
+                    {th('stateRank', 'St', true)}
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Class</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Town</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">State</th>
@@ -612,7 +613,7 @@ export function NationalRecruits() {
                         </td>
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.positionRank || '—'}</td>
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.stateRank || '—'}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.classYear.replace(/JuniorCollege_/, 'JUCO ').replace('HighSchool', 'HS')}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{formatClassYearShort(r.classYear)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.hometown}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.homeState}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.pipeline || '—'}</td>

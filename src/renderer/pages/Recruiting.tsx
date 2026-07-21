@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { EditButton } from '../components/common/CoachCard';
+import { formatClassYearShort } from '../lib/recruitFormat';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitModal } from '../data/RecruitModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
@@ -38,13 +40,13 @@ type RecruitSortKey =
   | 'style';
 type SortDir = 'asc' | 'desc';
 
+// The first cell is a combined "Prospect" identity (rank · portrait · name ·
+// position · stars), matching the National Recruits page; it sorts by national
+// rank, so position/name/stars/nationalRank are no longer standalone columns.
 const COLUMNS: { key: RecruitSortKey; label: string }[] = [
-  { key: 'position', label: 'Pos' },
-  { key: 'name', label: 'Player' },
-  { key: 'stars', label: 'Stars' },
+  { key: 'nationalRank', label: 'Prospect' },
   { key: 'overall', label: 'OVR' },
-  { key: 'nationalRank', label: 'Nat #' },
-  { key: 'positionRank', label: 'Pos #' },
+  { key: 'positionRank', label: 'Pos' },
   { key: 'city', label: 'City' },
   { key: 'state', label: 'State' },
   { key: 'classYear', label: 'Class' },
@@ -97,11 +99,6 @@ function sortRecruits(recruits: RecruitBoardEntry[], key: RecruitSortKey, dir: S
   return dir === 'desc' ? sorted.reverse() : sorted;
 }
 
-function formatClassYear(raw: string): string {
-  if (raw === 'HighSchool') return 'HS';
-  if (raw.startsWith('JuniorCollege_')) return `JUCO ${raw.replace('JuniorCollege_', '')}`;
-  return raw;
-}
 
 function Stars({ count }: { count: number }) {
   if (count <= 0) {
@@ -204,40 +201,43 @@ function RecruitTable({
                   <EditButton onClick={() => onEdit(r)} label={`Edit ${r.firstName} ${r.lastName}`} />
                 </td>
               )}
-              <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.position}</td>
+              {/* Combined Prospect cell — rank · portrait · name · position · stars (matches National Recruits). */}
               <td className="px-3 py-2.5">
-                <span className="flex items-center gap-1.5 font-medium text-slate-900 dark:text-white">
-                  {r.firstName} {r.lastName}
-                  {r.isFavorite && (
-                    <span className="text-amber-500 dark:text-amber-400" title="Favorite" aria-label="Favorite">
-                      &#9733;
-                    </span>
-                  )}
-                </span>
-              </td>
-              <td className="px-3 py-2.5">
-                <Stars count={r.stars} />
+                <div className="flex items-center gap-2.5">
+                  <span className="tnum w-6 shrink-0 text-right text-xs font-bold text-slate-400 dark:text-slate-500">{r.nationalRank || '—'}</span>
+                  <PlayerPortrait player={r} size="sm" className="!h-8 !w-8 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 truncate font-medium text-slate-900 dark:text-white">
+                      {r.firstName} {r.lastName}
+                      {r.isFavorite && (
+                        <span className="text-amber-500 dark:text-amber-400" title="Favorite" aria-label="Favorite">
+                          &#9733;
+                        </span>
+                      )}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                      <span className="font-bold text-slate-500 dark:text-slate-400">{r.position}</span>
+                      <Stars count={r.stars} />
+                    </p>
+                  </div>
+                </div>
               </td>
               <td className="px-3 py-2.5 font-semibold text-slate-900 dark:text-white">{r.overallRating}</td>
-              <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.nationalRank || '—'}</td>
               <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.positionRank || '—'}</td>
               <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.hometown}</td>
               <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.homeState}</td>
-              <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{formatClassYear(r.classYear)}</td>
+              <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{formatClassYearShort(r.classYear)}</td>
               <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{r.archetype}</td>
               <td className="px-3 py-2.5">
                 <StageBadge stage={r.stage} />
               </td>
               <td className="px-3 py-2.5">
                 {r.signedTeamDisplayName ? (
-                  <div className="flex items-center gap-2">
-                    <TeamLogo
-                      team={{ assetName: r.signedTeamDisplayName, label: r.signedTeamDisplayName }}
-                      size="sm"
-                      variant={r.stage === 'signed' ? 'gold' : undefined}
-                    />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{r.signedTeamDisplayName}</span>
-                  </div>
+                  <TeamLogo
+                    team={{ assetName: r.signedTeamDisplayName, label: r.signedTeamDisplayName }}
+                    size="sm"
+                    variant={r.stage === 'signed' ? 'gold' : undefined}
+                  />
                 ) : (
                   <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                 )}
@@ -366,7 +366,7 @@ function AllRecruitsBoard({
             <option value="">All classes</option>
             {options.classYears.map((c) => (
               <option key={c} value={c}>
-                {formatClassYear(c)}
+                {formatClassYearShort(c)}
               </option>
             ))}
           </select>
