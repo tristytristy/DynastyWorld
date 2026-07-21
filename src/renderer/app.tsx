@@ -11,6 +11,7 @@ import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
 import { NcaaHub } from './pages/NcaaHub';
+import { NcaaRecords } from './pages/NcaaRecords';
 import { Roster } from './pages/Roster';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
@@ -91,6 +92,7 @@ export function App() {
                       <Route path="standings" element={<Standings />} />
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />
+                      <Route path="ncaa-records" element={<NcaaRecords />} />
                     </Route>
                   </Route>
                 </Routes>

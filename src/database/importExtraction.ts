@@ -93,6 +93,7 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   saveSnapshot(season.id, 'recruits', extraction.recruits);
   // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
   saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
+  saveSnapshot(season.id, 'ncaaRecords', extraction.ncaaRecords);
   saveSnapshot(season.id, 'stats', extraction.stats);
   saveSnapshot(season.id, 'teamStats', extraction.teamStats);
   saveSnapshot(season.id, 'kicking', extraction.kicking);

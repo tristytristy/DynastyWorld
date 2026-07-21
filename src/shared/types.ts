@@ -1460,6 +1460,10 @@ export interface DynastyApi {
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
     getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;
+    getNcaaRecords: (
+      dynastyId: string,
+      seasonId?: number,
+    ) => Promise<import('../extractors/extract-ncaa-records').NcaaRecordsData | null>;
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;

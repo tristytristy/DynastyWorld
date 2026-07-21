@@ -38,6 +38,7 @@ export function NcaaHubLayout() {
         {tab('/standings', 'Standings')}
         {tab('/annual-awards', 'Annual Awards')}
         {tab('/all-america', 'All-America & All-Conf')}
+        {tab('/ncaa-records', 'Record Book')}
       </div>
 
       <Outlet />
