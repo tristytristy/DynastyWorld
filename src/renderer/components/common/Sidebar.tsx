@@ -17,10 +17,12 @@ const UTILITY_TRIGGER_CLASS =
 
 function navClass(isActive: boolean): string {
   return [
-    'group flex items-center justify-between border border-transparent px-4 py-3 text-sm font-medium transition-all duration-base ease-standard',
+    'group relative flex items-center justify-between border px-4 py-3 text-sm font-medium transition-all duration-base ease-standard',
     isActive
-      ? 'border-[var(--team-primary)] bg-[linear-gradient(90deg,rgba(37,99,235,0.14),rgba(37,99,235,0.03))] text-slate-950 shadow-[0_18px_40px_-24px_rgba(37,99,235,0.45)] dark:text-white'
-      : 'text-slate-700 hover:border-slate-200 hover:bg-white/80 hover:text-slate-950 dark:text-slate-300 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white',
+      // Active = the program is "seated": a tactile team-colored edge indicator
+      // + a faint team wash, no blue glow (restraint over glow, per the design).
+      ? 'border-[color:color-mix(in_srgb,var(--team-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--team-primary)_10%,transparent)] text-slate-950 before:absolute before:-left-px before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:bg-[var(--team-primary)] dark:text-white'
+      : 'border-transparent text-slate-700 hover:border-slate-200 hover:bg-black/[0.03] hover:text-slate-950 dark:text-slate-300 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white',
   ].join(' ');
 }
 

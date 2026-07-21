@@ -187,7 +187,7 @@ export function buildHistoryExportHtml(
   }
   .wrap { max-width: 1100px; margin: 0 auto; }
   header {
-    border-radius: 24px;
+    border-radius: 2px;
     padding: 2rem;
     margin-bottom: 1.5rem;
     background: linear-gradient(120deg, var(--primary), var(--secondary));
@@ -208,7 +208,7 @@ export function buildHistoryExportHtml(
     border: 1px solid rgba(217, 119, 6, 0.35);
     background: rgba(217, 119, 6, 0.1);
     color: #92400e;
-    border-radius: 16px;
+    border-radius: 2px;
     padding: 0.9rem 1.1rem;
     font-size: 0.85rem;
     margin-bottom: 1.5rem;
@@ -224,15 +224,15 @@ export function buildHistoryExportHtml(
     background: var(--surface);
     border: 1px solid var(--border);
   }
-  .tile { border-radius: 20px; padding: 1rem; }
+  .tile { border-radius: 2px; padding: 1rem; }
   .tile-label { margin: 0; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; color: var(--text-dim); }
   .tile-value { margin: 0.5rem 0 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
-  section.panel { border-radius: 24px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  section.panel { border-radius: 2px; padding: 1.5rem; margin-bottom: 1.5rem; }
   section.panel h2 { margin: 0.35rem 0 1rem; font-size: 1.15rem; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
-  .card { border-radius: 20px; padding: 1.1rem; }
+  .card { border-radius: 2px; padding: 1.1rem; }
   .card h3 { margin: 0.35rem 0 0.9rem; font-size: 1rem; }
-  .record-line { border-radius: 16px; background: var(--bg); border: 1px solid var(--border); padding: 0.75rem 0.9rem; margin-bottom: 0.6rem; }
+  .record-line { border-radius: 2px; background: var(--bg); border: 1px solid var(--border); padding: 0.75rem 0.9rem; margin-bottom: 0.6rem; }
   .record-line:last-child { margin-bottom: 0; }
   .record-line-label { margin: 0 0 0.4rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; color: var(--text-dim); }
   .record-line-empty { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
@@ -240,8 +240,8 @@ export function buildHistoryExportHtml(
   .record-line-name { margin: 0; font-weight: 600; }
   .record-line-meta { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--text-dim); }
   .record-line-value { margin: 0; font-size: 1.3rem; font-weight: 600; }
-  .coach-row { border-radius: 16px 16px 0 0; border-bottom: none; padding: 0.9rem 1rem 0.6rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
-  .coach-row + .coach-meta { border-radius: 0 0 16px 16px; border-top: none; }
+  .coach-row { border-radius: 2px 2px 0 0; border-bottom: none; padding: 0.9rem 1rem 0.6rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+  .coach-row + .coach-meta { border-radius: 0 0 2px 2px; border-top: none; }
   .coach-meta { padding: 0 1rem 0.9rem; margin-bottom: 0.75rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.3rem; font-size: 0.75rem; color: var(--text-dim); }
   .coach-name { margin: 0; font-weight: 600; }
   .coach-record { margin: 0; font-size: 1.1rem; font-weight: 600; }
@@ -249,7 +249,7 @@ export function buildHistoryExportHtml(
   th { text-align: left; padding: 0.7rem 0.6rem; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-dim); border-bottom: 1px solid var(--border); }
   td { padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--border); }
   td.strong { font-weight: 600; }
-  .badge { display: inline-block; border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; margin-right: 0.3rem; }
+  .badge { display: inline-block; border-radius: 2px; padding: 0.2rem 0.6rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; margin-right: 0.3rem; }
   .badge-gold { background: rgba(217, 119, 6, 0.15); color: #92400e; }
   .badge-blue { background: rgba(14, 165, 233, 0.15); color: #075985; }
   .badge-green { background: rgba(16, 185, 129, 0.15); color: #065f46; }
@@ -258,7 +258,7 @@ export function buildHistoryExportHtml(
     .badge-blue { color: #7dd3fc; }
     .badge-green { color: #6ee7b7; }
   }
-  .milestone { border-radius: 18px; padding: 0.9rem 1rem; margin-bottom: 0.6rem; }
+  .milestone { border-radius: 2px; padding: 0.9rem 1rem; margin-bottom: 0.6rem; }
   .milestone:last-child { margin-bottom: 0; }
   .milestone-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
   .milestone-detail { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--text-dim); }
