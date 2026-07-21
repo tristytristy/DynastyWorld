@@ -284,7 +284,7 @@ function RecruitPanel({
             onClick={() => onEdit(recruit)}
             className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
           >
-            Edit ratings
+            Edit recruit
           </button>
         </div>
       )}

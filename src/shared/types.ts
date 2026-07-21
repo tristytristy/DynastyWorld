@@ -65,6 +65,10 @@ export interface PlayerEditFields {
   personality: string;
   scheme: string;
   role: string;
+  /** Player.RecruitingDealbreaker — the one thing this recruit cares most about (enum). */
+  recruitingDealbreaker: string;
+  /** Player.IdealRecruitingPitch — the pitch this recruit most wants to hear (enum). */
+  idealRecruitingPitch: string;
   isImpactPlayer: boolean;
   isCreated: boolean;
   isUserControlled: boolean;

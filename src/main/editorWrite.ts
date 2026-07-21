@@ -71,6 +71,8 @@ function readPlayerFields(r: FranchiseRecord): PlayerEditFields {
     personality: String(r.Personality),
     scheme: String(r.Scheme),
     role: String(r.Role),
+    recruitingDealbreaker: String(r.RecruitingDealbreaker),
+    idealRecruitingPitch: String(r.IdealRecruitingPitch),
     isImpactPlayer: Boolean(r.IsImpactPlayer),
     isCreated: Boolean(r.IsCreated),
     isUserControlled: Boolean(r.IsUserControlled),
@@ -96,6 +98,8 @@ function writePlayerFields(r: FranchiseRecord, fields: PlayerEditFields): void {
   r.Personality = fields.personality;
   r.Scheme = fields.scheme;
   r.Role = fields.role;
+  r.RecruitingDealbreaker = fields.recruitingDealbreaker;
+  r.IdealRecruitingPitch = fields.idealRecruitingPitch;
   r.IsImpactPlayer = fields.isImpactPlayer;
   r.IsCreated = fields.isCreated;
   r.IsUserControlled = fields.isUserControlled;

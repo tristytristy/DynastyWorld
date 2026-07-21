@@ -8,6 +8,16 @@ import {
   SKILL_GROUP_CAP_FIELDS,
 } from '../../../shared/playerEditorFields';
 import { POSITION_ORDER } from '../../lib/rosterOrder';
+import {
+  DEALBREAKER_OPTIONS,
+  IDEAL_PITCH_OPTIONS,
+  PERSONALITY_OPTIONS,
+  ROLE_OPTIONS,
+  SCHEME_DEFENSE_OPTIONS,
+  SCHEME_OFFENSE_OPTIONS,
+  TRAIT_DEV_OPTIONS,
+  type EnumOption,
+} from '../../lib/playerEditorOptions';
 import { PortraitPicker } from './PortraitPicker';
 import { Button } from '../ui/Button';
 import type { PlayerEditFields, RecruitEditFields } from '../../../shared/types';
@@ -46,6 +56,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className={FIELD_LABEL_CLASS}>{label}</span>
       {children}
     </label>
+  );
+}
+
+/**
+ * A select over a fixed enum option list. If the current value isn't in the
+ * list (an unexpected/legacy enum member), it's shown as its own option so the
+ * field never silently changes the saved value just by opening the editor.
+ */
+function EnumSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: EnumOption[];
+  onChange: (value: string) => void;
+}) {
+  const known = options.some((o) => o.value === value);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
+      {!known && <option value={value}>{value || '—'}</option>}
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -97,7 +134,7 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
           />
         </Field>
         <Field label="Trait Development">
-          <input type="text" value={draft.traitDevelopment} onChange={(e) => update({ traitDevelopment: e.target.value })} className={INPUT_CLASS} />
+          <EnumSelect value={draft.traitDevelopment} options={TRAIT_DEV_OPTIONS} onChange={(v) => update({ traitDevelopment: v })} />
         </Field>
         <Field label="Age">
           <input type="number" value={draft.age} onChange={(e) => update({ age: Number(e.target.value) })} className={INPUT_CLASS} />
@@ -119,13 +156,33 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
           />
         </Field>
         <Field label="Personality">
-          <input type="text" value={draft.personality} onChange={(e) => update({ personality: e.target.value })} className={INPUT_CLASS} />
+          <EnumSelect value={draft.personality} options={PERSONALITY_OPTIONS} onChange={(v) => update({ personality: v })} />
         </Field>
         <Field label="Scheme">
-          <input type="text" value={draft.scheme} onChange={(e) => update({ scheme: e.target.value })} className={INPUT_CLASS} />
+          <select value={draft.scheme} onChange={(e) => update({ scheme: e.target.value })} className={INPUT_CLASS}>
+            {!SCHEME_OFFENSE_OPTIONS.concat(SCHEME_DEFENSE_OPTIONS).some((o) => o.value === draft.scheme) && (
+              <option value={draft.scheme}>{draft.scheme || '—'}</option>
+            )}
+            <optgroup label="Offense">
+              {SCHEME_OFFENSE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Defense">
+              {SCHEME_DEFENSE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+          </select>
         </Field>
         <Field label="Role">
-          <input type="text" value={draft.role} onChange={(e) => update({ role: e.target.value })} className={INPUT_CLASS} />
+          <EnumSelect value={draft.role} options={ROLE_OPTIONS} onChange={(v) => update({ role: v })} />
+        </Field>
+        <Field label="Deal Breaker">
+          <EnumSelect value={draft.recruitingDealbreaker} options={DEALBREAKER_OPTIONS} onChange={(v) => update({ recruitingDealbreaker: v })} />
+        </Field>
+        <Field label="Ideal Pitch">
+          <EnumSelect value={draft.idealRecruitingPitch} options={IDEAL_PITCH_OPTIONS} onChange={(v) => update({ idealRecruitingPitch: v })} />
         </Field>
         <Field label="Impact Player">
           <select
