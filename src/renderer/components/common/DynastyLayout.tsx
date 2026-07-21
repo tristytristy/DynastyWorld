@@ -91,8 +91,8 @@ function DynastyNav({ id }: { id: string }) {
         : 'coach';
 
   return (
-    <nav className="rounded-xl border border-white/65 bg-white/76 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.38)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76">
-      <div className="corner-cut flex flex-wrap items-center gap-2 border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
+    <nav className="border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-md dark:border-white/10 dark:bg-[#181b1f]">
+      <div className="corner-cut flex flex-wrap items-center gap-2 border border-slate-200/80 bg-slate-100/80 p-1.5 dark:border-white/5 dark:bg-black/25">
         <Link to={`/dynasty/${id}`} className={sectionTabClass(section === 'coach')}>
           Coach Hub
         </Link>
