@@ -266,17 +266,21 @@ export async function forceCommitRecruit(dynastyId: string, playerId: number): P
     // score, and make the user's team the clear leader — then the game's own
     // Signing Day processing signs and rosters him like any other hard-commit.
 
-    // Ensure a scholarship is on the table (required to sign) — but never force
-    // 'Committed', which natural hard-commits don't have until Signing Day.
-    if (!['Offered', 'Committed'].includes(String(board.ScholarshipStatus))) {
-      set(board, 'ScholarshipStatus', 'Offered');
-    }
+    // Match the natural commit state EXACTLY. Verified at portal/signing week
+    // (APPMASTERPORTALW1): every naturally-signed board recruit keeps
+    // ScholarshipStatus=Offered and CommittedWeekNumber=0 — the ONLY fields that
+    // differed on the stuck force-sign (Tim Addington) were Committed + week 10.
+    // So force those two back to the natural values (this also repairs a recruit
+    // stuck in the old state on a re-force).
+    set(board, 'ScholarshipStatus', 'Offered');
+    set(board, 'CommittedWeekNumber', 0);
     // Meet the recruit's NIL so affordability isn't the blocker.
     const nilExpectation = Number(board.NILExpectation);
     set(board, 'CurrentNILOffer', Math.max(0, Math.min(1023, Math.max(Number(board.CurrentNILOffer), nilExpectation))));
 
     // Recruit row: hard-commit with a strong commit score (kept within the
-    // natural hard-commit range, not an absurd value).
+    // natural range). The game promotes HardCommitted -> Signed at Signing Day,
+    // so a recruit forced during the season lands in the natural signed state.
     set(recruit, 'RecruitStage', 'HardCommitted');
     set(recruit, 'CommitScore', Math.max(Number(recruit.CommitScore), 400));
 
