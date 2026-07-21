@@ -1438,8 +1438,6 @@ export interface DynastyApi {
     getRecruit: (dynastyId: string, playerId: number) => Promise<RecruitEditData | null>;
     saveRecruit: (dynastyId: string, playerId: number, fields: RecruitEditFields) => Promise<SaveEditResult>;
     saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
-    addRecruitToBoard: (dynastyId: string, playerId: number) => Promise<SaveEditResult>;
-    removeRecruitFromBoard: (dynastyId: string, playerId: number) => Promise<SaveEditResult>;
     searchPortraits: (
       kind: 'player' | 'coach',
       query: string,
