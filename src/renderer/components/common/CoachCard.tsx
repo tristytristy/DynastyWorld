@@ -24,7 +24,7 @@ export function EditButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="inline-flex h-6 w-6 shrink-0 items-center justify-center border border-slate-300/80 bg-white/90 text-slate-500 transition hover:border-[var(--team-primary)] hover:text-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400"
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center border border-slate-300/80 bg-white/90 text-slate-500 transition hover:border-[var(--team-primary)] hover:text-[var(--team-accent-text)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400"
     >
       <EditIcon />
     </button>

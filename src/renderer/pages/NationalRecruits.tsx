@@ -84,7 +84,7 @@ function LockPill({ unlocked, onClick, revealLabel = 'Reveal' }: { unlocked: boo
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
         unlocked
-          ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-primary)] dark:text-white'
+          ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-accent-text)] dark:text-white'
           : 'border-slate-300/80 bg-slate-100/70 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white'
       }`}
       aria-label={unlocked ? 'Hide' : revealLabel}
@@ -158,7 +158,7 @@ function RecruitPanel({
             <Stars n={recruit.stars} />
             <StageBadge stage={recruit.recruitStage} />
             {recruit.gemBust === 'GEM' && <span className="border border-emerald-300/70 bg-emerald-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">Gem</span>}
-            {recruit.onUserBoard && <span className="border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--team-primary)] dark:text-white">On board</span>}
+            {recruit.onUserBoard && <span className="border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--team-accent-text)] dark:text-white">On board</span>}
           </div>
         </div>
       </div>
@@ -486,7 +486,7 @@ export function NationalRecruits() {
 
   const th = (key: SortKey, label: string, alignRight = false) => (
     <th className={`whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] ${alignRight ? 'text-right' : 'text-left'}`}>
-      <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 transition hover:text-[var(--team-primary)] ${sortKey === key ? 'text-slate-900 dark:text-white' : ''}`}>
+      <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 transition hover:text-[var(--team-accent-text)] ${sortKey === key ? 'text-slate-900 dark:text-white' : ''}`}>
         {label}
         {sortKey === key && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
       </button>
@@ -602,7 +602,7 @@ export function NationalRecruits() {
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); ovrLockClick(r); }}
-                              className="ml-auto inline-flex text-slate-400 transition hover:text-[var(--team-primary)] dark:text-slate-500"
+                              className="ml-auto inline-flex text-slate-400 transition hover:text-[var(--team-accent-text)] dark:text-slate-500"
                               aria-label="Reveal overall rating"
                               title="Overall hidden — click to reveal"
                             >

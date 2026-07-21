@@ -259,7 +259,7 @@ export function History() {
       </div>
 
       <div>
-        <p className="type-eyebrow text-[var(--team-primary)]">History During This Save</p>
+        <p className="type-eyebrow text-[var(--team-accent-text)]">History During This Save</p>
         <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
           Dynasty-era summary — {history.teamName} since your archive began.
         </h3>
@@ -285,7 +285,7 @@ export function History() {
       <ProgramHonors history={history} />
 
       <div>
-        <p className="type-eyebrow text-[var(--team-primary)]">Program Records · all-time</p>
+        <p className="type-eyebrow text-[var(--team-accent-text)]">Program Records · all-time</p>
         <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
           The school record book from the save itself — persists across coaches.
         </h3>

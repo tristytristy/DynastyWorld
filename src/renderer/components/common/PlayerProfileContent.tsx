@@ -610,7 +610,7 @@ function OverviewCard({
         <button
           type="button"
           onClick={onJump}
-          className="mt-3 self-start font-display text-xs font-semibold uppercase tracking-[0.18em] text-[var(--team-primary)] transition hover:opacity-75"
+          className="mt-3 self-start font-display text-xs font-semibold uppercase tracking-[0.18em] text-[var(--team-accent-text)] transition hover:opacity-75"
         >
           {jumpLabel ?? 'View'} →
         </button>

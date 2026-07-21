@@ -177,13 +177,13 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
                           const fmt = row.format ?? int;
                           return (
                             <tr key={row.label} className="border-b border-slate-200/60 last:border-b-0 dark:border-white/5">
-                              <td className={`tnum w-1/3 px-3 py-2 text-right font-semibold ${leftWins ? 'text-[var(--team-primary)]' : 'text-slate-800 dark:text-slate-100'}`}>
+                              <td className={`tnum w-1/3 px-3 py-2 text-right font-semibold ${leftWins ? 'text-[var(--team-accent-text)]' : 'text-slate-800 dark:text-slate-100'}`}>
                                 {lv === null ? '-' : fmt(lv)}
                               </td>
                               <td className="type-meta w-1/3 px-3 py-2 text-center uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                                 {row.label}
                               </td>
-                              <td className={`tnum w-1/3 px-3 py-2 text-left font-semibold ${rightWins ? 'text-[var(--team-primary)]' : 'text-slate-800 dark:text-slate-100'}`}>
+                              <td className={`tnum w-1/3 px-3 py-2 text-left font-semibold ${rightWins ? 'text-[var(--team-accent-text)]' : 'text-slate-800 dark:text-slate-100'}`}>
                                 {rv === null ? '-' : fmt(rv)}
                               </td>
                             </tr>

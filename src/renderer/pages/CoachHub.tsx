@@ -192,7 +192,7 @@ export function CoachHub() {
                   {userCoach ? `${userCoach.firstName} ${userCoach.lastName}` : overview.teamName}
                 </h2>
                 {userCoach && (
-                  <p className="mt-2 text-sm font-semibold text-[var(--team-primary)]">
+                  <p className="mt-2 text-sm font-semibold text-[var(--team-accent-text)]">
                     {spaceCamelCase(userCoach.position)}
                   </p>
                 )}

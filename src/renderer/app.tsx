@@ -35,20 +35,10 @@ const ANGLED_PANEL = angledClip('1.25rem');
 export function App() {
   return (
     <div className="relative min-h-full overflow-hidden">
-      <div className="pointer-events-none fixed inset-0">
-        <div
-          style={{ clipPath: 'polygon(0 0, 100% 0, calc(100% - 12rem) 100%, 0 100%)' }}
-          className="absolute left-0 top-0 h-[24rem] w-[38rem] bg-[linear-gradient(135deg,rgba(37,99,235,0.22),rgba(37,99,235,0.03))] dark:bg-[linear-gradient(135deg,rgba(59,130,246,0.2),rgba(59,130,246,0.03))]"
-        />
-        <div
-          style={{ clipPath: 'polygon(10rem 0, 100% 0, 100% 100%, 0 100%)' }}
-          className="absolute right-0 top-0 h-[22rem] w-[34rem] bg-[linear-gradient(225deg,rgba(14,165,233,0.18),rgba(14,165,233,0.02))] dark:bg-[linear-gradient(225deg,rgba(34,211,238,0.14),rgba(34,211,238,0.03))]"
-        />
-        <div
-          style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 8rem 100%)' }}
-          className="absolute bottom-0 left-[18%] h-[20rem] w-[42rem] bg-[linear-gradient(180deg,rgba(2,132,199,0.1),rgba(148,163,184,0.04))] dark:bg-[linear-gradient(180deg,rgba(37,99,235,0.12),rgba(15,23,42,0.02))]"
-        />
-      </div>
+      {/* Phase 10: the blue/cyan aurora beams that used to sit behind the shell
+          were removed — they read as "glow" against the analog-matte direction.
+          The ground's own subtle vertical falloff (globals.css) is the only
+          surface variation now; team color lives in accents, not the backdrop. */}
 
       <div className="relative flex min-h-full flex-col">
         <Navbar />

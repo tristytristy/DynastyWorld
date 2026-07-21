@@ -69,6 +69,14 @@
     --surface-interactive-hover: rgba(240, 241, 244, 0.95);
     --surface-overlay: #ffffff;
     --surface-overlay-border: rgba(15, 23, 42, 0.12);
+    /**
+     * Contrast-safe form of the team color for use as TEXT on neutral surfaces
+     * (eyebrows, links, position labels). Team colors are picked for their
+     * fills, so a dark navy or a bright maize is often unreadable as small text.
+     * On light surfaces we darken it slightly; on dark surfaces (below) we
+     * lighten it toward white. Fills/borders keep using raw --team-primary.
+     */
+    --team-accent-text: color-mix(in srgb, var(--team-primary) 84%, #0b0e12);
   }
 
   /**
@@ -87,6 +95,8 @@
     --surface-interactive-hover: rgba(38, 42, 48, 0.85);
     --surface-overlay: #15181c;
     --surface-overlay-border: rgba(255, 255, 255, 0.12);
+    /* Lighten the team color toward white so team-tinted TEXT stays legible on the dark graphite ground. */
+    --team-accent-text: color-mix(in srgb, var(--team-primary) 60%, #ffffff);
   }
 
   /**

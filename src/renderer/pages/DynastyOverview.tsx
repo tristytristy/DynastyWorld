@@ -78,7 +78,7 @@ function BudgetButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-2 border border-slate-300/80 bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:border-[var(--team-primary)] hover:text-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300"
+      className="inline-flex shrink-0 items-center gap-2 border border-slate-300/80 bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:border-[var(--team-primary)] hover:text-[var(--team-accent-text)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300"
     >
       Program budget
     </button>
@@ -343,7 +343,7 @@ export function DynastyOverview() {
                 Latest results
               </h3>
             </div>
-            <Link to={`/dynasty/${id}/schedule`} className="text-sm font-medium text-[var(--team-primary)] hover:underline">
+            <Link to={`/dynasty/${id}/schedule`} className="text-sm font-medium text-[var(--team-accent-text)] hover:underline">
               Schedule
             </Link>
           </div>

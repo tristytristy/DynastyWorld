@@ -77,7 +77,7 @@ function TeamRow({
             {team.isDivisionLeader && (
               <span
                 title="Division leader"
-                className="shrink-0 border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--team-primary)] dark:text-white"
+                className="shrink-0 border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--team-accent-text)] dark:text-white"
               >
                 ◆ Div
               </span>
