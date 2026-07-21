@@ -1019,6 +1019,8 @@ export interface NationalRecruit {
     jumping: number;
   };
   topSchools: NationalRecruitSchool[];
+  /** True if this prospect is on the user's own recruiting board (merged from the board snapshot in getNationalRecruits). */
+  onUserBoard: boolean;
 }
 
 /** A viewed (any) team's championship honors for one season, from the leaguewide YearSummary snapshot — so Team Hub can show the same trophies the user's own team gets. */
@@ -1436,6 +1438,8 @@ export interface DynastyApi {
     getRecruit: (dynastyId: string, playerId: number) => Promise<RecruitEditData | null>;
     saveRecruit: (dynastyId: string, playerId: number, fields: RecruitEditFields) => Promise<SaveEditResult>;
     saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
+    addRecruitToBoard: (dynastyId: string, playerId: number) => Promise<SaveEditResult>;
+    removeRecruitFromBoard: (dynastyId: string, playerId: number) => Promise<SaveEditResult>;
     searchPortraits: (
       kind: 'player' | 'coach',
       query: string,

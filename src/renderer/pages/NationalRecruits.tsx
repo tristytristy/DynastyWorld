@@ -99,6 +99,8 @@ function RecruitPanel({
   canEdit,
   onEdit,
   onEditRecruiting,
+  onToggleBoard,
+  boardBusy,
   onOpenFull,
   ovrUnlocked,
   onOvrLockClick,
@@ -109,6 +111,8 @@ function RecruitPanel({
   canEdit: boolean;
   onEdit: (r: NationalRecruit) => void;
   onEditRecruiting: (r: NationalRecruit) => void;
+  onToggleBoard: (r: NationalRecruit) => void;
+  boardBusy: boolean;
   onOpenFull: (r: NationalRecruit) => void;
   ovrUnlocked: boolean;
   onOvrLockClick: (r: NationalRecruit) => void;
@@ -153,6 +157,7 @@ function RecruitPanel({
             <Stars n={recruit.stars} />
             <StageBadge stage={recruit.recruitStage} />
             {recruit.gemBust === 'GEM' && <span className="border border-emerald-300/70 bg-emerald-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">Gem</span>}
+            {recruit.onUserBoard && <span className="border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--team-primary)] dark:text-white">On board</span>}
           </div>
         </div>
       </div>
@@ -264,23 +269,37 @@ function RecruitPanel({
         )}
       </div>
 
-      {/* Actions — recruiting edits + full player edit. The name/portrait opens the full profile. */}
+      {/* Actions — board management + recruiting edits + full player edit. The name/portrait opens the full profile. */}
       {canEdit && (
-        <div className="flex gap-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+        <div className="space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
           <button
             type="button"
-            onClick={() => onEditRecruiting(recruit)}
-            className="flex-1 bg-[var(--team-primary)] px-3 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95"
+            onClick={() => onToggleBoard(recruit)}
+            disabled={boardBusy}
+            className={`w-full border px-3 py-2 text-sm font-semibold transition disabled:opacity-60 ${
+              recruit.onUserBoard
+                ? 'border-red-300/70 bg-red-50/70 text-red-800 hover:bg-red-100/70 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300'
+                : 'border-[var(--team-primary)]/60 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-primary)] hover:brightness-95 dark:text-white'
+            }`}
           >
-            Edit recruiting
+            {boardBusy ? 'Saving…' : recruit.onUserBoard ? 'Remove from board' : '+ Add to board'}
           </button>
-          <button
-            type="button"
-            onClick={() => onEdit(recruit)}
-            className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-          >
-            Edit ratings
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onEditRecruiting(recruit)}
+              className="flex-1 bg-[var(--team-primary)] px-3 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95"
+            >
+              Edit recruiting
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(recruit)}
+              className="flex-1 border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+            >
+              Edit ratings
+            </button>
+          </div>
         </div>
       )}
     </SurfaceCard>
@@ -307,6 +326,8 @@ export function NationalRecruits() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pendingUnlock, setPendingUnlock] = useState<{ recruit: NationalRecruit; stat: 'ovr' | 'athletic' } | null>(null);
   const [editingRecruit, setEditingRecruit] = useState<NationalRecruit | null>(null);
+  const [boardBusyId, setBoardBusyId] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
   const [stars, setStars] = useState('');
@@ -423,6 +444,29 @@ export function NationalRecruits() {
       isRecruit: true,
       onSaved: () => window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr)),
     });
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  async function toggleBoard(r: NationalRecruit) {
+    if (!id || boardBusyId !== null) return;
+    setBoardBusyId(r.playerId);
+    setToast(null);
+    const result = r.onUserBoard
+      ? await window.api.editor.removeRecruitFromBoard(id, r.playerId)
+      : await window.api.editor.addRecruitToBoard(id, r.playerId);
+    if (result.success) {
+      const fresh = await window.api.db.getNationalRecruits(id, seasonId);
+      setRecruits(fresh);
+      setToast(r.onUserBoard ? `Removed ${r.lastName} from your board.` : `Added ${r.lastName} to your board.`);
+    } else {
+      setToast(result.message);
+    }
+    setBoardBusyId(null);
   }
 
   // Clicking a stat's lock: reveal (open the warning) when locked; re-lock all when unlocked.
@@ -603,6 +647,8 @@ export function NationalRecruits() {
             canEdit={canEdit}
             onEdit={editRecruit}
             onEditRecruiting={setEditingRecruit}
+            onToggleBoard={toggleBoard}
+            boardBusy={selected ? boardBusyId === selected.playerId : false}
             onOpenFull={openFull}
             ovrUnlocked={selected ? ovr.isUnlocked(selected.playerId) : false}
             onOvrLockClick={ovrLockClick}
@@ -642,6 +688,16 @@ export function NationalRecruits() {
               window.api.db.getNationalRecruits(id, seasonId).then((rr) => setRecruits(rr));
             }}
           />,
+          document.body,
+        )}
+
+      {toast &&
+        createPortal(
+          <div className="fixed inset-x-0 bottom-6 z-[130] flex justify-center px-4">
+            <div className="corner-cut-sm max-w-md border border-slate-200/80 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+              {toast}
+            </div>
+          </div>,
           document.body,
         )}
     </div>

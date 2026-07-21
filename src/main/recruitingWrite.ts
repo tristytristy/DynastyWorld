@@ -109,3 +109,129 @@ export async function saveRecruitInfluence(
     return true;
   });
 }
+
+const BOARD_TABLES = ['Team', 'RecruitingBoard', 'RecruitTarget[]', 'UserRecruitTarget', 'Recruit', 'Player'];
+
+/**
+ * The madden-franchise table methods needed to add a record — beyond our
+ * lightweight FranchiseTable boundary type. `nextRecordToUse` is the head of
+ * the empty-record chain; `setNextRecordToUse` allocates a row out of it (the
+ * step that actually marks a populated empty row non-empty); getBinary... builds
+ * a reference string to a row. Verified against madden-franchise's .d.ts.
+ */
+interface AllocatableTable {
+  header: { nextRecordToUse: number };
+  records: FranchiseRecord[];
+  getBinaryReferenceToRecord(index: number): string;
+  setNextRecordToUse(index: number, resetEmptyRecordMap: boolean): void;
+}
+function asAllocatable(table: unknown): AllocatableTable {
+  return table as unknown as AllocatableTable;
+}
+
+/** Resolves the user team's board slot container (Team.RecruitingBoard.Recruits, a fixed 35-slot array of UserRecruitTarget refs). */
+function loadBoardSlots(
+  franchise: OpenFranchise,
+  teamIndex: number,
+): { slotsRow: FranchiseRecord; slotKeys: string[] } | null {
+  const teamTable = getLargestTable(franchise, 'Team');
+  const team = nonEmpty(teamTable.records).find((r) => Number(r.TeamIndex) === teamIndex);
+  if (!team) return null;
+  const board = resolveReferenceWithTable(franchise, team, 'RecruitingBoard');
+  if (!board) return null;
+  const slots = resolveReferenceWithTable(franchise, board.record, 'Recruits');
+  if (!slots) return null;
+  return { slotsRow: slots.record, slotKeys: Object.keys(slots.record.fields) };
+}
+
+/** The Player.PresentationId a board slot's UserRecruitTarget points at, or null for an empty slot. */
+function slotPlayerId(franchise: OpenFranchise, slotsRow: FranchiseRecord, slotKey: string): number | null {
+  const urt = resolveReferenceWithTable(franchise, slotsRow, slotKey);
+  if (!urt) return null;
+  const recruit = resolveReferenceWithTable(franchise, urt.record, 'Recruit');
+  const player = recruit ? resolveReferenceWithTable(franchise, recruit.record, 'Player') : null;
+  return player ? Number(player.record.PresentationId) : null;
+}
+
+/** Removes a prospect from the user's board by clearing its slot. Verified round-trip safe. */
+export async function removeRecruitFromBoard(dynastyId: string, playerId: number): Promise<SaveEditResult> {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty || dynasty.teamId === null) return { success: false, message: 'No user team on this dynasty.' };
+  const teamIndex = dynasty.teamId;
+
+  return withRecruitWrite(dynastyId, async (franchise) => {
+    await Promise.all(BOARD_TABLES.map((t) => preloadAllInstances(franchise, t)));
+    const board = loadBoardSlots(franchise, teamIndex);
+    if (!board) return false;
+
+    let targetKey: string | null = null;
+    let emptyRaw: string | null = null;
+    for (const k of board.slotKeys) {
+      const pid = slotPlayerId(franchise, board.slotsRow, k);
+      if (pid === null) {
+        if (emptyRaw === null) emptyRaw = String(board.slotsRow[k]); // an empty slot's raw value
+      } else if (pid === playerId) {
+        targetKey = k;
+      }
+    }
+    if (!targetKey) return false; // not on the board
+    board.slotsRow[targetKey] = emptyRaw ?? '0'.repeat(32);
+    return true;
+  });
+}
+
+/**
+ * Adds a prospect to the user's board — fills an empty board slot with a fresh
+ * UserRecruitTarget pointing at the recruit. Uses the "advanced" empty-record
+ * allocation (populate `nextRecordToUse`, then `setNextRecordToUse` to take it
+ * out of the empty chain) — verified round-trip safe, but the one op worth a
+ * one-time in-game confirm. Idempotent (no-op if already on the board); errors
+ * if the board is full (35).
+ */
+export async function addRecruitToBoard(dynastyId: string, playerId: number): Promise<SaveEditResult> {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty || dynasty.teamId === null) return { success: false, message: 'No user team on this dynasty.' };
+  const teamIndex = dynasty.teamId;
+
+  return withRecruitWrite(dynastyId, async (franchise) => {
+    await Promise.all(BOARD_TABLES.map((t) => preloadAllInstances(franchise, t)));
+    await Promise.all(['ProspectTargetSchool[]', 'ProspectTargetSchool'].map((t) => preloadAllInstances(franchise, t)));
+
+    const recruit = await findRecruitByPlayerId(franchise, playerId);
+    if (!recruit) return false;
+    const board = loadBoardSlots(franchise, teamIndex);
+    if (!board) return false;
+
+    let emptyKey: string | null = null;
+    for (const k of board.slotKeys) {
+      const pid = slotPlayerId(franchise, board.slotsRow, k);
+      if (pid === playerId) return true; // already on board — idempotent
+      if (pid === null && !emptyKey) emptyKey = k;
+    }
+    if (!emptyKey) throw new Error('Your recruiting board is full (35). Remove a prospect first.');
+
+    const recruitTable = asAllocatable(getLargestTable(franchise, 'Recruit'));
+    const recruitRow = recruitTable.records.indexOf(recruit);
+    const urtTable = asAllocatable(getLargestTable(franchise, 'UserRecruitTarget'));
+    const urtRow = urtTable.header.nextRecordToUse;
+    const nextEmpty = urtTable.records.findIndex((r, i) => i > urtRow && r.isEmpty);
+    if (urtRow === undefined || nextEmpty < 0) throw new Error('No free recruiting-target slot in the save.');
+
+    const urt = urtTable.records[urtRow];
+    urt.Recruit = recruitTable.getBinaryReferenceToRecord(recruitRow);
+    urt.ScholarshipStatus = 'None';
+    urt.CurrentNILOffer = 0;
+    urt.SendTheHouse = false;
+    urt.ContactFriendsAndFamily = false;
+    urt.ContactHighSchoolCoaches = false;
+    urt.SearchSocialMedia = false;
+    urt.VisitRecruitsSchool = false;
+    urt.IsFavorite = false;
+    urt.CommittedWeekNumber = 0;
+
+    // Allocate the row out of the empty-record chain, then point the board slot at it.
+    urtTable.setNextRecordToUse(nextEmpty, true);
+    board.slotsRow[emptyKey] = urtTable.getBinaryReferenceToRecord(urtRow);
+    return true;
+  });
+}

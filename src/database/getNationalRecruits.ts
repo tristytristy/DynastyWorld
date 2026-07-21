@@ -4,10 +4,10 @@ import type { NationalRecruit } from '../shared/types';
 
 /**
  * The whole league-wide recruit pool for a season (~2,950 rows) — the national
- * Recruits browser under NCAA Hub. Read straight from the compressed
- * `nationalRecruits` snapshot; the stored shape already matches the renderer
- * type, so this is a pass-through with light null-guarding. Distinct from
- * getRecruits (the user's own 35-slot board).
+ * Recruits browser. Read from the compressed `nationalRecruits` snapshot, then
+ * merged with the user's own board snapshot (`recruits`) so each prospect knows
+ * whether it's on the user's board (drives the add/remove control). Distinct
+ * from getRecruits, which returns only the board.
  */
 export function getNationalRecruits(dynastyId: string, seasonId?: number): NationalRecruit[] | undefined {
   const dynasty = getDynastyById(dynastyId);
@@ -18,5 +18,9 @@ export function getNationalRecruits(dynastyId: string, seasonId?: number): Natio
 
   const recruits = getSnapshot<NationalRecruitData[]>(season.id, 'nationalRecruits');
   if (!recruits) return undefined;
-  return recruits;
+
+  const board = getSnapshot<{ playerId: number }[]>(season.id, 'recruits') ?? [];
+  const boardIds = new Set(board.map((r) => r.playerId));
+
+  return recruits.map((r) => ({ ...r, onUserBoard: boardIds.has(r.playerId) }));
 }

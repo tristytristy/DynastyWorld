@@ -23,7 +23,7 @@ import {
   saveRecruitEdits,
   searchPortraits,
 } from '../editorWrite';
-import { saveRecruitInfluence } from '../recruitingWrite';
+import { addRecruitToBoard, removeRecruitFromBoard, saveRecruitInfluence } from '../recruitingWrite';
 
 export function registerEditorHandlers(): void {
   ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
@@ -84,6 +84,14 @@ export function registerEditorHandlers(): void {
       return saveRecruitInfluence(dynastyId, playerId, edit);
     },
   );
+
+  ipcMain.handle(IPC.editor.addRecruitToBoard, async (_event, dynastyId: string, playerId: number): Promise<SaveEditResult> => {
+    return addRecruitToBoard(dynastyId, playerId);
+  });
+
+  ipcMain.handle(IPC.editor.removeRecruitFromBoard, async (_event, dynastyId: string, playerId: number): Promise<SaveEditResult> => {
+    return removeRecruitFromBoard(dynastyId, playerId);
+  });
 
   ipcMain.handle(
     IPC.editor.searchPortraits,
