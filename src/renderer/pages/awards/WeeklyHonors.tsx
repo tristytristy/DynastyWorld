@@ -3,10 +3,29 @@ import { TeamLogo } from '../../components/common/TeamLogo';
 import { PlayerNameButton } from './AwardsShared';
 import { formatAwardLabel } from '../../lib/awardFormat';
 import { useAwardsOverview } from '../../data/useAwardsOverview';
+import { useViewedTeam } from '../../data/ViewedTeamProvider';
 
 /** The user's own team's weekly honors — uses whichever weekly-award fields the save actually populates (see extract-awards.ts); no weekly category is invented that isn't real leaguewide extracted data. */
 export function WeeklyHonors() {
   const { dynastyId, seasonId, awards } = useAwardsOverview();
+  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+
+  // Weekly player honors are extracted for the user's own team only (the save
+  // doesn't carry them leaguewide). When a non-user team is selected, show an
+  // honest "your team only" notice instead of misleadingly rendering the user's
+  // own honors under another program's Team Hub.
+  if (viewedTeamIndex !== null) {
+    const teamName = leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? 'This team';
+    return (
+      <div>
+        <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Weekly Honors</h3>
+        <SurfaceCard className="mt-4 text-center text-sm text-slate-400 dark:text-slate-500">
+          Weekly player honors are tracked for your own team only — {teamName}&apos;s weekly awards aren&apos;t recorded in
+          the save&apos;s leaguewide data. Switch back to your team to see its weekly honors.
+        </SurfaceCard>
+      </div>
+    );
+  }
 
   if (awards === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading honors...</p>;
   if (awards === null) return <p className="text-slate-500 dark:text-slate-400">No honors recorded for this season yet.</p>;

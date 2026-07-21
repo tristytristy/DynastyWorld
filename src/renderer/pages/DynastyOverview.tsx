@@ -5,7 +5,7 @@ import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatTile } from '../components/ui/StatTile';
 import { TeamLogo } from '../components/common/TeamLogo';
-import { PlayerPortrait } from '../components/common/PlayerPortrait';
+import { TopPlayersCard } from '../components/common/TopPlayersCard';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
@@ -16,7 +16,7 @@ import {
   getPostseasonAppearanceImagePath,
   getTrophyImagePath,
 } from '../lib/trophyAssetMapping';
-import type { BowlAppearance, GameSummary, RankingsOverview, SeasonOverview, TeamTrophies, Trophy } from '../../shared/types';
+import type { BowlAppearance, GameSummary, RankingsOverview, RosterPlayer, SeasonOverview, TeamTrophies, Trophy } from '../../shared/types';
 
 function rankLabel(rank: number | null): string {
   return rank === null ? 'Unranked' : `#${rank}`;
@@ -176,40 +176,24 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
           </div>
         </SurfaceCard>
       )}
-      <SurfaceCard>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Top players</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {topPlayers.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() =>
-                openPlayerModal(
-                  dynastyId,
-                  p.id,
-                  roster?.seasonId,
-                  topPlayers.map((x) => x.id),
-                  {
-                    name: `${p.firstName} ${p.lastName}`,
-                    position: p.position,
-                    teamDisplayName: teamName,
-                    portraitAssetName: p.portraitAssetName,
-                  },
-                  teamIndex,
-                )
-              }
-              className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
-            >
-              <PlayerPortrait player={p} size="sm" className="!h-9 !w-9" />
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-white">
-                {p.firstName} {p.lastName}
-              </span>
-              <span className="type-meta shrink-0 text-slate-500 dark:text-slate-400">{p.position}</span>
-              <span className="type-stat-sm shrink-0 text-slate-950 dark:text-white">{p.overallRating}</span>
-            </button>
-          ))}
-        </div>
-      </SurfaceCard>
+      <TopPlayersCard
+        players={roster?.players ?? []}
+        onSelect={(p) =>
+          openPlayerModal(
+            dynastyId,
+            p.id,
+            roster?.seasonId,
+            topPlayers.map((x) => x.id),
+            {
+              name: `${p.firstName} ${p.lastName}`,
+              position: p.position,
+              teamDisplayName: teamName,
+              portraitAssetName: p.portraitAssetName,
+            },
+            teamIndex,
+          )
+        }
+      />
     </div>
   );
 }
@@ -220,8 +204,10 @@ export function DynastyOverview() {
   const [overview, setOverview] = useState<SeasonOverview | null | undefined>(undefined);
   const [trophies, setTrophies] = useState<TeamTrophies | null | undefined>(undefined);
   const [rankings, setRankings] = useState<RankingsOverview | null | undefined>(undefined);
+  const [roster, setRoster] = useState<RosterPlayer[] | null>(null);
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
   const { openTeamBudgetEditor } = useEditorModal();
+  const { openPlayerModal } = usePlayerModal();
 
   useEffect(() => {
     if (!id) return;
@@ -234,6 +220,9 @@ export function DynastyOverview() {
     });
     window.api.db.getRankings(id, seasonId).then((result) => {
       if (!cancelled) setRankings(result);
+    });
+    window.api.db.getRoster(id, seasonId).then((result) => {
+      if (!cancelled) setRoster(result ?? null);
     });
     return () => {
       cancelled = true;
@@ -387,6 +376,28 @@ export function DynastyOverview() {
           )}
         </SurfaceCard>
       </div>
+
+      {/* Top players — the same shared card the league-team view uses (Phase 4 unification). */}
+      {roster && roster.length > 0 && userTeamIndex !== null && (
+        <TopPlayersCard
+          players={roster}
+          onSelect={(p) =>
+            openPlayerModal(
+              id ?? '',
+              p.id,
+              seasonId,
+              [...roster].sort((a, b) => b.overallRating - a.overallRating).slice(0, 10).map((x) => x.id),
+              {
+                name: `${p.firstName} ${p.lastName}`,
+                position: p.position,
+                teamDisplayName: overview.teamName,
+                portraitAssetName: p.portraitAssetName,
+              },
+              userTeamIndex,
+            )
+          }
+        />
+      )}
     </div>
   );
 }
