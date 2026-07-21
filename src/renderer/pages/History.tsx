@@ -251,16 +251,20 @@ export function History() {
       )}
 
       <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-5 py-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-        All-time school title counts are not exposed by the readable dynasty save yet, so title totals on this page are
-        shown as dynasty-era results only.
+        This page separates two timelines: <strong>History During This Save</strong> (everything below, accumulated
+        across the seasons you&apos;ve played/imported) and the <strong>Program Records</strong> book (the save&apos;s own
+        all-time team records, which persist across coaches). The program&apos;s all-time win/title <em>totals</em>
+        (e.g. the in-game 999-319 career records) live in a separate save history structure that isn&apos;t surfaced here
+        yet, so the totals below are dynasty-era only.
       </div>
 
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-          Historical Summary
-        </p>
+        <p className="type-eyebrow text-[var(--team-primary)]">History During This Save</p>
+        <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+          Dynasty-era summary — {history.teamName} since your archive began.
+        </h3>
         <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatTile label="Program Record" value={formatRecord(history.dynastyWins, history.dynastyLosses)} />
+          <StatTile label="Dynasty-era Record" value={formatRecord(history.dynastyWins, history.dynastyLosses)} />
           <StatTile
             label="Schools Coached"
             value={String(history.schoolsCoached.length)}
@@ -281,11 +285,9 @@ export function History() {
       <ProgramHonors history={history} />
 
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-          School Record Book
-        </p>
-        <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-          Verified team records from the save itself.
+        <p className="type-eyebrow text-[var(--team-primary)]">Program Records · all-time</p>
+        <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+          The school record book from the save itself — persists across coaches.
         </h3>
         <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
           The game&apos;s own single-game record book tracks the player, position, year, and value only — it doesn&apos;t
