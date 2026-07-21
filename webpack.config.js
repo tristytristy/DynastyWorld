@@ -166,6 +166,26 @@ const rendererConfig = {
             ignore: ['**/*.dds', '**/*.psd'],
           },
         },
+        {
+          // The in-app User Manual (opened from the sidebar in an iframe). Same
+          // source as the standalone PDF, but here the placeholders resolve to
+          // the app's OWN bundled asset files instead of baked-in data URIs —
+          // so the shipped manual.html stays tiny (~40KB) and reuses the fonts,
+          // logo, and splash the app already carries. Version stamped at build.
+          from: 'docs/manual/manual.template.html',
+          to: 'manual.html',
+          transform(content) {
+            return content
+              .toString()
+              .replace(/__INTER400__/g, 'assets/fonts/inter-latin-400-normal.woff2')
+              .replace(/__INTER500__/g, 'assets/fonts/inter-latin-500-normal.woff2')
+              .replace(/__INTER600__/g, 'assets/fonts/inter-latin-600-normal.woff2')
+              .replace(/__INTER700__/g, 'assets/fonts/inter-latin-700-normal.woff2')
+              .replace(/__LOGO_MARK__/g, 'assets/Logo/Logo-mark.png')
+              .replace(/__SPLASH__/g, 'assets/splash/spshscr.png')
+              .replace(/__VERSION__/g, APP_VERSION);
+          },
+        },
       ],
     }),
   ],

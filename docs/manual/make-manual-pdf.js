@@ -7,8 +7,12 @@
 // the PDF is fully self-contained (fonts + logo embedded as data URIs) and the
 // version always matches package.json:
 //   __INTER400/500/600/700__  -> public/assets/fonts/inter-latin-*.woff2
+//   __LOGO_MARK__             -> public/assets/Logo/Logo-mark.png
+//   __SPLASH__                -> public/assets/splash/spshscr.png
 //   __VERSION__               -> package.json version
-// (The logo graphic is hard-coded directly in the template as a data URI.)
+// All assets are baked in as data URIs so the PDF is a portable standalone file.
+// (The in-app manual.html instead references these assets from the app bundle —
+//  see the CopyWebpackPlugin transform in webpack.config.js.)
 //
 // Output: "Dynasty Hub - User Manual.pdf" at the repo root.
 const { app, BrowserWindow } = require('electron');
@@ -18,6 +22,8 @@ const path = require('path');
 const HERE = __dirname; // docs/manual
 const ROOT = path.resolve(HERE, '..', '..'); // repo root
 const FONTS = path.join(ROOT, 'public/assets/fonts');
+const LOGO = path.join(ROOT, 'public/assets/Logo/Logo-mark.png');
+const SPLASH = path.join(ROOT, 'public/assets/splash/spshscr.png');
 const OUT_PDF = path.join(ROOT, 'Dynasty Hub - User Manual.pdf');
 
 function dataUri(file, mime) {
@@ -32,6 +38,8 @@ html = html
   .replace(/__INTER500__/g, dataUri(path.join(FONTS, 'inter-latin-500-normal.woff2'), 'font/woff2'))
   .replace(/__INTER600__/g, dataUri(path.join(FONTS, 'inter-latin-600-normal.woff2'), 'font/woff2'))
   .replace(/__INTER700__/g, dataUri(path.join(FONTS, 'inter-latin-700-normal.woff2'), 'font/woff2'))
+  .replace(/__LOGO_MARK__/g, dataUri(LOGO, 'image/png'))
+  .replace(/__SPLASH__/g, dataUri(SPLASH, 'image/png'))
   .replace(/__VERSION__/g, version);
 
 // Written next to the template but gitignored — a transient render input.
