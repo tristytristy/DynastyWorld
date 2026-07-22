@@ -1,4 +1,4 @@
-import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot } from './helpers';
+import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot, resolveSeasonHeadCoach } from './helpers';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
 import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
@@ -66,6 +66,7 @@ export function getLeagueTeamOverview(
     dynastyLabel: dynasty.label,
     teamName: team.displayName,
     seasonYear: season.seasonYear,
+    headCoach: resolveSeasonHeadCoach(season, teamIndex),
     lastSyncedAt: season.extractedAt,
     record: { wins: team.confWins + team.nonConfWins, losses: team.confLosses + team.nonConfLosses },
     conferenceRecord: { wins: team.confWins, losses: team.confLosses },

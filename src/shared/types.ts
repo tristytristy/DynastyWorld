@@ -239,11 +239,23 @@ export interface GameSummary {
   result: 'W' | 'L' | 'T' | null;
 }
 
+/** The coach who led a team for a season — surfaced on the Team Hub overview so browsing any program shows who's in charge. presentationId is the stable coach id (see docs/coach-movement-research.md). */
+export interface SeasonOverviewCoach {
+  firstName: string;
+  lastName: string;
+  position: string;
+  presentationId: number;
+  isUserControlled: boolean;
+  portraitAssetName: string | null;
+}
+
 export interface SeasonOverview {
   dynastyId: string;
   dynastyLabel: string;
   teamName: string;
   seasonYear: number;
+  /** The team's head coach that season (or the user-controlled coach if no HeadCoach row resolved); null for a history-only season. */
+  headCoach: SeasonOverviewCoach | null;
   lastSyncedAt: string;
   record: { wins: number; losses: number };
   conferenceRecord: { wins: number; losses: number };

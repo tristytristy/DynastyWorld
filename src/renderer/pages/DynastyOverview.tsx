@@ -167,6 +167,11 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
               <div>
                 <p className="type-eyebrow text-slate-400 dark:text-slate-500">Team Hub</p>
                 <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">{teamName}</h2>
+                {overview?.headCoach && (
+                  <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {overview.headCoach.firstName} {overview.headCoach.lastName} · Head Coach
+                  </p>
+                )}
               </div>
             </div>
             {teamTrophies.length > 0 && (
@@ -331,6 +336,11 @@ export function DynastyOverview() {
                 <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
                   {overview.teamName}
                 </h2>
+                {overview.headCoach && (
+                  <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {overview.headCoach.firstName} {overview.headCoach.lastName} · Head Coach
+                  </p>
+                )}
               </div>
             </div>
 

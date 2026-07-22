@@ -3,6 +3,7 @@ import type { BindParams, SqlValue } from 'sql.js';
 import { getDb, persist } from './init';
 import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
+import type { SeasonOverviewCoach } from '../shared/types';
 
 // ---- Low-level primitives -------------------------------------------------
 
@@ -299,6 +300,28 @@ export function resolveSeasonTeam(
     displayName: team.displayName,
     primaryColorHex: team.primaryColorHex,
     secondaryColorHex: team.secondaryColorHex,
+  };
+}
+
+/**
+ * The head coach of a given team for a season, from that season's coaches
+ * snapshot — for the "who coaches this program" line on any team's overview
+ * (user or non-user). Prefers the HeadCoach row; falls back to the
+ * user-controlled coach if a team has no resolved HeadCoach. Null when there's
+ * no coaches snapshot (history-only season) or no staff for the team.
+ */
+export function resolveSeasonHeadCoach(season: Season, teamIndex: number): SeasonOverviewCoach | null {
+  const coaches = getSnapshot<CoachData[]>(season.id, 'coaches') ?? [];
+  const staff = coaches.filter((c) => c.teamIndex === teamIndex);
+  const hc = staff.find((c) => c.position === 'HeadCoach') ?? staff.find((c) => c.isUserControlled) ?? null;
+  if (!hc) return null;
+  return {
+    firstName: hc.firstName,
+    lastName: hc.lastName,
+    position: hc.position,
+    presentationId: hc.presentationId,
+    isUserControlled: hc.isUserControlled,
+    portraitAssetName: hc.portraitAssetName,
   };
 }
 

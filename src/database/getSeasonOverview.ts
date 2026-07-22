@@ -1,4 +1,11 @@
-import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot, resolveSeasonTeam } from './helpers';
+import {
+  getCurrentSeason,
+  getDynastyById,
+  getSeasonById,
+  getSnapshot,
+  resolveSeasonHeadCoach,
+  resolveSeasonTeam,
+} from './helpers';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { DynastyTheme, GameSummary, SeasonOverview } from '../shared/types';
@@ -74,6 +81,7 @@ export function getSeasonOverview(dynastyId: string, seasonId?: number): SeasonO
     dynastyLabel: dynasty.label,
     teamName: userTeam.displayName,
     seasonYear: season.seasonYear,
+    headCoach: resolveSeasonHeadCoach(season, userTeam.teamIndex),
     lastSyncedAt: season.extractedAt,
     record: {
       wins: userTeam.confWins + userTeam.nonConfWins,
