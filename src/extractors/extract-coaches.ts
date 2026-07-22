@@ -42,7 +42,18 @@ export interface CareerCoachStats {
 }
 
 export interface CoachData {
+  /**
+   * The coach's stable per-entity id (Coach.PresentationId). Verified constant
+   * across a school move (SMU→UCLA kept 710) AND across a portrait/name change
+   * on a created coach (256 unchanged) — see docs/coach-movement-research.md.
+   * This is the ONLY safe key for tracking a coach's journey across teams and
+   * saves; name and asset fields are not (users edit names; the portrait fields
+   * change with the face).
+   */
+  presentationId: number;
   teamIndex: number;
+  /** The coach's PREVIOUS team (Coach.PrevTeamIndex); 255 = none. Set to the old school right after a move — the signal for move-year season attribution. */
+  prevTeamIndex: number;
   firstName: string;
   lastName: string;
   /**
@@ -89,6 +100,8 @@ export interface CoachData {
 }
 
 const FIELDS = [
+  'PresentationId',
+  'PrevTeamIndex',
   'FirstName',
   'LastName',
   'TeamIndex',
@@ -149,7 +162,9 @@ export async function extractCoaches(franchise: OpenFranchise): Promise<CoachDat
     .map((r) => {
       const careerStatsResolved = resolveReferenceWithTable(franchise, r, 'CareerStats');
       return {
+        presentationId: Number(r.PresentationId),
         teamIndex: Number(r.TeamIndex),
+        prevTeamIndex: Number(r.PrevTeamIndex),
         firstName: String(r.FirstName),
         lastName: String(r.LastName),
         portraitAssetName:

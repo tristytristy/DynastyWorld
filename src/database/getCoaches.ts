@@ -16,6 +16,7 @@ function positionSortIndex(position: string): number {
 
 function toCoach(c: CoachData, teamNameByIndex: Map<number, string>): Coach {
   return {
+    presentationId: c.presentationId,
     teamIndex: c.teamIndex,
     firstName: c.firstName,
     lastName: c.lastName,

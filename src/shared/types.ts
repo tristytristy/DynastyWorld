@@ -412,7 +412,15 @@ export interface CareerCoachStats {
 }
 
 export interface Coach {
-  /** Current team, not the coach's alma mater — see extract-coaches.ts. Together with `position`, uniquely identifies a coach for editing (PresentationId is not reliably unique for coaches, unlike players). */
+  /**
+   * The coach's stable per-entity id (Coach.PresentationId). Stable across school
+   * moves and portrait/name edits, so it's the key for tracking the USER's coach
+   * journey across teams and saves. NOT universally unique across all coaches
+   * (some generated coordinators share 0), so it does NOT replace (teamIndex,
+   * position) for editing — see docs/coach-movement-research.md.
+   */
+  presentationId: number;
+  /** Current team, not the coach's alma mater — see extract-coaches.ts. Together with `position`, uniquely identifies a coach for editing. */
   teamIndex: number;
   firstName: string;
   lastName: string;

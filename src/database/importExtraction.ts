@@ -79,8 +79,14 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     });
   }
 
+  // The user coach's stable id (Coach.PresentationId) — the identity anchor for
+  // the coaching journey. 0 (generated coordinators) is treated as "no real id".
+  const userCoach = extraction.coaches.find((c) => c.isUserControlled);
+  const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
+
   const season =
-    getSeasonByYear(dynasty.id, league.seasonYear) ?? createSeason(dynasty.id, league.seasonYear, userTeam.teamIndex);
+    getSeasonByYear(dynasty.id, league.seasonYear) ??
+    createSeason(dynasty.id, league.seasonYear, userTeam.teamIndex, userCoachId);
 
   saveSnapshot(season.id, 'league', extraction.league);
   saveSnapshot(season.id, 'teams', extraction.teams);
@@ -123,7 +129,7 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   for (const yearSummary of extraction.leagueHistory) {
     if (yearSummary.seasonYear === league.seasonYear) continue;
     if (getSeasonByYear(dynasty.id, yearSummary.seasonYear)) continue;
-    const backfilledSeason = createSeason(dynasty.id, yearSummary.seasonYear, null, false, false);
+    const backfilledSeason = createSeason(dynasty.id, yearSummary.seasonYear, null, null, false, false);
     saveSnapshot(backfilledSeason.id, 'yearSummary', yearSummary);
     backfilledSeasonYears.push(yearSummary.seasonYear);
   }

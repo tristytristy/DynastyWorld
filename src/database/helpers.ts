@@ -174,6 +174,7 @@ interface SeasonRow {
   extracted_at: string;
   is_current: number;
   user_team_id: number | null;
+  user_coach_id: number | null;
   final_record_wins: number | null;
   final_record_losses: number | null;
   final_record_ties: number | null;
@@ -196,6 +197,8 @@ export interface Season {
   extractedAt: string;
   isCurrent: boolean;
   userTeamId: number | null;
+  /** The user coach's stable Coach.PresentationId for this season — the identity anchor for tracking a coaching journey across schools/saves. Null for history-only seasons and coaches with no real id. See docs/coach-movement-research.md. */
+  userCoachId: number | null;
   finalRecordWins: number | null;
   finalRecordLosses: number | null;
   finalRecordTies: number | null;
@@ -220,6 +223,7 @@ function mapSeason(row: SeasonRow): Season {
     extractedAt: row.extracted_at,
     isCurrent: row.is_current === 1,
     userTeamId: row.user_team_id,
+    userCoachId: row.user_coach_id,
     finalRecordWins: row.final_record_wins,
     finalRecordLosses: row.final_record_losses,
     finalRecordTies: row.final_record_ties,
@@ -252,6 +256,7 @@ export function createSeason(
   dynastyId: string,
   seasonYear: number,
   userTeamId: number | null,
+  userCoachId: number | null = null,
   isCurrent = true,
   hasFullData = true,
 ): Season {
@@ -259,8 +264,8 @@ export function createSeason(
     run('UPDATE seasons SET is_current = 0 WHERE dynasty_id = ?', [dynastyId]);
   }
   run(
-    'INSERT INTO seasons (dynasty_id, season_year, extracted_at, is_current, user_team_id, has_full_data) VALUES (?, ?, ?, ?, ?, ?)',
-    [dynastyId, seasonYear, new Date().toISOString(), isCurrent ? 1 : 0, userTeamId, hasFullData ? 1 : 0],
+    'INSERT INTO seasons (dynasty_id, season_year, extracted_at, is_current, user_team_id, user_coach_id, has_full_data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [dynastyId, seasonYear, new Date().toISOString(), isCurrent ? 1 : 0, userTeamId, userCoachId, hasFullData ? 1 : 0],
   );
   const row = get<SeasonRow>(
     'SELECT * FROM seasons WHERE dynasty_id = ? AND season_year = ?',
@@ -290,8 +295,6 @@ export function getSeasonsByDynasty(dynastyId: string): Season[] {
  */
 export function backfillMissingSeasonTeamIds(): void {
   const rows = all<SeasonRow>('SELECT * FROM seasons WHERE user_team_id IS NULL', []);
-  if (rows.length === 0) return;
-
   for (const row of rows) {
     const coaches = getSnapshot<CoachData[]>(row.id, 'coaches') ?? [];
     const derivedTeamId = findUserTeamIndex(coaches);
@@ -299,6 +302,19 @@ export function backfillMissingSeasonTeamIds(): void {
     const resolvedTeamId = derivedTeamId ?? fallbackTeamId;
     if (resolvedTeamId === null || resolvedTeamId === undefined) continue;
     run('UPDATE seasons SET user_team_id = ? WHERE id = ?', [resolvedTeamId, row.id]);
+  }
+
+  // user_coach_id (schema v8) — same idea, derived from each full-data season's
+  // own coaches snapshot (the user-controlled coach's stable PresentationId).
+  // History-only seasons have no coaches snapshot, so they stay NULL. A coach
+  // with no real id (generated coordinators carry 0) also stays NULL.
+  const coachRows = all<SeasonRow>('SELECT * FROM seasons WHERE user_coach_id IS NULL AND has_full_data = 1', []);
+  for (const row of coachRows) {
+    const coaches = getSnapshot<CoachData[]>(row.id, 'coaches') ?? [];
+    const userCoach = coaches.find((c) => c.isUserControlled);
+    const coachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
+    if (coachId === null) continue;
+    run('UPDATE seasons SET user_coach_id = ? WHERE id = ?', [coachId, row.id]);
   }
 }
 
