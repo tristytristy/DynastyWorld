@@ -2,6 +2,7 @@ import { openFranchiseFile } from './lib/franchise';
 import { extractLeague, type LeagueData } from './extract-league';
 import { extractTeams, type TeamData } from './extract-teams';
 import { extractCoaches, findUserTeamIndex, type CoachData } from './extract-coaches';
+import { extractUserCoachLastMove, type CoachMoveData } from './extract-coach-move';
 import { extractRoster, type RosterPlayerData } from './extract-roster';
 import { extractLeaguePortraits, type LeaguePortraitData } from './extract-league-portraits';
 import { extractLeagueRoster, type LeagueRosterData } from './extract-league-roster';
@@ -47,6 +48,8 @@ export interface ExtractionData {
   userTeam: TeamData;
   /** Every completed year of league-wide history the save exposes (see extract-league-history.ts) — used to backfill history-only seasons the app never individually synced. */
   leagueHistory: YearSummaryData[];
+  /** The user coach's most recent school move (or null) — for move-year season attribution at persist time. See extract-coach-move.ts. */
+  coachMove: CoachMoveData | null;
 }
 
 export async function extractAll(
@@ -72,6 +75,12 @@ export async function extractAll(
   if (!userTeam) {
     throw new Error('Could not determine which team this dynasty belongs to.');
   }
+
+  // The user coach's stable id + most recent school move (for move-year season
+  // attribution in persistExtraction). 0 = a coach with no real id.
+  const userCoach = coaches.find((c) => c.isUserControlled);
+  const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
+  const coachMove = await extractUserCoachLastMove(franchise, userCoachId);
 
   onProgress?.('roster', 'start');
   const roster = await extractRoster(franchise, userTeam.teamIndex);
@@ -139,5 +148,6 @@ export async function extractAll(
     awards,
     userTeam,
     leagueHistory,
+    coachMove,
   };
 }

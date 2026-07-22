@@ -84,9 +84,25 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   const userCoach = extraction.coaches.find((c) => c.isUserControlled);
   const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
 
+  // Move-year attribution: a coach moves after the bowl but before the season
+  // year rolls over, so on a post-move sync `userTeam` is already the NEW school
+  // while the just-completed season was coached at the OLD one. If the coach's
+  // most recent move landed at the current team AT THE END of this same season
+  // year, attribute the season to the previous school instead. (This corrects
+  // the season's TEAM; a post-move sync still captures the new team's roster
+  // snapshot, so syncing before advancing remains the way to keep full fidelity.)
+  const move = extraction.coachMove;
+  let seasonTeamIndex = userTeam.teamIndex;
+  if (move && move.toTeamIndex === userTeam.teamIndex) {
+    const moveAbsoluteYear = league.baseCalendarYear + move.seasonYearRelative;
+    if (moveAbsoluteYear === league.seasonYear) {
+      seasonTeamIndex = move.fromTeamIndex;
+    }
+  }
+
   const season =
     getSeasonByYear(dynasty.id, league.seasonYear) ??
-    createSeason(dynasty.id, league.seasonYear, userTeam.teamIndex, userCoachId);
+    createSeason(dynasty.id, league.seasonYear, seasonTeamIndex, userCoachId);
 
   saveSnapshot(season.id, 'league', extraction.league);
   saveSnapshot(season.id, 'teams', extraction.teams);
