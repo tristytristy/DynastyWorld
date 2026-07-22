@@ -43,8 +43,9 @@ function SeasonSwitcher() {
         {seasons.map((season) => (
           <option key={season.id} value={season.id}>
             {season.seasonYear}
+            {season.teamName ? ` — ${season.teamName}` : ''}
             {season.isCurrent ? ' (current)' : ''}
-            {season.hasFullData ? '' : ' — History Only'}
+            {season.hasFullData ? '' : ' · History Only'}
           </option>
         ))}
       </select>
@@ -111,37 +112,49 @@ function DynastyNav({ id }: { id: string }) {
   );
 }
 
-export function DynastyLayout() {
-  const { id } = useParams<{ id: string }>();
+/**
+ * Applies the team theme for the SELECTED season, so viewing a previous season
+ * paints the app in the previous school's colors (the coach-journey goal). Lives
+ * inside SelectedSeasonProvider so it can read the selected season; getSeasonTheme
+ * falls back to the dynasty's current-team theme for a history-only season.
+ */
+function SeasonThemedShell({ id }: { id: string }) {
   const { resolveColorVars } = useTheme();
+  const { selectedSeasonId } = useSelectedSeason();
   const [theme, setTheme] = useState<DynastyTheme | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!id) return;
     let cancelled = false;
-    window.api.db.getDynastyTheme(id).then((result) => {
+    window.api.db.getSeasonTheme(id, selectedSeasonId).then((result) => {
       if (!cancelled) setTheme(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, selectedSeasonId]);
 
   const colorVars = resolveColorVars({
     primary: theme?.primaryColor ?? null,
     secondary: theme?.secondaryColor ?? null,
   });
 
+  return (
+    <div style={colorVars as unknown as CSSProperties} className="space-y-6">
+      <DynastyNav id={id} />
+      <HistoryOnlySeasonBanner dynastyId={id} />
+      <Outlet />
+    </div>
+  );
+}
+
+export function DynastyLayout() {
+  const { id } = useParams<{ id: string }>();
   if (!id) return null;
 
   return (
     <SelectedSeasonProvider dynastyId={id}>
       <ViewedTeamProvider dynastyId={id}>
-      <div style={colorVars as unknown as CSSProperties} className="space-y-6">
-        <DynastyNav id={id} />
-        <HistoryOnlySeasonBanner dynastyId={id} />
-        <Outlet />
-      </div>
+        <SeasonThemedShell id={id} />
       </ViewedTeamProvider>
     </SelectedSeasonProvider>
   );

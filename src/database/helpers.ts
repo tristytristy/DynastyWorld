@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import type { BindParams, SqlValue } from 'sql.js';
 import { getDb, persist } from './init';
 import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
+import type { TeamData } from '../extractors/extract-teams';
 
 // ---- Low-level primitives -------------------------------------------------
 
@@ -278,6 +279,27 @@ export function getSeasonsByDynasty(dynastyId: string): Season[] {
   return all<SeasonRow>('SELECT * FROM seasons WHERE dynasty_id = ? ORDER BY season_year DESC', [
     dynastyId,
   ]).map(mapSeason);
+}
+
+/**
+ * The team the user coached that season, resolved from the season's own teams
+ * snapshot via user_team_id — name + colors. Null for a history-only season (no
+ * teams snapshot / null user_team_id) or if the team can't be found. This is the
+ * per-season identity used for coach-journey theming and season labels: a
+ * previous season resolves to the previous school, not the dynasty's current one.
+ */
+export function resolveSeasonTeam(
+  season: Season,
+): { displayName: string; primaryColorHex: string; secondaryColorHex: string } | null {
+  if (season.userTeamId === null) return null;
+  const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
+  const team = teams.find((t) => t.teamIndex === season.userTeamId);
+  if (!team) return null;
+  return {
+    displayName: team.displayName,
+    primaryColorHex: team.primaryColorHex,
+    secondaryColorHex: team.secondaryColorHex,
+  };
 }
 
 /**

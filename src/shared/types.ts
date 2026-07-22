@@ -746,6 +746,8 @@ export interface SeasonSummary {
   isCurrent: boolean;
   /** False for a lightweight, backfilled "history-only" season — league-wide champions/awards only, no roster/schedule/stats. */
   hasFullData: boolean;
+  /** The school the user coached that season — for the season picker's label so a multi-school journey reads "2028 — SMU / 2029 — UCLA". Null for a history-only season. */
+  teamName: string | null;
 }
 
 export type GameType = 'conference' | 'non-conference' | 'bowl';
@@ -1492,6 +1494,8 @@ export interface DynastyApi {
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
+    /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
+    getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
     getTeamAwardResults: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;
     calculateTeamAward: (dynastyId: string, seasonId: number, awardDefinitionId: string) => Promise<TeamAwardResult>;

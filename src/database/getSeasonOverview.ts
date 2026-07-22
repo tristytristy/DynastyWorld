@@ -1,7 +1,29 @@
-import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
+import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot, resolveSeasonTeam } from './helpers';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
-import type { GameSummary, SeasonOverview } from '../shared/types';
+import type { DynastyTheme, GameSummary, SeasonOverview } from '../shared/types';
+
+/**
+ * Team colors for a SPECIFIC season — the coach-journey theming source. Resolves
+ * to the team the user actually coached that season (season.user_team_id), so
+ * viewing a previous season themes the app in the previous school's colors.
+ * Falls back to the dynasty's current-team theme for a history-only season (no
+ * per-season team) so the app is never left un-themed.
+ */
+export function getSeasonTheme(dynastyId: string, seasonId?: number): DynastyTheme | null {
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty) return null;
+  const fallback: DynastyTheme = {
+    teamName: dynasty.teamName ?? dynasty.label,
+    primaryColor: dynasty.teamColorPrimary,
+    secondaryColor: dynasty.teamColorSecondary,
+  };
+  const season = seasonId !== undefined ? getSeasonById(seasonId) : getCurrentSeason(dynastyId);
+  if (!season || season.dynastyId !== dynastyId) return fallback;
+  const team = resolveSeasonTeam(season);
+  if (!team) return fallback;
+  return { teamName: team.displayName, primaryColor: team.primaryColorHex, secondaryColor: team.secondaryColorHex };
+}
 
 function toGameSummary(game: GameData, userTeamIndex: number): GameSummary {
   const isHome = game.homeTeamIndex === userTeamIndex;

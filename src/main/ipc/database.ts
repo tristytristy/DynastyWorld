@@ -32,10 +32,11 @@ import {
   getDynastyById,
   getDynasties,
   getSeasonsByDynasty,
+  resolveSeasonTeam,
 } from '../../database/helpers';
 import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../database/importExtraction';
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
-import { getSeasonOverview } from '../../database/getSeasonOverview';
+import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
 import { getRoster } from '../../database/getRoster';
@@ -169,6 +170,7 @@ export function registerDatabaseHandlers(): void {
       seasonYear: season.seasonYear,
       isCurrent: season.isCurrent,
       hasFullData: season.hasFullData,
+      teamName: resolveSeasonTeam(season)?.displayName ?? null,
     }));
   });
 
@@ -307,6 +309,13 @@ export function registerDatabaseHandlers(): void {
         primaryColor: dynasty.teamColorPrimary,
         secondaryColor: dynasty.teamColorSecondary,
       };
+    },
+  );
+
+  ipcMain.handle(
+    IPC.db.getSeasonTheme,
+    async (_event, dynastyId: string, seasonId?: number): Promise<DynastyTheme | null> => {
+      return getSeasonTheme(dynastyId, seasonId);
     },
   );
 
