@@ -21,8 +21,8 @@ function TeamHonorSummary({ items }: { items: { label: string; value: number }[]
 type HonorPhase = 'postseason' | 'preseason';
 
 const PHASE_OPTIONS: { value: HonorPhase; label: string }[] = [
-  { value: 'postseason', label: 'Postseason (Earned)' },
-  { value: 'preseason', label: 'Preseason (Predicted)' },
+  { value: 'postseason', label: 'Postseason' },
+  { value: 'preseason', label: 'Preseason' },
 ];
 
 const KIND_OPTIONS: { value: HonorKind; label: string }[] = [
@@ -94,17 +94,6 @@ function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; s
           <TeamHonorSummary items={summaryItems} />
         </div>
       </div>
-
-      {isPreseason && (
-        <div className="flex items-start gap-3 border-l-4 border-amber-500 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
-          <span className="mt-0.5 text-base leading-none" aria-hidden>★</span>
-          <p>
-            <span className="font-semibold">Preseason watch list — predicted, not yet earned.</span> These are the
-            projected honor teams the game assigns before the season is played. The real, earned teams appear under the
-            Postseason view once the season finishes.
-          </p>
-        </div>
-      )}
 
       <SurfaceCard className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200/80 p-5 dark:border-white/5">
