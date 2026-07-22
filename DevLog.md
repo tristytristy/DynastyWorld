@@ -1696,6 +1696,31 @@ Direct follow-up to the overnight pass, picking three items off the resulting ba
 **No new dependencies added.**
 
 ---
+
+## Phase — Annual awards year-scoping fix + save award-pruning finding (2026-07-22)
+
+Playtest bug report: in a multi-season dynasty the Annual Awards page showed the *same* award with multiple winners (2 John Mackey, 2 Butkus, 2 Shaun Alexander…), a player's Honors repeated identically every year (a QB shown "Freshman All-American" in 2026, 2027 *and* 2028), and at the start of a new season prior-year All-Americans/All-Conference already appeared (last year's now-upperclassmen still on the "freshman" teams). User also asked that awards not display until actually handed out in-game.
+
+**Shipped:**
+- **Root cause (confirmed on a disposable copy of a real 3-season save):** `PlayerAward` is an *accumulating* per-year ledger — one `Period="Season"` row per award per year, keyed by `PeriodIndex` = season index (`0` = `baseCalendarYear`). `extract-awards.ts` read the whole table unscoped and stamped every year still present onto the season being synced. Same bug-class `extract-league-history.ts` already fixed for the flat `LeagueHistoryAward`/coach-awards table.
+- **Fix (going-forward, `extract-awards.ts`):** `extractAwards` now takes `currentSeasonIndex` (`league.seasonYear - league.baseCalendarYear`) and skips any `Season`-period row whose `PeriodIndex` ≠ current season, so each sync captures only its own year no matter how much stale data the table holds at that moment. `extract-all.ts` passes the index through. Also tightened the loop so *only* `Game`-period rows reach the weekly-honors ledger — previously a Heisman/other non-marquee Season award on the user's own team could leak into weekly honors (`PeriodIndex` there is the week, not a year).
+- **"Not until handed out in-game" — satisfied by the same fix:** a year's postseason rows are only written when that season finishes, and `getAwards.ts` already filters out preseason `_PRE` watch-list rows at display time, so scoped current-year awards only appear once real.
+
+**Scope decisions — retroactive repair attempted, then reverted (the important finding):**
+- Built a sync-time repair that re-derived each already-recorded season's awards from the current save (one-pass `byYearIndex` map + a repair loop in `persistExtraction`). Tested it against a **copy of the real archive DB** (never the live one) before shipping.
+- The test proved it **lossy and harmful**: the game **prunes older years' award detail from the save over time**. A season whose live snapshot captured **1,498** All-American rows retained only **~499** for that same year two seasons later; individual marquee winners (e.g. that year's Best DB / Best Receiver) were gone entirely. Re-deriving a past year from a later save therefore *deletes* honors the live sync had captured correctly.
+- Set-difference between adjacent stored snapshots was also rejected — it silently drops legitimate repeat 1st/2nd-team All-Americans (a star honored two years running).
+- **Conclusion (durable):** a season's awards can only be captured faithfully by the sync taken **while that season is current**, which the year-scoping fix now guarantees. Already-polluted past seasons in existing archives are a bounded, one-time cosmetic artifact and are **not** auto-repairable without data loss. The whole repair path (`byYearIndex`, the extra `ExtractionData` field, the loop) was reverted; only the going-forward scoping remains.
+
+**Verification:**
+- `npm run typecheck` + `npm run lint` clean (before the revert with the repair, and again after reverting to the going-forward-only fix).
+- Data-level proof via plain Node scripts against `madden-franchise` on a disposable save copy: unscoped extraction = 31 marquee (9 duplicated types) + 2,844 All-Americans across 3 years → scoped = 20 marquee (0 duplicates) + 1,497 All-Americans (exactly one year, matching the per-`PeriodIndex` tally).
+- Pruning confirmed by reading a **copy** of the real archive DB (`season_snapshots`): per-season award counts + cross-year player overlap (2026's freshman All-Americans literally present in the 2027 snapshot), and the 1,498→499 shrinkage of a past year in the live save vs its stored snapshot.
+- All disposable copies + scratch scripts kept out of the repo (session scratchpad only).
+
+**No new dependencies added.**
+
+---
 ## Template for new entries
 
 ```markdown

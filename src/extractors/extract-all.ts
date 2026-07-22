@@ -120,7 +120,11 @@ export async function extractAll(
   onProgress?.('rivalries', 'done');
 
   onProgress?.('awards', 'start');
-  const awards = await extractAwards(franchise, userTeam.teamIndex);
+  const awards = await extractAwards(
+    franchise,
+    userTeam.teamIndex,
+    league.seasonYear - league.baseCalendarYear,
+  );
   const coachAwards = (currentYearSummary?.awards ?? []).filter(
     (a) => a.awardType === 'BEST_HC' || a.awardType === 'BEST_AC',
   );

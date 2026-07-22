@@ -125,7 +125,34 @@ function isAllAmericanType(awardType: string): boolean {
 
 const MARQUEE_PLAYER_TYPES = new Set(AWARD_DISPLAY_ORDER.filter((type) => type !== 'BEST_HC' && type !== 'BEST_AC'));
 
-export async function extractAwards(franchise: OpenFranchise, userTeamIndex: number): Promise<AwardsData> {
+/**
+ * @param currentSeasonIndex `league.seasonYear - league.baseCalendarYear` — the
+ *   0-based index of the season being synced. Season-period awards (marquee +
+ *   All-American) accumulate in `PlayerAward` across seasons, one row per award
+ *   per year keyed by `PeriodIndex` = that season index (confirmed against a
+ *   3-completed-year save — the John Mackey Award had rows at PeriodIndex 0/1/2,
+ *   one per year). Reading the whole table unscoped stamped EVERY year still in
+ *   the table onto the season being synced, so the same award showed multiple
+ *   winners and a player's freshman honors reappeared every later year. Scoping
+ *   to `currentSeasonIndex` fixes that: each sync captures only its own year,
+ *   producing a clean per-year snapshot no matter how much stale data the table
+ *   holds at sync time. Because the game PRUNES older years' award detail from
+ *   the table over time (verified: a season whose live snapshot held ~1,500
+ *   All-Americans was down to ~500 rows two years later), a past year canNOT be
+ *   faithfully re-derived from a later save — the only complete capture is the
+ *   sync taken while that season is current, which this scoping guarantees.
+ *   Since a year's postseason rows are only written when that season actually
+ *   finishes, scoping also stops awards from appearing before they're handed
+ *   out in-game (preseason `_PRE` watch-list rows are filtered separately at
+ *   display time — see getAwards.ts). Same year-scoping fix
+ *   extract-league-history.ts already applied to the flat LeagueHistoryAward
+ *   table for the coach awards.
+ */
+export async function extractAwards(
+  franchise: OpenFranchise,
+  userTeamIndex: number,
+  currentSeasonIndex: number,
+): Promise<AwardsData> {
   const playerAwardTable = getLargestTable(franchise, 'PlayerAward');
   await playerAwardTable.readRecords();
   await preloadAllInstances(franchise, 'Player');
@@ -141,42 +168,53 @@ export async function extractAwards(franchise: OpenFranchise, userTeamIndex: num
     const team = resolveReferenceWithTable(franchise, r, 'Team');
     if (!team) continue;
 
-    if (isAllAmericanType(awardType)) {
-      // Leaguewide, not team-scoped — the honors roster browser needs every
-      // conference's selections, not just the user's team's. Team-scoped
-      // counts are derived from this same list at query time by filtering
-      // on teamDisplayName, rather than duplicating entries here.
-      const player = resolveReferenceWithTable(franchise, r, 'Player');
-      if (!player) continue;
-      const conference = resolveReferenceWithTable(franchise, r, 'Conference');
-      leagueAllAmericans.push({
-        playerId: Number(player.record.PresentationId),
-        firstName: String(player.record.FirstName),
-        lastName: String(player.record.LastName),
-        position: String(player.record.Position),
-        teamDisplayName: String(team.record.DisplayName),
-        conferenceName: conference ? String(conference.record.Name) : null,
-        awardType,
-      });
+    // Season-period rows are the accumulating per-year award history (marquee +
+    // All-American, both confirmed Season-only). Scope to the season being
+    // synced so past years' winners never leak into this season's snapshot.
+    if (String(r.Period) === 'Season') {
+      if (Number(r.PeriodIndex) !== currentSeasonIndex) continue;
+
+      if (isAllAmericanType(awardType)) {
+        // Leaguewide, not team-scoped — the honors roster browser needs every
+        // conference's selections, not just the user's team's. Team-scoped
+        // counts are derived from this same list at query time by filtering
+        // on teamDisplayName, rather than duplicating entries here.
+        const player = resolveReferenceWithTable(franchise, r, 'Player');
+        if (!player) continue;
+        const conference = resolveReferenceWithTable(franchise, r, 'Conference');
+        leagueAllAmericans.push({
+          playerId: Number(player.record.PresentationId),
+          firstName: String(player.record.FirstName),
+          lastName: String(player.record.LastName),
+          position: String(player.record.Position),
+          teamDisplayName: String(team.record.DisplayName),
+          conferenceName: conference ? String(conference.record.Name) : null,
+          awardType,
+        });
+        continue;
+      }
+
+      if (MARQUEE_PLAYER_TYPES.has(awardType)) {
+        const player = resolveReferenceWithTable(franchise, r, 'Player');
+        if (!player) continue;
+        leagueAwards.push({
+          awardType,
+          playerId: Number(player.record.PresentationId),
+          firstName: String(player.record.FirstName),
+          lastName: String(player.record.LastName),
+          teamDisplayName: String(team.record.DisplayName),
+          position: String(player.record.Position),
+        });
+      }
+      // Other Season-period awards (Heisman — handled via the ranking table —
+      // and BEST_DEF_1, deliberately excluded) are intentionally not surfaced
+      // here; never fall through to the weekly ledger below.
       continue;
     }
 
-    if (MARQUEE_PLAYER_TYPES.has(awardType) && String(r.Period) === 'Season') {
-      const player = resolveReferenceWithTable(franchise, r, 'Player');
-      if (!player) continue;
-      leagueAwards.push({
-        awardType,
-        playerId: Number(player.record.PresentationId),
-        firstName: String(player.record.FirstName),
-        lastName: String(player.record.LastName),
-        teamDisplayName: String(team.record.DisplayName),
-        position: String(player.record.Position),
-      });
-      continue;
-    }
-
-    // Everything else is a weekly Player-of-the-Week style honor — scoped to
-    // the user's own team, same convention as roster/stats/gamelog.
+    // Game-period rows are weekly Player-of-the-Week honors — scoped to the
+    // user's own team, same convention as roster/stats/gamelog. (PeriodIndex
+    // here is the WEEK, not a season index.)
     if (Number(team.record.TeamIndex) !== userTeamIndex) continue;
     const player = resolveReferenceWithTable(franchise, r, 'Player');
     if (!player) continue;
