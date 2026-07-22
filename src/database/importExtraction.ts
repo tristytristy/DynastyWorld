@@ -100,41 +100,57 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     }
   }
 
-  const season =
-    getSeasonByYear(dynasty.id, league.seasonYear) ??
-    createSeason(dynasty.id, league.seasonYear, seasonTeamIndex, userCoachId);
+  const existing = getSeasonByYear(dynasty.id, league.seasonYear);
+  const season = existing ?? createSeason(dynasty.id, league.seasonYear, seasonTeamIndex, userCoachId);
 
-  saveSnapshot(season.id, 'league', extraction.league);
-  saveSnapshot(season.id, 'teams', extraction.teams);
-  saveSnapshot(season.id, 'coaches', extraction.coaches);
-  saveSnapshot(season.id, 'roster', extraction.roster);
-  saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
-  saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
-  saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
-  saveSnapshot(season.id, 'schedule', extraction.schedule);
-  saveSnapshot(season.id, 'recruits', extraction.recruits);
-  // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
-  saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
-  saveSnapshot(season.id, 'ncaaRecords', extraction.ncaaRecords);
-  saveSnapshot(season.id, 'stats', extraction.stats);
-  saveSnapshot(season.id, 'teamStats', extraction.teamStats);
-  saveSnapshot(season.id, 'kicking', extraction.kicking);
-  saveSnapshot(season.id, 'gamelog', extraction.gamelog);
-  saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
-  saveSnapshot(season.id, 'rivalries', extraction.rivalries);
-  saveSnapshot(season.id, 'awards', extraction.awards);
+  // Finalize / lock (Step 3): this year was already captured for a DIFFERENT
+  // team than the one we're now extracting — meaning the coach has changed
+  // schools since. The stored season is a finalized past season at the previous
+  // school; a post-move re-sync must NOT overwrite its snapshots with the new
+  // team's roster/coaches (which would leave the old-school season carrying the
+  // new school's data). Compare against the EXTRACTED team (userTeam.teamIndex,
+  // what the snapshots are actually for), not the move-attributed index — the
+  // latter can equal the stored team and would defeat the lock. The new school's
+  // tenure is captured on its own next season instead.
+  const finalizedElsewhere =
+    !!existing &&
+    existing.hasFullData &&
+    existing.userTeamId !== null &&
+    existing.userTeamId !== userTeam.teamIndex;
 
-  const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);
-  if (currentYearSummary) saveSnapshot(season.id, 'yearSummary', currentYearSummary);
+  if (!finalizedElsewhere) {
+    saveSnapshot(season.id, 'league', extraction.league);
+    saveSnapshot(season.id, 'teams', extraction.teams);
+    saveSnapshot(season.id, 'coaches', extraction.coaches);
+    saveSnapshot(season.id, 'roster', extraction.roster);
+    saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
+    saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
+    saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
+    saveSnapshot(season.id, 'schedule', extraction.schedule);
+    saveSnapshot(season.id, 'recruits', extraction.recruits);
+    // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
+    saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
+    saveSnapshot(season.id, 'ncaaRecords', extraction.ncaaRecords);
+    saveSnapshot(season.id, 'stats', extraction.stats);
+    saveSnapshot(season.id, 'teamStats', extraction.teamStats);
+    saveSnapshot(season.id, 'kicking', extraction.kicking);
+    saveSnapshot(season.id, 'gamelog', extraction.gamelog);
+    saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
+    saveSnapshot(season.id, 'rivalries', extraction.rivalries);
+    saveSnapshot(season.id, 'awards', extraction.awards);
 
-  recordRankingSnapshot(season.id, {
-    week: computeLastPlayedWeek(extraction.schedule, userTeam.teamIndex),
-    mediaPollRank: userTeam.mediaPollRank,
-    coachesPollRank: userTeam.coachesPollRank,
-    cfpRank: userTeam.cfpRank,
-    wins: userTeam.confWins + userTeam.nonConfWins,
-    losses: userTeam.confLosses + userTeam.nonConfLosses,
-  });
+    const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);
+    if (currentYearSummary) saveSnapshot(season.id, 'yearSummary', currentYearSummary);
+
+    recordRankingSnapshot(season.id, {
+      week: computeLastPlayedWeek(extraction.schedule, userTeam.teamIndex),
+      mediaPollRank: userTeam.mediaPollRank,
+      coachesPollRank: userTeam.coachesPollRank,
+      cfpRank: userTeam.cfpRank,
+      wins: userTeam.confWins + userTeam.nonConfWins,
+      losses: userTeam.confLosses + userTeam.nonConfLosses,
+    });
+  }
 
   // Backfill: real league-wide history exists for completed years the app
   // never individually synced (e.g. a save imported for the first time
