@@ -962,14 +962,36 @@ export interface TeamHonorCounts {
   allConferenceFreshman: number;
 }
 
+/**
+ * Preseason (watch-list) honor counts for the user's team. Preseason has only
+ * 1st/2nd teams — no freshman preseason team exists in the save — so this is a
+ * deliberately narrower shape than the postseason `TeamHonorCounts`.
+ */
+export interface PreseasonTeamHonorCounts {
+  allAmericanFirst: number;
+  allAmericanSecond: number;
+  allConferenceFirst: number;
+  allConferenceSecond: number;
+}
+
 export interface AwardsOverview {
   teamName: string;
   leagueAwards: LeagueAward[];
   heismanWinner: HeismanCandidate | null;
   heismanFinalists: HeismanCandidate[];
   teamHonorCounts: TeamHonorCounts;
-  /** Full leaguewide All-American/All-Conference roster — the UI filters this client-side by kind/tier/conference rather than the server pre-splitting it. */
+  /** Full leaguewide All-American/All-Conference roster — the UI filters this client-side by kind/tier/conference rather than the server pre-splitting it. Postseason (earned) honors only. */
   honorsRoster: HonorRosterEntry[];
+  /**
+   * Leaguewide PRESEASON (`_PRE`) All-America/All-Conference watch list —
+   * projected honors the game assigns at the start of a season (before any
+   * games), kept separate from `honorsRoster` so a prediction is never shown
+   * as an earned award. Only 1st/2nd-team variants exist (no freshman
+   * preseason). Present as soon as a Week 0 sync is taken.
+   */
+  preseasonHonorsRoster: HonorRosterEntry[];
+  /** Preseason (watch-list) honor counts for the user's team. */
+  preseasonTeamHonorCounts: PreseasonTeamHonorCounts;
   /** The user's own team's weekly honors, chronological. */
   weeklyHonors: WeeklyHonor[];
   /** Distinct conference names across the league, alphabetical with the user's own conference moved to the front. */

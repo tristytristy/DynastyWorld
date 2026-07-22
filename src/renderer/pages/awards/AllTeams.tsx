@@ -8,16 +8,7 @@ import { getHonorKind, getHonorTier, type HonorKind, type HonorTier } from '../.
 import { useAwardsOverview } from '../../data/useAwardsOverview';
 import type { AwardsOverview } from '../../../shared/types';
 
-function TeamHonorSummary({ teamName, awards }: { teamName: string; awards: AwardsOverview }) {
-  const items = [
-    { label: `${teamName} First Team All-Americans`, value: awards.teamHonorCounts.allAmericanFirst },
-    { label: `${teamName} Second Team All-Americans`, value: awards.teamHonorCounts.allAmericanSecond },
-    { label: `${teamName} Freshman All-Americans`, value: awards.teamHonorCounts.allAmericanFreshman },
-    { label: `${teamName} First Team All-Conference`, value: awards.teamHonorCounts.allConferenceFirst },
-    { label: `${teamName} Second Team All-Conference`, value: awards.teamHonorCounts.allConferenceSecond },
-    { label: `${teamName} Freshman All-Conference`, value: awards.teamHonorCounts.allConferenceFreshman },
-  ];
-
+function TeamHonorSummary({ items }: { items: { label: string; value: number }[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {items.map((item) => (
@@ -26,6 +17,13 @@ function TeamHonorSummary({ teamName, awards }: { teamName: string; awards: Awar
     </div>
   );
 }
+
+type HonorPhase = 'postseason' | 'preseason';
+
+const PHASE_OPTIONS: { value: HonorPhase; label: string }[] = [
+  { value: 'postseason', label: 'Postseason (Earned)' },
+  { value: 'preseason', label: 'Preseason (Predicted)' },
+];
 
 const KIND_OPTIONS: { value: HonorKind; label: string }[] = [
   { value: 'all-american', label: 'All-American' },
@@ -48,18 +46,42 @@ export function AllTeams() {
 
 function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; seasonId: number | undefined; awards: AwardsOverview }) {
   const { appearance } = useTheme();
+  const [phase, setPhase] = useState<HonorPhase>('postseason');
   const [kind, setKind] = useState<HonorKind>('all-american');
   const [tier, setTier] = useState<HonorTier>('first');
   const [conference, setConference] = useState<string>(awards.userConferenceName ?? awards.conferences[0] ?? '');
 
+  const isPreseason = phase === 'preseason';
+  // Preseason has no freshman team in the save, so drop that tier and never
+  // let a leftover 'freshman' selection filter to an empty preseason list.
+  const tierOptions = isPreseason ? TIER_OPTIONS.filter((t) => t.value !== 'freshman') : TIER_OPTIONS;
+  const effectiveTier: HonorTier = isPreseason && tier === 'freshman' ? 'first' : tier;
+  const roster = isPreseason ? awards.preseasonHonorsRoster : awards.honorsRoster;
+
   const filtered = useMemo(() => {
-    return awards.honorsRoster.filter((entry) => {
+    return roster.filter((entry) => {
       if (getHonorKind(entry.awardType) !== kind) return false;
-      if (getHonorTier(entry.awardType) !== tier) return false;
+      if (getHonorTier(entry.awardType) !== effectiveTier) return false;
       if (kind === 'all-conference' && entry.conferenceName !== conference) return false;
       return true;
     });
-  }, [awards.honorsRoster, kind, tier, conference]);
+  }, [roster, kind, effectiveTier, conference]);
+
+  const summaryItems = isPreseason
+    ? [
+        { label: `${awards.teamName} Preseason First Team All-Americans`, value: awards.preseasonTeamHonorCounts.allAmericanFirst },
+        { label: `${awards.teamName} Preseason Second Team All-Americans`, value: awards.preseasonTeamHonorCounts.allAmericanSecond },
+        { label: `${awards.teamName} Preseason First Team All-Conference`, value: awards.preseasonTeamHonorCounts.allConferenceFirst },
+        { label: `${awards.teamName} Preseason Second Team All-Conference`, value: awards.preseasonTeamHonorCounts.allConferenceSecond },
+      ]
+    : [
+        { label: `${awards.teamName} First Team All-Americans`, value: awards.teamHonorCounts.allAmericanFirst },
+        { label: `${awards.teamName} Second Team All-Americans`, value: awards.teamHonorCounts.allAmericanSecond },
+        { label: `${awards.teamName} Freshman All-Americans`, value: awards.teamHonorCounts.allAmericanFreshman },
+        { label: `${awards.teamName} First Team All-Conference`, value: awards.teamHonorCounts.allConferenceFirst },
+        { label: `${awards.teamName} Second Team All-Conference`, value: awards.teamHonorCounts.allConferenceSecond },
+        { label: `${awards.teamName} Freshman All-Conference`, value: awards.teamHonorCounts.allConferenceFreshman },
+      ];
 
   return (
     <div className="space-y-6">
@@ -69,12 +91,38 @@ function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; s
           Honor teams selected leaguewide — not a directory of every school.
         </p>
         <div className="mt-4">
-          <TeamHonorSummary teamName={awards.teamName} awards={awards} />
+          <TeamHonorSummary items={summaryItems} />
         </div>
       </div>
 
+      {isPreseason && (
+        <div className="flex items-start gap-3 border-l-4 border-amber-500 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+          <span className="mt-0.5 text-base leading-none" aria-hidden>★</span>
+          <p>
+            <span className="font-semibold">Preseason watch list — predicted, not yet earned.</span> These are the
+            projected honor teams the game assigns before the season is played. The real, earned teams appear under the
+            Postseason view once the season finishes.
+          </p>
+        </div>
+      )}
+
       <SurfaceCard className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200/80 p-5 dark:border-white/5">
+          <select
+            value={phase}
+            onChange={(event) => {
+              const next = event.target.value as HonorPhase;
+              setPhase(next);
+              if (next === 'preseason' && tier === 'freshman') setTier('first');
+            }}
+            className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
+          >
+            {PHASE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <select
             value={kind}
             onChange={(event) => setKind(event.target.value as HonorKind)}
@@ -87,11 +135,11 @@ function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; s
             ))}
           </select>
           <select
-            value={tier}
+            value={effectiveTier}
             onChange={(event) => setTier(event.target.value as HonorTier)}
             className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
           >
-            {TIER_OPTIONS.map((option) => (
+            {tierOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

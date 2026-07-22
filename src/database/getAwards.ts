@@ -9,6 +9,7 @@ import type {
   HeismanCandidate,
   HonorRosterEntry,
   LeagueAward,
+  PreseasonTeamHonorCounts,
   TeamHonorCounts,
   WeeklyHonor,
 } from '../shared/types';
@@ -31,6 +32,19 @@ function countHonors(roster: HonorRosterEntry[], teamName: string): TeamHonorCou
     allConferenceFirst: count((t) => t === 'ALL_AM_1ST_CONF'),
     allConferenceSecond: count((t) => t === 'ALL_AM_2ND_CONF'),
     allConferenceFreshman: count((t) => t === 'ALL_AM_FR_CONF'),
+  };
+}
+
+function countPreseasonHonors(roster: HonorRosterEntry[], teamName: string): PreseasonTeamHonorCounts {
+  const forTeam = roster.filter((entry) => entry.teamDisplayName === teamName);
+  const count = (predicate: (awardType: string) => boolean) =>
+    forTeam.filter((entry) => predicate(entry.awardType)).length;
+
+  return {
+    allAmericanFirst: count((t) => t === 'ALL_AM_1ST_PRE'),
+    allAmericanSecond: count((t) => t === 'ALL_AM_2ND_PRE'),
+    allConferenceFirst: count((t) => t === 'ALL_AM_1ST_PRE_CONF'),
+    allConferenceSecond: count((t) => t === 'ALL_AM_2ND_PRE_CONF'),
   };
 }
 
@@ -62,6 +76,8 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
       heismanFinalists: [],
       teamHonorCounts: countHonors([], teamName),
       honorsRoster: [],
+      preseasonHonorsRoster: [],
+      preseasonTeamHonorCounts: countPreseasonHonors([], teamName),
       weeklyHonors: [],
       conferences: [],
       userConferenceName: userTeam?.conferenceName ?? null,
@@ -92,18 +108,26 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
   const heismanWinner = heismanCandidates.find((h) => h.rank === 0) ?? null;
   const heismanFinalists = heismanCandidates.filter((h) => h.rank > 0);
 
+  const toHonorEntry = (a: (typeof awards.leagueAllAmericans)[number]): HonorRosterEntry => ({
+    playerId: a.playerId,
+    playerName: `${a.firstName} ${a.lastName}`,
+    position: a.position,
+    teamDisplayName: a.teamDisplayName,
+    conferenceName: a.conferenceName,
+    awardType: a.awardType,
+    isUserTeam: a.teamDisplayName === teamName,
+    portraitAssetName: leaguePortraits.get(a.playerId) ?? null,
+  });
+
+  // Split the earned postseason honors from the preseason (`_PRE`) watch list —
+  // both are year-scoped already (extract-awards.ts), but a prediction must
+  // never render as an earned award, so the UI gets them as two lists.
   const honorsRoster: HonorRosterEntry[] = awards.leagueAllAmericans
     .filter((a) => !isPreseasonHonor(a.awardType))
-    .map((a) => ({
-      playerId: a.playerId,
-      playerName: `${a.firstName} ${a.lastName}`,
-      position: a.position,
-      teamDisplayName: a.teamDisplayName,
-      conferenceName: a.conferenceName,
-      awardType: a.awardType,
-      isUserTeam: a.teamDisplayName === teamName,
-      portraitAssetName: leaguePortraits.get(a.playerId) ?? null,
-    }));
+    .map(toHonorEntry);
+  const preseasonHonorsRoster: HonorRosterEntry[] = awards.leagueAllAmericans
+    .filter((a) => isPreseasonHonor(a.awardType))
+    .map(toHonorEntry);
 
   const roster = getSnapshot<RosterPlayerData[]>(season.id, 'roster') ?? [];
   const rosterById = new Map(roster.map((p) => [p.id, p]));
@@ -147,6 +171,8 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
     heismanFinalists,
     teamHonorCounts: countHonors(honorsRoster, teamName),
     honorsRoster,
+    preseasonHonorsRoster,
+    preseasonTeamHonorCounts: countPreseasonHonors(preseasonHonorsRoster, teamName),
     weeklyHonors,
     conferences,
     userConferenceName,
