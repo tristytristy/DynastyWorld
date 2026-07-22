@@ -79,4 +79,11 @@ export const IPC = {
     update: 'media:update',
     remove: 'media:remove',
   },
+  notes: {
+    list: 'notes:list',
+    create: 'notes:create',
+    update: 'notes:update',
+    remove: 'notes:remove',
+    titleSuggestions: 'notes:titleSuggestions',
+  },
 } as const;

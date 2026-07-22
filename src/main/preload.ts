@@ -107,6 +107,13 @@ const api: DynastyApi = {
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
     remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
   },
+  notes: {
+    list: (dynastyId, playerId) => ipcRenderer.invoke(IPC.notes.list, dynastyId, playerId),
+    create: (dynastyId, playerId, title, body) => ipcRenderer.invoke(IPC.notes.create, dynastyId, playerId, title, body),
+    update: (id, title, body) => ipcRenderer.invoke(IPC.notes.update, id, title, body),
+    remove: (id) => ipcRenderer.invoke(IPC.notes.remove, id),
+    titleSuggestions: (dynastyId) => ipcRenderer.invoke(IPC.notes.titleSuggestions, dynastyId),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -1105,6 +1105,15 @@ export interface LeagueTeamHonors {
 }
 
 /** One media-gallery item (schema v6) — user-uploaded image/video with optional game + player links. Metadata only; the file lives under <userData>/media/<dynastyId>/. */
+/** A freeform user note scoped to one player within a dynasty (schema v7). Timestamps are ISO strings. */
+export interface PlayerNote {
+  id: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MediaItem {
   id: number;
   seasonId: number;
@@ -1540,6 +1549,16 @@ export interface DynastyApi {
     listForGame: (dynastyId: string, seasonId: number | undefined, gameId: number) => Promise<MediaItemResolved[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
     remove: (id: number) => Promise<void>;
+  };
+  notes: {
+    /** All of a player's notes, most-recently-updated first. Scoped to (dynasty, player). */
+    list: (dynastyId: string, playerId: number) => Promise<PlayerNote[]>;
+    create: (dynastyId: string, playerId: number, title: string, body: string) => Promise<PlayerNote>;
+    /** Updates title + body; resolves to the fresh note, or null if the id no longer exists. */
+    update: (id: number, title: string, body: string) => Promise<PlayerNote | null>;
+    remove: (id: number) => Promise<void>;
+    /** Distinct titles used anywhere in this dynasty (recall/auto-fill for the title field). */
+    titleSuggestions: (dynastyId: string) => Promise<string[]>;
   };
 }
 

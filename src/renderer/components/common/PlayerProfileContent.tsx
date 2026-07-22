@@ -12,6 +12,7 @@ import type { PlayerModalFallback } from '../../data/PlayerModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { EditButton } from './CoachCard';
 import { MediaGallery } from './MediaGallery';
+import { PlayerNotesTab } from './PlayerNotesTab';
 import type {
   AwardsOverview,
   SeasonSummary,
@@ -536,7 +537,7 @@ function buildPlayerHonorSeasons(awardHistory: AwardsBySeason[], playerId: numbe
  * existing editor IPC (read-only reuse — current season only, since the save
  * has long since moved past any historical season's state).
  */
-type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'media' | 'attributes' | 'gamelog' | 'history';
+type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'media' | 'notes' | 'attributes' | 'gamelog' | 'history';
 
 const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -544,6 +545,7 @@ const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'career', label: 'Career' },
   { key: 'awards', label: 'Awards' },
   { key: 'media', label: 'Media' },
+  { key: 'notes', label: 'Notes' },
   { key: 'attributes', label: 'Attributes' },
   { key: 'gamelog', label: 'Game Log' },
   { key: 'history', label: 'History' },
@@ -1190,6 +1192,7 @@ export function PlayerProfileContent({
         )}
 
         {tab === 'media' && <PlayerMediaTab dynastyId={dynastyId} playerId={playerId} />}
+        {tab === 'notes' && <PlayerNotesTab dynastyId={dynastyId} playerId={playerId} />}
 
         {tab === 'attributes' && <AttributesTab dynastyId={dynastyId} playerId={playerId} isCurrentSeason={canEditPlayer} />}
 

@@ -214,6 +214,28 @@ const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'player-notes',
+    title: 'Notes on a player',
+    content: (
+      <>
+        <p>
+          Every player profile has a <strong>Notes</strong> tab — a place to jot down whatever you want to remember
+          about them: a scouting read, a position idea, a recruiting angle, an injury to keep an eye on. Open a player,
+          go to <strong>Notes</strong>, and click <strong>Add note</strong> — each note has a title and a freeform body.
+        </p>
+        <p>
+          The title field <strong>remembers titles you&apos;ve used before</strong>, so recurring kinds of note (say
+          &quot;Injury history&quot; or &quot;Position change&quot;) come back with a keystroke instead of retyping.
+          Notes can be edited or deleted any time.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Notes are saved to that specific player and <strong>persist across seasons and sessions</strong> — they live
+          on your computer alongside your dynasty data, never in the save file, so syncing never touches them.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'good-to-know',
     title: 'A few honest limitations',
     content: (

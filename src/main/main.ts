@@ -8,6 +8,7 @@ import { registerExtractionHandlers } from './ipc/extraction';
 import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
+import { registerNotesHandlers } from './ipc/notes';
 import {
   initDatabase,
   DatabaseCorruptedError,
@@ -330,6 +331,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerNotesHandlers();
       try {
         const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
         const { dynasty } = persistExtraction(process.env.DIAGNOSTIC_IMPORT_PATH, extraction);
@@ -350,6 +352,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerNotesHandlers();
       // No application menu — the app is a self-contained hub with its own
       // in-window chrome, so the native File/View/Help bar is removed entirely.
       Menu.setApplicationMenu(null);
@@ -463,6 +466,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerNotesHandlers();
       // No application menu — the app is a self-contained hub with its own
       // in-window chrome, so the native File/View/Help bar is removed entirely.
       Menu.setApplicationMenu(null);
