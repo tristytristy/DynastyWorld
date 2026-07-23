@@ -472,6 +472,32 @@ const THREE_D_GOLD_BASE_PATH = 'assets/3d_logos/png_gold';
 
 export const FALLBACK_LOGO_PATH = `${LOGO_BASE_PATH}/${FALLBACK_LOGO}`;
 
+/**
+ * Teams whose on-dark (`_OD`) 3D logo is pixel-for-pixel identical to the
+ * on-light (`_OL`) one — a colorful mark that reads the same on either
+ * background, so the game shipped the same image twice. Verified by a full
+ * byte + pixel diff of all 144 OL/OD pairs (74 teams matched here; the
+ * remaining 69 have a real light/dark recolor and keep both files). The
+ * redundant `_OD` copies were removed from public/assets, so for these keys
+ * getLogoPath serves the single `_OL` file for BOTH light and dark. Gold is
+ * unaffected (a separate variant). Keep this in sync if the logo set changes.
+ */
+const SINGLE_VARIANT_LOGOS = new Set<string>([
+  'appalachianstate', 'arizona', 'arizonastate', 'arkansas', 'arkansasstate', 'army',
+  'ballstate', 'boisestate', 'bowlinggreen', 'buffalo', 'byu', 'coastalcarolina',
+  'colorado', 'coloradostate', 'connecticut', 'delaware', 'eastcarolina', 'fcseast',
+  'fcsmidwest', 'fcsnorthwest', 'fcssoutheast', 'fcswest', 'florida', 'floridaatlantic',
+  'floridaintl', 'floridastate', 'fresnostate', 'georgiasouthern', 'georgiastate', 'hawaii',
+  'iowastate', 'jacksonvillestate', 'jamesmadison', 'kansas', 'kansasstate', 'kennesawstate',
+  'kentstate', 'liberty', 'louisianalafayette', 'louisianamonroe', 'louisianatech', 'louisville',
+  'marshall', 'memphis', 'miami', 'miamioh', 'middletennessee', 'mississippistate',
+  'missouri', 'missouristate', 'ncstate', 'newmexico', 'newmexicostate', 'northdakotastate',
+  'northernillinois', 'ohio', 'ohiostate', 'oklahomastate', 'olddominion', 'oregonstate',
+  'pennstate', 'sacramentostate', 'sandiegostate', 'sanjosestate', 'southalabama', 'southernmississippi',
+  'stanford', 'texassanantonio', 'troy', 'tulane', 'uab', 'ucf',
+  'westernkentucky', 'westernmichigan',
+]);
+
 export function normalizeTeamKey(teamAssetName: string): string {
   return teamAssetName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 }
@@ -501,8 +527,11 @@ export function getLogoPath(teamAssetName: string, background: 'light' | 'dark' 
     if (background === 'gold') {
       return `${THREE_D_GOLD_BASE_PATH}/${filename.replace(/\.png$/i, '_gold.png')}`;
     }
-    const base = background === 'dark' ? THREE_D_OD_BASE_PATH : THREE_D_OL_BASE_PATH;
-    const variantFilename = filename.replace(/\.png$/i, `_${background === 'dark' ? 'OD' : 'OL'}.png`);
+    // Only genuine two-variant teams have a distinct on-dark file; for the
+    // single-variant teams the _OD copy was removed, so serve _OL for dark too.
+    const useDark = background === 'dark' && !SINGLE_VARIANT_LOGOS.has(key);
+    const base = useDark ? THREE_D_OD_BASE_PATH : THREE_D_OL_BASE_PATH;
+    const variantFilename = filename.replace(/\.png$/i, `_${useDark ? 'OD' : 'OL'}.png`);
     return `${base}/${variantFilename}`;
   }
   if (TEAM_NCAA_LOGOS[key]) return `${LOGO_BASE_PATH}/${TEAM_NCAA_LOGOS[key]}`;
