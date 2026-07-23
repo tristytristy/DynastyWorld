@@ -176,20 +176,29 @@ const DEFENSE_GAME_LEADERS: LeaderMetric<DefensiveGameLine>[] = [
   { label: 'Interceptions', value: (l) => l.interceptions, format: (v) => v.toLocaleString(), onlyIfPositive: true },
 ];
 
-/** Builds the (StatTableRow & LeaderCardRow) shape StatisticsCategorySection needs — joins each real gamelog entry against the roster snapshot for identity/portrait fields the entry itself doesn't carry. */
+/**
+ * Builds the (StatTableRow & LeaderCardRow) shape StatisticsCategorySection needs.
+ * Prefers the user roster (richer/current) for identity, but falls back to the
+ * entry's own self-contained identity for OPPONENT players, who aren't in the
+ * user's roster snapshot. (Seasons synced before opponent box scores shipped
+ * carry no per-entry identity — those are all user-team players, covered by the
+ * roster lookup.)
+ */
 function buildGameRows<TLine>(entries: GameLogEntry[], roster: RosterPlayer[]): (StatTableRow<TLine> & LeaderCardRow)[] {
   return entries
     .map((entry) => {
       const player = roster.find((item) => item.id === entry.playerId);
-      if (!player) return null;
+      const firstName = player?.firstName ?? entry.firstName;
+      const lastName = player?.lastName ?? entry.lastName;
+      if (firstName === undefined || lastName === undefined) return null;
       return {
-        playerId: player.id,
-        firstName: player.firstName,
-        lastName: player.lastName,
-        position: player.position,
-        jerseyNumber: player.jerseyNumber,
-        schoolYear: player.schoolYear,
-        portraitAssetName: player.portraitAssetName,
+        playerId: entry.playerId,
+        firstName,
+        lastName,
+        position: player?.position ?? entry.position ?? '',
+        jerseyNumber: player?.jerseyNumber ?? entry.jerseyNumber ?? 0,
+        schoolYear: player?.schoolYear ?? entry.schoolYear ?? '',
+        portraitAssetName: player?.portraitAssetName ?? entry.portraitAssetName ?? null,
         line: entry.line as TLine,
       };
     })
@@ -218,6 +227,8 @@ export function GameDetailContent({
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
   const [media, setMedia] = useState<MediaItemResolved[]>([]);
+  // Which side's player box score is shown (when opponent data is available).
+  const [side, setSide] = useState<'user' | 'opponent'>('user');
 
   useEffect(() => {
     if (!id) return;
@@ -242,7 +253,20 @@ export function GameDetailContent({
   }
 
   const allEntries = (gamelog ?? []).filter((entry) => entry.gameId === game.gameId);
-  const entries = allEntries.filter(hasMeaningfulStats);
+  // Split the box score by team. The user's team is whichever team an entry's
+  // player belongs to in the user roster; the other team index is the opponent.
+  // Seasons synced before this shipped carry no per-entry teamIndex — there,
+  // hasBothSides is false and the box score stays the user's team (as before).
+  const userTeamIndex = allEntries.find(
+    (e) => e.teamIndex !== undefined && (roster ?? []).some((r) => r.id === e.playerId),
+  )?.teamIndex;
+  const teamIndexes = [...new Set(allEntries.map((e) => e.teamIndex).filter((x): x is number => x !== undefined))];
+  const opponentTeamIndex = teamIndexes.find((ti) => ti !== userTeamIndex);
+  const hasBothSides = userTeamIndex !== undefined && opponentTeamIndex !== undefined;
+  const activeTeamIndex = hasBothSides ? (side === 'opponent' ? opponentTeamIndex : userTeamIndex) : undefined;
+  const sideEntries = hasBothSides ? allEntries.filter((e) => e.teamIndex === activeTeamIndex) : allEntries;
+
+  const entries = sideEntries.filter(hasMeaningfulStats);
   const offenseEntries = entries.filter((entry) => entry.category === 'offense');
   const defenseEntries = entries.filter((entry) => entry.category === 'defense');
   const offenseRows = buildGameRows<OffensiveGameLine>(offenseEntries, roster ?? []);
@@ -383,14 +407,45 @@ export function GameDetailContent({
             </div>
           </SurfaceCard>
 
+          {hasBothSides && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 type-eyebrow text-slate-400 dark:text-slate-500">Player box score</span>
+              {([
+                ['user', game.teamName] as const,
+                ['opponent', game.opponent] as const,
+              ]).map(([key, name]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSide(key)}
+                  aria-pressed={side === key}
+                  className={`flex items-center gap-2 border px-3 py-2 text-sm font-medium transition ${
+                    side === key
+                      ? 'border-[var(--team-primary)] bg-[color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-slate-950 dark:text-white'
+                      : 'border-slate-200/80 text-slate-600 hover:bg-black/[0.03] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <TeamLogo team={{ assetName: name, label: name }} size="sm" />
+                  <span>{name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {topPerformer && (
             <SurfaceCard>
               <p className="type-eyebrow text-slate-400 dark:text-slate-500">Top performer</p>
               <h3 className="mt-2 font-display text-section-title font-semibold text-slate-950 dark:text-white">
-                {topPerformerPlayer ? `${topPerformerPlayer.firstName} ${topPerformerPlayer.lastName}` : `#${topPerformer.playerId}`}
+                {topPerformerPlayer
+                  ? `${topPerformerPlayer.firstName} ${topPerformerPlayer.lastName}`
+                  : topPerformer.firstName
+                    ? `${topPerformer.firstName} ${topPerformer.lastName}`
+                    : `#${topPerformer.playerId}`}
               </h3>
-              {topPerformerPlayer && (
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{topPerformerPlayer.position}</p>
+              {(topPerformerPlayer?.position ?? topPerformer.position) && (
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {topPerformerPlayer?.position ?? topPerformer.position}
+                </p>
               )}
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {topPerformer.category === 'offense'
@@ -403,7 +458,8 @@ export function GameDetailContent({
           {entries.length === 0 ? (
             <SurfaceCard>
               <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                No individual player stats were recorded for your roster in this game.
+                No individual player stats were recorded for{' '}
+                {hasBothSides ? (side === 'opponent' ? game.opponent : game.teamName) : 'your roster'} in this game.
               </div>
             </SurfaceCard>
           ) : (

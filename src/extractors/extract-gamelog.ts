@@ -50,9 +50,30 @@ export interface PlayerGameLogEntry {
   gameId: number;
   category: GameStatCategory;
   line: OffensiveGameLine | DefensiveGameLine;
+  /** The player's team — lets the Game Info box score toggle between the two sides. */
+  teamIndex: number;
+  // Self-contained identity (same source fields as extract-roster) so the box
+  // score can render OPPONENT players too, who aren't in the user's roster
+  // snapshot. Mirrors RosterPlayerData's identity fields.
+  firstName: string;
+  lastName: string;
+  position: string;
+  jerseyNumber: number;
+  schoolYear: string;
+  portraitAssetName: string | null;
 }
 
-const PLAYER_FIELDS = ['PresentationId', 'TeamIndex', 'GameStats'];
+const PLAYER_FIELDS = [
+  'PresentationId',
+  'TeamIndex',
+  'GameStats',
+  'FirstName',
+  'LastName',
+  'Position',
+  'JerseyNum',
+  'SchoolYear',
+  'GenericHeadAssetName',
+];
 
 /**
  * Same real-vs-return-table distinction as extract-stats.ts: a player with
@@ -113,9 +134,23 @@ function mapLineForCategory(category: GameStatCategory, r: FranchiseRecord): Off
   return category === 'offense' ? mapOffensiveLine(r) : mapDefensiveLine(r);
 }
 
+/**
+ * @param teamIndex the user's team.
+ * @param opponentTeamIndexes the teams the user played (from the schedule) — their
+ *   players are captured too so each of the user's games can show BOTH box scores.
+ * @param userGameIds the SeasonGame ids the user actually played. Opponent players
+ *   carry lines for ALL of their own games, so restrict to these to keep only the
+ *   game against the user.
+ *
+ * Scoping to {user + opponents} rather than the whole league keeps this fast
+ * (~a dozen teams instead of ~140) — full opponent per-game stats DO exist
+ * league-wide in the save, but we only need the user's own matchups here.
+ */
 export async function extractGameLog(
   franchise: OpenFranchise,
   teamIndex: number,
+  opponentTeamIndexes: number[],
+  userGameIds: number[],
 ): Promise<PlayerGameLogEntry[]> {
   const playerTable = getLargestTable(franchise, 'Player');
   await playerTable.readRecords(PLAYER_FIELDS);
@@ -130,12 +165,24 @@ export async function extractGameLog(
     ].map((name) => preloadAllInstances(franchise, name)),
   );
 
-  const players = nonEmpty(playerTable.records).filter((r) => Number(r.TeamIndex) === teamIndex);
+  const includeTeams = new Set<number>([teamIndex, ...opponentTeamIndexes]);
+  const userGames = new Set(userGameIds);
+  const players = nonEmpty(playerTable.records).filter((r) => includeTeams.has(Number(r.TeamIndex)));
 
   const entries: PlayerGameLogEntry[] = [];
   for (const player of players) {
     const gameStatsRow = resolveReferenceWithTable(franchise, player, 'GameStats');
     if (!gameStatsRow) continue;
+
+    const identity = {
+      teamIndex: Number(player.TeamIndex),
+      firstName: String(player.FirstName),
+      lastName: String(player.LastName),
+      position: String(player.Position),
+      jerseyNumber: Number(player.JerseyNum),
+      schoolYear: String(player.SchoolYear),
+      portraitAssetName: String(player.GenericHeadAssetName || '').trim() || null,
+    };
 
     // The array's slot count isn't a fixed known constant (varies with games-in-season,
     // e.g. conference championship/bowl games) — enumerate whatever slots exist rather
@@ -149,12 +196,14 @@ export async function extractGameLog(
 
       const gameRef = resolved.record.getReferenceDataByKey('SeasonGame');
       if (!gameRef) continue;
+      if (!userGames.has(gameRef.rowNumber)) continue; // only the user's own games
 
       entries.push({
         playerId: Number(player.PresentationId),
         gameId: gameRef.rowNumber,
         category,
         line: mapLineForCategory(category, resolved.record),
+        ...identity,
       });
     }
   }

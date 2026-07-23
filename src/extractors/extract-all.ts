@@ -106,7 +106,16 @@ export async function extractAll(
   onProgress?.('stats', 'done');
 
   onProgress?.('gamelog', 'start');
-  const gamelog = await extractGameLog(franchise, userTeam.teamIndex);
+  // Include the user's opponents so each game's box score can show both sides.
+  const userGameIds = schedule.map((g) => g.gameId);
+  const opponentTeamIndexes = [
+    ...new Set(
+      schedule
+        .map((g) => (g.homeTeamIndex === userTeam.teamIndex ? g.awayTeamIndex : g.homeTeamIndex))
+        .filter((idx): idx is number => idx !== null && idx !== userTeam.teamIndex),
+    ),
+  ];
+  const gamelog = await extractGameLog(franchise, userTeam.teamIndex, opponentTeamIndexes, userGameIds);
   onProgress?.('gamelog', 'done');
 
   onProgress?.('trophies', 'start');

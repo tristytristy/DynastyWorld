@@ -730,6 +730,16 @@ export interface GameLogEntry {
   gameId: number;
   category: 'offense' | 'defense';
   line: OffensiveGameLine | DefensiveGameLine;
+  /** The player's team — powers the Game Info box-score team toggle. Absent on seasons synced before this shipped. */
+  teamIndex?: number;
+  // Self-contained identity (opponent players aren't in the user roster snapshot).
+  // Optional so seasons synced before this shipped still type-check.
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+  jerseyNumber?: number;
+  schoolYear?: string;
+  portraitAssetName?: string | null;
 }
 
 export interface TeamStatLine {
