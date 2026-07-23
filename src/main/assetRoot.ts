@@ -63,6 +63,9 @@ function readRegistryAssetsPath(): string | null {
     const out = execFileSync('reg', ['query', 'HKCU\\Software\\CFB Dynasty Hub', '/v', 'AssetsPath'], {
       encoding: 'utf8',
       windowsHide: true,
+      // Ignore stderr so a missing key doesn't spam the log with reg.exe's
+      // "unable to find the specified registry key" message (we handle absence).
+      stdio: ['ignore', 'pipe', 'ignore'],
     });
     const m = out.match(/AssetsPath\s+REG_SZ\s+(.+)/);
     return m ? m[1].trim() : null;

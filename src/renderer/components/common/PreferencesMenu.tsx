@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import type { ColorMode } from '../../theme/themePreference';
+import type { AssetStatus } from '../../../shared/types';
 import { CenteredModalPanel } from './CenteredModalPanel';
 
 function SegmentButton({
@@ -148,6 +149,23 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
   const isDark = appearance === 'dark';
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
+  const [assetStatus, setAssetStatus] = useState<AssetStatus | null>(null);
+  useEffect(() => {
+    window.api.assets
+      .getStatus()
+      .then(setAssetStatus)
+      .catch(() => setAssetStatus(null));
+  }, []);
+  const changeAssetFolder = async () => {
+    const res = await window.api.assets.chooseFolder();
+    // Reload so every image path re-resolves against the new folder.
+    if (res.picked && !res.invalid && res.found) {
+      window.location.reload();
+    } else {
+      setAssetStatus(res);
+    }
+  };
+
   const sectionClass = isDark
     ? 'rounded-xl border border-slate-800/80 bg-slate-950/84 p-4'
     : 'rounded-xl border border-slate-200/90 bg-white/72 p-4';
@@ -277,6 +295,36 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
                 write backs up your save first and is verified before it&apos;s kept, but this is experimental. Off by
                 default; turning it off hides these tools without affecting the rest of the Recruit Hub.
               </label>
+            </CollapsibleSection>
+          </div>
+
+          <div className="space-y-4">
+            <p className={`type-eyebrow ${subtleTextClass}`}>Storage</p>
+            <CollapsibleSection title="Image data folder" isDark={isDark} outerClass={sectionClass}>
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                Player faces, team logos, and trophies load from a separate image-data folder installed once by the
+                Asset Installer. The app finds it automatically — point it somewhere new here if you move it.
+              </p>
+              <p className={`mt-2 break-all text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                {assetStatus?.found ? (
+                  <>
+                    Current: <span className="font-mono">{assetStatus.path}</span>
+                  </>
+                ) : (
+                  <span className="text-amber-500">Not found — the app is using bundled art, or none is installed.</span>
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={changeAssetFolder}
+                className={`mt-3 border px-4 py-2 text-xs font-semibold transition ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                    : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Change folder…
+              </button>
             </CollapsibleSection>
           </div>
         </div>

@@ -18,7 +18,7 @@ Unicode true
 SetCompress off            ; the payload is WebP/PNG (already compressed) — skip the wasted CPU
 
 !define APPNAME "CFB Dynasty Hub Image Data"
-!define VERSION "0.4.0"
+!define VERSION "0.5.0"
 !define REGKEY  "Software\CFB Dynasty Hub"
 ; File paths resolve relative to THIS script's folder (build\), so go up one
 ; level to the project root's public\assets.
