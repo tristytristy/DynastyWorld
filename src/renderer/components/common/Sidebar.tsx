@@ -5,6 +5,7 @@ import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
 import { UserManualMenu } from './UserManualMenu';
+import { AboutMenu } from './AboutMenu';
 import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
@@ -113,6 +114,7 @@ export function Sidebar() {
             <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <UserManualMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            <AboutMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
           </div>
         </div>
 
