@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { App } from './app';
+import { AssetGate } from './components/common/AssetGate';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { StadiumDataProvider } from './data/StadiumDataProvider';
 import { PlayerModalProvider } from './data/PlayerModalProvider';
@@ -25,6 +26,7 @@ if (!container) {
 createRoot(container).render(
   <React.StrictMode>
     <ThemeProvider>
+     <AssetGate>
       <RecruitingExperienceProvider>
        <StadiumDataProvider>
         <ConfirmDialogProvider>
@@ -42,6 +44,7 @@ createRoot(container).render(
         </ConfirmDialogProvider>
        </StadiumDataProvider>
       </RecruitingExperienceProvider>
+     </AssetGate>
     </ThemeProvider>
   </React.StrictMode>,
 );

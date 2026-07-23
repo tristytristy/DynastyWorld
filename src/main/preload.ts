@@ -8,6 +8,11 @@ const api: DynastyApi = {
     getDefaultSavesDir: () => ipcRenderer.invoke(IPC.fs.getDefaultSavesDir),
     scanForSaves: (dirPath) => ipcRenderer.invoke(IPC.fs.scanForSaves, dirPath),
   },
+  assets: {
+    getStatus: () => ipcRenderer.invoke(IPC.assets.getStatus),
+    chooseFolder: () => ipcRenderer.invoke(IPC.assets.chooseFolder),
+    clearPath: () => ipcRenderer.invoke(IPC.assets.clearPath),
+  },
   db: {
     getDynasties: () => ipcRenderer.invoke(IPC.db.getDynasties),
     importDynasty: (savePath) => ipcRenderer.invoke(IPC.db.importDynasty, savePath),

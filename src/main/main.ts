@@ -1,8 +1,10 @@
-import { app, BrowserWindow, Menu, dialog, screen } from 'electron';
+import { app, BrowserWindow, Menu, dialog, screen, protocol } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { getAssetsRoot } from './assetRoot';
 import { registerFilesystemHandlers } from './ipc/filesystem';
+import { registerAssetHandlers } from './ipc/assets';
 import { registerDatabaseHandlers } from './ipc/database';
 import { registerExtractionHandlers } from './ipc/extraction';
 import { registerExportHandlers } from './ipc/export';
@@ -58,6 +60,53 @@ const DEFAULT_HEIGHT = 900;
 const MIN_WIDTH = 1024;
 const MIN_HEIGHT = 700;
 const USE_PRE_SPLASH_ONLY = process.env.USE_PRE_SPLASH_ONLY === '1';
+
+/**
+ * The heavy image assets are served over a custom `cfbmedia://` scheme from
+ * the external image-data folder (see assetRoot.ts) rather than bundled inside
+ * the app. Renderer image URLs look like `cfbmedia://media/3d_logos/...webp`;
+ * the host segment ("media") is ignored and the path is resolved against the
+ * resolved asset root. Must be declared as a privileged/standard/secure scheme
+ * BEFORE app 'ready' so <img> can load it under the page CSP.
+ */
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'cfbmedia', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
+
+const MEDIA_CONTENT_TYPES: Record<string, string> = {
+  '.webp': 'image/webp',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+};
+
+/** Wires the cfbmedia:// handler to the resolved image-data folder. Call once, after app 'ready'. */
+function registerMediaProtocol(): void {
+  protocol.handle('cfbmedia', async (request) => {
+    const root = getAssetsRoot();
+    if (!root) return new Response('image data not installed', { status: 404 });
+    let rel: string;
+    try {
+      rel = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, '');
+    } catch {
+      return new Response('bad request', { status: 400 });
+    }
+    const resolved = path.resolve(root, rel);
+    // Path-traversal guard: never serve outside the asset root.
+    if (resolved !== path.resolve(root) && !resolved.startsWith(path.resolve(root) + path.sep)) {
+      return new Response('forbidden', { status: 403 });
+    }
+    try {
+      const data = await fs.promises.readFile(resolved);
+      const type = MEDIA_CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream';
+      return new Response(data, { headers: { 'content-type': type, 'cache-control': 'public, max-age=31536000' } });
+    } catch {
+      return new Response('not found', { status: 404 });
+    }
+  });
+}
 
 interface WindowBounds {
   width: number;
@@ -321,11 +370,15 @@ app
     // rather than race the first instance for the same SQLite file.
     if (!gotSingleInstanceLock) return;
 
+    // Serve the external image-data folder over cfbmedia:// for every path below.
+    registerMediaProtocol();
+
     // Diagnostic runs are a one-shot headless import + quit — the splash screen
     // would just flash and add noise to the log, so it's skipped entirely.
     if (process.env.DIAGNOSTIC_IMPORT_PATH) {
       await initDatabase();
       registerFilesystemHandlers();
+      registerAssetHandlers();
       registerDatabaseHandlers();
       registerExtractionHandlers();
       registerExportHandlers();
@@ -347,6 +400,7 @@ app
     if (USE_PRE_SPLASH_ONLY) {
       await initDatabaseWithRecovery();
       registerFilesystemHandlers();
+      registerAssetHandlers();
       registerDatabaseHandlers();
       registerExtractionHandlers();
       registerExportHandlers();
@@ -461,6 +515,7 @@ app
 
       sendSplashProgress(splash, { percent: 55, status: 'Preparing workspace...' });
       registerFilesystemHandlers();
+      registerAssetHandlers();
       registerDatabaseHandlers();
       registerExtractionHandlers();
       registerExportHandlers();

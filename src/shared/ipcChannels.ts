@@ -4,6 +4,11 @@ export const IPC = {
     getDefaultSavesDir: 'fs:getDefaultSavesDir',
     scanForSaves: 'fs:scanForSaves',
   },
+  assets: {
+    getStatus: 'assets:getStatus',
+    chooseFolder: 'assets:chooseFolder',
+    clearPath: 'assets:clearPath',
+  },
   db: {
     getDynasties: 'db:getDynasties',
     importDynasty: 'db:importDynasty',

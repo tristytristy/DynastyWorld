@@ -1,10 +1,12 @@
 import type { BowlAppearance, Trophy } from '../../shared/types';
 
-const CONFCHAMP_BASE_PATH = 'assets/confchamp';
-const BOWL_BASE_PATH = 'assets/bowlgames';
-const PLAYOFF_BASE_PATH = 'assets/playoffs';
+const CONFCHAMP_BASE_PATH = 'cfbmedia://media/confchamp';
+const BOWL_BASE_PATH = 'cfbmedia://media/bowlgames';
+const PLAYOFF_BASE_PATH = 'cfbmedia://media/playoffs';
+// Conference marks stay bundled with the app (tiny SVGs, needed for the
+// fallback UI) — only the big raster art moves to the external image folder.
 const CONF_BASE_PATH = 'assets/conf';
-const AWARDS_BASE_PATH = 'assets/awards';
+const AWARDS_BASE_PATH = 'cfbmedia://media/awards';
 
 const NATIONAL_CHAMPIONSHIP_TROPHY = `${CONFCHAMP_BASE_PATH}/confchamp__NationalChampionshipTrophy.webp`;
 const BOWL_DEFAULT_LOGO = `${BOWL_BASE_PATH}/bowl_Default.webp`;

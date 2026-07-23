@@ -1485,11 +1485,28 @@ export interface ExtractionProgressEvent {
   status: ExtractionStepStatus;
 }
 
+/** Where the external image-data folder lives, and whether it was found. */
+export interface AssetStatus {
+  found: boolean;
+  path: string | null;
+}
+
+/** Result of the "choose image folder" dialog. `picked` is false if the user cancelled; `invalid` is true if the chosen folder isn't a real image-data folder. */
+export interface AssetChooseResult extends AssetStatus {
+  picked: boolean;
+  invalid?: boolean;
+}
+
 export interface DynastyApi {
   fs: {
     selectFile: () => Promise<string | null>;
     getDefaultSavesDir: () => Promise<string>;
     scanForSaves: (dirPath: string) => Promise<SaveFileInfo[]>;
+  };
+  assets: {
+    getStatus: () => Promise<AssetStatus>;
+    chooseFolder: () => Promise<AssetChooseResult>;
+    clearPath: () => Promise<AssetStatus>;
   };
   db: {
     getDynasties: () => Promise<DynastySummary[]>;

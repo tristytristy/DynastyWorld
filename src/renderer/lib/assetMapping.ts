@@ -454,21 +454,21 @@ export const TEAM_3D_LOGOS: Record<string, string> = {
 };
 
 const FALLBACK_LOGO = '_NCAA_logo.webp';
-const LOGO_BASE_PATH = 'assets/icons/ncaa-logos';
+const LOGO_BASE_PATH = 'cfbmedia://media/icons/ncaa-logos';
 /**
  * "On dark" / "on light" variants — same 143 teams as TEAM_3D_LOGOS, filenames
  * verified to be identical apart from an `_OD`/`_OL` suffix before `.webp`
  * (diffed all 3 folders directly), so they're derived rather than a second
  * 143-entry table that could drift out of sync.
  */
-const THREE_D_OD_BASE_PATH = 'assets/3d_logos/PNG_OD';
+const THREE_D_OD_BASE_PATH = 'cfbmedia://media/3d_logos/PNG_OD';
 // Real on-disk casing is "png_OL", not "PNG_OL" — confirmed via PowerShell
 // (Get-ChildItem, exact-case) after `ls`/`find` misleadingly succeeded on the
 // wrong case due to Windows' case-insensitive filesystem. Matters for
 // portability: a packaged build on a case-sensitive filesystem would 404.
-const THREE_D_OL_BASE_PATH = 'assets/3d_logos/png_OL';
+const THREE_D_OL_BASE_PATH = 'cfbmedia://media/3d_logos/png_OL';
 /** Same 143 teams, `_gold` suffix instead of `_OD`/`_OL` — confirmed present on disk (e.g. `Miami_gold.webp`). A celebratory variant, not a theme-appearance one: used for "this team just gained something" contexts (e.g. a newly-signed recruit) rather than picked automatically by light/dark appearance. */
-const THREE_D_GOLD_BASE_PATH = 'assets/3d_logos/png_gold';
+const THREE_D_GOLD_BASE_PATH = 'cfbmedia://media/3d_logos/png_gold';
 
 export const FALLBACK_LOGO_PATH = `${LOGO_BASE_PATH}/${FALLBACK_LOGO}`;
 

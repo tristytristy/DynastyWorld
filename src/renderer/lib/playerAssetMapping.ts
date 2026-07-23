@@ -8,5 +8,5 @@
  */
 export function getPlayerPortraitCandidates(assetName: string | null): string[] {
   if (!assetName) return [];
-  return [`assets/playerportrait/nilpp_${assetName}.webp`];
+  return [`cfbmedia://media/playerportrait/nilpp_${assetName}.webp`];
 }
