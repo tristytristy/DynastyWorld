@@ -12,6 +12,7 @@
     "build:prod": "webpack --mode=production",
     "start": "npm run build && electron .",
     "package": "npm run clean && npm run build:prod && electron-builder",
+    "package:assets": "node build/compile-assets-installer.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",

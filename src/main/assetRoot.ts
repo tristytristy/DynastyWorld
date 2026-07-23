@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -33,6 +34,11 @@ function readConfig(): { assetsPath?: string } {
   }
 }
 
+// Resolving the root touches the filesystem (and the registry) and the
+// cfbmedia:// handler calls it on EVERY image request, so cache the result.
+// `undefined` = not yet resolved; setAssetsPath() invalidates it.
+let cachedRoot: string | null | undefined;
+
 /** Persist (or clear, with null) the user's chosen image-data folder. */
 export function setAssetsPath(p: string | null): void {
   const cfg = readConfig();
@@ -42,6 +48,26 @@ export function setAssetsPath(p: string | null): void {
     fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
   } catch (err) {
     console.error('[assets] failed to save asset-config.json:', err);
+  }
+  cachedRoot = undefined;
+}
+
+/**
+ * The path the Asset Installer records under HKCU\Software\CFB Dynasty Hub so
+ * the app auto-detects a user-chosen folder with no browsing. Read once per
+ * session (behind the cache) — never per image request.
+ */
+function readRegistryAssetsPath(): string | null {
+  if (process.platform !== 'win32') return null;
+  try {
+    const out = execFileSync('reg', ['query', 'HKCU\\Software\\CFB Dynasty Hub', '/v', 'AssetsPath'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    const m = out.match(/AssetsPath\s+REG_SZ\s+(.+)/);
+    return m ? m[1].trim() : null;
+  } catch {
+    return null;
   }
 }
 
@@ -54,6 +80,8 @@ function candidateRoots(): string[] {
   const roots: string[] = [];
   const cfg = readConfig();
   if (cfg.assetsPath) roots.push(cfg.assetsPath);
+  const reg = readRegistryAssetsPath();
+  if (reg) roots.push(reg);
   try {
     const exeDir = path.dirname(app.getPath('exe'));
     roots.push(path.join(exeDir, 'assets'));
@@ -67,12 +95,12 @@ function candidateRoots(): string[] {
   return roots;
 }
 
-/** The resolved image-data root, or null if none is found. */
+/** The resolved image-data root, or null if none is found (cached per session). */
 export function getAssetsRoot(): string | null {
-  for (const r of candidateRoots()) {
-    if (isAssetRoot(r)) return r;
+  if (cachedRoot === undefined) {
+    cachedRoot = candidateRoots().find((r) => isAssetRoot(r)) ?? null;
   }
-  return null;
+  return cachedRoot;
 }
 
 export function getAssetStatus(): { found: boolean; path: string | null } {
