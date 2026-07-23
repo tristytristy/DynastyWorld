@@ -6,8 +6,8 @@ const PLAYOFF_BASE_PATH = 'assets/playoffs';
 const CONF_BASE_PATH = 'assets/conf';
 const AWARDS_BASE_PATH = 'assets/awards';
 
-const NATIONAL_CHAMPIONSHIP_TROPHY = `${CONFCHAMP_BASE_PATH}/confchamp__NationalChampionshipTrophy.png`;
-const BOWL_DEFAULT_LOGO = `${BOWL_BASE_PATH}/bowl_Default.png`;
+const NATIONAL_CHAMPIONSHIP_TROPHY = `${CONFCHAMP_BASE_PATH}/confchamp__NationalChampionshipTrophy.webp`;
+const BOWL_DEFAULT_LOGO = `${BOWL_BASE_PATH}/bowl_Default.webp`;
 
 /**
  * The real `BowlGame.Name` strings the save uses for the three CFP bracket
@@ -17,14 +17,14 @@ const BOWL_DEFAULT_LOGO = `${BOWL_BASE_PATH}/bowl_Default.png`;
  * traditional bowls).
  */
 const PLAYOFF_ROUND_FILES: Record<string, string> = {
-  'CFP First Round': 'playoff_Round_1.png',
-  'CFP Quarterfinal': 'playoff_Qtr_Final.png',
-  'CFP Semifinal': 'playoff_Semi_Game.png',
+  'CFP First Round': 'playoff_Round_1.webp',
+  'CFP Quarterfinal': 'playoff_Qtr_Final.webp',
+  'CFP Semifinal': 'playoff_Semi_Game.webp',
 };
 
 const NATIONAL_CHAMPIONSHIP_APPEARANCE = {
-  dark: `${PLAYOFF_BASE_PATH}/playoff_NationalChampionshipWhite.png`,
-  light: `${PLAYOFF_BASE_PATH}/playoff_NationalChampionship.png`,
+  dark: `${PLAYOFF_BASE_PATH}/playoff_NationalChampionshipWhite.webp`,
+  light: `${PLAYOFF_BASE_PATH}/playoff_NationalChampionship.webp`,
 };
 
 interface ConferenceLogoFiles {
@@ -66,18 +66,18 @@ const CONFERENCE_LOGO_FILES: Record<string, ConferenceLogoFiles> = {
  * rather than guessing at a filename.
  */
 const CONFERENCE_TROPHY_FILES: Record<string, string> = {
-  ACC: 'confchamp__ACCChampionshipTrophy.png',
-  American: 'confchamp__AACChampionshipTrophy.png',
-  'Conference USA': 'confchamp__CUSAChampionshipTrophy.png',
-  CUSA: 'confchamp__CUSAChampionshipTrophy.png',
-  'Big 12': 'confchamp__BIG12ChampionshipTrophy.png',
-  'Big Ten': 'confchamp__BIG10ChampionshipTrophy.png',
-  MAC: 'confchamp__MACChampionshipTrophy.png',
-  MWC: 'confchamp__MountainWestChampionshipTrophy.png',
-  'Mountain West': 'confchamp__MountainWestChampionshipTrophy.png',
-  'Pac-12': 'confchamp__PAC12ChampionshipTrophy.png',
-  SEC: 'confchamp__SECChampionshipTrophy.png',
-  'Sun Belt': 'confchamp__SunBeltChampionshipTrophy.png',
+  ACC: 'confchamp__ACCChampionshipTrophy.webp',
+  American: 'confchamp__AACChampionshipTrophy.webp',
+  'Conference USA': 'confchamp__CUSAChampionshipTrophy.webp',
+  CUSA: 'confchamp__CUSAChampionshipTrophy.webp',
+  'Big 12': 'confchamp__BIG12ChampionshipTrophy.webp',
+  'Big Ten': 'confchamp__BIG10ChampionshipTrophy.webp',
+  MAC: 'confchamp__MACChampionshipTrophy.webp',
+  MWC: 'confchamp__MountainWestChampionshipTrophy.webp',
+  'Mountain West': 'confchamp__MountainWestChampionshipTrophy.webp',
+  'Pac-12': 'confchamp__PAC12ChampionshipTrophy.webp',
+  SEC: 'confchamp__SECChampionshipTrophy.webp',
+  'Sun Belt': 'confchamp__SunBeltChampionshipTrophy.webp',
 };
 
 /**
@@ -93,30 +93,30 @@ const CONFERENCE_TROPHY_FILES: Record<string, string> = {
  * instead.
  */
 const AWARD_TROPHY_FILES: Record<string, string> = {
-  HEISMAN: 'trophies_HeismanMemorialTrophy.png',
-  BEST_QB: 'trophies_DaveyOBrienAward.png',
-  BEST_SR_QB: 'trophies_JohnnyUnitas.png',
-  BEST_RB: 'trophies_DoakWalkerRunningBackAward.png',
-  BEST_REC: 'trophies_BiletnikoffAward.png',
-  BEST_TE: 'trophies_JohnMackeyAward.png',
-  BEST_KICK: 'trophies_LouGroza.png',
-  BEST_PUNT: 'trophies_RayGuyAward.png',
-  BEST_C: 'trophies_RimingtonTrophy.png',
-  BEST_IL: 'trophies_OutlandTrophy.png',
-  BEST_LB: 'trophies_ButkusAward.png',
-  BEST_DB: 'trophies_JimThorpeAward.png',
-  BEST_DL: 'trophies_Lombardi.png',
-  BEST_DE: 'trophies_CFB_Generic_Trophy_BestDefensiveEnd.png',
-  BEST_DEF_1: 'trophies_BronkoNagurskiTrophy.png',
-  BEST_DEF_2: 'trophies_ChuckBednarikAward.png',
-  BEST_POTY: 'trophies_WalterCampAward.png',
-  BEST_PLAYER: 'trophies_MaxwellAward.png',
-  BEST_FRESHMAN_POTY: 'trophies_ShaunAlexanderAward.png',
-  BEST_ACADEMIC: 'trophies_CampbellAward.png',
-  BEST_SR: 'trophies_TheJetAward.png',
-  MOST_VERSATILE: 'trophies_HornungAward.png',
-  BEST_HC: 'trophies_BearBryantHeadCoach.png',
-  BEST_AC: 'trophies_Broyles.png',
+  HEISMAN: 'trophies_HeismanMemorialTrophy.webp',
+  BEST_QB: 'trophies_DaveyOBrienAward.webp',
+  BEST_SR_QB: 'trophies_JohnnyUnitas.webp',
+  BEST_RB: 'trophies_DoakWalkerRunningBackAward.webp',
+  BEST_REC: 'trophies_BiletnikoffAward.webp',
+  BEST_TE: 'trophies_JohnMackeyAward.webp',
+  BEST_KICK: 'trophies_LouGroza.webp',
+  BEST_PUNT: 'trophies_RayGuyAward.webp',
+  BEST_C: 'trophies_RimingtonTrophy.webp',
+  BEST_IL: 'trophies_OutlandTrophy.webp',
+  BEST_LB: 'trophies_ButkusAward.webp',
+  BEST_DB: 'trophies_JimThorpeAward.webp',
+  BEST_DL: 'trophies_Lombardi.webp',
+  BEST_DE: 'trophies_CFB_Generic_Trophy_BestDefensiveEnd.webp',
+  BEST_DEF_1: 'trophies_BronkoNagurskiTrophy.webp',
+  BEST_DEF_2: 'trophies_ChuckBednarikAward.webp',
+  BEST_POTY: 'trophies_WalterCampAward.webp',
+  BEST_PLAYER: 'trophies_MaxwellAward.webp',
+  BEST_FRESHMAN_POTY: 'trophies_ShaunAlexanderAward.webp',
+  BEST_ACADEMIC: 'trophies_CampbellAward.webp',
+  BEST_SR: 'trophies_TheJetAward.webp',
+  MOST_VERSATILE: 'trophies_HornungAward.webp',
+  BEST_HC: 'trophies_BearBryantHeadCoach.webp',
+  BEST_AC: 'trophies_Broyles.webp',
 };
 
 /**
@@ -125,7 +125,7 @@ const AWARD_TROPHY_FILES: Record<string, string> = {
  * the real bowlgames/ folder: 30 of 32 real (non-CFP-placeholder) bowls match
  * this normalization exactly. The 2 that don't (confirmed missing from the
  * asset pack entirely, not a naming mismatch) fall back to the generic
- * bowl_Default.png, same as any bowl whose AssetName didn't resolve at all
+ * bowl_Default.webp, same as any bowl whose AssetName didn't resolve at all
  * (the CFP bracket round entries, which have a blank AssetName in the save).
  */
 function normalizeBowlAssetName(assetName: string): string {
@@ -139,12 +139,12 @@ export function getConferenceChampionshipTrophyPath(conferenceName: string): str
 
 export function getBowlLogoPath(bowlAssetName: string | null): string {
   if (!bowlAssetName) return BOWL_DEFAULT_LOGO;
-  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}.png`;
+  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}.webp`;
 }
 
 export function getBowlTrophyPath(bowlAssetName: string | null): string {
   if (!bowlAssetName) return BOWL_DEFAULT_LOGO;
-  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}Trophy.png`;
+  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}Trophy.webp`;
 }
 
 /** null if `conferenceName` isn't a recognized real conference (e.g. "Independent") - never a guessed filename. */
