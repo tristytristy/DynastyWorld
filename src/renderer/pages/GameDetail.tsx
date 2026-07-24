@@ -13,12 +13,12 @@ import { useStadiumData } from '../data/StadiumDataProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
 import type {
   DefensiveGameLine,
+  GameDetailData,
   GameLogEntry,
   MediaItemResolved,
   OffensiveGameLine,
   RosterPlayer,
   ScheduleGame,
-  ScheduleOverview,
   TeamStatLine,
 } from '../../shared/types';
 
@@ -223,48 +223,85 @@ export function GameDetailContent({
   const id = dynastyId;
   const { appearance } = useTheme();
   const { getStadium } = useStadiumData();
-  const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
+  const [detail, setDetail] = useState<GameDetailData | null | undefined>(undefined);
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
-  const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
   const [media, setMedia] = useState<MediaItemResolved[]>([]);
-  // Which side's player box score is shown (when opponent data is available).
-  const [side, setSide] = useState<'user' | 'opponent'>('user');
+  // Which side's player box score is shown ('primary' = user's side, or the away
+  // team for a non-user game; 'secondary' = the other team).
+  const [side, setSide] = useState<'primary' | 'secondary'>('primary');
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    window.api.db.getSchedule(id, seasonId).then((result) => !cancelled && setSchedule(result));
+    window.api.db.getGameDetail(id, Number(gameId), seasonId).then((result) => !cancelled && setDetail(result));
+    // Roster still fetched so the user's own players resolve identity on seasons
+    // synced before per-entry identity shipped (opponents fall back to the entry).
     window.api.db.getRoster(id, seasonId).then((result) => !cancelled && setRoster(result));
-    window.api.db.getGameLog(id, seasonId).then((result) => !cancelled && setGamelog(result));
     window.api.media.listForGame(id, seasonId, Number(gameId)).then((result) => !cancelled && setMedia(result));
     return () => {
       cancelled = true;
     };
   }, [id, seasonId, gameId]);
 
-  if (schedule === undefined || roster === undefined || gamelog === undefined) {
+  if (detail === undefined || roster === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading game...</p>;
   }
 
-  const game: ScheduleGame | undefined = schedule?.games.find((item) => item.gameId === Number(gameId));
-
-  if (!game || !id) {
+  if (!detail || !id) {
     return <p className="text-slate-500 dark:text-slate-400">Game not found.</p>;
   }
 
-  const allEntries = (gamelog ?? []).filter((entry) => entry.gameId === game.gameId);
-  // Split the box score by team. The user's team is whichever team an entry's
-  // player belongs to in the user roster; the other team index is the opponent.
-  // Seasons synced before this shipped carry no per-entry teamIndex — there,
-  // hasBothSides is false and the box score stays the user's team (as before).
-  const userTeamIndex = allEntries.find(
-    (e) => e.teamIndex !== undefined && (roster ?? []).some((r) => r.id === e.playerId),
-  )?.teamIndex;
-  const teamIndexes = [...new Set(allEntries.map((e) => e.teamIndex).filter((x): x is number => x !== undefined))];
-  const opponentTeamIndex = teamIndexes.find((ti) => ti !== userTeamIndex);
-  const hasBothSides = userTeamIndex !== undefined && opponentTeamIndex !== undefined;
-  const activeTeamIndex = hasBothSides ? (side === 'opponent' ? opponentTeamIndex : userTeamIndex) : undefined;
+  // Perspective: frame from the user's side if they're in this game, otherwise
+  // treat the away team as "primary" (neutral home/away for a non-user game).
+  const userSide = detail.home.isUser ? detail.home : detail.away.isUser ? detail.away : null;
+  const primary = userSide ?? detail.away;
+  const secondary = primary === detail.home ? detail.away : detail.home;
+  const primaryIsHome = primary === detail.home;
+  const played = detail.played;
+  const result: ScheduleGame['result'] =
+    userSide && played ? (primary.score > secondary.score ? 'W' : primary.score < secondary.score ? 'L' : 'T') : null;
+
+  // Adapt the neutral GameDetailData to the ScheduleGame shape the render + its
+  // formatting helpers already consume — so one render path serves every game.
+  const game: ScheduleGame = {
+    gameId: detail.gameId,
+    week: detail.week,
+    teamName: primary.name,
+    opponent: secondary.name,
+    isHome: primaryIsHome,
+    status: detail.status,
+    dayOfWeek: detail.dayOfWeek,
+    broadcastScope: '',
+    kickoffTime: detail.kickoffTime,
+    date: detail.date,
+    teamScore: played ? primary.score : null,
+    opponentScore: played ? secondary.score : null,
+    result,
+    opponentCurrentRank: secondary.currentRank,
+    teamQuarterScores: primary.quarterScores,
+    opponentQuarterScores: secondary.quarterScores,
+    teamStats: primary.stats,
+    opponentStats: secondary.stats,
+    gameType: detail.gameType,
+    bowlName: detail.bowlName,
+    bowlAssetName: detail.bowlAssetName,
+    isNationalChampionship: detail.isNationalChampionship,
+    conferenceName: detail.conferenceName,
+    isRivalryGame: false,
+    rivalryName: null,
+    siteType: detail.isNeutralSite ? 'neutral' : primaryIsHome ? 'home' : 'away',
+    opponentRecord: null,
+    runningRecord: null,
+  };
+
+  // Both teams' entries for this game; toggle between the two sides.
+  const allEntries = detail.players;
+  const hasBothSides =
+    allEntries.some((e) => e.teamIndex === primary.teamIndex) &&
+    allEntries.some((e) => e.teamIndex === secondary.teamIndex);
+  const activeTeamIndex = side === 'secondary' ? secondary.teamIndex : primary.teamIndex;
   const sideEntries = hasBothSides ? allEntries.filter((e) => e.teamIndex === activeTeamIndex) : allEntries;
+  const activeSideName = side === 'secondary' ? secondary.name : primary.name;
 
   const entries = sideEntries.filter(hasMeaningfulStats);
   const offenseEntries = entries.filter((entry) => entry.category === 'offense');
@@ -343,6 +380,10 @@ export function GameDetailContent({
               <p className={`text-4xl font-semibold tracking-tight ${resultColor}`}>
                 {game.result} {game.teamScore}-{game.opponentScore}
               </p>
+            ) : played ? (
+              <p className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                {primary.score}&ndash;{secondary.score}
+              </p>
             ) : (
               <p className="text-2xl font-semibold tracking-tight text-slate-400 dark:text-slate-500">Upcoming</p>
             )}
@@ -350,7 +391,7 @@ export function GameDetailContent({
         </div>
       </SurfaceCard>
 
-      {game.result === null || !game.teamStats || !game.opponentStats ? (
+      {!played || !game.teamStats || !game.opponentStats ? (
         <SurfaceCard>
           <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
             This game has not been played yet. Box score and stat surfaces will populate after the result is imported.
@@ -411,8 +452,8 @@ export function GameDetailContent({
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 type-eyebrow text-slate-400 dark:text-slate-500">Player box score</span>
               {([
-                ['user', game.teamName] as const,
-                ['opponent', game.opponent] as const,
+                ['primary', primary.name] as const,
+                ['secondary', secondary.name] as const,
               ]).map(([key, name]) => (
                 <button
                   key={key}
@@ -458,8 +499,7 @@ export function GameDetailContent({
           {entries.length === 0 ? (
             <SurfaceCard>
               <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                No individual player stats were recorded for{' '}
-                {hasBothSides ? (side === 'opponent' ? game.opponent : game.teamName) : 'your roster'} in this game.
+                No individual player stats were recorded for {activeSideName} in this game.
               </div>
             </SurfaceCard>
           ) : (

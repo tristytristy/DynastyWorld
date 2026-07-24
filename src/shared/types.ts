@@ -725,6 +725,62 @@ export interface DefensiveGameLine {
   passDeflections: number;
 }
 
+/** One league game for the national Scores page — from the leaguewide schedule snapshot; click-through opens the full Game Info modal. */
+export interface LeagueScoreGame {
+  gameId: number;
+  week: number;
+  weekType: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  bowlName: string | null;
+}
+
+/** One side of a game, in neutral home/away terms — powers the universal Game Info modal for ANY league game. */
+export interface GameDetailTeamSide {
+  teamIndex: number;
+  name: string;
+  score: number;
+  /** [Q1, Q2, Q3, Q4]. */
+  quarterScores: number[];
+  /** null until the game is played. */
+  stats: TeamStatLine | null;
+  /** Current media-poll rank (approx, not point-in-time), or null if unranked. */
+  currentRank: number | null;
+  /** True when this side is the active dynasty's own team (drives user-perspective framing). */
+  isUser: boolean;
+}
+
+/**
+ * Everything the Game Info modal needs for ONE game, framed neutrally (home vs
+ * away) so the SAME modal renders a user game and any non-user/CPU game. When
+ * `hasUser` is true one side's `isUser` is set and the modal frames from that
+ * side (vs/@ opponent, W/L). Built by getGameDetail from the leaguewide
+ * schedule + teams + gamelog snapshots.
+ */
+export interface GameDetailData {
+  gameId: number;
+  week: number;
+  played: boolean;
+  status: string;
+  dayOfWeek: string;
+  kickoffTime: string;
+  date: string;
+  isBowlGame: boolean;
+  isNationalChampionship: boolean;
+  bowlName: string | null;
+  bowlAssetName: string | null;
+  isNeutralSite: boolean;
+  gameType: 'conference' | 'non-conference' | 'bowl';
+  conferenceName: string | null;
+  home: GameDetailTeamSide;
+  away: GameDetailTeamSide;
+  hasUser: boolean;
+  /** Both teams' player box-score lines for this game. */
+  players: GameLogEntry[];
+}
+
 export interface GameLogEntry {
   playerId: number;
   gameId: number;
@@ -1534,6 +1590,7 @@ export interface DynastyApi {
     getTeamStats: (dynastyId: string, seasonId?: number) => Promise<TeamStats | null>;
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
+    getGameDetail: (dynastyId: string, gameId: number, seasonId?: number) => Promise<GameDetailData | null>;
     getTeamTrophies: (dynastyId: string, seasonId?: number) => Promise<TeamTrophies | null>;
     getSchedule: (dynastyId: string, seasonId?: number) => Promise<ScheduleOverview | null>;
     getStandings: (dynastyId: string, seasonId?: number) => Promise<StandingsOverview | null>;
@@ -1542,6 +1599,7 @@ export interface DynastyApi {
     getRankings: (dynastyId: string, seasonId?: number) => Promise<RankingsOverview | null>;
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
+    getLeagueScores: (dynastyId: string, seasonId?: number) => Promise<LeagueScoreGame[] | null>;
     getLeagueTeamOverview: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<SeasonOverview | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getAllLeaguePlayers: (dynastyId: string, seasonId?: number) => Promise<NationalPlayer[] | null>;

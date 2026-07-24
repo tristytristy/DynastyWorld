@@ -32,6 +32,7 @@ const api: DynastyApi = {
     getKickingStats: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getKickingStats, dynastyId, seasonId),
     getGameLog: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getGameLog, dynastyId, seasonId),
+    getGameDetail: (dynastyId, gameId, seasonId) => ipcRenderer.invoke(IPC.db.getGameDetail, dynastyId, gameId, seasonId),
     getTeamTrophies: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getTeamTrophies, dynastyId, seasonId),
     getSchedule: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSchedule, dynastyId, seasonId),
@@ -41,6 +42,7 @@ const api: DynastyApi = {
     getRankings: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRankings, dynastyId, seasonId),
     getRecruits: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRecruits, dynastyId, seasonId),
     getLeagueTeams: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getLeagueTeams, dynastyId, seasonId),
+    getLeagueScores: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getLeagueScores, dynastyId, seasonId),
     getLeagueTeamOverview: (dynastyId, teamIndex, seasonId) =>
       ipcRenderer.invoke(IPC.db.getLeagueTeamOverview, dynastyId, teamIndex, seasonId),
     getLeagueTeamRoster: (dynastyId, teamIndex, seasonId) => ipcRenderer.invoke(IPC.db.getLeagueTeamRoster, dynastyId, teamIndex, seasonId),

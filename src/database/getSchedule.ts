@@ -4,7 +4,7 @@ import type { TeamData } from '../extractors/extract-teams';
 import type { RivalryData } from '../extractors/extract-rivalries';
 import type { ScheduleGame, ScheduleOverview } from '../shared/types';
 
-function formatKickoff(minutes: number): string {
+export function formatKickoff(minutes: number): string {
   if (minutes <= 0) return 'TBD';
   const hour24 = Math.floor(minutes / 60);
   const min = minutes % 60;
@@ -18,7 +18,7 @@ const MONTH_NAMES = [
 ];
 
 /** Empty until the game's date has actually been assigned in-game (not true for any game in a fresh preseason save). */
-function formatGameDate(month: number, day: number): string {
+export function formatGameDate(month: number, day: number): string {
   if (month <= 0 || day <= 0 || month > 12) return 'TBD';
   return `${MONTH_NAMES[month - 1]} ${day}`;
 }

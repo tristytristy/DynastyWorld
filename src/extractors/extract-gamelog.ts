@@ -135,22 +135,44 @@ function mapLineForCategory(category: GameStatCategory, r: FranchiseRecord): Off
 }
 
 /**
- * @param teamIndex the user's team.
- * @param opponentTeamIndexes the teams the user played (from the schedule) — their
- *   players are captured too so each of the user's games can show BOTH box scores.
- * @param userGameIds the SeasonGame ids the user actually played. Opponent players
- *   carry lines for ALL of their own games, so restrict to these to keep only the
- *   game against the user.
+ * True if the line has any real production. Leaguewide, most players dress but
+ * do nothing in a given game — those all-zero lines would only ever be filtered
+ * out at display anyway (see GameDetail's hasMeaningfulStats), so skip them at
+ * extraction to keep the (now leaguewide) snapshot lean.
+ */
+function lineHasStats(category: GameStatCategory, line: OffensiveGameLine | DefensiveGameLine): boolean {
+  if (category === 'offense') {
+    const l = line as OffensiveGameLine;
+    return l.passAttempts > 0 || l.rushAttempts > 0 || l.receptions > 0;
+  }
+  const l = line as DefensiveGameLine;
+  return (
+    l.tackles > 0 ||
+    l.assistedTackles > 0 ||
+    l.tacklesForLoss > 0 ||
+    l.sacks > 0 ||
+    l.interceptions > 0 ||
+    l.forcedFumbles > 0 ||
+    l.fumbleRecoveries > 0 ||
+    l.passDeflections > 0
+  );
+}
+
+/**
+ * Leaguewide per-game player box scores for the season being synced — every
+ * team, both sides of every game — so the Game Info modal can show a full box
+ * score for ANY game, not just the user's (full opponent/CPU-vs-CPU per-game
+ * stats DO exist in the save, verified: ~97% of league games carry both teams'
+ * lines). Each entry carries self-contained identity because it spans players
+ * who aren't in the user's roster snapshot.
  *
- * Scoping to {user + opponents} rather than the whole league keeps this fast
- * (~a dozen teams instead of ~140) — full opponent per-game stats DO exist
- * league-wide in the save, but we only need the user's own matchups here.
+ * @param seasonGameIds the SeasonGame ids belonging to the season being synced
+ *   (SeasonGame is a flat cross-season table, so a player's lines are filtered
+ *   to just this season's games — same reason extract-schedule filters by year).
  */
 export async function extractGameLog(
   franchise: OpenFranchise,
-  teamIndex: number,
-  opponentTeamIndexes: number[],
-  userGameIds: number[],
+  seasonGameIds: number[],
 ): Promise<PlayerGameLogEntry[]> {
   const playerTable = getLargestTable(franchise, 'Player');
   await playerTable.readRecords(PLAYER_FIELDS);
@@ -165,12 +187,10 @@ export async function extractGameLog(
     ].map((name) => preloadAllInstances(franchise, name)),
   );
 
-  const includeTeams = new Set<number>([teamIndex, ...opponentTeamIndexes]);
-  const userGames = new Set(userGameIds);
-  const players = nonEmpty(playerTable.records).filter((r) => includeTeams.has(Number(r.TeamIndex)));
+  const seasonGames = new Set(seasonGameIds);
 
   const entries: PlayerGameLogEntry[] = [];
-  for (const player of players) {
+  for (const player of nonEmpty(playerTable.records)) {
     const gameStatsRow = resolveReferenceWithTable(franchise, player, 'GameStats');
     if (!gameStatsRow) continue;
 
@@ -196,13 +216,16 @@ export async function extractGameLog(
 
       const gameRef = resolved.record.getReferenceDataByKey('SeasonGame');
       if (!gameRef) continue;
-      if (!userGames.has(gameRef.rowNumber)) continue; // only the user's own games
+      if (!seasonGames.has(gameRef.rowNumber)) continue; // only this season's games
+
+      const line = mapLineForCategory(category, resolved.record);
+      if (!lineHasStats(category, line)) continue; // drop dressed-but-did-nothing lines
 
       entries.push({
         playerId: Number(player.PresentationId),
         gameId: gameRef.rowNumber,
         category,
-        line: mapLineForCategory(category, resolved.record),
+        line,
         ...identity,
       });
     }

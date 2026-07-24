@@ -168,6 +168,7 @@ function LeagueTypeCell({ game, appearance }: { game: LeagueTeamGame; appearance
 
 function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
   const { appearance } = useTheme();
+  const { openGameModal } = useGameModal();
   const [games, setGames] = useState<LeagueTeamGame[] | null | undefined>(undefined);
 
   useEffect(() => {
@@ -189,7 +190,7 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
       <PageHeader
         eyebrow="Schedule"
         title={`${teamName} schedule.`}
-        description="From the league-wide season snapshot — results and opponents for any team in the country. Kickoff times, stadiums, and game detail are tracked for your own games only."
+        description="From the league-wide season snapshot — results and opponents for any team in the country. Click any game for the full box score."
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
@@ -215,7 +216,11 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
               </thead>
               <tbody>
                 {games.map((g) => (
-                  <tr key={g.gameId} className="border-b border-slate-200/70 bg-white/60 last:border-b-0 dark:border-slate-800/70 dark:bg-transparent">
+                  <tr
+                    key={g.gameId}
+                    onClick={() => openGameModal(dynastyId, g.gameId, seasonId)}
+                    className="cursor-pointer border-b border-slate-200/70 bg-white/60 transition last:border-b-0 hover:brightness-[0.985] dark:border-slate-800/70 dark:bg-transparent"
+                  >
                     <td className="tnum px-4 py-3 text-slate-500 dark:text-slate-400">{g.week}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">

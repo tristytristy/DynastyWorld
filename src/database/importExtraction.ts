@@ -134,7 +134,9 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     saveSnapshot(season.id, 'stats', extraction.stats);
     saveSnapshot(season.id, 'teamStats', extraction.teamStats);
     saveSnapshot(season.id, 'kicking', extraction.kicking);
-    saveSnapshot(season.id, 'gamelog', extraction.gamelog);
+    // Leaguewide box scores — every team's per-game lines — so compressed like
+    // the other leaguewide snapshots (roster/schedule).
+    saveSnapshotCompressed(season.id, 'gamelog', extraction.gamelog);
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
     saveSnapshot(season.id, 'rivalries', extraction.rivalries);
     saveSnapshot(season.id, 'awards', extraction.awards);

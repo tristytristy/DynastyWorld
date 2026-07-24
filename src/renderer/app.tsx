@@ -15,6 +15,7 @@ import { NcaaRecords } from './pages/NcaaRecords';
 import { Roster } from './pages/Roster';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
+import { Scores } from './pages/Scores';
 import { Statistics } from './pages/Statistics';
 import { TeamAwards } from './pages/TeamAwards';
 import { AnnualAwards } from './pages/awards/AnnualAwards';
@@ -90,6 +91,7 @@ export function App() {
 
                     <Route element={<NcaaHubLayout />}>
                       <Route path="ncaa-hub" element={<NcaaHub />} />
+                      <Route path="scores" element={<Scores />} />
                       <Route path="players" element={<NationalPlayers />} />
                       <Route path="standings" element={<Standings />} />
                       <Route path="annual-awards" element={<AnnualAwards />} />
