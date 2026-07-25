@@ -1791,6 +1791,17 @@ Playtest bug report: in a multi-season dynasty the Annual Awards page showed the
 **Verification:** typecheck + lint + prod build clean. Live screenshots (ss-userdata isolated copy): (1) user unfiltered Season-Total; (2) Conference + Per-Game — numbers change with the filter (Points 218→28.3/G ×4g=113 ✓; Total Offense 3,860→457/G ×4=1,828 ✓; Turnover Margin −3→+4; 3rd-down-allowed 29.9%→28.6%), matching the Phase 1 hand-verified conference subset; (3) Player view — collapsible headers + player counts (Passing 2 / Rushing 6 / Receiving 10 / Defense 27), leaders + tables intact; (4) responsive 1024 (breakdown 2-up, filter bar one row); (5) **league team (Alabama)** — full Team Stats over 9 games (269 pts, +10 margin, 3rd-down-allowed 52.0%), season-only rows honestly "—"; (6) **0-match filter** (Conference + vs FCS Southeast) → "No games match this filter"; (7) user-team regression — season-only rows still show real numbers (INT 5, FR 4, RZ-allowed 77.3%). Parity + league-capability + 0-match reachability all confirmed by a live IPC eval.
 
 ---
+## Phase — Bug: high-school recruits shown as transfers (FCS logos) (2026-07-25)
+
+**User report:** high school recruits appearing in the Transfers section, rendered with FCS logos.
+
+**Root cause (probed a real multi-season league snapshot):** EA parks every player who isn't on a real, uniquely-indexed FBS/FCS roster into a generic "FCS" pool at **teamIndex 255** (0xFF = "none"). It's five buckets — FCS West/East/Midwest/Northwest/Southeast — ALL sharing index 255, all `conferenceName: null`, `teamPrestige: 0`, poll ranks 255, empty records — holding ~3,545 players on the test save (a real team has ~85). Incoming recruits live there modeled as **"Freshman"** until they sign (there is no "High School" school-year value). `getTransfers` flags a transfer as *any* player whose team-NAME changed between consecutive league-roster snapshots, with no notion of the pool being unreal — so a recruit signing (`255 → your FBS team`) showed as "transferred in from FCS West" with the generic FCS logo. The reverse (`FBS → 255`, a player dropping off FBS) showed as a bogus "transferred out to FCS West." Because all five buckets collapse to one name in the index→name map, the pool must be identified by **raw index**, not name.
+
+**Fix (`src/database/getTransfers.ts`, read-time — no re-sync):** track each player's previous teamIndex (was only keeping the name) and exclude any move where either side is the pool. Pool set = `{255}` plus, defensively, any null-conference bucket found in either season's teams snapshot. Real FBS↔named-FCS transfers (NDSU, Sac State — real indices, real conferences) are untouched.
+
+**Verification:** replicated old vs new diff on a real league snapshot with two synthetic injections — a recruit signing (`255 → Alabama`) and a genuine transfer (`Troy → San Jose State`). Before fix: 3 detected (recruit-signing + a real `FBS → 255` departure already in the data + the genuine one). After fix: **1 — only the genuine Troy→San Jose State transfer survives**; both pool artifacts removed. typecheck + lint + prod build clean.
+
+---
 ## Template for new entries
 
 ```markdown
