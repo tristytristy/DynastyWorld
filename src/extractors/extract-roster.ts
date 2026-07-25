@@ -10,6 +10,8 @@ export interface RosterPlayerData {
   jerseyNumber: number;
   schoolYear: string;
   overallRating: number;
+  /** Player.CurrentNILCompensation — the player's actual current NIL pay in $K (0 for players with no deal; never negative, unlike the raw BaseNILValue demand field). */
+  nilCompensation: number;
   archetype: string;
   developmentTrait: string;
   heightInches: number;
@@ -29,6 +31,7 @@ const FIELDS = [
   'JerseyNum',
   'SchoolYear',
   'OverallRating',
+  'CurrentNILCompensation',
   'PlayerType',
   'TraitDevelopment',
   'Height',
@@ -69,6 +72,7 @@ export function mapPlayer(r: FranchiseRecord): RosterPlayerData {
     jerseyNumber: Number(r.JerseyNum),
     schoolYear: String(r.SchoolYear),
     overallRating: Number(r.OverallRating),
+    nilCompensation: Number(r.CurrentNILCompensation),
     archetype: formatArchetype(String(r.PlayerType)),
     developmentTrait: formatDevTrait(String(r.TraitDevelopment)),
     heightInches: Number(r.Height),

@@ -131,8 +131,16 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
 
   const roster = getSnapshot<RosterPlayerData[]>(season.id, 'roster') ?? [];
   const rosterById = new Map(roster.map((p) => [p.id, p]));
+  // The `schedule` snapshot is LEAGUE-WIDE (every game in the country), so many
+  // games share each week. Filter to the honored team's OWN games first —
+  // otherwise the week→game map collapses to some arbitrary team's game and the
+  // weekly-honor opponent shows an unrelated school (fixed 2026-07-24).
   const schedule = getSnapshot<GameData[]>(season.id, 'schedule') ?? [];
-  const gameByWeek = new Map(schedule.map((g) => [g.week, g]));
+  const gameByWeek = new Map(
+    schedule
+      .filter((g) => g.homeTeamIndex === season.userTeamId || g.awayTeamIndex === season.userTeamId)
+      .map((g) => [g.week, g]),
+  );
 
   const weeklyHonors: WeeklyHonor[] = awards.weeklyHonors
     .map((a): WeeklyHonor | null => {

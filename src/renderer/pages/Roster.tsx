@@ -21,7 +21,13 @@ import {
 } from '../lib/rosterOrder';
 import type { RosterPlayer } from '../../shared/types';
 
-type SortKey = 'jersey' | 'name' | 'position' | 'class' | 'hometown' | 'height' | 'weight' | 'overall';
+type SortKey = 'jersey' | 'name' | 'position' | 'class' | 'hometown' | 'height' | 'weight' | 'overall' | 'nil';
+
+/** NIL pay ($K) → "$195K" / "$1.2M"; em-dash for no deal. */
+function formatNil(k: number): string {
+  if (!k) return '—';
+  return k >= 1000 ? `$${(k / 1000).toFixed(1)}M` : `$${k}K`;
+}
 type SortDir = 'asc' | 'desc';
 type ViewMode = 'list' | 'gallery';
 
@@ -45,6 +51,7 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   height: 'desc',
   weight: 'desc',
   overall: 'desc',
+  nil: 'desc',
 };
 
 const UNITS: Unit[] = ['Offense', 'Defense', 'Special Teams'];
@@ -84,6 +91,8 @@ function sortPlayers(players: RosterPlayer[], key: SortKey, dir: SortDir): Roste
         return a.weightPounds - b.weightPounds;
       case 'overall':
         return a.overallRating - b.overallRating;
+      case 'nil':
+        return (a.nilCompensation ?? 0) - (b.nilCompensation ?? 0);
     }
   });
   return dir === 'desc' ? sorted.reverse() : sorted;
@@ -113,7 +122,7 @@ function SortableHeader({
   );
 }
 
-function PlayerCard({ player, onOpen, onEdit }: { player: RosterPlayer; onOpen: () => void; onEdit?: (event: MouseEvent) => void }) {
+function PlayerCard({ player, onOpen, onEdit, teamAssetName }: { player: RosterPlayer; onOpen: () => void; onEdit?: (event: MouseEvent) => void; teamAssetName?: string | null }) {
   return (
     <div
       role="button"
@@ -130,7 +139,7 @@ function PlayerCard({ player, onOpen, onEdit }: { player: RosterPlayer; onOpen: 
       <div className="flex w-full items-start justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <PlayerPortrait player={player} size="md" />
+            <PlayerPortrait player={player} size="md" teamAssetName={teamAssetName} />
             <span className="absolute -bottom-2 -right-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--team-primary)] text-sm font-bold text-[var(--team-on-primary)] shadow-[0_18px_40px_-24px_rgba(37,99,235,0.9)]">
               {player.jerseyNumber}
             </span>
@@ -148,9 +157,16 @@ function PlayerCard({ player, onOpen, onEdit }: { player: RosterPlayer; onOpen: 
             </p>
           </div>
         </div>
-        <span className="border border-slate-200/80 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-300">
-          {player.overallRating} OVR
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="border border-slate-200/80 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-300">
+            {player.overallRating} OVR
+          </span>
+          {(player.nilCompensation ?? 0) > 0 && (
+            <span className="proportional-nums text-xs font-semibold text-slate-400 dark:text-slate-500">
+              {formatNil(player.nilCompensation ?? 0)} NIL
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid w-full gap-3 sm:grid-cols-2">
@@ -186,7 +202,7 @@ export function Roster() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [view, setView] = useState<ViewMode>('list');
 
-  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
   const viewedTeamName =
     viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
 
@@ -240,6 +256,12 @@ export function Roster() {
     const total = roster.reduce((sum, player) => sum + player.overallRating, 0);
     return (total / roster.length).toFixed(1);
   }, [roster]);
+
+  // Total team NIL spend — sum of every rostered player's current NIL pay.
+  const nilTotal = useMemo(
+    () => (roster ?? []).reduce((sum, player) => sum + (player.nilCompensation ?? 0), 0),
+    [roster],
+  );
 
   function openPlayer(playerId: number) {
     if (!id) return;
@@ -317,7 +339,7 @@ export function Roster() {
         <StatTile label="Players" value={String(roster.length)} />
         <StatTile label="Filtered" value={String(sorted.length)} />
         <StatTile label="Average OVR" value={averageOverall} />
-        <StatTile label="Units" value={String(new Set(roster.map((player) => unitForPosition(player.position))).size)} />
+        <StatTile label="NIL" value={formatNil(nilTotal)} />
       </div>
 
       <SurfaceCard>
@@ -429,6 +451,7 @@ export function Roster() {
             <PlayerCard
               key={player.id}
               player={player}
+              teamAssetName={viewedTeamName ?? userTeamName}
               onOpen={() => openPlayer(player.id)}
               onEdit={
                 canEditRoster
@@ -460,6 +483,7 @@ export function Roster() {
                   <SortableHeader label="Wt." sortKey="weight" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="Yr." sortKey="class" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="OVR" sortKey="overall" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="NIL" sortKey="nil" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="Hometown" sortKey="hometown" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                 </tr>
               </thead>
@@ -504,6 +528,7 @@ export function Roster() {
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{player.weightPounds}</td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{abbreviateClass(player.schoolYear)}</td>
                     <td className="proportional-nums px-4 py-3 font-semibold text-slate-900 dark:text-white">{player.overallRating}</td>
+                    <td className="proportional-nums px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{formatNil(player.nilCompensation ?? 0)}</td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{player.hometown}, {player.homeState}</td>
                   </tr>
                 ))}

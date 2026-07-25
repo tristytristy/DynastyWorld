@@ -23,6 +23,7 @@ export const IPC = {
     getRoster: 'db:getRoster',
     getPlayerStats: 'db:getPlayerStats',
     getTeamStats: 'db:getTeamStats',
+    getTeamGameStats: 'db:getTeamGameStats',
     getKickingStats: 'db:getKickingStats',
     getGameLog: 'db:getGameLog',
     getGameDetail: 'db:getGameDetail',
@@ -93,5 +94,9 @@ export const IPC = {
     update: 'notes:update',
     remove: 'notes:remove',
     titleSuggestions: 'notes:titleSuggestions',
+  },
+  update: {
+    check: 'update:check',
+    openDownload: 'update:openDownload',
   },
 } as const;

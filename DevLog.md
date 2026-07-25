@@ -1721,6 +1721,76 @@ Playtest bug report: in a multi-season dynasty the Annual Awards page showed the
 **No new dependencies added.**
 
 ---
+## Phase — Game Info rework, helmets & jersey overlays, Schedule premium, native menu → v0.6.0 release (2026-07-24)
+
+**Shipped:**
+- **Helmet + jersey asset libraries.** User-supplied team helmet renders (`public/assets/helmet/{left,right}`) and team jerseys (`public/assets/jersey`) converted to WebP (helmets q90; jerseys q90 + `alphaQuality:100` so the collar edge on skin stays pixel-perfect). Both key 1:1 with the existing 3D-logo token, so `helmetAssetMapping.ts` / `jerseyAssetMapping.ts` DERIVE paths from the shared token (no drift-prone second table), routed through `canonicalKey` so abbreviated schedule names resolve.
+- **Game Information matchup rework** (`GameDetail.tsx`, universal for every league game): threaded each team's real save colors through `GameDetailTeamSide`; transparent helmet-duel header (away helmet faces right on the left, home faces left on the right — verified against the art, the source folder names are the opposite of the facing) with a big/bold hero score, winner tint, and a per-side W/L chip; the bowl/conference/CFP emblem moved to the top-center above the eyebrow and scaled up (square box, since the logos are square 1024² canvases); quarter table recolored per-team; team stats became 9 center-anchored diverging bars (third-down by conversion RATE, possession by seconds, zero-safe); Top Performer became a two-player "Star of the game" duel by game-impact.
+- **Jersey overlays on portraits** — `PlayerPortrait` gained an optional `teamAssetName`; when it maps to a jersey, the jersey is stacked 1:1 in the same 512×512 box (matched object-fit, only over a real portrait, hidden on the initials fallback / on 404). Applied at RENDER time so a transfer just changes the team and the jersey follows. Threaded into Roster, Statistics (leaders + Hot Players + split card), National Players, Player Profile (hero + opposing-team fallback), Game Detail, Awards (AwardsShared), Top Players.
+- **Schedule premium pass** — shared `ScheduleHero` masthead (team helmet facing right + eyebrow + big team name + stat chips + team-color edge) on both the user's own and any league team's schedule; shared `ResultChip` (W/L pill) + per-row W/L accent bars.
+- **Native menu bar restored for DEV ONLY** — `buildAppMenu()` (role-based: Reload/DevTools/zoom/clipboard/quit), gated on `!app.isPackaged`, plus a `before-input-event` F12 / Ctrl+Shift+I DevTools shortcut. Packaged releases stay menu-less. (Root cause of "DevTools stopped working": the earlier `setApplicationMenu(null)` killed the menu accelerators.)
+- **v0.6.0 release — COMPLETE installer.** Bumped 0.5.0→0.6.0. `electron-builder.js` now takes a `SLIM_INSTALLER` env toggle: default = COMPLETE (app + all graphics in one installer, media `asarUnpack`ed so cfbmedia:// serves real files); `SLIM_INSTALLER=1` = the 0.5.0 slim-app + separate image-pack path (kept wired for next update). Jersey folder added to the slim exclude list + `assets-installer.nsi`.
+
+**Scope decisions:**
+- Jersey overlay deliberately NOT wired on Team Awards thumbs, Player Comparison, Transfers, the 32px player-switcher nav thumbnails, or Media (team not cleanly available / tiny / team-less); recruits correctly get none (not on a team). Easy follow-ups.
+- Reverted to the COMPLETE installer for 0.6.0 by user's call (the graphics library just grew, so one download is simpler); the slim two-installer split is intact behind the env flag for the following update.
+
+**Errors hit & fixes:**
+- Helmet facing: the `left`/`right` source folders are named for the side of the helmet shown, which is the OPPOSITE of the facing — verified visually before wiring so the duel faces inward.
+- Hero emblem read small until I measured it: the bowl logos are square 1024² canvases, so a height cap was shrinking them — switched to a square box.
+- `NationalPlayer` has `teamDisplayName` (not `teamName`) — typecheck caught the first pass.
+
+**Verification:**
+- typecheck + lint + prod build clean throughout. Live screenshots (temporary throwaway `gdtest` route for the modal-only GameDetail, removed after) of: Game Info in light+dark (Clemson@LSU, App St@ECU) incl. bowl/conference/CFP emblems; the 2× helmets; the Schedule hero (App St own + Toledo league); jersey overlays on the Alabama roster gallery + the GameDetail Top Performer duel. `app.isPackaged=false` confirmed for the unpackaged (.bat) launch so the dev menu shows.
+- Jersey feasibility proven up front by compositing a jersey over real portraits with `sharp` before committing (and re-checked from the WebP).
+
+**Filesize:** helmets 92.7→24.0 MB; jerseys 12.9→2.1 MB. 0.6.0 is the COMPLETE installer (app + full graphics, ~1 GB) rather than the 103 MB slim app.
+
+---
+## Phase — NIL on the roster + 0.6.1 slim release (app + graphics pack) (2026-07-24)
+
+**Shipped:**
+- **NIL on the roster.** Probed a real save first (data-absence discipline): `Player.CurrentNILCompensation` is the actual per-player NIL pay in $K — 0 for no deal, never negative (verified league-wide, ~92% populated) — the right field, vs the signed `BaseNILValue` "demand" which sums negative. Threaded via the shared `mapPlayer` (so BOTH the user's roster and any viewed league team get it) → `RosterPlayer.nilCompensation?`. Roster page: sortable NIL column right of OVR (list + gallery card badge), and the old UNITS stat tile is now **NIL = total team spend**. `formatNil`: `$XK` / `$X.XM` / "—". Verified end-to-end via a fresh import — user team $335K; Texas State (viewed) $620K + Brad Jackson $175K, matching the raw-save probe to the dollar. NOTE: extraction change → needs a re-sync to populate.
+- **0.6.1 = SLIM release (app + separate graphics pack).** Reverting to the two-installer model after 0.6.0's one-time complete build. `SLIM_INSTALLER=1 npm run package` → ~103 MB app (media excluded, served over cfmedia:// from an external folder); `npm run package:assets` → the one-time Image Data pack (assets-installer.nsi, VERSION 0.6.1, now includes helmet + jersey). This also fixes 0.6.0's slow install (no 27k-file asarUnpack — the slim app carries no media at all).
+
+**Scope decisions:**
+- Chose slim-app + graphics-pack (user's call) over an app-only installer: a slim app upgrading over 0.6.0 removes 0.6.0's *bundled-in-app* media, so without a persistent external pack the app would show the "Locate image data folder" gate. The pack writes the HKCU registry pointer to a persistent folder, so every future app-only update stays tiny and images keep working.
+
+**Verification:**
+- typecheck/lint/build clean. NIL verified against DYNASTY-APPMASTER on a disposable copy + a fresh in-app import (both roster paths). Slim app packaged + confirmed it excludes the media and resolves an external asset folder (config/registry) for the new helmet/jersey assets too.
+
+**Filesize:** 0.6.1 app ~103 MB + Image Data pack (~900 MB, one-time). vs 0.6.0's single ~1 GB complete installer.
+
+---
+## Phase — Weekly-honor opponent fix → 0.6.2 (app-only) (2026-07-24)
+
+**Shipped:**
+- **Bug fix (user-reported): Weekly Honors showed the wrong opponent past week 0.** `getAwards` built its week→game lookup from the LEAGUE-WIDE `schedule` snapshot keyed by week alone, so dozens of games per week collapsed to whichever was last in the array (almost never the honored team's game) — the opponent then resolved to a random school (NDSU's honors showed Notre Dame / Ole Miss / C. Carolina, teams it never played; week 0 matched by luck). Fix: filter the schedule to the honored team's own games (`home/awayTeamIndex === userTeamId`) before building the map. It's a READ-TIME fix — **no re-sync needed**, corrects existing saves on the updated app. Verified against a real import: wk3 Charlotte, wk6 Old Dominion, wk8 James Madison all match the schedule.
+- **0.6.2 = app-only slim rebuild.** Bumped app to 0.6.2; the 0.6.1 graphics pack is unchanged and still valid (assets identical), so only `SLIM_INSTALLER=1 npm run package` was rebuilt (~139 MB). nsi/pack VERSION stays 0.6.1.
+
+**Verification:** typecheck/build clean; weekly-honor opponents verified to match the schedule via a fresh in-app import.
+
+---
+## Phase — Team Hub Statistics: Team/Player split + filter-driven team stats (2026-07-25)
+
+**Shipped (Phases 0–6 of the Statistics refactor — COMPLETE; not yet released):**
+- **The core bug fixed: team stats now respond to the filters.** Previously the game-type/opponent filters only re-scoped the *player* leaderboards; the team summary + breakdown were frozen at static full-season per-game values (`perGame(teamStats.X)`), silently ignoring every filter. Rebuilt the whole Team view on a per-game aggregate.
+- **New data layer.** `getTeamGameStats(dynastyId, teamIndex, seasonId)` (+ IPC/preload/types) returns a per-game team+opponent stat line for any team, derived from the league-wide `schedule` snapshot (`homeTeamStats`/`awayTeamStats`), tagged with gameType (conference/non-conference/bowl) + siteType (home/away/neutral) + rivalry. `renderer/lib/teamStats.ts` is the shared filter+aggregate layer: `filterTeamGames`, `aggregateTeamGames` (ratio-correct — sums conv/att, never averages percentages), `opponentOptions`, `availableGameTypes` (only buckets that actually occur), `ratioPct`, `perGame`, `turnoverMargin`.
+- **Phase 0 proof:** summing per-game team+opponent stat lines EXACTLY reproduces the season `TeamStats` (totalYards 3860=3860, 3rd-down conv 54=54, takeaways 9=9), so nothing is lost vs the old TeamStats-only path — and per-game opponent lines give us a stat we never had.
+- **New capability: 3rd Down % Allowed** (from `opponentStats` per game) — was hardcoded "Not available". Verified 29.9% season / 28.6% conference-only.
+- **Team Stats / Player Stats become an explicit `SegmentedControl` switch** (default Team) in a new sticky filter bar shared by both views (replaces the old "Compare Players" entry point; Compare now lives inside Player Stats). New reusable `ui/SegmentedControl.tsx` + `ui/CollapsibleSection.tsx`.
+- **Season Total vs Per Game** is now a real, correct toggle — labels flip ("Points" ↔ "Points / G"), values switch between summed totals and per-game averages over the *filtered* game count.
+- **Honest labeling.** Stats with no per-game source (red-zone %, kick/punt return yards, INTs, fumble recoveries) come from full-season `teamStats` and are tagged **SEASON** (or **FULL SEASON** when a filter is active) so it's unambiguous they ignore the filter. Empty state when a filter matches 0 played games.
+- Offense/Defense/Special Teams breakdown is now collapsible (Special Teams collapsed by default).
+- **Phase 4 — Player Stats view:** every category section (Passing/Rushing/Receiving/Defense/Kicking/Punting/Returns) is now collapsible via a shared `collapsible`/`defaultOpen` prop on `StatisticsCategorySection` (reusing `CollapsibleSection`), with a live player-count on the header right. Main four default open, Kicking/Punting/Returns collapsed. Compare Players was already relocated to a secondary top-right button (Phase 2). GameDetail's use of the same component is untouched (collapsible defaults off).
+- **Phase 5 — responsive/visual pass.** The app's real floor is `minWidth: 1024` (desktop Electron — no phone widths exist), so verification targets 1024→1400, not mobile. Team breakdown grid → `md:grid-cols-2 lg:grid-cols-3` so at the 1024 floor Offense+Defense sit side-by-side instead of one full-width column with a huge label→value gap. Confirmed the sticky filter bar fits one row at 1024, summary tiles reflow 2-up, and the player tables already scroll inside their own `overflow-x-auto min-w-[720px]` container (no page-level horizontal scroll). Added a hover affordance to `CollapsibleSection` (chevron + eyebrow brighten to the team accent) now that those headers are the primary interactive element in both views. Added a permanent `SCREENSHOT_SIZE="W,H"` override to the main.ts screenshot harness so responsive widths can be captured.
+- **Phase 6 — QA/acceptance matrix + a real gap fixed.** Ran a full acceptance pass via the live IPC path (SCREENSHOT_EVAL against the real DB): **parity confirmed programmatically** — per-game sums exactly equal the season `TeamStats` on all 8 spot-checked fields (totalYards/passYards/rushYards/3rd-down conv+att/takeaways/sacks/penalties). **QA caught a real gap:** the fetch effect early-returned in league mode and never called `getTeamGameStats`, so viewing any non-user team showed an EMPTY Team Stats view — even though the league-wide `schedule` snapshot means `getTeamGameStats` reconstructs any of the 143 teams' per-game stats (verified: Alabama returns 9 played games with real scores). Fixed: league mode now fetches `getTeamGameStats(viewedTeamIndex)`; `TeamStatsView` accepts a null `teamStats` and renders the season-only rows (red-zone %, return yards, INTs, fumble recoveries) as "—" for league teams (those cumulative fields genuinely aren't tracked per non-user team — `getTeamStats` is user-only), while all filterable/per-game stats (incl. the new 3rd-down-allowed) work for every team. Reworded the no-data empty state ("No games have been played yet this season.") since it's no longer only the user's-unsynced case.
+
+**Scope decisions:** Sacks-allowed left out of the breakdown (always 0 per-game — no real source). No sub-1024 responsive work — the window can't get there. Multi-season boundary + never-synced-season cases weren't screenshotted (the ss-userdata copy is single-season 2026): both reduce to the `games===0` empty-state branch (verified via the 0-match and league-season paths) and the standard season-scoped `getSnapshot` resolution every other verified page already uses — no new season-boundary code was introduced.
+
+**Verification:** typecheck + lint + prod build clean. Live screenshots (ss-userdata isolated copy): (1) user unfiltered Season-Total; (2) Conference + Per-Game — numbers change with the filter (Points 218→28.3/G ×4g=113 ✓; Total Offense 3,860→457/G ×4=1,828 ✓; Turnover Margin −3→+4; 3rd-down-allowed 29.9%→28.6%), matching the Phase 1 hand-verified conference subset; (3) Player view — collapsible headers + player counts (Passing 2 / Rushing 6 / Receiving 10 / Defense 27), leaders + tables intact; (4) responsive 1024 (breakdown 2-up, filter bar one row); (5) **league team (Alabama)** — full Team Stats over 9 games (269 pts, +10 margin, 3rd-down-allowed 52.0%), season-only rows honestly "—"; (6) **0-match filter** (Conference + vs FCS Southeast) → "No games match this filter"; (7) user-team regression — season-only rows still show real numbers (INT 5, FR 4, RZ-allowed 77.3%). Parity + league-capability + 0-match reachability all confirmed by a live IPC eval.
+
+---
 ## Template for new entries
 
 ```markdown

@@ -4,8 +4,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { StatTile } from '../components/ui/StatTile';
-import { PageHeader } from '../components/ui/PageHeader';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
@@ -13,7 +11,83 @@ import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
 import { getBowlLogoPath } from '../lib/trophyAssetMapping';
+import { getHelmetPath, DEFAULT_HELMET_PATH } from '../lib/helmetAssetMapping';
 import type { LeagueTeamGame, ScheduleGame, ScheduleOverview } from '../../shared/types';
+
+/**
+ * Premium schedule masthead — the team's own helmet (facing right, into the
+ * page) leading the page identity, with the season's headline numbers as
+ * compact stat chips. Shared by the user's own schedule and any league team's.
+ */
+function ScheduleHero({
+  teamAssetName,
+  teamLabel,
+  description,
+  stats,
+}: {
+  teamAssetName: string;
+  teamLabel: string;
+  description: string;
+  stats: { label: string; value: string }[];
+}) {
+  return (
+    <SurfaceCard surface="raised" className="relative overflow-hidden">
+      {/* Signature left edge in the active team color — ties the masthead to the app chrome. */}
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-[var(--team-primary)]" />
+      <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:gap-7 sm:text-left">
+        <img
+          src={getHelmetPath(teamAssetName, 'left')}
+          alt=""
+          onError={(event) => {
+            const img = event.currentTarget;
+            if (img.dataset.fellBack) return;
+            img.dataset.fellBack = '1';
+            img.src = DEFAULT_HELMET_PATH.left;
+          }}
+          className="-my-4 h-36 w-36 shrink-0 object-contain sm:-my-6 sm:h-52 sm:w-52"
+          draggable={false}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Schedule</p>
+          <h2 className="type-page-title mt-1.5 text-slate-950 dark:text-white">{teamLabel}</h2>
+          <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400 sm:mx-0">{description}</p>
+          {stats.length > 0 && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2.5 sm:justify-start">
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="corner-cut-sm border border-slate-200/80 bg-slate-50/85 px-4 py-2 dark:border-slate-800 dark:bg-white/5"
+                >
+                  <p className="type-eyebrow text-slate-400 dark:text-slate-500">{stat.label}</p>
+                  <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-slate-900 dark:text-white">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </SurfaceCard>
+  );
+}
+
+/** Compact, premium W/L result pill used across both schedule tables. */
+function ResultChip({ result, teamScore, opponentScore }: { result: 'W' | 'L' | 'T' | null; teamScore: number | null; opponentScore: number | null }) {
+  if (result === null) {
+    return <span className="type-eyebrow text-slate-400 dark:text-slate-500">Upcoming</span>;
+  }
+  const tone =
+    result === 'W'
+      ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300'
+      : result === 'L'
+        ? 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300'
+        : 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 font-display text-sm font-bold tabular-nums ${tone}`}>
+      {result}
+      <span className="font-semibold opacity-90">{teamScore}-{opponentScore}</span>
+    </span>
+  );
+}
 
 /** Traditional-bowl logo matching is a normalized-name guess (see trophyAssetMapping.ts) — fail over to the generic mark rather than a broken image icon. */
 function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): void {
@@ -95,14 +169,6 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
       : game.result === 'L'
         ? 'border-red-200/70 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20'
         : 'border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-white/5';
-  const resultText =
-    game.result === null ? 'Upcoming' : `${game.result} ${game.teamScore}-${game.opponentScore}`;
-  const resultColor =
-    game.result === 'W'
-      ? 'text-green-700 dark:text-green-400'
-      : game.result === 'L'
-        ? 'text-red-700 dark:text-red-400'
-        : 'text-slate-400 dark:text-slate-500';
   const runningRecordText = game.runningRecord
     ? `${game.runningRecord.overallWins}-${game.runningRecord.overallLosses} (${game.runningRecord.conferenceWins}-${game.runningRecord.conferenceLosses})`
     : null;
@@ -138,12 +204,12 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
         {game.dayOfWeek} {game.kickoffTime}
       </td>
       <td className="px-5 py-4">
-        <span className={`font-semibold ${resultColor}`}>{resultText}</span>
-        {runningRecordText && (
-          <span className="proportional-nums ml-2 text-sm font-normal text-slate-400 dark:text-slate-500">
-            | {runningRecordText}
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ResultChip result={game.result} teamScore={game.teamScore} opponentScore={game.opponentScore} />
+          {runningRecordText && (
+            <span className="proportional-nums text-sm font-normal text-slate-400 dark:text-slate-500">{runningRecordText}</span>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -187,15 +253,15 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Schedule"
-        title={`${teamName} schedule.`}
+      <ScheduleHero
+        teamAssetName={teamName}
+        teamLabel={teamName}
         description="From the league-wide season snapshot — results and opponents for any team in the country. Click any game for the full box score."
+        stats={[
+          { label: 'Record', value: games && games.length > 0 ? `${wins}-${losses}` : '—' },
+          { label: 'Games', value: String(games?.length ?? 0) },
+        ]}
       />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Record" value={games && games.length > 0 ? `${wins}-${losses}` : '—'} />
-        <StatTile label="Games" value={String(games?.length ?? 0)} />
-      </div>
       <SurfaceCard className="overflow-hidden p-0">
         {games === undefined && <p className="p-6 text-sm text-slate-500 dark:text-slate-400">Loading schedule...</p>}
         {games === null && (
@@ -208,40 +274,45 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Wk</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Opponent</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">Type</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.18em]">Result</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Wk</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opponent</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-[0.2em]">Result</th>
                 </tr>
               </thead>
               <tbody>
-                {games.map((g) => (
-                  <tr
-                    key={g.gameId}
-                    onClick={() => openGameModal(dynastyId, g.gameId, seasonId)}
-                    className="cursor-pointer border-b border-slate-200/70 bg-white/60 transition last:border-b-0 hover:brightness-[0.985] dark:border-slate-800/70 dark:bg-transparent"
-                  >
-                    <td className="tnum px-4 py-3 text-slate-500 dark:text-slate-400">{g.week}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">
-                        <TeamLogo team={{ assetName: g.opponent, label: g.opponent }} size="sm" />
-                        <span>
-                          {g.isHome ? 'vs' : '@'} {g.opponent}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400"><LeagueTypeCell game={g} appearance={appearance} /></td>
-                    <td className="tnum px-4 py-3 text-right">
-                      {g.result === null ? (
-                        <span className="text-slate-400 dark:text-slate-500">Upcoming</span>
-                      ) : (
-                        <span className={`font-semibold ${g.result === 'W' ? 'text-green-700 dark:text-green-400' : g.result === 'L' ? 'text-red-700 dark:text-red-400' : 'text-slate-500'}`}>
-                          {g.result} {g.teamScore}-{g.opponentScore}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {games.map((g) => {
+                  const tint =
+                    g.result === 'W'
+                      ? 'bg-green-50/60 dark:bg-green-950/15'
+                      : g.result === 'L'
+                        ? 'bg-red-50/60 dark:bg-red-950/15'
+                        : 'bg-white/50 dark:bg-transparent';
+                  const accent = g.result === 'W' ? '#16a34a' : g.result === 'L' ? '#dc2626' : 'transparent';
+                  return (
+                    <tr
+                      key={g.gameId}
+                      onClick={() => openGameModal(dynastyId, g.gameId, seasonId)}
+                      className={`group cursor-pointer border-b border-slate-200/60 transition last:border-b-0 hover:brightness-[0.98] dark:border-white/5 ${tint}`}
+                    >
+                      <td className="tnum px-5 py-3.5 font-medium text-slate-500 dark:text-slate-400" style={{ boxShadow: `inset 3px 0 0 ${accent}` }}>{g.week}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">
+                          <TeamLogo team={{ assetName: g.opponent, label: g.opponent }} size="sm" />
+                          <span>
+                            <span className="text-slate-400 dark:text-slate-500">{g.isHome ? 'vs' : '@'}</span> {g.opponent}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400"><LeagueTypeCell game={g} appearance={appearance} /></td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end">
+                          <ResultChip result={g.result} teamScore={g.teamScore} opponentScore={g.opponentScore} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -256,7 +327,7 @@ export function Schedule() {
   const { openGameModal } = useGameModal();
   const { selectedSeasonId: seasonId } = useSelectedSeason();
   const [overview, setOverview] = useState<ScheduleOverview | null | undefined>(undefined);
-  const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
 
   useEffect(() => {
     if (!id) return;
@@ -297,21 +368,17 @@ export function Schedule() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Schedule"
-        title="Weekly flow, kickoff context, and results in one place."
+      <ScheduleHero
+        teamAssetName={userTeamName ?? 'Team'}
+        teamLabel={userTeamName ?? 'Schedule'}
         description="Review the full season board, move into game detail from any row, and keep key context visible while navigating between years."
+        stats={[
+          { label: 'Record', value: `${overview.record.wins}-${overview.record.losses}` },
+          { label: 'Conference', value: `${overview.conferenceRecord.wins}-${overview.conferenceRecord.losses}` },
+          { label: 'Current streak', value: streakLabel },
+          { label: 'Bowl eligible', value: overview.bowlEligible ? 'Yes' : 'Not yet' },
+        ]}
       />
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Record" value={`${overview.record.wins}-${overview.record.losses}`} />
-        <StatTile
-          label="Conference"
-          value={`${overview.conferenceRecord.wins}-${overview.conferenceRecord.losses}`}
-        />
-        <StatTile label="Current streak" value={streakLabel} />
-        <StatTile label="Bowl eligible" value={overview.bowlEligible ? 'Yes' : 'Not yet'} />
-      </div>
 
       <SurfaceCard className="overflow-hidden p-0">
         <div className="overflow-x-auto">

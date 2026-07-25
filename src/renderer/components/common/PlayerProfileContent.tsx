@@ -967,7 +967,7 @@ export function PlayerProfileContent({
     return (
       <div className="space-y-6">
         <SurfaceCard className="flex items-center gap-4">
-          <PlayerPortrait player={fallbackPlayer} size="lg" />
+          <PlayerPortrait player={fallbackPlayer} size="lg" teamAssetName={fallback.teamDisplayName} />
           <div className="min-w-0">
             <h2 className="truncate font-display text-section-title font-semibold text-slate-950 dark:text-white">{fallback.name}</h2>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
@@ -1032,7 +1032,7 @@ export function PlayerProfileContent({
       >
         <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center md:p-6">
           <div className="flex shrink-0 justify-center sm:justify-start">
-            <PlayerPortrait player={player} large />
+            <PlayerPortrait player={player} large teamAssetName={heroTeamName} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">

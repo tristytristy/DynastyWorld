@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
-import type { SyntheticEvent } from 'react';
-import { ConferenceMark } from '../components/common/ConferenceMark';
+import type { CSSProperties, SyntheticEvent } from 'react';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { StatisticsCategorySection, type ColumnDef, type LeaderCardRow, type LeaderMetric } from '../components/common/StatisticsCategorySection';
 import type { StatTableRow } from '../components/common/StatisticsTable';
 import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
-import { getBowlLogoPath } from '../lib/trophyAssetMapping';
+import { getBowlLogoPath, getConferenceLogoPath } from '../lib/trophyAssetMapping';
+import { getHelmetPath, DEFAULT_HELMET_PATH, type HelmetSide } from '../lib/helmetAssetMapping';
+import { buildTeamColorVars, type TeamColorVars } from '../lib/teamTheme';
 import { gameImpactScore } from '../../shared/gameImpactScore';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
+import { usePlayerModal } from '../data/PlayerModalProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
 import type {
   DefensiveGameLine,
   GameDetailData,
+  GameDetailTeamSide,
   GameLogEntry,
   MediaItemResolved,
   OffensiveGameLine,
@@ -29,47 +33,122 @@ function formatPossession(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-function StatCompareRow({
-  label,
-  team,
-  opponent,
-  format = (value: number) => String(value),
-}: {
-  label: string;
-  team: number;
-  opponent: number;
-  format?: (value: number) => string;
-}) {
+/** The theme-appropriate, contrast-safe text form of a team's primary color. */
+function teamTextColor(colors: TeamColorVars, appearance: 'light' | 'dark'): string {
+  return appearance === 'dark' ? colors['--team-text-dark'] : colors['--team-text-light'];
+}
+
+/**
+ * A team's helmet, loaded from the external image pack. `side` is the physical
+ * screen position (the art in each folder faces INWARD): 'left' art faces right
+ * so it belongs on the left, 'right' art faces left so it belongs on the right.
+ * Falls back once to the generic Default helmet if a team's file 404s.
+ */
+function HelmetImg({ teamName, side, className }: { teamName: string; side: HelmetSide; className?: string }) {
   return (
-    <tr className="border-b border-white/60 last:border-b-0 dark:border-white/5">
-      <td className="proportional-nums px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">{format(team)}</td>
-      <td className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">{label}</td>
-      <td className="proportional-nums px-4 py-3 text-left font-semibold text-slate-900 dark:text-white">{format(opponent)}</td>
-    </tr>
+    <img
+      src={getHelmetPath(teamName, side)}
+      alt=""
+      onError={(event) => {
+        const img = event.currentTarget;
+        if (img.dataset.fellBack) return;
+        img.dataset.fellBack = '1';
+        img.src = DEFAULT_HELMET_PATH[side];
+      }}
+      className={className}
+      draggable={false}
+    />
   );
 }
 
-function TeamStatsCompare({ team, opponent }: { team: TeamStatLine; opponent: TeamStatLine }) {
+/** Center-anchored diverging bar: left/right fills meet at the leader's share, with a 50% reference tick. */
+function StatBar({
+  label,
+  leftShare,
+  leftDisplay,
+  rightDisplay,
+  leftColor,
+  rightColor,
+}: {
+  label: string;
+  leftShare: number;
+  leftDisplay: string;
+  rightDisplay: string;
+  leftColor: string;
+  rightColor: string;
+}) {
+  const pct = Math.round(Math.max(0, Math.min(1, leftShare)) * 100);
   return (
-    <table className="w-full text-sm">
-      <tbody>
-        <StatCompareRow label="Total Yards" team={team.totalYards} opponent={opponent.totalYards} />
-        <StatCompareRow label="Pass Yards" team={team.passYards} opponent={opponent.passYards} />
-        <StatCompareRow label="Rush Yards" team={team.rushYards} opponent={opponent.rushYards} />
-        <StatCompareRow label="First Downs" team={team.firstDowns} opponent={opponent.firstDowns} />
-        <StatCompareRow label="Third Down" team={team.thirdDownConversions} opponent={opponent.thirdDownConversions} />
-        <StatCompareRow label="Turnovers" team={team.turnovers} opponent={opponent.turnovers} />
-        <StatCompareRow label="Sacks" team={team.sacks} opponent={opponent.sacks} />
-        <StatCompareRow label="Penalty Yards" team={team.penaltyYards} opponent={opponent.penaltyYards} />
-        <StatCompareRow
-          label="Possession"
-          team={team.possessionTimeSeconds}
-          opponent={opponent.possessionTimeSeconds}
-          format={formatPossession}
-        />
-      </tbody>
-    </table>
+    <div className="px-4 py-3">
+      <p className="type-eyebrow text-center text-slate-400 dark:text-slate-500">{label}</p>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="proportional-nums w-16 shrink-0 text-right text-sm font-semibold text-slate-900 dark:text-white">{leftDisplay}</span>
+        <div className="relative h-2.5 flex-1 overflow-hidden bg-slate-200/80 dark:bg-white/10">
+          <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, backgroundColor: leftColor }} />
+          <div className="absolute inset-y-0 right-0" style={{ width: `${100 - pct}%`, backgroundColor: rightColor }} />
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/80 dark:bg-black/50" />
+        </div>
+        <span className="proportional-nums w-16 shrink-0 text-left text-sm font-semibold text-slate-900 dark:text-white">{rightDisplay}</span>
+      </div>
+    </div>
   );
+}
+
+/** Proportional share of a total; even split (no lean) when neither side has any. */
+function share(left: number, right: number): number {
+  const total = left + right;
+  return total > 0 ? left / total : 0.5;
+}
+
+interface PerformerStat {
+  value: string;
+  label: string;
+}
+
+/**
+ * The two headline stats for a top-performer card, drawn from the same
+ * per-game lines the box-score tables use — a passer shows Pass Yds + Pass TD,
+ * a rusher Car + Rush Yds, a receiver Rec + Rec Yds, a defender Tackles + the
+ * biggest impact play they made.
+ */
+function performerStats(entry: GameLogEntry): PerformerStat[] {
+  if (entry.category === 'offense') {
+    const l = entry.line as OffensiveGameLine;
+    // Dominant role by yardage — a two-way stat line still gets its best story.
+    const role = Math.max(l.passYards, l.rushYards, l.receivingYards);
+    if (role === l.passYards && l.passAttempts > 0) {
+      return [
+        { value: l.passYards.toLocaleString(), label: 'Pass Yds' },
+        { value: String(l.passTDs), label: 'Pass TD' },
+      ];
+    }
+    if (role === l.rushYards && l.rushAttempts > 0) {
+      return [
+        { value: String(l.rushAttempts), label: 'Car' },
+        { value: l.rushYards.toLocaleString(), label: 'Rush Yds' },
+      ];
+    }
+    return [
+      { value: String(l.receptions), label: 'Rec' },
+      { value: l.receivingYards.toLocaleString(), label: 'Rec Yds' },
+    ];
+  }
+  const d = entry.line as DefensiveGameLine;
+  const tackles: PerformerStat = { value: String(d.tackles + d.assistedTackles), label: 'Tackles' };
+  // Second callout: the single most impactful play, in priority order.
+  const bigPlay: PerformerStat =
+    d.sacks > 0
+      ? { value: String(d.sacks), label: 'Sacks' }
+      : d.interceptions > 0
+        ? { value: String(d.interceptions), label: 'Int' }
+        : d.forcedFumbles > 0
+          ? { value: String(d.forcedFumbles), label: 'FF' }
+          : d.tacklesForLoss > 0
+            ? { value: String(d.tacklesForLoss), label: 'TFL' }
+            : d.passDeflections > 0
+              ? { value: String(d.passDeflections), label: 'PD' }
+              : { value: String(d.assistedTackles), label: 'Ast' };
+  return [tackles, bigPlay];
 }
 
 /** Category-specific "did this player actually do anything" check — a QB with zero attempts, a back with zero touches, or a defender with an all-zero line shouldn't clutter the box score just because a GameLogEntry row exists for them. */
@@ -89,23 +168,6 @@ function hasMeaningfulStats(entry: GameLogEntry): boolean {
     line.fumbleRecoveries > 0 ||
     line.passDeflections > 0
   );
-}
-
-function offenseSummary(line: OffensiveGameLine): string {
-  const parts: string[] = [];
-  if (line.passAttempts > 0) parts.push(`${line.passCompletions}/${line.passAttempts}, ${line.passYards} yds, ${line.passTDs} TD`);
-  if (line.rushAttempts > 0) parts.push(`${line.rushAttempts} car, ${line.rushYards} yds, ${line.rushTDs} TD`);
-  if (line.receptions > 0) parts.push(`${line.receptions} rec, ${line.receivingYards} yds, ${line.receivingTDs} TD`);
-  return parts.join(' | ') || '-';
-}
-
-function defenseSummary(line: DefensiveGameLine): string {
-  const parts: string[] = [`${line.tackles + line.assistedTackles} tkl`];
-  if (line.sacks > 0) parts.push(`${line.sacks} sck`);
-  if (line.interceptions > 0) parts.push(`${line.interceptions} INT`);
-  if (line.passDeflections > 0) parts.push(`${line.passDeflections} PD`);
-  if (line.forcedFumbles > 0) parts.push(`${line.forcedFumbles} FF`);
-  return parts.join(' | ');
 }
 
 /**
@@ -211,6 +273,70 @@ function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): voi
   event.currentTarget.src = fallback;
 }
 
+/**
+ * "Star of the game" card — one per team, independent of the box-score toggle
+ * below, so it stays paired with the helmet-duel header. Cutout portrait
+ * flanked by two headline stats, name/jersey in a team-color bar; the whole
+ * card opens the player modal (same click-through as every player surface).
+ */
+function PerformerCard({
+  entry,
+  colors,
+  teamName,
+  roster,
+  dynastyId,
+  seasonId,
+  appearance,
+}: {
+  entry: GameLogEntry;
+  colors: TeamColorVars;
+  teamName: string;
+  roster: RosterPlayer[];
+  dynastyId: string;
+  seasonId: number | undefined;
+  appearance: 'light' | 'dark';
+}) {
+  const { openPlayerModal } = usePlayerModal();
+  const player = roster.find((p) => p.id === entry.playerId);
+  const firstName = player?.firstName ?? entry.firstName ?? '';
+  const lastName = player?.lastName ?? entry.lastName ?? '';
+  const position = player?.position ?? entry.position ?? '';
+  const jerseyNumber = player?.jerseyNumber ?? entry.jerseyNumber ?? 0;
+  const portraitAssetName = player?.portraitAssetName ?? entry.portraitAssetName ?? null;
+  const stats = performerStats(entry);
+  const teamColor = colors['--team-primary'];
+  const labelColor = teamTextColor(colors, appearance);
+
+  const Callout = ({ stat, align }: { stat: PerformerStat; align: 'left' | 'right' }) => (
+    <div className={`flex flex-1 flex-col ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
+      <span className="type-stat-md text-slate-950 dark:text-white">{stat.value}</span>
+      <span className="type-eyebrow" style={{ color: labelColor }}>{stat.label}</span>
+      <span className="mt-1.5 h-px w-8 bg-slate-300 dark:bg-white/20" />
+    </div>
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={() => openPlayerModal(dynastyId, entry.playerId, seasonId, undefined, undefined, entry.teamIndex)}
+      className="corner-cut group flex w-full flex-col border border-slate-200/80 bg-slate-50/85 p-4 text-left transition hover:border-[color:var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
+      style={{ '--team-primary': teamColor } as unknown as CSSProperties}
+    >
+      <p className="type-eyebrow text-slate-400 dark:text-slate-500">{teamName} — Star of the game</p>
+      <div className="mt-2 flex items-center justify-center gap-2">
+        <Callout stat={stats[0]} align="right" />
+        <PlayerPortrait player={{ firstName, lastName, portraitAssetName }} large className="max-h-[15rem]" teamAssetName={teamName} />
+        <Callout stat={stats[1]} align="left" />
+      </div>
+      <div className="mt-3 flex items-center gap-2 px-3 py-2" style={{ backgroundColor: teamColor, color: colors['--team-on-primary'] }}>
+        <span className="type-stat-sm">#{jerseyNumber}</span>
+        <span className="truncate font-semibold">{firstName} {lastName}</span>
+        {position && <span className="ml-auto text-sm font-medium opacity-80">{position}</span>}
+      </div>
+    </button>
+  );
+}
+
 export function GameDetailContent({
   dynastyId,
   gameId,
@@ -251,18 +377,32 @@ export function GameDetailContent({
     return <p className="text-slate-500 dark:text-slate-400">Game not found.</p>;
   }
 
-  // Perspective: frame from the user's side if they're in this game, otherwise
-  // treat the away team as "primary" (neutral home/away for a non-user game).
-  const userSide = detail.home.isUser ? detail.home : detail.away.isUser ? detail.away : null;
-  const primary = userSide ?? detail.away;
-  const secondary = primary === detail.home ? detail.away : detail.home;
-  const primaryIsHome = primary === detail.home;
+  // Neutral home/away framing drives the whole matchup view (helmets, stats,
+  // stars) so it's identical for user and non-user games. Perspective (which
+  // side is "primary") only decides the default box-score toggle + W/L chip.
+  const away = detail.away;
+  const home = detail.home;
+  const userSide = home.isUser ? home : away.isUser ? away : null;
+  const primary = userSide ?? away;
+  const secondary = primary === home ? away : home;
+  const primaryIsHome = primary === home;
   const played = detail.played;
   const result: ScheduleGame['result'] =
     userSide && played ? (primary.score > secondary.score ? 'W' : primary.score < secondary.score ? 'L' : 'T') : null;
 
-  // Adapt the neutral GameDetailData to the ScheduleGame shape the render + its
-  // formatting helpers already consume — so one render path serves every game.
+  // Per-side, contrast-safe color sets (scoped to this page — the global
+  // --team-primary / Team-Mode theming is untouched). Falls back to the
+  // brand blue for placeholder/FCS teams with no save color.
+  const awayColors = buildTeamColorVars(away.primaryColor, away.secondaryColor);
+  const homeColors = buildTeamColorVars(home.primaryColor, home.secondaryColor);
+  const awayColor = awayColors['--team-primary'];
+  const homeColor = homeColors['--team-primary'];
+  const awayWon = played && away.score > home.score;
+  const homeWon = played && home.score > away.score;
+  const winnerColor = homeWon ? homeColor : awayWon ? awayColor : null;
+
+  // Adapt the neutral GameDetailData to the ScheduleGame shape the meta-line
+  // formatting helpers already consume.
   const game: ScheduleGame = {
     gameId: detail.gameId,
     week: detail.week,
@@ -314,84 +454,155 @@ export function GameDetailContent({
   const passingRows = offenseRows.filter((row) => row.line.passAttempts > 0);
   const rushingRows = offenseRows.filter((row) => row.line.rushAttempts > 0);
   const receivingRows = offenseRows.filter((row) => row.line.receptions > 0);
-  const topPerformer = entries.length
-    ? entries.reduce((best, entry) => (gameImpactScore(entry) > gameImpactScore(best) ? entry : best))
-    : null;
-  const topPerformerPlayer = topPerformer ? (roster ?? []).find((player) => player.id === topPerformer.playerId) : null;
 
-  const resultColor =
-    game.result === 'W'
-      ? 'text-green-700 dark:text-green-400'
-      : game.result === 'L'
-        ? 'text-red-700 dark:text-red-400'
-        : 'text-slate-400 dark:text-slate-500';
+  // Top performer per team (by game-impact), independent of the box-score
+  // toggle. Older seasons carry no per-entry teamIndex (all user-team) — those
+  // degrade to a single overall card.
+  const meaningfulAll = allEntries.filter(hasMeaningfulStats);
+  const hasTeamIndex = allEntries.some((e) => e.teamIndex !== undefined);
+  const topForTeam = (teamIndex: number): GameLogEntry | null => {
+    const pool = meaningfulAll.filter((e) => e.teamIndex === teamIndex);
+    return pool.length ? pool.reduce((best, e) => (gameImpactScore(e) > gameImpactScore(best) ? e : best)) : null;
+  };
+  const awayTop = hasTeamIndex ? topForTeam(away.teamIndex) : null;
+  const homeTop = hasTeamIndex ? topForTeam(home.teamIndex) : null;
+  const overallTop = meaningfulAll.length
+    ? meaningfulAll.reduce((best, e) => (gameImpactScore(e) > gameImpactScore(best) ? e : best))
+    : null;
+
+  // Away-vs-home team-stat bars (both teams' lines exist once played).
+  const statBars =
+    played && away.stats && home.stats
+      ? (() => {
+          const a = away.stats as TeamStatLine;
+          const h = home.stats as TeamStatLine;
+          const num = (v: number) => v.toLocaleString();
+          const aThird = a.thirdDownAttempts > 0 ? a.thirdDownConversions / a.thirdDownAttempts : 0;
+          const hThird = h.thirdDownAttempts > 0 ? h.thirdDownConversions / h.thirdDownAttempts : 0;
+          return [
+            { label: 'Total Yards', leftShare: share(a.totalYards, h.totalYards), leftDisplay: num(a.totalYards), rightDisplay: num(h.totalYards) },
+            { label: 'Pass Yards', leftShare: share(a.passYards, h.passYards), leftDisplay: num(a.passYards), rightDisplay: num(h.passYards) },
+            { label: 'Rush Yards', leftShare: share(a.rushYards, h.rushYards), leftDisplay: num(a.rushYards), rightDisplay: num(h.rushYards) },
+            { label: 'First Downs', leftShare: share(a.firstDowns, h.firstDowns), leftDisplay: num(a.firstDowns), rightDisplay: num(h.firstDowns) },
+            {
+              label: 'Third Down',
+              leftShare: share(aThird, hThird),
+              leftDisplay: `${a.thirdDownConversions}/${a.thirdDownAttempts}`,
+              rightDisplay: `${h.thirdDownConversions}/${h.thirdDownAttempts}`,
+            },
+            { label: 'Turnovers', leftShare: share(a.turnovers, h.turnovers), leftDisplay: num(a.turnovers), rightDisplay: num(h.turnovers) },
+            { label: 'Sacks', leftShare: share(a.sacks, h.sacks), leftDisplay: num(a.sacks), rightDisplay: num(h.sacks) },
+            { label: 'Penalty Yards', leftShare: share(a.penaltyYards, h.penaltyYards), leftDisplay: num(a.penaltyYards), rightDisplay: num(h.penaltyYards) },
+            {
+              label: 'Possession',
+              leftShare: share(a.possessionTimeSeconds, h.possessionTimeSeconds),
+              leftDisplay: formatPossession(a.possessionTimeSeconds),
+              rightDisplay: formatPossession(h.possessionTimeSeconds),
+            },
+          ];
+        })()
+      : null;
+
+  // Hero game emblem — the conference mark for a conference game, else the
+  // bowl / playoff / CFP logo — sized to roughly 80% of the eyebrow's width and
+  // centered above it. Null for a plain non-conference game (no emblem exists).
+  const conferenceLogoSrc =
+    game.gameType === 'conference' && game.conferenceName
+      ? getConferenceLogoPath(game.conferenceName, appearance)
+      : null;
+  const gameTypeImgSrc = getGameTypeImagePath(game, appearance);
+  const gameLogo = conferenceLogoSrc ? (
+    <img src={conferenceLogoSrc} alt="" className="h-32 w-32 object-contain sm:h-44 sm:w-44" draggable={false} />
+  ) : gameTypeImgSrc ? (
+    <img
+      src={gameTypeImgSrc ?? undefined}
+      alt=""
+      onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
+      className="h-32 w-32 object-contain sm:h-44 sm:w-44"
+      draggable={false}
+    />
+  ) : null;
+
+  const metaLine = (
+    <p className="text-sm text-slate-500 dark:text-slate-400">
+      {[
+        gameTypeLabel(game),
+        (() => {
+          const location = getLocationDisplay(game, getStadium);
+          if (location.stadium) return `${location.stadium}, ${location.cityState}`;
+          return game.siteType === 'neutral' ? location.badge : null;
+        })(),
+      ]
+        .filter(Boolean)
+        .join(' | ')}
+    </p>
+  );
+
+  // A team flank in the header: a big helmet over the team name + rank. The
+  // helmet box is oversized for impact; negative vertical margins pull the box
+  // back in so it doesn't add height (the overlap region is only the helmet
+  // PNG's own transparent padding, so no art is clipped or collides).
+  const TeamFlank = ({ team, sideName, teamColor }: { team: GameDetailTeamSide; sideName: HelmetSide; teamColor: string }) => (
+    <div className="flex w-52 shrink-0 flex-col items-center sm:w-80">
+      <HelmetImg teamName={team.name} side={sideName} className="-my-6 h-52 w-52 object-contain sm:-my-10 sm:h-80 sm:w-80" />
+      <div className="flex flex-col items-center gap-1 text-center">
+        <span className="h-1 w-12" style={{ backgroundColor: teamColor }} />
+        <p className="font-display text-base font-bold leading-tight text-slate-950 dark:text-white sm:text-lg">{team.name}</p>
+        {team.currentRank && team.currentRank <= 25 && (
+          <span className="type-eyebrow text-slate-400 dark:text-slate-500">#{team.currentRank}</span>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 dark:border-slate-800 dark:bg-white/5">
-              <TeamLogo team={{ assetName: game.opponent, label: game.opponent }} size="lg" />
-            </div>
-            <div>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game detail</p>
-              <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-                {game.isHome ? 'vs' : '@'} {game.opponent}
-              </h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Week {game.week} | {game.date} | {game.dayOfWeek} {game.kickoffTime}
-              </p>
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                {game.gameType === 'conference' && game.conferenceName ? (
-                  <ConferenceMark conferenceName={game.conferenceName} background={appearance} context="inline" alt="" />
-                ) : (
-                  getGameTypeImagePath(game, appearance) && (
-                    <img
-                      src={getGameTypeImagePath(game, appearance) ?? undefined}
-                      alt=""
-                      onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
-                      className="h-5 w-5 shrink-0 object-contain"
-                      draggable={false}
-                    />
-                  )
-                )}
-                <span>
-                  {[
-                    gameTypeLabel(game),
-                    (() => {
-                      const location = getLocationDisplay(game, getStadium);
-                      if (location.stadium) return `${location.stadium}, ${location.cityState}`;
-                      return game.siteType === 'neutral' ? location.badge : null;
-                    })(),
-                    game.opponentCurrentRank && game.opponentCurrentRank <= 25
-                      ? `#${game.opponentCurrentRank}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' | ')}
-                </span>
-              </p>
-            </div>
-          </div>
+      {/* Header — helmet duel + hero score. Deliberately NOT a SurfaceCard:
+          transparent ground so the helmets + score are the whole statement. */}
+      <div className="relative flex items-center justify-between gap-2 overflow-visible sm:gap-4">
+        {winnerColor && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `radial-gradient(120% 90% at ${homeWon ? '100%' : '0%'} 50%, color-mix(in srgb, ${winnerColor} 14%, transparent), transparent 60%)`,
+            }}
+          />
+        )}
+        <TeamFlank team={away} sideName="left" teamColor={awayColor} />
 
-          <div className="text-right">
-            {game.result !== null ? (
-              <p className={`text-4xl font-semibold tracking-tight ${resultColor}`}>
-                {game.result} {game.teamScore}-{game.opponentScore}
-              </p>
-            ) : played ? (
-              <p className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                {primary.score}&ndash;{secondary.score}
-              </p>
-            ) : (
-              <p className="text-2xl font-semibold tracking-tight text-slate-400 dark:text-slate-500">Upcoming</p>
-            )}
-          </div>
+        <div className="relative flex min-w-0 flex-1 flex-col items-center gap-2">
+          {gameLogo && <div className="mb-0.5 flex justify-center">{gameLogo}</div>}
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Week {game.week}</p>
+          {played ? (
+            <div className="flex items-baseline justify-center gap-3 sm:gap-5">
+              <span
+                className="font-display text-6xl font-bold leading-none tracking-tight tabular-nums sm:text-7xl"
+                style={{ color: teamTextColor(awayColors, appearance), opacity: awayWon || away.score === home.score ? 1 : 0.5 }}
+              >
+                {away.score}
+              </span>
+              <span className="text-3xl font-light text-slate-300 dark:text-slate-600 sm:text-4xl">–</span>
+              <span
+                className="font-display text-6xl font-bold leading-none tracking-tight tabular-nums sm:text-7xl"
+                style={{ color: teamTextColor(homeColors, appearance), opacity: homeWon || away.score === home.score ? 1 : 0.5 }}
+              >
+                {home.score}
+              </span>
+            </div>
+          ) : (
+            <p className="font-display text-5xl font-bold tracking-tight text-slate-300 dark:text-slate-600">VS</p>
+          )}
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {game.date} · {game.dayOfWeek} {game.kickoffTime}
+          </p>
+          {metaLine}
         </div>
-      </SurfaceCard>
 
-      {!played || !game.teamStats || !game.opponentStats ? (
+        <TeamFlank team={home} sideName="right" teamColor={homeColor} />
+      </div>
+
+      {!played || !statBars ? (
         <SurfaceCard>
           <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
             This game has not been played yet. Box score and stat surfaces will populate after the result is imported.
@@ -399,13 +610,14 @@ export function GameDetailContent({
         </SurfaceCard>
       ) : (
         <>
+          {/* Quarter by quarter — away/home rows, each keyed with its team color */}
           <SurfaceCard className="overflow-hidden p-0">
             <div className="border-b border-slate-200/80 px-5 py-4 dark:border-white/5">
               <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Quarter by quarter</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-sm">
-                <thead className="bg-[var(--team-primary)] text-[var(--team-on-primary)]">
+                <thead className="bg-slate-900 text-white dark:bg-white/10">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.22em]"></th>
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">Q1</th>
@@ -416,38 +628,56 @@ export function GameDetailContent({
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b border-white/60 bg-slate-50/80 dark:border-white/5 dark:bg-white/5">
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{game.teamName}</td>
-                    {game.teamQuarterScores.map((score, index) => (
-                      <td key={index} className="proportional-nums px-4 py-3 text-center text-slate-900 dark:text-white">{score}</td>
-                    ))}
-                    <td className="proportional-nums px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{game.teamScore}</td>
-                  </tr>
-                  <tr className="bg-slate-50/80 dark:bg-white/5">
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{game.opponent}</td>
-                    {game.opponentQuarterScores.map((score, index) => (
-                      <td key={index} className="proportional-nums px-4 py-3 text-center text-slate-900 dark:text-white">{score}</td>
-                    ))}
-                    <td className="proportional-nums px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{game.opponentScore}</td>
-                  </tr>
+                  {[
+                    { row: away, color: awayColor } as const,
+                    { row: home, color: homeColor } as const,
+                  ].map((entry, rowIndex) => (
+                    <tr key={entry.row.teamIndex} className={`bg-slate-50/80 dark:bg-white/5 ${rowIndex === 0 ? 'border-b border-white/60 dark:border-white/5' : ''}`}>
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white" style={{ borderLeft: `3px solid ${entry.color}` }}>{entry.row.name}</td>
+                      {entry.row.quarterScores.map((score, index) => (
+                        <td key={index} className="proportional-nums px-4 py-3 text-center text-slate-900 dark:text-white">{score}</td>
+                      ))}
+                      <td className="proportional-nums px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{entry.row.score}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </SurfaceCard>
 
+          {/* Team stats — center-scale diverging bars */}
           <SurfaceCard>
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Team stats</h3>
-              <div className="flex gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                <span>{game.teamName}</span>
-                <span>{game.opponent}</span>
+              <div className="flex items-center gap-4 type-eyebrow text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: awayColor }} />{away.name}</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: homeColor }} />{home.name}</span>
               </div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/85 dark:border-slate-800 dark:bg-white/5">
-              <TeamStatsCompare team={game.teamStats} opponent={game.opponentStats} />
+            <div className="divide-y divide-slate-200/70 border border-slate-200/80 bg-slate-50/60 dark:divide-white/5 dark:border-slate-800 dark:bg-white/5">
+              {statBars.map((bar) => (
+                <StatBar key={bar.label} {...bar} leftColor={awayColor} rightColor={homeColor} />
+              ))}
             </div>
           </SurfaceCard>
 
+          {/* Top performers — one per team (or a single card on legacy seasons) */}
+          {awayTop || homeTop ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {awayTop && (
+                <PerformerCard entry={awayTop} colors={awayColors} teamName={away.name} roster={roster ?? []} dynastyId={id} seasonId={seasonId} appearance={appearance} />
+              )}
+              {homeTop && (
+                <PerformerCard entry={homeTop} colors={homeColors} teamName={home.name} roster={roster ?? []} dynastyId={id} seasonId={seasonId} appearance={appearance} />
+              )}
+            </div>
+          ) : overallTop ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <PerformerCard entry={overallTop} colors={primary === home ? homeColors : awayColors} teamName={primary.name} roster={roster ?? []} dynastyId={id} seasonId={seasonId} appearance={appearance} />
+            </div>
+          ) : null}
+
+          {/* Player box score — per-side toggle */}
           {hasBothSides && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 type-eyebrow text-slate-400 dark:text-slate-500">Player box score</span>
@@ -473,29 +703,6 @@ export function GameDetailContent({
             </div>
           )}
 
-          {topPerformer && (
-            <SurfaceCard>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Top performer</p>
-              <h3 className="mt-2 font-display text-section-title font-semibold text-slate-950 dark:text-white">
-                {topPerformerPlayer
-                  ? `${topPerformerPlayer.firstName} ${topPerformerPlayer.lastName}`
-                  : topPerformer.firstName
-                    ? `${topPerformer.firstName} ${topPerformer.lastName}`
-                    : `#${topPerformer.playerId}`}
-              </h3>
-              {(topPerformerPlayer?.position ?? topPerformer.position) && (
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  {topPerformerPlayer?.position ?? topPerformer.position}
-                </p>
-              )}
-              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                {topPerformer.category === 'offense'
-                  ? offenseSummary(topPerformer.line as OffensiveGameLine)
-                  : defenseSummary(topPerformer.line as DefensiveGameLine)}
-              </p>
-            </SurfaceCard>
-          )}
-
           {entries.length === 0 ? (
             <SurfaceCard>
               <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
@@ -512,6 +719,7 @@ export function GameDetailContent({
                   rows={passingRows}
                   columnDefs={PASSING_GAME_COLUMNS}
                   mode="per-game"
+                  teamAssetName={activeSideName}
                   defaultSortKey="passYards"
                   leaders={PASSING_GAME_LEADERS}
                   emptyStateMessage="No passing stats recorded."
@@ -525,6 +733,7 @@ export function GameDetailContent({
                   rows={rushingRows}
                   columnDefs={RUSHING_GAME_COLUMNS}
                   mode="per-game"
+                  teamAssetName={activeSideName}
                   defaultSortKey="rushYards"
                   leaders={RUSHING_GAME_LEADERS}
                   emptyStateMessage="No rushing stats recorded."
@@ -538,6 +747,7 @@ export function GameDetailContent({
                   rows={receivingRows}
                   columnDefs={RECEIVING_GAME_COLUMNS}
                   mode="per-game"
+                  teamAssetName={activeSideName}
                   defaultSortKey="receivingYards"
                   leaders={RECEIVING_GAME_LEADERS}
                   emptyStateMessage="No receiving stats recorded."
@@ -551,6 +761,7 @@ export function GameDetailContent({
                   rows={defenseRows}
                   columnDefs={DEFENSE_GAME_COLUMNS}
                   mode="per-game"
+                  teamAssetName={activeSideName}
                   defaultSortKey="tackles"
                   leaders={DEFENSE_GAME_LEADERS}
                   emptyStateMessage="No defensive stats recorded."

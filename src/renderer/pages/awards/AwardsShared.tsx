@@ -47,7 +47,7 @@ export function PlayerNameButton({
 
   return (
     <span className="flex items-center gap-2.5">
-      <PlayerPortrait player={{ ...splitDisplayName(name), portraitAssetName }} size="sm" onClick={open} />
+      <PlayerPortrait player={{ ...splitDisplayName(name), portraitAssetName }} size="sm" onClick={open} teamAssetName={teamDisplayName} />
       {nameButton}
     </span>
   );

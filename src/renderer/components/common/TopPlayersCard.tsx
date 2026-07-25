@@ -23,11 +23,14 @@ export function TopPlayersCard({
   onSelect,
   limit = 10,
   title = 'Top players',
+  teamAssetName,
 }: {
   players: TopPlayerEntry[];
   onSelect: (player: TopPlayerEntry) => void;
   limit?: number;
   title?: string;
+  /** The team these players belong to — dresses each portrait in that jersey. */
+  teamAssetName?: string | null;
 }) {
   const top = [...players].sort((a, b) => b.overallRating - a.overallRating).slice(0, limit);
   if (top.length === 0) return null;
@@ -43,7 +46,7 @@ export function TopPlayersCard({
             onClick={() => onSelect(p)}
             className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
           >
-            <PlayerPortrait player={p} size="sm" className="!h-9 !w-9" />
+            <PlayerPortrait player={p} size="sm" className="!h-9 !w-9" teamAssetName={teamAssetName} />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-white">
               {p.firstName} {p.lastName}
             </span>

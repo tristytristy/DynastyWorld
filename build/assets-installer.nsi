@@ -18,7 +18,7 @@ Unicode true
 SetCompress off            ; the payload is WebP/PNG (already compressed) — skip the wasted CPU
 
 !define APPNAME "CFB Dynasty Hub Image Data"
-!define VERSION "0.5.0"
+!define VERSION "0.6.1"
 !define REGKEY  "Software\CFB Dynasty Hub"
 ; File paths resolve relative to THIS script's folder (build\), so go up one
 ; level to the project root's public\assets.
@@ -49,6 +49,8 @@ Section "Image Data"
   File /r "${SRC}\confchamp"
   File /r "${SRC}\playoffs"
   File /r "${SRC}\icons"
+  File /r "${SRC}\helmet"
+  File /r "${SRC}\jersey"
 
   ; Pointer the app reads to auto-detect this folder.
   WriteRegStr HKCU "${REGKEY}" "AssetsPath" "$INSTDIR"
@@ -66,6 +68,8 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\confchamp"
   RMDir /r "$INSTDIR\playoffs"
   RMDir /r "$INSTDIR\icons"
+  RMDir /r "$INSTDIR\helmet"
+  RMDir /r "$INSTDIR\jersey"
   Delete "$INSTDIR\Uninstall Image Data.exe"
   RMDir "$INSTDIR"
   ; Only clears the pointer if it still points here (avoids nuking a re-install elsewhere).

@@ -33,6 +33,10 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     const r = idx !== null ? teamByIndex.get(idx)?.mediaPollRank ?? 0 : 0;
     return r > 0 ? r : null;
   };
+  const colorOf = (idx: number | null): { primary: string | null; secondary: string | null } => {
+    const t = idx !== null ? teamByIndex.get(idx) : undefined;
+    return { primary: t?.primaryColorHex ?? null, secondary: t?.secondaryColorHex ?? null };
+  };
 
   // Same classification getSchedule uses: bowl, else conference when both teams
   // share a conference, else non-conference.
@@ -52,15 +56,20 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     score: number,
     quarterScores: number[],
     stats: GameDetailTeamSide['stats'],
-  ): GameDetailTeamSide => ({
-    teamIndex: teamIndex ?? -1,
-    name: name ?? 'TBD',
-    score,
-    quarterScores,
-    stats,
-    currentRank: rankOf(teamIndex),
-    isUser: teamIndex !== null && teamIndex === userTeamIndex,
-  });
+  ): GameDetailTeamSide => {
+    const colors = colorOf(teamIndex);
+    return {
+      teamIndex: teamIndex ?? -1,
+      name: name ?? 'TBD',
+      score,
+      quarterScores,
+      stats,
+      currentRank: rankOf(teamIndex),
+      primaryColor: colors.primary,
+      secondaryColor: colors.secondary,
+      isUser: teamIndex !== null && teamIndex === userTeamIndex,
+    };
+  };
 
   return {
     gameId: game.gameId,

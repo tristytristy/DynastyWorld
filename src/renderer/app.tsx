@@ -29,9 +29,11 @@ import { PlayerProfileModal } from './components/common/PlayerProfileModal';
 import { GameDetailModal } from './components/common/GameDetailModal';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
+import { UpdateNotice } from './components/common/UpdateNotice';
 import { angledClip } from './components/ui/angledClip';
 
 const ANGLED_PANEL = angledClip('1.25rem');
+
 
 export function App() {
   return (
@@ -110,6 +112,7 @@ export function App() {
       <GameDetailModal />
       <RecruitProfileModal />
       <EditorModalHost />
+      <UpdateNotice />
     </div>
   );
 }

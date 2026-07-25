@@ -25,6 +25,7 @@ import type {
   TeamAwardHistorySeason,
   TeamAwardSettings,
   TeamStats,
+  TeamGameStat,
   TeamTrophies,
 } from '../../shared/types';
 import {
@@ -43,6 +44,7 @@ import { getHistory } from '../../database/getHistory';
 import { getRoster } from '../../database/getRoster';
 import { getPlayerStats } from '../../database/getPlayerStats';
 import { getTeamStats } from '../../database/getTeamStats';
+import { getTeamGameStats } from '../../database/getTeamGameStats';
 import { getKickingStats } from '../../database/getKickingStats';
 import { getGameLog } from '../../database/getGameLog';
 import { getGameDetail } from '../../database/getGameDetail';
@@ -195,6 +197,13 @@ export function registerDatabaseHandlers(): void {
     IPC.db.getTeamStats,
     async (_event, dynastyId: string, seasonId?: number): Promise<TeamStats | null> => {
       return getTeamStats(dynastyId, seasonId) ?? null;
+    },
+  );
+
+  ipcMain.handle(
+    IPC.db.getTeamGameStats,
+    async (_event, dynastyId: string, teamIndex: number | null, seasonId?: number): Promise<TeamGameStat[] | null> => {
+      return getTeamGameStats(dynastyId, teamIndex, seasonId) ?? null;
     },
   );
 

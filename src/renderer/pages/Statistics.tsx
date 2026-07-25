@@ -13,6 +13,19 @@ import { PlayerComparison, type ComparablePlayer } from '../components/common/Pl
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { Button } from '../components/ui/Button';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
+import {
+  filterTeamGames,
+  aggregateTeamGames,
+  opponentOptions,
+  availableGameTypes,
+  ratioPct,
+  perGame as perGameAvg,
+  turnoverMargin,
+  type TeamGameTypeFilter,
+  type TeamAggregate,
+} from '../lib/teamStats';
+import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { gameImpactScore } from '../../shared/gameImpactScore';
@@ -29,6 +42,7 @@ import type {
   ScheduleOverview,
   SeasonOverview,
   TeamStats,
+  TeamGameStat,
 } from '../../shared/types';
 
 function pct(made: number, attempted: number): number | null {
@@ -255,20 +269,30 @@ function ReturnsLeadersSection({
 
   return (
     <SurfaceCard>
-      <p className="type-eyebrow text-slate-400 dark:text-slate-500">Returns</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(({ metric, leader, tiedCount, value }) => (
-          <LeaderCard
-            key={metric.label}
-            dynastyId={dynastyId}
-            seasonId={seasonId}
-            label={metric.label}
-            row={leader}
-            value={value.toLocaleString()}
-            tiedCount={tiedCount}
-          />
-        ))}
-      </div>
+      <CollapsibleSection
+        title="Returns"
+        eyebrow
+        defaultOpen={false}
+        right={
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            {candidates.length} {candidates.length === 1 ? 'player' : 'players'}
+          </span>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map(({ metric, leader, tiedCount, value }) => (
+            <LeaderCard
+              key={metric.label}
+              dynastyId={dynastyId}
+              seasonId={seasonId}
+              label={metric.label}
+              row={leader}
+              value={value.toLocaleString()}
+              tiedCount={tiedCount}
+            />
+          ))}
+        </div>
+      </CollapsibleSection>
     </SurfaceCard>
   );
 }
@@ -289,12 +313,15 @@ export function Statistics() {
   const [kickingStats, setKickingStats] = useState<PlayerKickingStats[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
   const [gamelog, setGamelog] = useState<GameLogEntry[] | null | undefined>(undefined);
+  const [teamGameStats, setTeamGameStats] = useState<TeamGameStat[] | null | undefined>(undefined);
   const [mode, setMode] = useState<StatMode>('season');
+  /** Which half of the page is showing — the team-focused or player-focused stats. */
+  const [view, setView] = useState<'team' | 'player'>('team');
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
   const viewedTeamName =
     viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
-  /** Phase 4 splits — scope the four gamelog-backed categories to a subset of played games. */
-  const [gameFilter, setGameFilter] = useState<'all' | 'regular' | 'postseason' | 'home' | 'away'>('all');
+  // Shared filters — drive BOTH team and player stats off one filtered game set.
+  const [gameType, setGameType] = useState<TeamGameTypeFilter>('all');
   const [opponentFilter, setOpponentFilter] = useState<string>('all');
 
   useEffect(() => {
@@ -305,13 +332,18 @@ export function Statistics() {
     });
     if (viewedTeamIndex !== null) {
       // League mode: another team's players from the per-season league
-      // snapshot. Team stats / kicking / gamelog / schedule aren't tracked
-      // for non-user teams — those sections get honest empty states instead
-      // of fabricated zeros.
+      // snapshot. Season-cumulative TeamStats / kicking / gamelog / schedule
+      // aren't tracked for non-user teams (those get honest empty states or a
+      // "—"), but per-game team stats ARE — the schedule snapshot is
+      // league-wide, so getTeamGameStats reconstructs any team's Team Stats
+      // view (season-only rows like red-zone % fall back to "—").
       setTeamStats(null);
       setKickingStats([]);
       setSchedule(null);
       setGamelog([]);
+      window.api.db.getTeamGameStats(id, viewedTeamIndex, seasonId).then((result) => {
+        if (!cancelled) setTeamGameStats(result);
+      });
       window.api.db.getLeagueTeamRoster(id, viewedTeamIndex, seasonId).then((result) => {
         if (cancelled) return;
         setRoster(result?.players ?? null);
@@ -349,6 +381,9 @@ export function Statistics() {
     });
     window.api.db.getGameLog(id, seasonId).then((result) => {
       if (!cancelled) setGamelog(result);
+    });
+    window.api.db.getTeamGameStats(id, viewedTeamIndex, seasonId).then((result) => {
+      if (!cancelled) setTeamGameStats(result);
     });
     return () => {
       cancelled = true;
@@ -422,23 +457,17 @@ export function Statistics() {
    * "Postseason" = the save's own bowl game type, which includes CFP rounds
    * and the national championship (see ScheduleGame.gameType docs).
    */
-  const splitActive = gameFilter !== 'all' || opponentFilter !== 'all';
-  const filteredGameIds = useMemo(() => {
-    if (!splitActive || !schedule) return null;
-    return new Set(
-      schedule.games
-        .filter((g) => g.result !== null)
-        .filter((g) => {
-          if (gameFilter === 'regular') return g.gameType !== 'bowl';
-          if (gameFilter === 'postseason') return g.gameType === 'bowl';
-          if (gameFilter === 'home') return g.isHome;
-          if (gameFilter === 'away') return !g.isHome && g.siteType !== 'neutral';
-          return true;
-        })
-        .filter((g) => opponentFilter === 'all' || g.opponent === opponentFilter)
-        .map((g) => g.gameId),
-    );
-  }, [splitActive, schedule, gameFilter, opponentFilter]);
+  // The single filtered game set (Phase 1 lib) — the source of truth both the
+  // team aggregates and the player gamelog sections derive from.
+  const splitActive = gameType !== 'all' || opponentFilter !== 'all';
+  const filteredGames = useMemo(
+    () => (teamGameStats ? filterTeamGames(teamGameStats, { gameType, opponent: opponentFilter }) : []),
+    [teamGameStats, gameType, opponentFilter],
+  );
+  const filteredGameIds = useMemo(
+    () => (splitActive && teamGameStats ? new Set(filteredGames.map((g) => g.gameId)) : null),
+    [splitActive, teamGameStats, filteredGames],
+  );
 
   const splitLines = useMemo(() => {
     if (!filteredGameIds || !gamelog) return null;
@@ -526,10 +555,8 @@ export function Statistics() {
     };
   }, [splitLines, allRows, passingRows, rushingRows, receivingRows, defenseRows]);
 
-  const opponents = useMemo(
-    () => [...new Set((schedule?.games ?? []).filter((g) => g.result !== null).map((g) => g.opponent))].sort(),
-    [schedule],
-  );
+  const opponents = useMemo(() => opponentOptions(teamGameStats ?? []), [teamGameStats]);
+  const gameTypeOptions = useMemo(() => availableGameTypes(teamGameStats ?? []), [teamGameStats]);
 
   const [compareOpen, setCompareOpen] = useState(false);
   // Everyone with any recorded stat line this season — offense/defense from
@@ -573,197 +600,102 @@ export function Statistics() {
 
   if (!id) return null;
 
-  // Games played comes from the team-stats snapshot itself (teamStats.wins/losses/ties),
-  // not from counting "played" entries in the schedule. The save's own SeasonGame table
-  // can transiently hold a leftover game from the just-finished season (e.g. last year's
-  // bowl game) at the exact moment a new season starts, before that season's own
-  // schedule has been generated — confirmed on a real save where a fresh-preseason
-  // season showed 1 "played" schedule entry that was actually last year's bowl loss,
-  // while the season-cumulative team stats correctly still read 0-0. Trusting teamStats
-  // here keeps the whole Team Statistics section internally consistent (0 games recorded
-  // this season reads as 0 games, not a misleading fractional PPG derived from a stale
-  // game). Points scored/allowed still come from the schedule (no POINTS field exists in
-  // TeamStats at all — see extract-team-stats.ts), so they're only computed once teamStats
-  // confirms real games have actually happened this season.
-  const gamesPlayed = teamStats ? teamStats.wins + teamStats.losses + teamStats.ties : 0;
-  const pointsScored = gamesPlayed > 0 ? (schedule?.games.reduce((sum, g) => sum + (g.teamScore ?? 0), 0) ?? 0) : 0;
-  const pointsAllowed =
-    gamesPlayed > 0 ? (schedule?.games.reduce((sum, g) => sum + (g.opponentScore ?? 0), 0) ?? 0) : 0;
-  const perGame = (value: number) => (gamesPlayed > 0 ? value / gamesPlayed : 0);
+  // The Team Stats view derives EVERYTHING from the per-game aggregate over the
+  // currently-filtered game set (filteredGames) — so game-type / opponent filters
+  // actually drive the numbers, and Season-Total vs Per-Game is a pure render choice
+  // over the same totals. Summing per-game team+opponent stat lines exactly reproduces
+  // the season TeamStats (verified in Phase 0), so nothing is lost versus the old
+  // TeamStats-only path; what's gained is filterability + honest 3rd-down-allowed.
+  const teamAggregate = aggregateTeamGames(filteredGames);
 
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-4">
-            <TeamLogo
-              team={{ assetName: viewedTeamName ?? overview.teamName, label: viewedTeamName ?? overview.teamName }}
-              size="lg"
-            />
-            <div>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                Statistics
-              </p>
-              <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-                {viewedTeamName ?? overview.teamName}
-              </h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Season {overview.seasonYear} — last synced {new Date(overview.lastSyncedAt).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-4 dark:border-slate-800/60">
-            <Button variant="secondary" onClick={() => setCompareOpen(true)} disabled={comparablePlayers.length < 2}>
-              Compare Players
-            </Button>
-            <select
-              value={gameFilter}
-              onChange={(e) => setGameFilter(e.target.value as typeof gameFilter)}
-              aria-label="Game split"
-              className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-            >
-              <option value="all">All Games</option>
-              <option value="regular">Regular Season</option>
-              <option value="postseason">Postseason</option>
-              <option value="home">Home</option>
-              <option value="away">Away</option>
-            </select>
-            <select
-              value={opponentFilter}
-              onChange={(e) => setOpponentFilter(e.target.value)}
-              aria-label="Opponent filter"
-              className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-            >
-              <option value="all">All Opponents</option>
-              {opponents.map((opp) => (
-                <option key={opp} value={opp}>
-                  vs {opp}
-                </option>
-              ))}
-            </select>
-            <div className="flex border border-slate-200/80 bg-slate-50/90 p-1 dark:border-slate-800 dark:bg-white/5">
-              <button
-                type="button"
-                onClick={() => setMode('season')}
-                className={`px-3 py-1.5 text-sm font-medium transition ${mode === 'season' ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]' : 'text-slate-500 dark:text-slate-400'}`}
-              >
-                Season Total
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('per-game')}
-                className={`px-3 py-1.5 text-sm font-medium transition ${mode === 'per-game' ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]' : 'text-slate-500 dark:text-slate-400'}`}
-              >
-                Per Game
-              </button>
-            </div>
+        <div className="flex items-center gap-4">
+          <TeamLogo
+            team={{ assetName: viewedTeamName ?? overview.teamName, label: viewedTeamName ?? overview.teamName }}
+            size="lg"
+          />
+          <div>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Statistics</p>
+            <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
+              {viewedTeamName ?? overview.teamName}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Season {overview.seasonYear} — last synced {new Date(overview.lastSyncedAt).toLocaleDateString()}
+            </p>
           </div>
         </div>
       </SurfaceCard>
 
-      {/* Team Statistics */}
-      {!teamStats ? (
-        <SurfaceCard className="text-center text-sm text-slate-400 dark:text-slate-500">
-          No team statistics recorded for this season yet — sync while games have been played.
-        </SurfaceCard>
+      {/* Sticky controls — mode switcher + shared filters that drive both views.
+          Restrained treatment (§4): fine border, subtle depth, no floating panel. */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white/90 px-4 py-3 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.55)] backdrop-blur-md dark:border-white/10 dark:bg-[#0d0d10]/90">
+        <SegmentedControl<'team' | 'player'>
+          value={view}
+          onChange={setView}
+          ariaLabel="Statistics mode"
+          options={[
+            { value: 'team', label: 'Team Stats' },
+            { value: 'player', label: 'Player Stats' },
+          ]}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={gameType}
+            onChange={(e) => setGameType(e.target.value as TeamGameTypeFilter)}
+            aria-label="Game type"
+            className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            {gameTypeOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={opponentFilter}
+            onChange={(e) => setOpponentFilter(e.target.value)}
+            aria-label="Opponent filter"
+            className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+          >
+            <option value="all">All Opponents</option>
+            {opponents.map((opp) => (
+              <option key={opp} value={opp}>
+                vs {opp}
+              </option>
+            ))}
+          </select>
+          <SegmentedControl<StatMode>
+            value={mode}
+            onChange={setMode}
+            ariaLabel="Totals or per game"
+            size="sm"
+            options={[
+              { value: 'season', label: 'Season Total' },
+              { value: 'per-game', label: 'Per Game' },
+            ]}
+          />
+        </div>
+      </div>
+
+      {view === 'team' ? (
+        /* ===== TEAM STATS VIEW ===== */
+        <TeamStatsView
+          agg={teamAggregate}
+          teamStats={teamStats ?? null}
+          mode={mode}
+          splitActive={splitActive}
+        />
       ) : (
+        /* ===== PLAYER STATS VIEW ===== */
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Points Per Game" value={oneDecimal(perGame(pointsScored))} />
-            <StatTile label="Total Offense" value={`${Math.round(perGame(teamStats.totalYards)).toLocaleString()} yd/g`} />
-            <StatTile label="Pass Yards Per Game" value={`${Math.round(perGame(teamStats.offPassYards)).toLocaleString()}`} />
-            <StatTile label="Rush Yards Per Game" value={`${Math.round(perGame(teamStats.offRushYards)).toLocaleString()}`} />
-            <StatTile label="Points Allowed Per Game" value={oneDecimal(perGame(pointsAllowed))} />
-            <StatTile
-              label="Total Defense"
-              value={`${Math.round(perGame(teamStats.defPassYards + teamStats.defRushYards)).toLocaleString()} yd/g`}
-            />
-            <StatTile
-              label="Turnover Margin"
-              value={`${teamStats.takeaways - teamStats.giveaways > 0 ? '+' : ''}${teamStats.takeaways - teamStats.giveaways}`}
-            />
-            <StatTile
-              label="3rd Down Conversion"
-              value={teamStats.thirdDowns > 0 ? pctFormat(pct(teamStats.thirdDownConv, teamStats.thirdDowns) ?? 0) : '-'}
-            />
-          </div>
-
-          <SurfaceCard>
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-              Team Performance Breakdown
-            </p>
-            <div className="mt-4 grid gap-6 lg:grid-cols-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Offense</h3>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <StatRow label="Games Played" value={String(gamesPlayed)} />
-                  <StatRow label="Points" value={String(pointsScored)} />
-                  <StatRow label="Total Yards" value={teamStats.totalYards.toLocaleString()} />
-                  <StatRow label="Passing Yards" value={teamStats.offPassYards.toLocaleString()} />
-                  <StatRow label="Rushing Yards" value={teamStats.offRushYards.toLocaleString()} />
-                  <StatRow label="First Downs" value={String(teamStats.firstDowns)} />
-                  <StatRow
-                    label="3rd Down %"
-                    value={teamStats.thirdDowns > 0 ? pctFormat(pct(teamStats.thirdDownConv, teamStats.thirdDowns) ?? 0) : '-'}
-                  />
-                  <StatRow
-                    label="4th Down %"
-                    value={teamStats.fourthDowns > 0 ? pctFormat(pct(teamStats.fourthDownConv, teamStats.fourthDowns) ?? 0) : '-'}
-                  />
-                  <StatRow
-                    label="Red-Zone %"
-                    value={
-                      teamStats.offRedZones > 0
-                        ? pctFormat(pct(teamStats.offRedZoneTds + teamStats.offRedZoneFgs, teamStats.offRedZones) ?? 0)
-                        : '-'
-                    }
-                  />
-                  <StatRow label="Turnovers" value={String(teamStats.giveaways)} />
-                  <StatRow label="Time of Possession" value={formatSeconds(perGame(teamStats.possessionTime))} />
-                </dl>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Defense</h3>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <StatRow label="Points Allowed" value={String(pointsAllowed)} />
-                  <StatRow label="Total Yards Allowed" value={(teamStats.defPassYards + teamStats.defRushYards).toLocaleString()} />
-                  <StatRow label="Passing Yards Allowed" value={teamStats.defPassYards.toLocaleString()} />
-                  <StatRow label="Rushing Yards Allowed" value={teamStats.defRushYards.toLocaleString()} />
-                  <StatRow label="Sacks" value={String(teamStats.sacks)} />
-                  <StatRow label="Interceptions" value={String(teamStats.defInts)} />
-                  <StatRow label="Fumble Recoveries" value={String(teamStats.fumbleRec)} />
-                  <StatRow
-                    label="3rd Down % Allowed"
-                    value="Not available"
-                  />
-                  <StatRow
-                    label="Red-Zone % Allowed"
-                    value={
-                      teamStats.defRedZones > 0
-                        ? pctFormat(pct(teamStats.defRedZoneTds + teamStats.defRedZoneFgs, teamStats.defRedZones) ?? 0)
-                        : '-'
-                    }
-                  />
-                </dl>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Special Teams</h3>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <StatRow label="Punts" value={String(teamStats.punts)} />
-                  <StatRow label="Punt Yards" value={teamStats.puntYards.toLocaleString()} />
-                  <StatRow label="Kick Return Yards" value={teamStats.kickReturnYards.toLocaleString()} />
-                  <StatRow label="Punt Return Yards" value={teamStats.puntReturnYards.toLocaleString()} />
-                  <StatRow label="Penalties" value={String(teamStats.penalties)} />
-                  <StatRow label="Penalty Yards" value={teamStats.penaltyYards.toLocaleString()} />
-                </dl>
-              </div>
-            </div>
-          </SurfaceCard>
-        </>
-      )}
-
-      <HotPlayersSection gamelog={gamelog ?? []} schedule={schedule} players={allRows} />
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={() => setCompareOpen(true)} disabled={comparablePlayers.length < 2}>
+          Compare Players
+        </Button>
+      </div>
+      <HotPlayersSection gamelog={gamelog ?? []} schedule={schedule} players={allRows} teamAssetName={viewedTeamName ?? overview.teamName} />
       <MilestonesSection players={allRows} />
 
       {/* Player Statistics */}
@@ -774,6 +706,8 @@ export function Statistics() {
         rows={effectiveRows.passing}
         columnDefs={PASSING_COLUMNS}
         mode={mode}
+        collapsible
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="passYards"
         leaders={[
           { label: 'Passing Yards', value: (l) => l.passYards, format: (v) => v.toLocaleString() },
@@ -795,6 +729,8 @@ export function Statistics() {
         rows={effectiveRows.rushing}
         columnDefs={RUSHING_COLUMNS}
         mode={mode}
+        collapsible
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="rushYards"
         leaders={[
           { label: 'Rushing Yards', value: (l) => l.rushYards, format: (v) => v.toLocaleString() },
@@ -816,6 +752,8 @@ export function Statistics() {
         rows={effectiveRows.receiving}
         columnDefs={RECEIVING_COLUMNS}
         mode={mode}
+        collapsible
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="receivingYards"
         leaders={[
           { label: 'Receptions', value: (l) => l.receptions, format: (v) => v.toLocaleString() },
@@ -838,6 +776,8 @@ export function Statistics() {
         rows={effectiveRows.defense}
         columnDefs={DEFENSE_COLUMNS}
         mode={mode}
+        collapsible
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="tackles"
         leaders={[
           { label: 'Tackles', value: (l) => l.tackles, format: (v) => v.toLocaleString() },
@@ -861,6 +801,9 @@ export function Statistics() {
         rows={kickingRows}
         columnDefs={KICKING_COLUMNS}
         mode={mode}
+        collapsible
+        defaultOpen={false}
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="fgMade"
         leaders={[
           { label: 'Field Goals Made', value: (l) => l.fgMade, format: (v) => v.toLocaleString() },
@@ -875,6 +818,9 @@ export function Statistics() {
         rows={puntingRows}
         columnDefs={PUNTING_COLUMNS}
         mode={mode}
+        collapsible
+        defaultOpen={false}
+        teamAssetName={viewedTeamName ?? overview.teamName}
         defaultSortKey="puntYards"
         leaders={[
           { label: 'Punting Yards', value: (l) => l.puntYards, format: (v) => v.toLocaleString() },
@@ -887,6 +833,9 @@ export function Statistics() {
         emptyStateMessage="No punting statistics have been recorded for this season."
       />
       <ReturnsLeadersSection dynastyId={id} seasonId={seasonId} candidates={returnCandidates} />
+        </>
+      )}
+
         </>
       )}
 
@@ -906,10 +855,12 @@ function HotPlayersSection({
   gamelog,
   schedule,
   players,
+  teamAssetName,
 }: {
   gamelog: GameLogEntry[];
   schedule: ScheduleOverview | null | undefined;
   players: PlayerRow[];
+  teamAssetName?: string | null;
 }) {
   const { openPlayerModal } = usePlayerModal();
   const { id } = useParams<{ id: string }>();
@@ -952,7 +903,7 @@ function HotPlayersSection({
             onClick={() => openPlayerModal(id, player.playerId, seasonId)}
             className="corner-cut-sm flex flex-col items-center gap-2 border border-slate-200/80 bg-slate-50/85 p-3 text-center transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
           >
-            <PlayerPortrait player={player} size="sm" />
+            <PlayerPortrait player={player} size="sm" teamAssetName={teamAssetName} />
             <div>
               <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                 {player.firstName} {player.lastName}
@@ -1065,11 +1016,146 @@ function MilestonesSection({ players }: { players: PlayerRow[] }) {
   );
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function StatRow({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-slate-200/60 pb-2 dark:border-slate-800/60">
-      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
+      <dt className="text-slate-500 dark:text-slate-400">
+        {label}
+        {note && (
+          <span className="ml-1.5 align-middle text-[10px] font-medium uppercase tracking-wide text-slate-400/80 dark:text-slate-500">
+            {note}
+          </span>
+        )}
+      </dt>
       <dd className="proportional-nums font-semibold text-slate-900 dark:text-white">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * The Team Stats view — every filterable number is derived from `agg` (the
+ * aggregate over the currently-filtered game set), so game-type / opponent filters
+ * genuinely drive the numbers. `mode` toggles Season Total vs Per Game as a pure
+ * presentation choice over the same totals. A handful of stats have no per-game
+ * source (red-zone %, return yards, INTs, fumble recoveries — see Phase 0) and come
+ * from the full-season `teamStats`; those are always tagged "season" so it's never
+ * ambiguous that they ignore the filter and the per-game toggle. `teamStats` is null
+ * when viewing a league (non-user) team — the per-game aggregate still works from the
+ * league-wide schedule, but those season-only fields aren't tracked, so they show "—".
+ */
+function TeamStatsView({
+  agg,
+  teamStats,
+  mode,
+  splitActive,
+}: {
+  agg: TeamAggregate;
+  teamStats: TeamStats | null;
+  mode: StatMode;
+  splitActive: boolean;
+}) {
+  const perGame = mode === 'per-game';
+  const games = agg.games;
+
+  if (games === 0) {
+    return (
+      <SurfaceCard className="text-center text-sm text-slate-400 dark:text-slate-500">
+        {splitActive
+          ? 'No games match this filter yet — try a different game type or opponent.'
+          : 'No games have been played yet this season.'}
+      </SurfaceCard>
+    );
+  }
+
+  // Countable totals: season mode shows the sum; per-game mode shows the average.
+  const yards = (total: number) =>
+    perGame ? `${Math.round(perGameAvg(total, games)).toLocaleString()} yd` : `${total.toLocaleString()} yd`;
+  const yardsPlain = (total: number) =>
+    perGame ? Math.round(perGameAvg(total, games)).toLocaleString() : total.toLocaleString();
+  const points = (total: number) => (perGame ? oneDecimal(perGameAvg(total, games)) : String(total));
+  const count = (total: number) => (perGame ? oneDecimal(perGameAvg(total, games)) : String(total));
+  const ratio = (made: number, att: number) => {
+    const p = ratioPct(made, att);
+    return p === null ? '—' : pctFormat(p);
+  };
+  const sfx = perGame ? ' / G' : '';
+  const margin = turnoverMargin(agg);
+  const seasonNote = splitActive ? 'full season' : 'season';
+  // Season-only fields (no per-game source, and not tracked for league teams → null).
+  const seasonNum = (pick: (t: TeamStats) => number) => (teamStats ? String(pick(teamStats)) : '—');
+  const seasonYds = (pick: (t: TeamStats) => number) => (teamStats ? pick(teamStats).toLocaleString() : '—');
+  const seasonRedZone = (att: number, tds: number, fgs: number) =>
+    teamStats && att > 0 ? pctFormat(pct(tds + fgs, att) ?? 0) : '—';
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label={`Points${sfx}`} value={points(agg.points)} />
+        <StatTile label={`Total Offense${sfx}`} value={yards(agg.totalYards)} />
+        <StatTile label={`Passing${sfx}`} value={yards(agg.passYards)} />
+        <StatTile label={`Rushing${sfx}`} value={yards(agg.rushYards)} />
+        <StatTile label={`Points Allowed${sfx}`} value={points(agg.pointsAllowed)} />
+        <StatTile label={`Total Defense${sfx}`} value={yards(agg.defTotalYards)} />
+        <StatTile label="Turnover Margin" value={`${margin > 0 ? '+' : ''}${margin}`} />
+        <StatTile label="3rd Down %" value={ratio(agg.thirdDownConv, agg.thirdDownAtt)} />
+      </div>
+
+      <SurfaceCard>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Team Performance Breakdown</p>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          {perGame ? 'Per-game averages' : 'Season totals'} over {games} game{games === 1 ? '' : 's'}
+          {splitActive ? ' matching the current filter' : ''}.
+        </p>
+        <div className="mt-4 grid gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
+          <CollapsibleSection title="Offense">
+            <dl className="space-y-2 text-sm">
+              <StatRow label={`Points${sfx}`} value={points(agg.points)} />
+              <StatRow label={`Total Yards${sfx}`} value={yardsPlain(agg.totalYards)} />
+              <StatRow label={`Passing Yards${sfx}`} value={yardsPlain(agg.passYards)} />
+              <StatRow label={`Rushing Yards${sfx}`} value={yardsPlain(agg.rushYards)} />
+              <StatRow label={`First Downs${sfx}`} value={count(agg.firstDowns)} />
+              <StatRow label="3rd Down %" value={ratio(agg.thirdDownConv, agg.thirdDownAtt)} />
+              <StatRow label="4th Down %" value={ratio(agg.fourthDownConv, agg.fourthDownAtt)} />
+              <StatRow label={`Turnovers${sfx}`} value={count(agg.giveaways)} />
+              <StatRow label="Time of Possession / G" value={formatSeconds(perGameAvg(agg.possessionSeconds, games))} />
+              <StatRow
+                label="Red-Zone %"
+                note={seasonNote}
+                value={teamStats ? seasonRedZone(teamStats.offRedZones, teamStats.offRedZoneTds, teamStats.offRedZoneFgs) : '—'}
+              />
+            </dl>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Defense">
+            <dl className="space-y-2 text-sm">
+              <StatRow label={`Points Allowed${sfx}`} value={points(agg.pointsAllowed)} />
+              <StatRow label={`Total Yards Allowed${sfx}`} value={yardsPlain(agg.defTotalYards)} />
+              <StatRow label={`Passing Yards Allowed${sfx}`} value={yardsPlain(agg.defPassYards)} />
+              <StatRow label={`Rushing Yards Allowed${sfx}`} value={yardsPlain(agg.defRushYards)} />
+              <StatRow label={`Sacks${sfx}`} value={count(agg.sacks)} />
+              <StatRow label="3rd Down % Allowed" value={ratio(agg.defThirdDownConv, agg.defThirdDownAtt)} />
+              <StatRow label="Interceptions" note={seasonNote} value={seasonNum((t) => t.defInts)} />
+              <StatRow label="Fumble Recoveries" note={seasonNote} value={seasonNum((t) => t.fumbleRec)} />
+              <StatRow
+                label="Red-Zone % Allowed"
+                note={seasonNote}
+                value={teamStats ? seasonRedZone(teamStats.defRedZones, teamStats.defRedZoneTds, teamStats.defRedZoneFgs) : '—'}
+              />
+            </dl>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Special Teams" defaultOpen={false}>
+            <dl className="space-y-2 text-sm">
+              <StatRow label={`Punts${sfx}`} value={count(agg.punts)} />
+              <StatRow label={`Punt Yards${sfx}`} value={yardsPlain(agg.puntYards)} />
+              <StatRow label={`Penalties${sfx}`} value={count(agg.penalties)} />
+              <StatRow label={`Penalty Yards${sfx}`} value={yardsPlain(agg.penaltyYards)} />
+              <StatRow label="Kick Return Yards" note={seasonNote} value={seasonYds((t) => t.kickReturnYards)} />
+              <StatRow label="Punt Return Yards" note={seasonNote} value={seasonYds((t) => t.puntReturnYards)} />
+            </dl>
+          </CollapsibleSection>
+        </div>
+      </SurfaceCard>
+    </>
   );
 }

@@ -385,6 +385,8 @@ export interface RosterPlayer {
   jerseyNumber: number;
   schoolYear: string;
   overallRating: number;
+  /** Current NIL pay in $K (Player.CurrentNILCompensation). Absent on rosters synced before this shipped. */
+  nilCompensation?: number;
   archetype: string;
   developmentTrait: string;
   heightInches: number;
@@ -748,6 +750,9 @@ export interface GameDetailTeamSide {
   stats: TeamStatLine | null;
   /** Current media-poll rank (approx, not point-in-time), or null if unranked. */
   currentRank: number | null;
+  /** Team primary/secondary colors (hex) from the save, or null for placeholder/FCS teams. Drives per-side theming on the Game Info page. */
+  primaryColor: string | null;
+  secondaryColor: string | null;
   /** True when this side is the active dynasty's own team (drives user-perspective framing). */
   isUser: boolean;
 }
@@ -816,6 +821,28 @@ export interface TeamStatLine {
   possessionTimeSeconds: number;
   punts: number;
   puntYards: number;
+}
+
+/**
+ * One played-or-upcoming game for a single team, with that team's own per-game
+ * stat line (`teamStats`) and the opponent's (`opponentStats`, i.e. the defense
+ * / "X allowed" side). The raw input to the Statistics page's shared filter +
+ * aggregation layer — summing `teamStats` across a filtered set reproduces the
+ * season totals exactly (verified). Red-zone %, return yards, and completion %
+ * are NOT here (season-only, see TeamStats) — they can't be filtered per-game.
+ */
+export interface TeamGameStat {
+  gameId: number;
+  week: number;
+  opponent: string;
+  gameType: 'conference' | 'non-conference' | 'bowl';
+  siteType: 'home' | 'away' | 'neutral';
+  isRivalry: boolean;
+  played: boolean;
+  teamScore: number | null;
+  opponentScore: number | null;
+  teamStats: TeamStatLine | null;
+  opponentStats: TeamStatLine | null;
 }
 
 export interface SeasonSummary {
@@ -1588,6 +1615,8 @@ export interface DynastyApi {
     getRoster: (dynastyId: string, seasonId?: number) => Promise<RosterPlayer[] | null>;
     getPlayerStats: (dynastyId: string, seasonId?: number) => Promise<PlayerStats[] | null>;
     getTeamStats: (dynastyId: string, seasonId?: number) => Promise<TeamStats | null>;
+    /** Per-game team + opponent stat lines for one team (null teamIndex = the user's own) — the Statistics page's filterable source. */
+    getTeamGameStats: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<TeamGameStat[] | null>;
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
     getGameDetail: (dynastyId: string, gameId: number, seasonId?: number) => Promise<GameDetailData | null>;
@@ -1691,6 +1720,27 @@ export interface DynastyApi {
     /** Distinct titles used anywhere in this dynasty (recall/auto-fill for the title field). */
     titleSuggestions: (dynastyId: string) => Promise<string[]>;
   };
+  update: {
+    /** Checks the GitHub Releases API for a newer version. Never throws — network/rate-limit failures come back as `error`. */
+    check: () => Promise<UpdateCheckResult>;
+    /** Opens a download URL in the user's default browser (http/https only). */
+    openDownload: (url: string) => Promise<void>;
+  };
+}
+
+/** Result of an update check against the project's GitHub Releases. */
+export interface UpdateCheckResult {
+  /** The running app version. */
+  current: string;
+  /** The latest published release version (tag, `v` stripped), or null if none/failed. */
+  latest: string | null;
+  updateAvailable: boolean;
+  /** Direct installer download (Setup .exe asset) or the release page, for the Download button. */
+  url: string | null;
+  /** The release notes (markdown), if any. */
+  notes: string | null;
+  /** Non-null when the check couldn't complete (offline, rate-limited, etc.) — the UI stays quiet. */
+  error: string | null;
 }
 
 

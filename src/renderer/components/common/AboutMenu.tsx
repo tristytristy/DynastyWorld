@@ -1,5 +1,11 @@
 import { useState } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import type { UpdateCheckResult } from '../../../shared/types';
+
+const PRIMARY_BTN =
+  'shrink-0 border border-[var(--team-primary)] bg-[var(--team-primary)] px-4 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:opacity-90';
+const SECONDARY_BTN =
+  'shrink-0 border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
 
 const CREDITS: { role: string; value: string }[] = [
   { role: 'Developer & Design', value: 'Mat Evanz' },
@@ -17,6 +23,27 @@ const CREDITS: { role: string; value: string }[] = [
  */
 export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [check, setCheck] = useState<UpdateCheckResult | null>(null);
+
+  const runCheck = async () => {
+    setChecking(true);
+    try {
+      setCheck(await window.api.update.check());
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const updateStatus = checking
+    ? 'Checking for updates…'
+    : check?.error
+      ? "Couldn't reach GitHub — check your connection and try again."
+      : check?.updateAvailable
+        ? `Update available: v${check.latest}`
+        : check
+          ? "You're on the latest version."
+          : 'See if a newer version is available.';
 
   return (
     <div className="relative">
@@ -43,6 +70,22 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
               v{__APP_VERSION__}
             </span>
             <span className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">by Antigracity</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-y border-slate-200/70 py-4 dark:border-white/5">
+            <div className="min-w-0">
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Updates</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{updateStatus}</p>
+            </div>
+            {check?.updateAvailable && check.url ? (
+              <button type="button" onClick={() => window.api.update.openDownload(check.url as string)} className={PRIMARY_BTN}>
+                Download
+              </button>
+            ) : (
+              <button type="button" onClick={runCheck} disabled={checking} className={SECONDARY_BTN}>
+                {checking ? 'Checking…' : 'Check for updates'}
+              </button>
+            )}
           </div>
 
           <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">

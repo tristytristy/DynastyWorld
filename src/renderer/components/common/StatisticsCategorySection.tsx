@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { SurfaceCard } from '../ui/SurfaceCard';
+import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
@@ -84,6 +85,7 @@ export function LeaderCard({
   value,
   tiedCount,
   qualifier,
+  teamAssetName,
 }: {
   dynastyId: string;
   seasonId?: number;
@@ -94,6 +96,8 @@ export function LeaderCard({
   tiedCount: number;
   /** Qualification rule display (e.g. "min 40 att") for rate metrics — see LeaderMetric.qualifierLabel. */
   qualifier?: string;
+  /** The team these leaders play for — dresses each portrait in that jersey. */
+  teamAssetName?: string | null;
 }) {
   const { openPlayerModal } = usePlayerModal();
   // League-mode clicks resolve against the viewed team's league snapshot; null-safe for use outside DynastyLayout.
@@ -104,7 +108,7 @@ export function LeaderCard({
       onClick={() => openPlayerModal(dynastyId, row.playerId, seasonId, undefined, undefined, viewedTeamIndex ?? undefined)}
       className="corner-cut-sm flex w-full items-center gap-3 border border-slate-200/80 bg-slate-50/85 p-3 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
     >
-      <PlayerPortrait player={row} size="sm" />
+      <PlayerPortrait player={row} size="sm" teamAssetName={teamAssetName} />
       <div className="min-w-0 flex-1">
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">
           {label}
@@ -147,6 +151,9 @@ export function StatisticsCategorySection<TLine>({
   defaultSortKey,
   leaders,
   emptyStateMessage,
+  teamAssetName,
+  collapsible = false,
+  defaultOpen = true,
 }: {
   dynastyId: string;
   seasonId?: number;
@@ -157,6 +164,12 @@ export function StatisticsCategorySection<TLine>({
   defaultSortKey: string;
   leaders: LeaderMetric<TLine>[];
   emptyStateMessage: string;
+  /** The team all rows belong to — passed through so each leader portrait wears that jersey. */
+  teamAssetName?: string | null;
+  /** Render the section title as a collapse/expand disclosure (Statistics Player view). GameDetail leaves this off. */
+  collapsible?: boolean;
+  /** Initial open state when collapsible. */
+  defaultOpen?: boolean;
 }) {
   const columns = useMemo(() => withMode(columnDefs, mode), [columnDefs, mode]);
 
@@ -174,11 +187,10 @@ export function StatisticsCategorySection<TLine>({
       .filter((entry): entry is { metric: LeaderMetric<TLine>; leader: (typeof rows)[number]; tiedCount: number; value: number } => entry !== null);
   }, [rows, leaders]);
 
-  return (
-    <SurfaceCard>
-      <p className="type-eyebrow text-slate-400 dark:text-slate-500">{title}</p>
+  const body = (
+    <>
       {leaderCards.length > 0 && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {leaderCards.map(({ metric, leader, tiedCount, value }) => (
             <LeaderCard
               key={metric.label}
@@ -189,11 +201,12 @@ export function StatisticsCategorySection<TLine>({
               value={metric.format(value)}
               tiedCount={tiedCount}
               qualifier={metric.qualifierLabel}
+              teamAssetName={teamAssetName}
             />
           ))}
         </div>
       )}
-      <div className="mt-4">
+      <div className={leaderCards.length > 0 ? 'mt-4' : ''}>
         <StatisticsTable
           dynastyId={dynastyId}
           seasonId={seasonId}
@@ -203,6 +216,30 @@ export function StatisticsCategorySection<TLine>({
           emptyStateMessage={emptyStateMessage}
         />
       </div>
+    </>
+  );
+
+  return (
+    <SurfaceCard>
+      {collapsible ? (
+        <CollapsibleSection
+          title={title}
+          eyebrow
+          defaultOpen={defaultOpen}
+          right={
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              {rows.length} {rows.length === 1 ? 'player' : 'players'}
+            </span>
+          }
+        >
+          {body}
+        </CollapsibleSection>
+      ) : (
+        <>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">{title}</p>
+          <div className="mt-4">{body}</div>
+        </>
+      )}
     </SurfaceCard>
   );
 }

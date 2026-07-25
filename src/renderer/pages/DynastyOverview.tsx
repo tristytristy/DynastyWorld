@@ -241,6 +241,7 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
 
       <TopPlayersCard
         players={roster?.players ?? []}
+        teamAssetName={teamName}
         onSelect={(p) =>
           openPlayerModal(
             dynastyId,
@@ -449,6 +450,7 @@ export function DynastyOverview() {
       {roster && roster.length > 0 && userTeamIndex !== null && (
         <TopPlayersCard
           players={roster}
+          teamAssetName={overview.teamName}
           onSelect={(p) =>
             openPlayerModal(
               id ?? '',

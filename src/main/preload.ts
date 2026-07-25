@@ -29,6 +29,8 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.db.getPlayerStats, dynastyId, seasonId),
     getTeamStats: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getTeamStats, dynastyId, seasonId),
+    getTeamGameStats: (dynastyId, teamIndex, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getTeamGameStats, dynastyId, teamIndex, seasonId),
     getKickingStats: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getKickingStats, dynastyId, seasonId),
     getGameLog: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getGameLog, dynastyId, seasonId),
@@ -121,6 +123,10 @@ const api: DynastyApi = {
     update: (id, title, body) => ipcRenderer.invoke(IPC.notes.update, id, title, body),
     remove: (id) => ipcRenderer.invoke(IPC.notes.remove, id),
     titleSuggestions: (dynastyId) => ipcRenderer.invoke(IPC.notes.titleSuggestions, dynastyId),
+  },
+  update: {
+    check: () => ipcRenderer.invoke(IPC.update.check),
+    openDownload: (url) => ipcRenderer.invoke(IPC.update.openDownload, url),
   },
 };
 

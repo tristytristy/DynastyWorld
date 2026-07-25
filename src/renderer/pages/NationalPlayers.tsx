@@ -134,7 +134,7 @@ function PlayerCard({ player, onOpen, onEdit }: { player: NationalPlayer; onOpen
       <div className="flex w-full items-start justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <PlayerPortrait player={player} size="md" />
+            <PlayerPortrait player={player} size="md" teamAssetName={player.teamDisplayName} />
             <span className="absolute -bottom-2 -right-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--team-primary)] text-sm font-bold text-[var(--team-on-primary)] shadow-[0_18px_40px_-24px_rgba(37,99,235,0.9)]">
               {player.jerseyNumber}
             </span>

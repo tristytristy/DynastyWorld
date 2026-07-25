@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, dialog, screen, protocol } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -11,6 +12,7 @@ import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
 import { registerNotesHandlers } from './ipc/notes';
+import { registerUpdateHandlers } from './ipc/update';
 import {
   initDatabase,
   DatabaseCorruptedError,
@@ -168,6 +170,37 @@ function saveWindowState(window: BrowserWindow): void {
   }
 }
 
+/**
+ * The native application menu bar. Removed in the July 2026 "self-contained
+ * hub" pass, then restored on request so there's a standard File/Edit/View/
+ * Window bar for reload, DevTools, zoom, and clipboard actions. Built entirely
+ * from predefined roles, so it needs no custom IPC and stays cross-platform.
+ */
+function buildAppMenu(): Menu {
+  const isMac = process.platform === 'darwin';
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
 function createWindow(): BrowserWindow {
   const state = sanitizeWindowState(loadWindowState());
 
@@ -179,13 +212,28 @@ function createWindow(): BrowserWindow {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  // Dev-only (unpackaged) developer shortcuts, wired straight onto the
+  // webContents so they work even if the application menu / its accelerators
+  // aren't present: F12 or Ctrl+Shift+I toggles DevTools. Packaged releases
+  // skip this entirely.
+  if (!app.isPackaged) {
+    win.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      const key = input.key.toLowerCase();
+      if (key === 'f12' || (input.control && input.shift && key === 'i')) {
+        win.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+    });
+  }
 
   win.on('close', () => saveWindowState(win));
   if (process.env.SCREENSHOT_ROUTE) {
@@ -385,6 +433,7 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerNotesHandlers();
+      registerUpdateHandlers();
       try {
         const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
         const { dynasty } = persistExtraction(process.env.DIAGNOSTIC_IMPORT_PATH, extraction);
@@ -407,8 +456,9 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerNotesHandlers();
-      // No application menu — the app is a self-contained hub with its own
-      // in-window chrome, so the native File/View/Help bar is removed entirely.
+      registerUpdateHandlers();
+      // Diagnostic/screenshot runs keep no menu bar so its height doesn't shift
+      // captures (the normal launch path restores the native menu — see below).
       Menu.setApplicationMenu(null);
 
       const win = createWindow();
@@ -417,7 +467,10 @@ app
         if (process.env.SCREENSHOT_DIR) {
           setTimeout(async () => {
             const dir = process.env.SCREENSHOT_DIR as string;
-            win.setSize(1400, 2600);
+            // Window size defaults to a tall desktop capture; SCREENSHOT_SIZE="W,H"
+            // overrides it so a run can verify responsive/narrow layouts too.
+            const [sw, sh] = (process.env.SCREENSHOT_SIZE ?? '1400,2600').split(',').map(Number);
+            win.setSize(sw || 1400, sh || 2600);
             await new Promise((r) => setTimeout(r, 500));
             // Imports a save file into the (isolated) database before any
             // select/click/capture — lets a verification run self-provision a
@@ -522,9 +575,14 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerNotesHandlers();
-      // No application menu — the app is a self-contained hub with its own
-      // in-window chrome, so the native File/View/Help bar is removed entirely.
-      Menu.setApplicationMenu(null);
+      registerUpdateHandlers();
+      // Native menu bar (File/Edit/View/Window) — reload, DevTools, zoom, and
+      // clipboard actions — for IN-HOUSE DEVELOPMENT ONLY. Shipped/packaged
+      // releases keep the self-contained-hub look with no native menu. Gated on
+      // app.isPackaged: false when run unpackaged (the playtest .bats launch
+      // `electron .`), true inside a built installer/portable exe. The
+      // diagnostic/screenshot branch keeps it null regardless (clean captures).
+      Menu.setApplicationMenu(app.isPackaged ? null : buildAppMenu());
 
       sendSplashProgress(splash, { percent: 85, status: 'Opening hub...' });
       const win = createWindow();
