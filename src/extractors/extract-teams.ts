@@ -36,6 +36,15 @@ export interface TeamSchoolRecordsData {
 export interface TeamData {
   teamIndex: number;
   origId: number;
+  /**
+   * The school's global logo asset id (TEAM_LOGO). Distinct from teamIndex —
+   * it's an index into EA's full alphabetical school master list (FBS + FCS +
+   * others), which is the SAME id space that Coach.AlmaMater / HomeTown use.
+   * Resolving a coach's alma mater requires matching AlmaMater against THIS,
+   * not teamIndex (verified: Kirby Smart alma=34 -> logoId 34 = Georgia, where
+   * teamIndex 34 = Indiana). See getCoaches.ts.
+   */
+  logoId: number;
   displayName: string;
   shortName: string;
   nickName: string;
@@ -112,6 +121,7 @@ const FIELDS = [
   'ShortName',
   'NickName',
   'TEAM_ORIGID',
+  'TEAM_LOGO',
   'TeamIndex',
   'AssetName',
   'ConfWin',
@@ -203,6 +213,7 @@ function mapTeam(
   return {
     teamIndex,
     origId: Number(r.TEAM_ORIGID),
+    logoId: Number(r.TEAM_LOGO),
     displayName: String(r.DisplayName),
     shortName: String(r.ShortName),
     nickName: String(r.NickName),

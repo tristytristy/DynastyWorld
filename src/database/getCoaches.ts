@@ -14,7 +14,7 @@ function positionSortIndex(position: string): number {
   return POSITION_PRIORITY[position] ?? 3;
 }
 
-function toCoach(c: CoachData, teamNameByIndex: Map<number, string>): Coach {
+function toCoach(c: CoachData, teamNameByLogo: Map<number, string>): Coach {
   return {
     presentationId: c.presentationId,
     teamIndex: c.teamIndex,
@@ -24,7 +24,10 @@ function toCoach(c: CoachData, teamNameByIndex: Map<number, string>): Coach {
     position: c.position,
     isUserControlled: c.isUserControlled,
     yearsCoaching: c.yearsCoaching,
-    almaMaterName: teamNameByIndex.get(c.almaMater) ?? null,
+    // AlmaMater is a TEAM_LOGO id, NOT a teamIndex — resolve against the logo
+    // map (see extract-teams.ts). Placeholder/pool schools are excluded from the
+    // map, so a coach whose alma isn't a real FBS school resolves to null.
+    almaMaterName: teamNameByLogo.get(c.almaMater) ?? null,
     age: c.age,
     dominantArchetype: c.dominantArchetype,
     seasonsWithTeam: c.seasonsWithTeam,
@@ -37,11 +40,32 @@ function toCoach(c: CoachData, teamNameByIndex: Map<number, string>): Coach {
   };
 }
 
+/** teamIndex bucket that lumps every non-FBS placeholder (Practice + the five FCS pools). */
+const FCS_POOL_TEAM_INDEX = 255;
+
+/**
+ * Builds the TEAM_LOGO -> school-name map used to resolve Coach.AlmaMater.
+ * AlmaMater indexes EA's global school list (the TEAM_LOGO id space), not
+ * teamIndex — see extract-teams.ts. Placeholder/pool teams (teamIndex 255:
+ * Practice, FCS East/West/...) are excluded so a coach whose alma isn't a real
+ * FBS school resolves to null rather than showing "Practice". Requires a
+ * re-synced season (older 'teams' snapshots predate the logoId field).
+ */
+function buildLogoNameMap(teams: TeamData[]): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const t of teams) {
+    if (t.teamIndex === FCS_POOL_TEAM_INDEX) continue;
+    if (t.logoId === undefined || t.logoId === null) continue;
+    if (!map.has(t.logoId)) map.set(t.logoId, t.displayName);
+  }
+  return map;
+}
+
 /**
  * Reads the coaching staff snapshot for a dynasty's given season, resolving
- * each coach's alma mater against that season's teams snapshot (see
- * extract-coaches.ts — AlmaMater is a raw TeamIndex, not a franchise
- * reference, so this is a plain map lookup, not a live save-file query).
+ * each coach's alma mater against that season's teams snapshot by TEAM_LOGO id
+ * (see extract-teams.ts / toCoach — AlmaMater is a global logo id, not a
+ * teamIndex, so this is a plain map lookup, not a live save-file query).
  */
 export function getCoaches(dynastyId: string, seasonId?: number): CoachOverview | undefined {
   const dynasty = getDynastyById(dynastyId);
@@ -51,12 +75,12 @@ export function getCoaches(dynastyId: string, seasonId?: number): CoachOverview 
   if (!season || season.dynastyId !== dynastyId || season.userTeamId === null) return undefined;
 
   const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
-  const teamNameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
+  const teamNameByLogo = buildLogoNameMap(teams);
 
   const allCoaches = getSnapshot<CoachData[]>(season.id, 'coaches') ?? [];
   const staff = allCoaches
     .filter((c) => c.teamIndex === season.userTeamId)
-    .map((c) => toCoach(c, teamNameByIndex))
+    .map((c) => toCoach(c, teamNameByLogo))
     .sort((a, b) => positionSortIndex(a.position) - positionSortIndex(b.position));
 
   const headCoach = staff.find((c) => c.position === 'HeadCoach') ?? null;

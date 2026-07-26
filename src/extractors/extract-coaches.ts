@@ -66,16 +66,15 @@ export interface CoachData {
   yearsCoaching: number;
   isUserControlled: boolean;
   /**
-   * Raw TeamIndex of the coach's alma mater — despite the name, this is a
-   * plain integer matching Team.TeamIndex, not a franchise-table reference
-   * (getReferenceDataByKey returns null for this field). Verified against a
-   * real save: e.g. rawValue 88 resolved to Temple, 21 to Colorado, all
-   * real FBS schools. Resolved to a display name at query time by joining
-   * against the teams snapshot (see getCoaches.ts), same as other
-   * teamIndex-keyed data (opponent names, conference membership). A handful
-   * of coaches (6/493 on the test save) carry an out-of-range value (150/151)
-   * that doesn't match any real team — presumably a "none assigned" sentinel
-   * — those resolve to null rather than a guessed name.
+   * The coach's alma mater as a global school id — a plain integer, NOT a
+   * franchise reference (getReferenceDataByKey returns null). CRUCIAL: despite
+   * the earlier assumption, this is NOT a Team.TeamIndex — it's the TEAM_LOGO
+   * id space (EA's full alphabetical school master list, FBS + FCS + others).
+   * Resolving it against teamIndex produces confidently-WRONG schools (Kirby
+   * Smart alma=34 -> teamIndex 34 = Indiana, but logoId 34 = Georgia, his real
+   * alma). Resolved to a name at query time against the teams snapshot's
+   * logoId (see getCoaches.ts). Values that don't map to a real FBS school
+   * (non-FBS almas, sentinels 150/151) resolve to null.
    */
   almaMater: number;
   age: number;
