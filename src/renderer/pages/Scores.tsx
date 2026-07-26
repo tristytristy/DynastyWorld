@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useGameModal } from '../data/GameModalProvider';
 import type { LeagueScoreGame } from '../../shared/types';
 
-function ScoreLine({ name, score, won, played }: { name: string; score: number | null; won: boolean; played: boolean }) {
+function ScoreLine({ name, teamIndex, score, won, played }: { name: string; teamIndex: number; score: number | null; won: boolean; played: boolean }) {
   return (
     <div className={`flex items-center justify-between gap-3 ${won ? 'font-semibold text-slate-950 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-      <span className="flex min-w-0 items-center gap-2">
-        <TeamLogo team={{ assetName: name, label: name }} size="sm" className="shrink-0" />
-        <span className="truncate">{name}</span>
-      </span>
+      <TeamLink teamIndex={teamIndex} teamName={name} size="sm" className="min-w-0" logoClassName="shrink-0" nameClassName="truncate" />
       <span className="proportional-nums shrink-0">{played ? score : '—'}</span>
     </div>
   );
@@ -91,18 +88,25 @@ export function Scores() {
             const awayWon = played && (g.awayScore ?? 0) > (g.homeScore ?? 0);
             const homeWon = played && (g.homeScore ?? 0) > (g.awayScore ?? 0);
             return (
-              <button
+              <div
                 key={g.gameId}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => openGameModal(id, g.gameId, seasonId)}
-                className="flex flex-col gap-1.5 border border-slate-200/80 bg-white/70 p-3.5 text-left text-sm transition hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20 dark:hover:bg-white/10"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openGameModal(id, g.gameId, seasonId);
+                  }
+                }}
+                className="flex cursor-pointer flex-col gap-1.5 border border-slate-200/80 bg-white/70 p-3.5 text-left text-sm transition hover:border-slate-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)] dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20 dark:hover:bg-white/10"
               >
                 {g.bowlName && (
                   <span className="type-eyebrow text-[var(--team-primary)]">{g.bowlName}</span>
                 )}
-                <ScoreLine name={g.awayTeamName} score={g.awayScore} won={awayWon} played={played} />
-                <ScoreLine name={g.homeTeamName} score={g.homeScore} won={homeWon} played={played} />
-              </button>
+                <ScoreLine name={g.awayTeamName} teamIndex={g.awayTeamIndex} score={g.awayScore} won={awayWon} played={played} />
+                <ScoreLine name={g.homeTeamName} teamIndex={g.homeTeamIndex} score={g.homeScore} won={homeWon} played={played} />
+              </div>
             );
           })}
         </div>

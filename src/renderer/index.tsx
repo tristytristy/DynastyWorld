@@ -6,6 +6,7 @@ import { AssetGate } from './components/common/AssetGate';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { StadiumDataProvider } from './data/StadiumDataProvider';
 import { PlayerModalProvider } from './data/PlayerModalProvider';
+import { TeamModalProvider } from './data/TeamModalProvider';
 import { EditorModalProvider } from './data/EditorModalProvider';
 import { RecruitModalProvider } from './data/RecruitModalProvider';
 import { GameModalProvider } from './data/GameModalProvider';
@@ -31,7 +32,8 @@ createRoot(container).render(
        <StadiumDataProvider>
         <ConfirmDialogProvider>
          <PlayerModalProvider>
-          <EditorModalProvider>
+          <TeamModalProvider>
+           <EditorModalProvider>
             <RecruitModalProvider>
               <GameModalProvider>
                 <HashRouter>
@@ -39,7 +41,8 @@ createRoot(container).render(
                 </HashRouter>
               </GameModalProvider>
             </RecruitModalProvider>
-          </EditorModalProvider>
+           </EditorModalProvider>
+          </TeamModalProvider>
          </PlayerModalProvider>
         </ConfirmDialogProvider>
        </StadiumDataProvider>

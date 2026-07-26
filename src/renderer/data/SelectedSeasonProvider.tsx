@@ -57,3 +57,8 @@ export function useSelectedSeason(): SelectedSeasonContextValue {
   }
   return ctx;
 }
+
+/** Safe outside a SelectedSeasonProvider (e.g. the app-root game modal) — returns null instead of throwing. */
+export function useSelectedSeasonOptional(): SelectedSeasonContextValue | null {
+  return useContext(SelectedSeasonContext);
+}

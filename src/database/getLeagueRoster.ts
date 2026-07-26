@@ -1,9 +1,10 @@
 import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot, resolveSeasonHeadCoach } from './helpers';
+import { getTeamGameStats } from './getTeamGameStats';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
 import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
-import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, NationalPlayer, SeasonOverview } from '../shared/types';
+import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, NationalPlayer, SeasonOverview, TeamCard } from '../shared/types';
 
 interface TeamsSnapshotEntry {
   teamIndex: number;
@@ -79,6 +80,46 @@ export function getLeagueTeamOverview(
     teamPrestige: team.teamPrestige > 0 ? team.teamPrestige : null,
     recentGames: played.slice(-3).reverse().map(toSummary),
     upcomingGames: upcoming.slice(0, 3).map(toSummary),
+  };
+}
+
+/**
+ * A compact, single-fetch "team card" for the global Team modal. Bundles the
+ * same SeasonOverview the Team Hub uses (record / rankings / recent + upcoming
+ * games) with the team's identity + colors (for the header wash + logo), its
+ * top players by OVR, and its per-game stat lines (the modal aggregates those
+ * into the stat strip via the shared teamStats lib, exactly as the Statistics
+ * page does). One round trip keeps the modal snappy. Returns null for an
+ * unknown / generic-FCS-pool team — TeamLink shouldn't open the modal for those.
+ */
+export function getTeamCard(dynastyId: string, teamIndex: number, seasonId?: number): TeamCard | null {
+  const overview = getLeagueTeamOverview(dynastyId, teamIndex, seasonId);
+  if (!overview) return null;
+  const resolved = resolveSeasonId(dynastyId, seasonId);
+  if (resolved === undefined) return null;
+  const team = (getSnapshot<TeamData[]>(resolved, 'teams') ?? []).find((t) => t.teamIndex === teamIndex);
+  const roster = getLeagueTeamRoster(dynastyId, teamIndex, seasonId);
+  const topPlayers = [...(roster?.players ?? [])]
+    .sort((a, b) => b.overallRating - a.overallRating)
+    .slice(0, 5)
+    .map((p) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      position: p.position,
+      jerseyNumber: p.jerseyNumber,
+      overallRating: p.overallRating,
+      portraitAssetName: p.portraitAssetName,
+    }));
+  return {
+    teamIndex,
+    overview,
+    topPlayers,
+    games: getTeamGameStats(dynastyId, teamIndex, seasonId) ?? [],
+    conferenceName: team?.conferenceName ?? null,
+    teamAssetName: team?.assetName ?? null,
+    primaryColorHex: team?.primaryColorHex ?? null,
+    secondaryColorHex: team?.secondaryColorHex ?? null,
   };
 }
 
@@ -196,6 +237,7 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         bowlName: g.bowlName,
         isHome,
         opponent: isHome ? g.awayTeamName : g.homeTeamName,
+        opponentTeamIndex: opponentIndex,
         teamScore,
         opponentScore,
         result,

@@ -1,5 +1,5 @@
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
-import { TeamLogo } from '../../components/common/TeamLogo';
+import { TeamLink } from '../../components/common/TeamLink';
 import { PlayerNameButton } from './AwardsShared';
 import { formatAwardLabel } from '../../lib/awardFormat';
 import { useAwardsOverview } from '../../data/useAwardsOverview';
@@ -64,8 +64,7 @@ export function WeeklyHonors() {
               {honor.opponent && (
                 <div className="flex shrink-0 items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   <span>vs.</span>
-                  <TeamLogo team={{ assetName: honor.opponent, label: honor.opponent }} size="sm" />
-                  <span>{honor.opponent}</span>
+                  <TeamLink teamName={honor.opponent} size="sm" />
                 </div>
               )}
             </div>

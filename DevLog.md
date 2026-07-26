@@ -1802,6 +1802,84 @@ Playtest bug report: in a multi-season dynasty the Annual Awards page showed the
 **Verification:** replicated old vs new diff on a real league snapshot with two synthetic injections — a recruit signing (`255 → Alabama`) and a genuine transfer (`Troy → San Jose State`). Before fix: 3 detected (recruit-signing + a real `FBS → 255` departure already in the data + the genuine one). After fix: **1 — only the genuine Troy→San Jose State transfer survives**; both pool artifacts removed. typecheck + lint + prod build clean.
 
 ---
+## Phase — Global Team modal + clickable team names (Phase 1 of the Team-modal / NCAA-stats plan) (2026-07-25)
+
+**Shipped:** a premier, global Team modal (the team counterpart to the player modal) that any team name across the app can open, plus clickable team names on the four priority surfaces (Schedule, Scores, Awards, Game Detail).
+
+- **Data:** new `getTeamCard(dynastyId, teamIndex, seasonId)` (`database/getLeagueRoster.ts`) — one bundled fetch reusing `getLeagueTeamOverview` (record/rankings/recent+upcoming games) + top-5 roster by OVR + `getTeamGameStats` (raw per-game lines) + the team's colors/asset/conference from the `teams` snapshot. IPC/preload/types wired (`TeamCard`/`TeamCardPlayer`). Verified via live IPC: Alabama → record 2-6, CFP #91, SEC, #b30839, top players, 12 games, recent/next games.
+- **Modal system:** `data/TeamModalProvider.tsx` (mirrors PlayerModalProvider) + `components/common/TeamProfileModal.tsx` (premier single-column card: team-color header wash + logo + record + rank chip, 6-tile stat strip aggregated from the games via the shared `teamStats` lib, last/next game cards, top-players rail with jersey portraits → player modal, and a team-colored **View Team Hub →** CTA). **Provider mounted at app-root (index.tsx)** so it opens from anywhere incl. the app-root game modal; **host mounted inside DynastyLayout** (needs ViewedTeamProvider + router for the CTA), at z-[110] so it stacks above the app-root game/player modals.
+- **CTA navigation** reuses the existing league-browse mechanism: `setViewedTeamIndex(teamIndex)` + `navigate('/dynasty/:id/team-hub')` (the same path the TeamSwitcher already uses; viewedTeamIndex persists across in-dynasty navigation).
+- **`components/common/TeamLink.tsx`** — the reusable clickable team name (+ optional logo). Prefers an explicit `teamIndex`; else resolves the name via `canonicalKey` (+ alias table) over `leagueTeams`. Falls back to plain, non-clickable text when unresolved, when it's the **FCS pool (index 255)**, or when outside a dynasty/modal context. Optional `dynastyId`/`seasonId` props let it work in the app-root game modal (GameDetail) where the route `:id`/SelectedSeasonProvider aren't in scope; added `useSelectedSeasonOptional`.
+- **Surfaced `teamIndex`** on Schedule (`ScheduleGame.opponentTeamIndex`, `LeagueTeamGame.opponentTeamIndex`) and Scores (`LeagueScoreGame.home/awayTeamIndex`) so those pass a real index (no fuzzy matching). GameDetail already had `home/awayTeamIndex`; Awards `TeamLine` is name-only → resolver.
+
+**Scope decisions:** Scores card changed from a `<button>` to a role="button" `<div>` so the team-name buttons aren't nested inside a button (invalid HTML) — game-modal click preserved, team-name click stops propagation. FCS-pool opponents (idx 255, e.g. "FCS Southeast") correctly render as plain non-clickable text.
+
+**Verification:** typecheck/lint/build clean. Live IPC eval confirmed getTeamCard + the new schedule/scores indices. Screenshots (dark): opened the modal from a Scores team name → Ohio card rendered premier (real green logo, green wash/rank-chip/CTA, stat strip 17.2 PPG/+5/27.5%, @ Akron W 30-27 / @ Miami OH next, top players with jersey portraits). Schedule opponents render as clean one-line TeamLinks (fixed an over-truncation from a baked-in `truncate`, now opt-in). Light mode not screenshotted (fiddly to force in the harness) — the modal uses the same slate light/dark class system as the verified PlayerProfileModal.
+
+**Remaining (this plan):** Phase 2 = NCAA Hub Statistics page (national team + player-stat leaderboards). Phase 3 = roll TeamLink out to the remaining surfaces (Standings, Transfers, NcaaHub, History, GameDetail sub-labels) + polish. Team-modal "View Team Hub" navigation logic in place but not yet screenshot-verified end-to-end.
+
+---
+## Phase — NCAA Hub Statistics page (Phase 2 of the Team-modal / NCAA-stats plan) (2026-07-25)
+
+**Shipped:** a new NCAA Hub → **Statistics** tab (route `national-stats`, between Scores and Players) with a Team/Player mode switch — national leaderboards across all of FBS.
+
+- **Backend (new):** `database/getNationalTeamStats.ts` — walks the league-wide `schedule` snapshot ONCE, summing each real FBS team's per-game team+opponent stat lines into one season row (same arithmetic as `getTeamGameStats`; verified App St. row = 3860 total yds, exact match to the season TeamStats). Excludes the generic FCS pool (index 255 / null conference). `database/getNationalStatLeaders.ts` — reuses `getAllLeaguePlayers`, ranks stat-holders SERVER-SIDE and returns the top 100 per category (passing/rushing/receiving from the offensive line, defense from the defensive line) so only ~400 rows cross IPC instead of ~16k. Types `NationalTeamStatRow`/`NationalLeaderEntry`/`NationalStatLeaders`; IPC/preload/handlers wired. Verified via live IPC: 138 teams (pool excluded), LSU tops scoring at 41.0 PPG, 100/category leaders (top passer Denegal SDSU 3028).
+- **Shared refactor:** the per-category stat-table column defs (PASSING/RUSHING/RECEIVING/DEFENSE/KICKING/PUNTING) + the `pct`/`pctFormat`/`oneDecimal` helpers moved out of `Statistics.tsx` into a shared `renderer/lib/statColumns.ts`, imported by both the Team Hub and National pages (one source of truth). `StatisticsTable`/`StatTableRow` gained an optional `teamName`/`teamIndex` — national tables show each player's team as a clickable `TeamLink` under the name; single-team tables (Team Hub, GameDetail) are unchanged. `StatisticsTable.openPlayer` and `LeaderCard` now resolve a clicked player against **their own team's** league snapshot via a per-row `teamIndex` (falling back to the page's viewed team) — so national leaders open correctly, like the Players page already does.
+- **Frontend:** `pages/NationalStatistics.tsx`. Team mode = a sortable `NationalTeamTable` (rank + team logo/TeamLink + conference, then PF / Total O / Pass / Rush / PA / Total D / 3rd % / TO Margin; click any column header to sort; Season Total / Per Game toggle). Player mode reuses `StatisticsCategorySection` (collapsible leader cards + top-100 table) fed by the national leaders, with the team column. Player names → player modal, team names → team modal.
+
+**Scope decisions:** Leader cards remain season-total-based even in Per-Game mode (same established behavior as the Team Hub Statistics leader cards — not a regression). Kept the existing scouting-directory "Players" tab separate from this production-stats "Statistics" tab (per the design chat — they answer different questions).
+
+**Verification:** typecheck/lint/build clean. Live IPC eval (parity + pool-exclusion + 100/category). Screenshots: Team leaderboard (real logos, sorted by PPG — LSU 41.0 / USC 40.7 / Kansas State 40.6…, per-game) and Player leaderboard (Passing top-100, leader cards, team+logo per row, per-game). NOT yet released.
+
+**Remaining (this plan):** Phase 3 = roll `TeamLink` out to the remaining surfaces (Standings, Transfers, NcaaHub, History, GameDetail sub-labels) + a polish pass (both themes, responsive, the season-total-vs-leader-card note).
+
+---
+## Phase — TeamLink rollout everywhere + polish (Phase 3 — plan COMPLETE) (2026-07-25)
+
+**Shipped:** rolled the clickable `TeamLink` out to the remaining team-name surfaces and finished the polish pass. The Team-modal / NCAA-stats plan (Phases 1–3) is now complete.
+
+- **Standings** (`Standings.tsx`) — each team row's name is a `TeamLink` (real `team.teamIndex`), division-leader / conf-champ badges preserved.
+- **Transfers** (`Transfers.tsx`) — the other school in each move is a `TeamLink` (outgoing carries `toTeamIndex`; incoming resolves by name). Row changed from a `<button>` to a role="button" div so the team link isn't a nested button (same pattern as Scores).
+- **NCAA Hub Overview** (`NcaaHub.tsx`) — the #1-team headline plus every ranking / recruiting-class / record-watch / conference-leader row: team names are now `TeamLink`s (name-resolved; logos kept as-is via `showLogo={false}`). One `replace_all` covered the five identical ranking rows.
+- **History** (`History.tsx`) — the national-champion team in each `LeagueHistoryRow` is a `TeamLink` (inline, no logo); the viewed-team masthead stays a plain logo (it's the page's own identity).
+- **Weekly Honors** (`awards/WeeklyHonors.tsx`) — the "vs. <opponent>" team is a `TeamLink`.
+
+**Scope decisions:** Deliberately did NOT linkify own-team identity surfaces (Team Hub / Coach Hub / Dashboard mastheads, Sidebar, TeamSwitcher, player-profile hero) — opening a modal of the team you're already looking at is pointless. GameDetail's small "X — Star of the game" eyebrow was left plain: its `PerformerCard` is a `<button>` (opens the player), so linking the team would need a button→div refactor for low value, and Phase 1 already made the prominent helmet-flank team names clickable. NcaaRecords' holder team sits inside mixed subtitle text — skipped as fiddly/low-value.
+
+**Polish:** Light mode — diagnosed the harness can't fully show it (removing the `.dark` class flips the Tailwind variants — `main` correctly goes transparent/light — but the body's dark gradient follows the Electron env's `prefers-color-scheme`, which the harness can't override); every new component uses the same `text-slate-X dark:…` token conventions as the rest of the verified app, and the only custom color (the team-modal wash) is a theme-independent `color-mix` on the team's hex. Responsive — the national team table scrolls inside its own `overflow-x-auto` at the 1024 floor (no page-level horizontal scroll); the team modal is `max-w-2xl` and fits. Unknown / FCS-pool teams render as plain non-clickable text everywhere (the `TeamLink` guard, verified in Phase 1).
+
+**Verification:** typecheck / lint / prod build clean across all edits. Screenshots: national team table at 1024 (scrolls cleanly), light-mode diagnostic (confirmed component-level light styling applies). The plan's three phases — global Team modal + clickable names (P1), NCAA Statistics page (P2), full rollout + polish (P3) — are done. NOT yet released.
+
+---
+## Phase — Bug fixes: modal scroll-lock (stuck page) + Team modal positioning (2026-07-25)
+
+Two user-reported bugs from playtesting the new Team modal.
+
+**Bug 1 — page stuck with no scroll, only an app restart fixes it.** Every modal used the per-instance pattern `prev = body.style.overflow; body.style.overflow = 'hidden'; …restore prev`. It's fine for one modal but breaks when modals STACK — which the new Team modal made common (team links inside the player/game/national modals; player links inside the Team modal). Ordering example: open player modal (saves prev='', sets hidden) → open Team modal from a team link (saves prev='hidden') → close player modal (restores '') → close Team modal (restores 'hidden' with NOTHING open) → body permanently `overflow:hidden`. Fix: a shared reference-counted lock `renderer/lib/useScrollLock.ts` (a module-level counter; the body is locked while ANY modal is open and unlocked only when the last closes). Converted ALL nine scroll-locking modals to it — TeamProfileModal, PlayerProfileModal, GameDetailModal, RecruitProfileModal, PlayerComparison, CenteredModalPanel, CoachEditorModal, PlayerEditorModal, TeamBudgetModal, ConfirmDialogProvider — so none can leave the body stuck regardless of stack order. (Partial adoption would still interleave, so it had to be all of them.)
+
+**Bug 2 — Team modals opened too low, not centered.** The other global modals (`GameDetailModal`, `PlayerComparison`, `CenteredModalPanel`) already `createPortal` to `document.body` — precisely because surrounding surfaces use `backdrop-blur`, and a `backdrop-filter` ancestor becomes the containing block for a `position: fixed` child, anchoring it to that panel instead of the viewport. The Team modal host is mounted inside `DynastyLayout`'s `<main>` (which has `backdrop-blur`), so its `fixed inset-0` was relative to the panel → pushed low. Fix: portal `TeamProfileModal`'s overlay to `document.body` too. The React tree is unchanged, so the `useViewedTeam`/router context the "View Team Hub" button needs still resolves — only the DOM parent moves. Verified: the modal is now dead-centered.
+
+**Verification:** typecheck/lint/build clean; centered-modal screenshot confirmed. NOT yet released.
+
+---
+## Phase — Bug fix: players/coaches showing initials despite a portrait in the pack (2026-07-25)
+
+**User-reported:** some players (e.g. Lesterlaisene Lagafuaina, Hawai'i) render as initials / a broken image even though their portrait is in the pack (the manual picker finds it).
+
+**Root cause (probed a real save):** EA truncates long combined names in the save's `GenericHeadAssetName` field and leaves a `-` truncation marker at the cutoff — `Unique_LagafuainaLesterl-_21542` — but the game's exported portrait texture files DROP that dash (`Unique_LagafuainaLesterl_21542.webp`; the master PNGs are already de-dashed). The app builds the portrait URL straight from `GenericHeadAssetName`, so those URLs 404 → initials. Scale: on a real 15,105-player leagueRoster, exactly 105 (~0.7%) have a `-` (the only special char, always right before `_<id>`, always long names); checked against the actual webp files on disk — 0 resolve at the dashed name, ALL 105 resolve with the dash removed. Coaches: 2 of 493, same pattern.
+
+**Fix (read-time, no re-sync):** `renderer/lib/playerAssetMapping.ts` now returns `[exactName, deDashedName]` when the name has a `-` (PlayerPortrait already does onError candidate-fallback, so it tries the exact file first, then the de-dashed one). `renderer/lib/coachAssetMapping.ts` is single-src (no fallback chain) and no dashed name ever matches a file, so it de-dashes directly. No-op for the 99%+ of normal names.
+
+**Verification:** typecheck/build clean; data check (105/105 players + 2/2 coaches resolve de-dashed against the real files); screenshot — Lagafuaina's portrait now renders in Hawai'i's team modal (was "LL" initials). Recorded the EA naming quirk in memory (reference-portrait-truncation-dash). NOT yet released.
+
+---
+## Phase — Release 0.6.3 (app-only) (2026-07-25)
+
+Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.3 (+ package-lock; drives `app.getVersion()` in About + the electron-builder exe filenames). Graphics pack stays 0.6.1 — no bundled assets changed this session, so it's an **app-only** slim rebuild (`SLIM_INSTALLER=1 npm run package`); existing users just update the app and keep their image pack. Git tag `v0.6.3` + a local `.backup/v0.6.3-<timestamp>/` snapshot per the release convention.
+
+**What's in 0.6.3 vs 0.6.2** (all detailed in the entries above): the Team Hub Statistics refactor (Team/Player split, filter-driven team stats, collapsible sections, honest per-game/season, 3rd-down-allowed, league-team stats); the new **NCAA Hub → Statistics** page (national team + player-stat leaderboards); the global **Team modal + clickable team names** everywhere (Phases 1–3); the **Check-for-Update** feature (this is the bootstrapping release that seeds it — it can detect the NEXT one); and the bug fixes — transfers showing HS recruits as FCS logos, the modal stuck-scroll + off-center positioning, and players/coaches showing initials instead of their portrait (EA truncation-dash). This is the first release built from committed history (the branch had accumulated 0.6.0–0.6.2's work uncommitted).
+
+---
 ## Template for new entries
 
 ```markdown

@@ -1,5 +1,5 @@
 import { usePlayerModal } from '../../data/PlayerModalProvider';
-import { TeamLogo } from '../../components/common/TeamLogo';
+import { TeamLink } from '../../components/common/TeamLink';
 import { PlayerPortrait } from '../../components/common/PlayerPortrait';
 
 /** Splits a "First Last" display name into (first, last) — award data only ever carries a combined display name, but PlayerPortrait needs the two split apart (for its own initials fallback, on the rare player with no portrait asset set). */
@@ -55,9 +55,10 @@ export function PlayerNameButton({
 
 export function TeamLine({ teamName }: { teamName: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-      <TeamLogo team={{ assetName: teamName, label: teamName }} size="sm" />
-      <span>{teamName}</span>
-    </div>
+    <TeamLink
+      teamName={teamName}
+      size="sm"
+      className="text-sm text-slate-500 dark:text-slate-400"
+    />
   );
 }

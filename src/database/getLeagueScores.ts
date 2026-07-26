@@ -27,6 +27,8 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
       weekType: g.weekType,
       homeTeamName: g.homeTeamName,
       awayTeamName: g.awayTeamName,
+      homeTeamIndex: g.homeTeamIndex,
+      awayTeamIndex: g.awayTeamIndex,
       homeScore: g.homeScore,
       awayScore: g.awayScore,
       bowlName: g.bowlName,

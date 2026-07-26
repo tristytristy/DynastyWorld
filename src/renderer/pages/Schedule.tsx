@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useTheme } from '../theme/ThemeProvider';
 import { useStadiumData } from '../data/StadiumDataProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
@@ -187,11 +187,9 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
         {game.opponentRecord ? `${game.opponentRecord.wins}-${game.opponentRecord.losses}` : '-'}
       </td>
       <td className="px-5 py-4">
-        <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">
-          <TeamLogo team={{ assetName: game.opponent, label: game.opponent }} size="sm" />
-          <span>
-            {game.isHome ? 'vs' : '@'} {game.opponent}
-          </span>
+        <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
+          <span className="text-slate-400 dark:text-slate-500">{game.isHome ? 'vs' : '@'}</span>
+          <TeamLink teamIndex={game.opponentTeamIndex} teamName={game.opponent} size="sm" nameClassName="whitespace-nowrap" />
         </div>
       </td>
       <td className="px-5 py-4">
@@ -297,11 +295,9 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                     >
                       <td className="tnum px-5 py-3.5 font-medium text-slate-500 dark:text-slate-400" style={{ boxShadow: `inset 3px 0 0 ${accent}` }}>{g.week}</td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3 font-medium text-slate-900 dark:text-white">
-                          <TeamLogo team={{ assetName: g.opponent, label: g.opponent }} size="sm" />
-                          <span>
-                            <span className="text-slate-400 dark:text-slate-500">{g.isHome ? 'vs' : '@'}</span> {g.opponent}
-                          </span>
+                        <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
+                          <span className="text-slate-400 dark:text-slate-500">{g.isHome ? 'vs' : '@'}</span>
+                          <TeamLink teamIndex={g.opponentTeamIndex} teamName={g.opponent} size="sm" nameClassName="whitespace-nowrap" />
                         </div>
                       </td>
                       <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400"><LeagueTypeCell game={g} appearance={appearance} /></td>

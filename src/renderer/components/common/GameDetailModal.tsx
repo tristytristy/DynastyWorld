@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useScrollLock } from '../../lib/useScrollLock';
 import { useGameModal } from '../../data/GameModalProvider';
 import { GameDetailContent } from '../../pages/GameDetail';
 
@@ -13,17 +14,16 @@ import { GameDetailContent } from '../../pages/GameDetail';
 export function GameDetailModal() {
   const { state, closeGameModal } = useGameModal();
 
+  useScrollLock(state !== null);
+
   useEffect(() => {
     if (!state) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') closeGameModal();
     }
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
     };
   }, [state, closeGameModal]);
 

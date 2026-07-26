@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
+import { TeamLink } from './TeamLink';
 
 /** One numeric (or "-") column in a statistics table. `getValue` returning null means genuinely not applicable for this row (e.g. a rate stat with a zero denominator) — rendered as "-", never as 0. */
 export interface StatColumn<TLine> {
@@ -18,6 +19,9 @@ export interface StatTableRow<TLine> {
   jerseyNumber: number;
   schoolYear: string;
   line: TLine;
+  /** National leaderboards only — shows the player's team (as a clickable TeamLink) under the name. Omitted on single-team tables. */
+  teamName?: string;
+  teamIndex?: number;
 }
 
 type SortDir = 'asc' | 'desc';
@@ -80,7 +84,10 @@ export function StatisticsTable<TLine>({
   }
 
   function openPlayer(playerId: number) {
-    openPlayerModal(dynastyId, playerId, seasonId, sorted.map((row) => row.playerId), undefined, viewedTeamIndex ?? undefined);
+    // National leaderboards carry a per-row teamIndex — resolve the player against
+    // THAT team's league snapshot; single-team tables fall back to the page's viewed team.
+    const rowTeamIndex = sorted.find((row) => row.playerId === playerId)?.teamIndex;
+    openPlayerModal(dynastyId, playerId, seasonId, sorted.map((row) => row.playerId), undefined, rowTeamIndex ?? viewedTeamIndex ?? undefined);
   }
 
   if (rows.length === 0) {
@@ -122,8 +129,22 @@ export function StatisticsTable<TLine>({
             >
               <td className="tnum whitespace-nowrap px-3 py-2.5 text-slate-500 dark:text-slate-400">{row.jerseyNumber}</td>
               <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-900 dark:text-white">
-                {row.firstName} {row.lastName}
-                <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">{row.schoolYear}</span>
+                <span className="flex flex-col">
+                  <span>
+                    {row.firstName} {row.lastName}
+                    <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">{row.schoolYear}</span>
+                  </span>
+                  {row.teamName && (
+                    <TeamLink
+                      teamIndex={row.teamIndex}
+                      teamName={row.teamName}
+                      seasonId={seasonId}
+                      size="sm"
+                      logoClassName="!h-4 !w-4"
+                      className="mt-0.5 text-xs font-normal text-slate-500 dark:text-slate-400"
+                    />
+                  )}
+                </span>
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-slate-600 dark:text-slate-300">{row.position}</td>
               {columns.map((col) => {

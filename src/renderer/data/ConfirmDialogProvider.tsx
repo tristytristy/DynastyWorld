@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useScrollLock } from '../lib/useScrollLock';
 import { createPortal } from 'react-dom';
 
 export interface ConfirmOptions {
@@ -54,11 +55,11 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  useScrollLock(Boolean(pending));
+
   useEffect(() => {
     if (!pending) return;
     confirmButtonRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -71,7 +72,6 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
     };
   }, [pending, settle]);
 

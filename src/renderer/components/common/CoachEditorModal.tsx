@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useScrollLock } from '../../lib/useScrollLock';
 import { PortraitPicker } from './PortraitPicker';
 import { Button } from '../ui/Button';
 import type { CoachEditFields } from '../../../shared/types';
@@ -54,10 +55,10 @@ export function CoachEditorModal({
     };
   }, [dynastyId, teamIndex, position]);
 
+  useScrollLock(true);
+
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -84,7 +85,6 @@ export function CoachEditorModal({
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
       previouslyFocused.current?.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

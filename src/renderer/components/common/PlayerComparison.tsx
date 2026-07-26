@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useScrollLock } from '../../lib/useScrollLock';
 import { PlayerPortrait } from './PlayerPortrait';
 import { Button } from '../ui/Button';
 import type { DefensiveStatLine, KickingStatLine, OffensiveStatLine } from '../../../shared/types';
@@ -91,16 +92,15 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
   const left = sorted.find((p) => p.playerId === leftId) ?? null;
   const right = sorted.find((p) => p.playerId === rightId) ?? null;
 
+  useScrollLock(true);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKey);
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = originalOverflow;
     };
   }, [onClose]);
 

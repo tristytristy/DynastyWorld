@@ -86,6 +86,7 @@ export function LeaderCard({
   tiedCount,
   qualifier,
   teamAssetName,
+  leagueTeamIndex,
 }: {
   dynastyId: string;
   seasonId?: number;
@@ -98,6 +99,8 @@ export function LeaderCard({
   qualifier?: string;
   /** The team these leaders play for — dresses each portrait in that jersey. */
   teamAssetName?: string | null;
+  /** National leaderboards: resolve this player against their own team's league snapshot. Falls back to the page's viewed team. */
+  leagueTeamIndex?: number;
 }) {
   const { openPlayerModal } = usePlayerModal();
   // League-mode clicks resolve against the viewed team's league snapshot; null-safe for use outside DynastyLayout.
@@ -105,7 +108,7 @@ export function LeaderCard({
   return (
     <button
       type="button"
-      onClick={() => openPlayerModal(dynastyId, row.playerId, seasonId, undefined, undefined, viewedTeamIndex ?? undefined)}
+      onClick={() => openPlayerModal(dynastyId, row.playerId, seasonId, undefined, undefined, leagueTeamIndex ?? viewedTeamIndex ?? undefined)}
       className="corner-cut-sm flex w-full items-center gap-3 border border-slate-200/80 bg-slate-50/85 p-3 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
     >
       <PlayerPortrait player={row} size="sm" teamAssetName={teamAssetName} />
@@ -202,6 +205,7 @@ export function StatisticsCategorySection<TLine>({
               tiedCount={tiedCount}
               qualifier={metric.qualifierLabel}
               teamAssetName={teamAssetName}
+              leagueTeamIndex={leader.teamIndex}
             />
           ))}
         </div>

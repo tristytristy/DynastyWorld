@@ -6,9 +6,19 @@ import { TeamLogo } from '../components/common/TeamLogo';
 import {
   StatisticsCategorySection,
   LeaderCard,
-  type ColumnDef,
   type StatMode,
 } from '../components/common/StatisticsCategorySection';
+import {
+  pct,
+  pctFormat,
+  oneDecimal,
+  PASSING_COLUMNS,
+  RUSHING_COLUMNS,
+  RECEIVING_COLUMNS,
+  DEFENSE_COLUMNS,
+  KICKING_COLUMNS,
+  PUNTING_COLUMNS,
+} from '../lib/statColumns';
 import { PlayerComparison, type ComparablePlayer } from '../components/common/PlayerComparison';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
@@ -44,97 +54,6 @@ import type {
   TeamStats,
   TeamGameStat,
 } from '../../shared/types';
-
-function pct(made: number, attempted: number): number | null {
-  return attempted > 0 ? (made / attempted) * 100 : null;
-}
-
-const pctFormat = (value: number) => `${value.toFixed(1)}%`;
-const oneDecimal = (value: number) => value.toFixed(1);
-
-const PASSING_COLUMNS: ColumnDef<OffensiveStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'passCompletions', label: 'Cmp', raw: (l) => l.passCompletions, perGame: true },
-  { key: 'passAttempts', label: 'Att', raw: (l) => l.passAttempts, perGame: true },
-  { key: 'passCompletionPct', label: 'Cmp%', raw: (l) => pct(l.passCompletions, l.passAttempts), format: pctFormat },
-  { key: 'passYards', label: 'Yds', raw: (l) => l.passYards, perGame: true },
-  {
-    key: 'passYardsPerAttempt',
-    label: 'Y/A',
-    raw: (l) => (l.passAttempts > 0 ? l.passYards / l.passAttempts : null),
-    format: oneDecimal,
-  },
-  { key: 'passTDs', label: 'TD', raw: (l) => l.passTDs, perGame: true },
-  { key: 'passInts', label: 'Int', raw: (l) => l.passInts, perGame: true },
-  { key: 'passLongest', label: 'Lng', raw: (l) => l.passLongest },
-];
-
-const RUSHING_COLUMNS: ColumnDef<OffensiveStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'rushAttempts', label: 'Att', raw: (l) => l.rushAttempts, perGame: true },
-  { key: 'rushYards', label: 'Yds', raw: (l) => l.rushYards, perGame: true },
-  {
-    key: 'rushYardsPerCarry',
-    label: 'Y/C',
-    raw: (l) => (l.rushAttempts > 0 ? l.rushYards / l.rushAttempts : null),
-    format: oneDecimal,
-  },
-  { key: 'rushTDs', label: 'TD', raw: (l) => l.rushTDs, perGame: true },
-  { key: 'rushLongest', label: 'Lng', raw: (l) => l.rushLongest },
-];
-
-const RECEIVING_COLUMNS: ColumnDef<OffensiveStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'receptions', label: 'Rec', raw: (l) => l.receptions, perGame: true },
-  { key: 'receivingYards', label: 'Yds', raw: (l) => l.receivingYards, perGame: true },
-  {
-    key: 'receivingYardsPerCatch',
-    label: 'Y/R',
-    raw: (l) => (l.receptions > 0 ? l.receivingYards / l.receptions : null),
-    format: oneDecimal,
-  },
-  { key: 'receivingTDs', label: 'TD', raw: (l) => l.receivingTDs, perGame: true },
-  { key: 'receivingLongest', label: 'Lng', raw: (l) => l.receivingLongest },
-];
-
-const KICKING_COLUMNS: ColumnDef<KickingStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'fgMade', label: 'FGM', raw: (l) => l.fgMade, perGame: true },
-  { key: 'fgAttempts', label: 'FGA', raw: (l) => l.fgAttempts, perGame: true },
-  { key: 'fgPct', label: 'FG%', raw: (l) => pct(l.fgMade, l.fgAttempts), format: pctFormat },
-  { key: 'fgLongest', label: 'Lng', raw: (l) => l.fgLongest },
-  { key: 'xpMade', label: 'XPM', raw: (l) => l.xpMade, perGame: true },
-  { key: 'xpAttempts', label: 'XPA', raw: (l) => l.xpAttempts, perGame: true },
-  { key: 'xpPct', label: 'XP%', raw: (l) => pct(l.xpMade, l.xpAttempts), format: pctFormat },
-];
-
-const PUNTING_COLUMNS: ColumnDef<KickingStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'puntAttempts', label: 'Punts', raw: (l) => l.puntAttempts, perGame: true },
-  { key: 'puntYards', label: 'Yds', raw: (l) => l.puntYards, perGame: true },
-  {
-    key: 'puntAvg',
-    label: 'Avg',
-    raw: (l) => (l.puntAttempts > 0 ? l.puntYards / l.puntAttempts : null),
-    format: oneDecimal,
-  },
-  { key: 'puntNetYards', label: 'Net Yds', raw: (l) => l.puntNetYards, perGame: true },
-  { key: 'puntLongest', label: 'Lng', raw: (l) => l.puntLongest },
-  { key: 'puntIn20', label: 'In 20', raw: (l) => l.puntIn20, perGame: true },
-];
-
-const DEFENSE_COLUMNS: ColumnDef<DefensiveStatLine>[] = [
-  { key: 'gamesPlayed', label: 'GP', raw: (l) => l.gamesPlayed },
-  { key: 'tackles', label: 'Tkl', raw: (l) => l.tackles, perGame: true },
-  { key: 'assistedTackles', label: 'Ast', raw: (l) => l.assistedTackles, perGame: true },
-  { key: 'tacklesForLoss', label: 'TFL', raw: (l) => l.tacklesForLoss, perGame: true },
-  { key: 'sacks', label: 'Sck', raw: (l) => l.sacks, perGame: true, format: oneDecimal },
-  { key: 'interceptions', label: 'Int', raw: (l) => l.interceptions, perGame: true },
-  { key: 'interceptionReturnYards', label: 'IntYds', raw: (l) => l.interceptionReturnYards },
-  { key: 'passDeflections', label: 'PD', raw: (l) => l.passDeflections, perGame: true },
-  { key: 'forcedFumbles', label: 'FF', raw: (l) => l.forcedFumbles, perGame: true },
-  { key: 'fumbleRecoveries', label: 'FR', raw: (l) => l.fumbleRecoveries, perGame: true },
-];
 
 interface PlayerRow {
   playerId: number;

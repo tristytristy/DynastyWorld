@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useScrollLock } from '../../lib/useScrollLock';
 import { useRecruitModal } from '../../data/RecruitModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { TeamLogo } from './TeamLogo';
@@ -184,14 +185,13 @@ export function RecruitProfileModal() {
 
   const isOpen = recruit !== null;
 
+  useScrollLock(isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
-
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -220,7 +220,6 @@ export function RecruitProfileModal() {
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
       previouslyFocused.current?.focus();
     };
   }, [isOpen, closeRecruitModal]);

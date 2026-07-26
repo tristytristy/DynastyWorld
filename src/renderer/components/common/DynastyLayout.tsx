@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
+import { TeamProfileModal } from './TeamProfileModal';
 import type { DynastyTheme } from '../../../shared/types';
 
 // Hard-edged tabs in the display face; the active tab carries the signature
@@ -143,6 +144,7 @@ function SeasonThemedShell({ id }: { id: string }) {
       <DynastyNav id={id} />
       <HistoryOnlySeasonBanner dynastyId={id} />
       <Outlet />
+      <TeamProfileModal />
     </div>
   );
 }

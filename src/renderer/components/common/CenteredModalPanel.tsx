@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { useScrollLock } from '../../lib/useScrollLock';
 
 /**
  * The one standard modal shell for the app (Phase 1 + Phase 8 standardization,
@@ -36,17 +37,16 @@ export function CenteredModalPanel({
   anchorRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
 }) {
+  useScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
 

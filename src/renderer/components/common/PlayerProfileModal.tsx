@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useScrollLock } from '../../lib/useScrollLock';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { PlayerProfileContent } from './PlayerProfileContent';
 import { PlayerPortrait } from './PlayerPortrait';
@@ -166,14 +167,13 @@ export function PlayerProfileModal() {
     if (dynastyIdForEffect && playerIdForEffect !== undefined) pushRecent(dynastyIdForEffect, playerIdForEffect);
   }, [dynastyIdForEffect, playerIdForEffect]);
 
+  useScrollLock(isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
-
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -202,7 +202,6 @@ export function PlayerProfileModal() {
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
       previouslyFocused.current?.focus();
     };
   }, [isOpen, closePlayerModal]);

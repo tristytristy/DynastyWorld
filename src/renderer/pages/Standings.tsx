@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { ConferenceMark } from '../components/common/ConferenceMark';
-import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { getConferenceChampionshipTrophyPath } from '../lib/trophyAssetMapping';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -71,9 +71,8 @@ function TeamRow({
       <td className="proportional-nums px-5 py-4 font-semibold text-slate-900 dark:text-white">#{team.place}</td>
       <td className="px-5 py-4">
         <div className="flex items-center gap-3">
-          <TeamLogo team={{ assetName: team.teamName, label: team.teamName }} size="sm" />
           <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate font-semibold text-slate-900 dark:text-white">{team.teamName}</p>
+            <TeamLink teamIndex={team.teamIndex} teamName={team.teamName} nameClassName="truncate font-semibold text-slate-900 dark:text-white" />
             {team.isDivisionLeader && (
               <span
                 title="Division leader"

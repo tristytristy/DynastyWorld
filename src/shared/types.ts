@@ -734,6 +734,8 @@ export interface LeagueScoreGame {
   weekType: string;
   homeTeamName: string;
   awayTeamName: string;
+  homeTeamIndex: number;
+  awayTeamIndex: number;
   homeScore: number | null;
   awayScore: number | null;
   bowlName: string | null;
@@ -845,6 +847,75 @@ export interface TeamGameStat {
   opponentStats: TeamStatLine | null;
 }
 
+/** One of a team's top players, for the Team modal's best-players rail. */
+export interface TeamCardPlayer {
+  id: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  jerseyNumber: number;
+  overallRating: number;
+  portraitAssetName: string | null;
+}
+
+/** The single bundled payload behind the global Team modal — see getTeamCard. */
+export interface TeamCard {
+  teamIndex: number;
+  /** Record / rankings / recent + upcoming games — same SeasonOverview the Team Hub uses. */
+  overview: SeasonOverview;
+  topPlayers: TeamCardPlayer[];
+  /** Per-game stat lines; the modal aggregates these into the stat strip via the shared teamStats lib. */
+  games: TeamGameStat[];
+  conferenceName: string | null;
+  teamAssetName: string | null;
+  primaryColorHex: string | null;
+  secondaryColorHex: string | null;
+}
+
+/** One team's aggregated season line for the NCAA Hub national team-stat leaderboard. The UI derives per-game averages, ratios, and turnover margin from these totals. */
+export interface NationalTeamStatRow {
+  teamIndex: number;
+  teamName: string;
+  conferenceName: string | null;
+  games: number;
+  points: number;
+  pointsAllowed: number;
+  totalYards: number;
+  passYards: number;
+  rushYards: number;
+  defTotalYards: number;
+  defPassYards: number;
+  defRushYards: number;
+  thirdDownConv: number;
+  thirdDownAtt: number;
+  turnovers: number;
+  takeaways: number;
+  sacks: number;
+}
+
+/** A national player-leaderboard entry — player identity + team + the stat line for whichever unit they played. */
+export interface NationalLeaderEntry {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  jerseyNumber: number;
+  schoolYear: string;
+  portraitAssetName: string | null;
+  teamName: string;
+  teamIndex: number;
+  offense: OffensiveStatLine | null;
+  defense: DefensiveStatLine | null;
+}
+
+/** Top-100-per-category national player leaderboards (see getNationalStatLeaders). */
+export interface NationalStatLeaders {
+  passing: NationalLeaderEntry[];
+  rushing: NationalLeaderEntry[];
+  receiving: NationalLeaderEntry[];
+  defense: NationalLeaderEntry[];
+}
+
 export interface SeasonSummary {
   id: number;
   seasonYear: number;
@@ -863,6 +934,8 @@ export interface ScheduleGame {
   /** The user's own team's display name — for client-side stadium lookup on home games (see stadiumData.ts), mirrors `opponent`. */
   teamName: string;
   opponent: string;
+  /** The opponent's league team index (null for a bye/TBD) — lets a team name open the Team modal. */
+  opponentTeamIndex: number | null;
   isHome: boolean;
   status: string;
   dayOfWeek: string;
@@ -1170,6 +1243,8 @@ export interface LeagueTeamGame {
   bowlName: string | null;
   isHome: boolean;
   opponent: string;
+  /** The opponent's league team index — opens the Team modal. */
+  opponentTeamIndex: number;
   teamScore: number | null;
   opponentScore: number | null;
   result: 'W' | 'L' | 'T' | null;
@@ -1617,6 +1692,9 @@ export interface DynastyApi {
     getTeamStats: (dynastyId: string, seasonId?: number) => Promise<TeamStats | null>;
     /** Per-game team + opponent stat lines for one team (null teamIndex = the user's own) — the Statistics page's filterable source. */
     getTeamGameStats: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<TeamGameStat[] | null>;
+    getTeamCard: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<TeamCard | null>;
+    getNationalTeamStats: (dynastyId: string, seasonId?: number) => Promise<NationalTeamStatRow[] | null>;
+    getNationalStatLeaders: (dynastyId: string, seasonId?: number) => Promise<NationalStatLeaders | null>;
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
     getGameDetail: (dynastyId: string, gameId: number, seasonId?: number) => Promise<GameDetailData | null>;

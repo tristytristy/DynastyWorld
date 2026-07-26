@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CSSProperties, SyntheticEvent } from 'react';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { StatisticsCategorySection, type ColumnDef, type LeaderCardRow, type LeaderMetric } from '../components/common/StatisticsCategorySection';
 import type { StatTableRow } from '../components/common/StatisticsTable';
@@ -408,6 +409,7 @@ export function GameDetailContent({
     week: detail.week,
     teamName: primary.name,
     opponent: secondary.name,
+    opponentTeamIndex: secondary.teamIndex,
     isHome: primaryIsHome,
     status: detail.status,
     dayOfWeek: detail.dayOfWeek,
@@ -547,7 +549,14 @@ export function GameDetailContent({
       <HelmetImg teamName={team.name} side={sideName} className="-my-6 h-52 w-52 object-contain sm:-my-10 sm:h-80 sm:w-80" />
       <div className="flex flex-col items-center gap-1 text-center">
         <span className="h-1 w-12" style={{ backgroundColor: teamColor }} />
-        <p className="font-display text-base font-bold leading-tight text-slate-950 dark:text-white sm:text-lg">{team.name}</p>
+        <TeamLink
+          teamIndex={team.teamIndex}
+          teamName={team.name}
+          dynastyId={dynastyId}
+          seasonId={seasonId}
+          showLogo={false}
+          nameClassName="font-display text-base font-bold leading-tight text-slate-950 dark:text-white sm:text-lg"
+        />
         {team.currentRank && team.currentRank <= 25 && (
           <span className="type-eyebrow text-slate-400 dark:text-slate-500">#{team.currentRank}</span>
         )}

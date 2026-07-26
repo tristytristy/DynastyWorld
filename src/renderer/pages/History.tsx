@@ -4,6 +4,7 @@ import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { formatAwardLabel } from '../lib/awardFormat';
 import type {
@@ -85,7 +86,8 @@ function LeagueHistoryRow({ year }: { year: LeagueHistoryYearEntry }) {
       {year.nationalChampion ? (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           <span className="font-semibold text-slate-900 dark:text-white">National Champion:</span>{' '}
-          {year.nationalChampion.teamName} ({formatRecord(year.nationalChampion.wins, year.nationalChampion.losses)}) —{' '}
+          <TeamLink teamName={year.nationalChampion.teamName} showLogo={false} nameClassName="font-medium text-slate-700 dark:text-slate-200" />{' '}
+          ({formatRecord(year.nationalChampion.wins, year.nationalChampion.losses)}) —{' '}
           {year.nationalChampion.coachFirstName} {year.nationalChampion.coachLastName}
         </p>
       ) : (

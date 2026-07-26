@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { CoachPortrait } from '../components/common/CoachPortrait';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
@@ -155,9 +156,11 @@ function TeamSpot({
       {rankChip(rank)}
       <div className={`flex items-center gap-3 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
         <TeamLogo team={{ assetName: teamName, label: teamName }} size={compact ? 'sm' : 'md'} />
-        <p className={`font-semibold tracking-tight text-slate-950 dark:text-white ${compact ? 'text-base' : 'text-xl sm:text-2xl'}`}>
-          {teamName}
-        </p>
+        <TeamLink
+          teamName={teamName}
+          showLogo={false}
+          nameClassName={`font-semibold tracking-tight text-slate-950 dark:text-white ${compact ? 'text-base' : 'text-xl sm:text-2xl'}`}
+        />
       </div>
     </div>
   );
@@ -308,7 +311,7 @@ function Top25Row({ entry }: { entry: NcaaHubTop25Entry }) {
         <div className="flex items-center gap-3">
           <TeamLogo team={{ assetName: entry.teamName, label: entry.teamName }} size="sm" />
           <div className="min-w-0">
-            <p className="font-semibold leading-tight text-slate-900 dark:text-white">{entry.teamName}</p>
+            <TeamLink teamName={entry.teamName} showLogo={false} nameClassName="font-semibold leading-tight text-slate-900 dark:text-white" />
             {entry.conferenceName && (
               <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">{entry.conferenceName}</p>
             )}
@@ -343,7 +346,7 @@ function PlayoffRow({ entry }: { entry: NcaaHubCfpEntry }) {
       </span>
       <TeamLogo team={{ assetName: entry.teamName, label: entry.teamName }} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold leading-tight text-slate-900 dark:text-white">{entry.teamName}</p>
+        <TeamLink teamName={entry.teamName} showLogo={false} nameClassName="font-semibold leading-tight text-slate-900 dark:text-white" />
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {entry.wins}-{entry.losses}
           {entry.conferenceName ? ` - ${entry.conferenceName}` : ''}
@@ -368,7 +371,7 @@ function RecruitingRow({ entry }: { entry: NcaaHubRecruitingClassEntry }) {
       </span>
       <TeamLogo team={{ assetName: entry.teamName, label: entry.teamName }} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold leading-tight text-slate-900 dark:text-white">{entry.teamName}</p>
+        <TeamLink teamName={entry.teamName} showLogo={false} nameClassName="font-semibold leading-tight text-slate-900 dark:text-white" />
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {entry.conferenceName ?? 'National class ranking'}
           {entry.conferenceRank ? ` - No. ${entry.conferenceRank} in conference` : ''}
@@ -397,7 +400,7 @@ function RecordWatchRow({
       {rankChip(entry.mediaRank)}
       <TeamLogo team={{ assetName: entry.teamName, label: entry.teamName }} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold leading-tight text-slate-900 dark:text-white">{entry.teamName}</p>
+        <TeamLink teamName={entry.teamName} showLogo={false} nameClassName="font-semibold leading-tight text-slate-900 dark:text-white" />
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {entry.wins}-{entry.losses}
           {entry.conferenceName ? ` - ${entry.conferenceName}` : ''}
@@ -428,7 +431,7 @@ function ConferenceLeaderRow({ entry }: { entry: NcaaHubConferenceLeader }) {
           <div className="mt-2 flex items-center gap-3">
             <TeamLogo team={{ assetName: entry.teamName, label: entry.teamName }} size="sm" />
             <div className="min-w-0">
-              <p className="font-semibold leading-tight text-slate-900 dark:text-white">{entry.teamName}</p>
+              <TeamLink teamName={entry.teamName} showLogo={false} nameClassName="font-semibold leading-tight text-slate-900 dark:text-white" />
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Conf {entry.conferenceWins}-{entry.conferenceLosses}
               </p>

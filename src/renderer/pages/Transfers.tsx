@@ -4,7 +4,7 @@ import type { TeamTransfers, TransferEntry } from '../../shared/types';
 import { PageHeader } from '../components/ui/PageHeader';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
-import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 
@@ -18,13 +18,21 @@ function TransferRow({
   onOpen: (entry: TransferEntry) => void;
 }) {
   // For an incoming move the "other" school is where they came FROM; for an
-  // outgoing move it's where they went TO.
+  // outgoing move it's where they went TO. Only the TO side carries an index.
   const otherTeam = direction === 'in' ? entry.fromTeam : entry.toTeam;
+  const otherTeamIndex = direction === 'out' ? entry.toTeamIndex : undefined;
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(entry)}
-      className="flex w-full items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(entry);
+        }
+      }}
+      className="flex w-full cursor-pointer items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 text-left transition hover:border-[var(--team-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
     >
       <PlayerPortrait player={entry} size="sm" className="!h-9 !w-9" />
       <div className="min-w-0 flex-1">
@@ -35,12 +43,11 @@ function TransferRow({
           <span>{entry.position}</span>
           <span aria-hidden="true">·</span>
           <span>{direction === 'in' ? 'from' : 'to'}</span>
-          <TeamLogo team={{ assetName: otherTeam, label: otherTeam }} size="sm" className="!h-4 !w-4" />
-          <span className="truncate">{otherTeam}</span>
+          <TeamLink teamIndex={otherTeamIndex} teamName={otherTeam} size="sm" logoClassName="!h-4 !w-4" nameClassName="truncate" />
         </p>
       </div>
       <span className="tnum shrink-0 text-xs font-semibold text-slate-400 dark:text-slate-500">{entry.seasonYear}</span>
-    </button>
+    </div>
   );
 }
 

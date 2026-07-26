@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useScrollLock } from '../../lib/useScrollLock';
 import {
   ABILITY_TIER_OPTIONS,
   MENTAL_ABILITY_FIELDS,
@@ -453,10 +454,10 @@ export function PlayerEditorModal({
     };
   }, [dynastyId, playerId, isRecruit]);
 
+  useScrollLock(true);
+
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -483,7 +484,6 @@ export function PlayerEditorModal({
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
       previouslyFocused.current?.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

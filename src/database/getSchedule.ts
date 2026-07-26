@@ -80,6 +80,7 @@ function toScheduleGame(
     week: game.week,
     teamName: userTeamName,
     opponent,
+    opponentTeamIndex: opponentIndex,
     isHome,
     status: game.status,
     dayOfWeek: game.dayOfWeek,
