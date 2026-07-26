@@ -45,23 +45,22 @@ const HELP_TOPICS: HelpTopic[] = [
         <p className="font-semibold text-slate-900 dark:text-white">
           Syncing is how the app captures your dynasty. These are the moments that matter.
         </p>
+        <p>Starting a brand-new dynasty, here&apos;s the order — walking through a season front to back:</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong>Every season, at the End of Season Recap</strong> — after your bowl/playoff and the awards
-            ceremony, right before you advance. This is the important one: it locks in your final record, postseason
-            result, and every award.
+            <strong>Week 0 — your first sync of every season.</strong> Before any games are played, the game names its
+            Preseason All-America teams; syncing now captures them and sets which school your coach belongs to. On a
+            fresh dynasty, this is where your archive begins.
           </li>
           <li>
-            <strong>Week 0 of each new season</strong> — captures the Preseason All-America teams and sets which
-            school your coach belongs to for the year.
+            <strong>During the season — any time you like.</strong> Totally safe; every sync just refreshes that
+            season in place, nothing is ever duplicated. Sync on an <strong>awards week</strong> to record each honor
+            the moment the game hands it out.
           </li>
           <li>
-            <strong>The awards week</strong> — if you want each honor recorded exactly when the game hands it out.
-            Weekly honors refresh on every in-season sync.
-          </li>
-          <li>
-            <strong>Any time in between</strong> — totally safe. Every sync just refreshes that season in place;
-            nothing is ever duplicated.
+            <strong>The End of Season Recap — the one that matters most.</strong> After your bowl/playoff and the
+            awards ceremony, right before you advance. This locks in your final record, postseason result, and every
+            award. Never skip it.
           </li>
         </ul>
         <p className="font-semibold text-slate-900 dark:text-white">You can&apos;t sync at the wrong time.</p>

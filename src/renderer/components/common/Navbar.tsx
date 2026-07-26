@@ -15,6 +15,13 @@ export function Navbar() {
         <span className="tnum self-end pb-0.5 text-xs font-light tracking-wide text-slate-400 dark:text-slate-500">
           v{__APP_VERSION__}
         </span>
+        {/* Dev-only build stamp — empty (and hidden) on release builds. Lets a
+            playtest session confirm at a glance it's running the newest build. */}
+        {__BUILD_LABEL__ ? (
+          <span className="tnum self-end pb-0.5 text-xs font-medium tracking-wide text-amber-500 dark:text-amber-400">
+            {__BUILD_LABEL__}
+          </span>
+        ) : null}
       </div>
     </header>
   );

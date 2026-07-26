@@ -1926,6 +1926,8 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 
 **Version note:** user has designated the **next release as 1.0** (this tightening pass is the stability work they wanted). Not bumped in package.json yet — that's a release-cut action for when they're ready.
 
+**Follow-ups (same day):** (1) the "When to sync" cheat sheet (manual Section 01 + the Quick Help topic) was reordered **chronologically for a new dynasty** — Week 0 first, then in-season, then End of Season Recap last — so it no longer reads as if season 1 skips the Week 0 sync. (2) Added a **dev-only build stamp**: webpack injects `__BUILD_LABEL__` ("dev build · <time>") on `--mode=development` (the playtest .bat) and an empty string on `--mode=production` (release). Shown in amber next to the version in the Navbar header + About panel, and on the manual cover (`.build-stamp:empty{display:none}` collapses it on release). So a playtest session can confirm at a glance it's running the newest build (the timestamp changes every rebuild); `make-manual-pdf.js` always renders it empty for the shipped PDF.
+
 **Also:** parked **Phase 5 (coaching tree)** as a `backlog` item in the Command Center for later, with the two research prereqs (real carousel save to pin the coach-flip stage; confirm offseason stages across a 2nd offseason).
 
 ---

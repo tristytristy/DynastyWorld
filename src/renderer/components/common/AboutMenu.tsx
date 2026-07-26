@@ -69,6 +69,11 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
             <span className="border border-[color:color-mix(in_srgb,var(--team-primary)_50%,transparent)] bg-[color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-2.5 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100">
               v{__APP_VERSION__}
             </span>
+            {__BUILD_LABEL__ ? (
+              <span className="border border-amber-400/50 bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                {__BUILD_LABEL__}
+              </span>
+            ) : null}
             <span className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">by Evanzport Interactive</span>
           </div>
 

@@ -90,6 +90,9 @@
   .cover .rule { width: 1.1in; height: 3px; background: var(--gold); margin: 0.32in auto 0.3in; }
   .cover .meta { display: flex; justify-content: center; gap: 0.7in; font-size: 9.5pt; color: rgba(255,255,255,0.62); }
   .cover .meta b { color: #fff; font-weight: 600; display: block; font-size: 11pt; margin-bottom: 1px; }
+  /* Dev-build stamp — shows only when the build injected a label; collapses to nothing on release. */
+  .cover .build-stamp { margin-top: 0.22in; font-size: 9.5pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+  .cover .build-stamp:empty { display: none; margin: 0; }
 
   /* ---- Contents ---- */
   .toc-grid { margin-top: 0.4in; column-count: 2; column-gap: 0.5in; }
@@ -206,6 +209,7 @@
       <div><b>Version __VERSION__</b>Desktop app · Windows</div>
       <div><b>Read me first</b>Written for players of every level</div>
     </div>
+    <div class="build-stamp">__BUILD_LABEL__</div>
   </div>
 </section>
 
@@ -241,13 +245,13 @@
 
   <div class="callout">
     <div class="lbl">When to sync — the whole cheat sheet</div>
-    <p>If you read nothing else, read this. A <strong>sync</strong> is how the app captures your dynasty; these are the moments that matter:</p>
+    <p>If you read nothing else, read this. A <strong>sync</strong> is how the app captures your dynasty. Starting a brand-new dynasty, here's when to do it, walking through a season in order:</p>
     <ul class="clean">
-      <li><strong>Every season, at the End of Season Recap</strong> — after your bowl/playoff and the awards ceremony, right before you advance. This is the one that matters most: it locks in your final record, postseason result, and every award.</li>
-      <li><strong>Week 0 of each new season</strong> — captures the Preseason All-America teams and sets which school your coach belongs to for the year.</li>
-      <li><strong>Any time you like in between</strong> — totally safe. Every sync just refreshes that season in place; nothing is ever duplicated.</li>
+      <li><strong>Week 0 — your very first sync, and the first sync of every season after.</strong> Before you play a single game, the game names its Preseason All-America teams; syncing now captures them and sets which school your coach belongs to for the year. On a fresh dynasty, this is where your archive begins.</li>
+      <li><strong>During the season — any time you like.</strong> Totally safe: every sync just refreshes that season in place, and nothing is ever duplicated. Sync on an <strong>awards week</strong> if you want each honor recorded the moment the game hands it out.</li>
+      <li><strong>The End of Season Recap — the one that matters most.</strong> After your bowl or playoff and the awards ceremony, right before you advance to the next year. This locks in your final record, postseason result, and every award. Never skip this one.</li>
     </ul>
-    <p><strong>The good news:</strong> you can't break your archive by syncing at the "wrong" time anymore. Once a season is finished, the app automatically protects it — later syncs can't overwrite it — and the coaching carousel is handled for you (Section 05). Just sync at the recap every year and you're set.</p>
+    <p><strong>The good news:</strong> you can't break your archive by syncing at the "wrong" time anymore. Once a season is finished, the app automatically protects it — later syncs can't overwrite it — and the coaching carousel is handled for you (Section 05). Sync at Week 0 and again at the recap every year, and you're set.</p>
   </div>
 
   <h3 class="sub">The single most important idea</h3>

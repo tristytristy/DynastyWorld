@@ -5,6 +5,21 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const { version: APP_VERSION } = require('./package.json');
 
+// A short, human-readable stamp of WHEN this bundle was built — shown next to
+// the version in DEV builds only (the playtest .bat runs `--mode=development`;
+// release packaging runs `--mode=production`). It changes on every rebuild, so
+// while testing you can glance at the header/manual and know for certain you're
+// looking at the latest changes and not a stale build. Empty on release, so
+// shipped builds show a clean version with no timestamp.
+const IS_DEV_BUILD = process.argv.join(' ').includes('development');
+const BUILD_TIME = new Date().toLocaleString('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const BUILD_LABEL = IS_DEV_BUILD ? `dev build · ${BUILD_TIME}` : '';
+
 // Persistent on-disk cache — after the first build, an unchanged-source
 // rebuild (the common case when opening the app via the launcher) drops from
 // ~30s to a few seconds. Keyed per config and invalidated automatically when
@@ -148,7 +163,10 @@ const rendererConfig = {
   plugins: [
     // Bakes the package.json version in at build time so the UI can show it
     // without a runtime IPC round-trip (single source of truth: package.json).
-    new webpack.DefinePlugin({ __APP_VERSION__: JSON.stringify(APP_VERSION) }),
+    new webpack.DefinePlugin({
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+      __BUILD_LABEL__: JSON.stringify(BUILD_LABEL),
+    }),
     new HtmlWebpackPlugin({
       template: './public/index.html',
     }),
@@ -183,7 +201,8 @@ const rendererConfig = {
               .replace(/__INTER700__/g, 'assets/fonts/inter-latin-700-normal.woff2')
               .replace(/__LOGO_MARK__/g, 'assets/Logo/Logo-mark.png')
               .replace(/__SPLASH__/g, 'assets/splash/spshscr.png')
-              .replace(/__VERSION__/g, APP_VERSION);
+              .replace(/__VERSION__/g, APP_VERSION)
+              .replace(/__BUILD_LABEL__/g, BUILD_LABEL);
           },
         },
       ],

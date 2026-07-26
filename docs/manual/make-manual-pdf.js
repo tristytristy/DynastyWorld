@@ -40,7 +40,9 @@ html = html
   .replace(/__INTER700__/g, dataUri(path.join(FONTS, 'inter-latin-700-normal.woff2'), 'font/woff2'))
   .replace(/__LOGO_MARK__/g, dataUri(LOGO, 'image/png'))
   .replace(/__SPLASH__/g, dataUri(SPLASH, 'image/png'))
-  .replace(/__VERSION__/g, version);
+  .replace(/__VERSION__/g, version)
+  // The standalone PDF is a shipped artifact — always clean, no dev build stamp.
+  .replace(/__BUILD_LABEL__/g, '');
 
 // Written next to the template but gitignored — a transient render input.
 const MANUAL_HTML = path.join(HERE, 'manual.rendered.html');
