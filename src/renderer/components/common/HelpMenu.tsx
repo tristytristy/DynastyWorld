@@ -58,9 +58,16 @@ const HELP_TOPICS: HelpTopic[] = [
             the moment the game hands it out.
           </li>
           <li>
-            <strong>The End of Season Recap — the one that matters most.</strong> After your bowl/playoff and the
-            awards ceremony, right before you advance. This locks in your final record, postseason result, and every
-            award. Never skip it.
+            <strong>The End of Season Recap — lock in the season.</strong> After your bowl/playoff and the awards
+            ceremony. This captures your final record, postseason result, and every award, and locks the season so
+            nothing can overwrite it later.
+          </li>
+          <li>
+            <strong>The &quot;Players Leaving&quot; step — capture who&apos;s moving on.</strong> Just after the recap,
+            the offseason reaches the step where the game decides who declares for the NFL, who graduates, and who&apos;s
+            transferring out (and why). Sync here to record it all on your Transfers &amp; Departures page — it&apos;s
+            the only moment that data exists, and the app locks the roster shortly after, so don&apos;t advance past it
+            without syncing.
           </li>
         </ul>
         <p className="font-semibold text-slate-900 dark:text-white">You can&apos;t sync at the wrong time.</p>
