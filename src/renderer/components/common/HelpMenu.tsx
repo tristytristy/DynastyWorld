@@ -39,36 +39,45 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'sync-cadence',
-    title: 'Sync every season before you advance',
+    title: 'When to sync (read this first)',
     content: (
       <>
         <p className="font-semibold text-slate-900 dark:text-white">
-          This is the single most important habit for getting a complete dynasty archive.
+          Syncing is how the app captures your dynasty. These are the moments that matter.
+        </p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            <strong>Every season, at the End of Season Recap</strong> — after your bowl/playoff and the awards
+            ceremony, right before you advance. This is the important one: it locks in your final record, postseason
+            result, and every award.
+          </li>
+          <li>
+            <strong>Week 0 of each new season</strong> — captures the Preseason All-America teams and sets which
+            school your coach belongs to for the year.
+          </li>
+          <li>
+            <strong>The awards week</strong> — if you want each honor recorded exactly when the game hands it out.
+            Weekly honors refresh on every in-season sync.
+          </li>
+          <li>
+            <strong>Any time in between</strong> — totally safe. Every sync just refreshes that season in place;
+            nothing is ever duplicated.
+          </li>
+        </ul>
+        <p className="font-semibold text-slate-900 dark:text-white">You can&apos;t sync at the wrong time.</p>
+        <p>
+          The moment a season finishes, the app locks it. So if you sync again later — deep in the offseason,
+          mid-coaching-carousel, on National Signing Day — that finished season stays exactly as you left it, and
+          nothing good is overwritten. You&apos;ll just see the normal &quot;Synced&quot; confirmation. Even changing
+          schools is handled for you: your finished season stays with your old school, and your new school picks up at
+          Week 0. Sync freely.
         </p>
         <p>
-          A sync captures your save exactly as it looks right now — this season&apos;s roster, schedule, stats, and
-          standings. Once you sim into the next year, that snapshot is gone for good. There&apos;s no way to look back
-          and rebuild it later — the save file only ever holds the current state of your dynasty, not a history of
-          every season along the way.
-        </p>
-        <p>
-          The habit that works: <strong>sync once near the end of each season</strong> — after your bowl game or
-          playoff run wraps up and awards are announced — right before you advance to the next year. That&apos;s the
-          moment your season&apos;s story is actually complete: final record, postseason result, and every award
-          locked in.
-        </p>
-        <p>
-          Syncing more than once during the same season is completely safe. Every sync just refreshes that
-          season&apos;s data in place — nothing gets duplicated. So check in as often as you like mid-season; just
-          make sure your <em>last</em> sync before advancing catches the finished product.
-        </p>
-        <p>
-          Miss one anyway? The next time you sync, the app recovers that year&apos;s <em>league-wide</em> history —
-          the national champion, each conference&apos;s champion, and the major awards — onto the History tab (this is
-          a &quot;History Only&quot; season; see the next section). That&apos;s the limit of what can come back, though:
-          your own team&apos;s roster, schedule, and game-by-game stats for a skipped season are gone for good, because
-          the save file simply doesn&apos;t keep them. Recovering the trophies is a nice consolation, not a substitute
-          for syncing — a complete archive only happens if you sync every season.
+          Why it matters: the save file only ever holds the <em>current</em> state of your dynasty, never a history of
+          every season. Miss a season entirely and the next sync can still recover that year&apos;s{' '}
+          <em>league-wide</em> facts — national champion, conference champions, major awards — as a &quot;History
+          Only&quot; season (see the next topic), but your own team&apos;s roster and game-by-game stats for a skipped
+          year are gone for good. A complete archive only happens if you sync every season.
         </p>
         <p>
           For the fullest experience, start the app on a <strong>fresh dynasty</strong> and sync from season one. If
@@ -282,10 +291,10 @@ export function HelpMenu({ triggerClassName }: { triggerClassName?: string } = {
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
-        Help
+        Quick Help
       </button>
 
-      <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={46} eyebrow="Help & How-To" title="Getting the most out of your dynasty archive.">
+      <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={46} eyebrow="Quick Help" title="Getting the most out of your dynasty archive.">
               <div className="grid grid-cols-[13rem,1fr] gap-4">
                 <section className={`max-h-[28rem] space-y-1 overflow-y-auto ${sectionClass}`}>
                   {HELP_TOPICS.map((topic) => (

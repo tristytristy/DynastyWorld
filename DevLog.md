@@ -1914,6 +1914,21 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Still open:** confirm offseason stage numbers across a 2nd offseason; pin coach-flip stage with a real carousel save. Uncommitted as of this entry.
 
 ---
+## Phase — Coach alma-mater fix + manual/Quick-Help rewrite (2026-07-26)
+
+**Coach alma mater was wrong for basically every coach (bug fix).** User reported custom-coach alma maters looking wrong. Probed the real SMU + Auburn saves: `Coach.AlmaMater` is a plain int but it is **NOT `Team.TeamIndex`** (the long-standing assumption in extract-coaches). It indexes the **TEAM_LOGO id space** — EA's full alphabetical school master list (FBS + FCS + others). Resolving by teamIndex produced confidently-wrong schools that drift down the alphabet as interspersed FCS schools push indices up (offset grows: BYU +1, Georgia +5, Oklahoma +10, Texas Tech +13). Smoking gun: **Kirby Smart alma=34 → teamIndex 34 = Indiana, but logoId 34 = Georgia** (his real school); the user's own **Rhett Lashlee showed "Arkansas State" instead of Arkansas**. The original "it's a TeamIndex" note only checked values were in-range, never against ground truth — that was the flaw. The in-save `College` table is an empty template (the real list is a static game asset), so TEAM_LOGO on the Team rows is the only in-save handle on that id space.
+
+**Fix:** `extract-teams.ts` now extracts `logoId` (TEAM_LOGO) onto `TeamData`; `getCoaches.ts` resolves `almaMater` against a `logoId → displayName` map (`buildLogoNameMap`) that **excludes the FCS pool (teamIndex 255)**, so non-FBS almas and sentinels (150/151) resolve to null instead of showing "Practice"/"FCS East". Only `getCoaches` resolves alma mater anywhere. **Verified end-to-end** on a real SMU import through the actual preload API: Lashlee→Arkansas, Applewhite→Texas, Loepp→UTSA — and confirmed correct for every coach with an FBS real-alma (Fickell→Ohio State, Heupel→Oklahoma, Riley→Texas Tech, Sarkisian→BYU, Bielema→Iowa). **Requires a re-sync** of existing seasons (new extraction field). typecheck/lint/build clean. Memory: `reference-coach-alma-mater`.
+
+**Manual + in-app help rewrite (phase-aware sync made the old advice obsolete).** With the silent phase-gating live, the fragile coaching-carousel sync instructions are wrong, so rewrote the guidance:
+- **Manual (`docs/manual/manual.template.html`):** added a prominent **"When to sync — the whole cheat sheet"** callout at the very top of Section 01 (users don't read far); Section 02 gained a "you can't sync at the wrong time" paragraph and swapped the "changing schools = careful order" bullet for an "awards week" one; **Section 05 "Moving to a new school" fully rewritten** — deleted the 4-step danger-zone procedure + warn callout, replaced with "the app handles carousel timing for you"; Section 13 tip updated to match; Section 06 renamed to **"Transfers & Departures"** with the new departures/NFL-projection copy; Section 11 documents the new "Check for updates on startup" toggle.
+- **Help → "Quick Help":** renamed the in-app tool (button + eyebrow in HelpMenu.tsx, sidebar shows "Quick Help", manual references updated). Rewrote the sync topic into a scannable "When to sync (read this first)" with the key weeks + the "you can't sync wrong / carousel handled for you" reassurance. Verified via screenshot (sidebar now Preferences · Stadium · Quick Help · User Manual · About).
+
+**Version note:** user has designated the **next release as 1.0** (this tightening pass is the stability work they wanted). Not bumped in package.json yet — that's a release-cut action for when they're ready.
+
+**Also:** parked **Phase 5 (coaching tree)** as a `backlog` item in the Command Center for later, with the two research prereqs (real carousel save to pin the coach-flip stage; confirm offseason stages across a 2nd offseason).
+
+---
 ## Template for new entries
 
 ```markdown
