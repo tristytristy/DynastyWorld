@@ -195,6 +195,16 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
             className={INPUT_CLASS}
           />
         </Field>
+        <Field label="Skill Points">
+          <input
+            type="number"
+            min={0}
+            max={32767}
+            value={draft.skillPoints}
+            onChange={(e) => update({ skillPoints: Number(e.target.value) })}
+            className={INPUT_CLASS}
+          />
+        </Field>
         <Field label="Impact Player">
           <select
             value={String(draft.isImpactPlayer)}

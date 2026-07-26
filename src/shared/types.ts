@@ -75,6 +75,13 @@ export interface PlayerEditFields {
    * a low-prestige program actually meet a recruit's NIL and keep him committed.
    */
   nilDemand: number;
+  /**
+   * Player.SkillPoints — the spendable skill-points currency the game accrues
+   * (from ExperiencePoints) and the player spends to upgrade attributes/abilities.
+   * Unsigned 15-bit field (real max 32,767); real rosters sit in the single/low
+   * double digits. Distinct from SkillGroupCap1..6 (the per-group rating ceilings).
+   */
+  skillPoints: number;
   isImpactPlayer: boolean;
   isCreated: boolean;
   isUserControlled: boolean;

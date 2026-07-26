@@ -1931,6 +1931,15 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Also:** parked **Phase 5 (coaching tree)** as a `backlog` item in the Command Center for later, with the two research prereqs (real carousel save to pin the coach-flip stage; confirm offseason stages across a 2nd offseason).
 
 ---
+## Phase — Editable Skill Points on the player editor (2026-07-26)
+
+**Ask:** user asked whether a player's **skill points** are editable / already in the app. They weren't — the editor's "Skill Group Caps" (`SkillGroupCap1..6`) are the per-group rating *ceilings*, a different thing from the spendable skill-points currency. Probed the save: `Player.SkillPoints` (unsigned 15-bit int, real max 32,767; real rosters sit single/low-double digits — observed 0–61) is the spendable currency; `Player.ExperiencePoints` (20-bit) is the XP that accrues toward it.
+
+**Shipped:** added **Skill Points** as an editable field, mirroring the existing coach `CoachPoints` pattern — `PlayerEditFields.skillPoints`, read in `readPlayerFields` (`Number(r.SkillPoints)`), written in `writePlayerFields` clamped to `[0, 32767]` (wrap guard, same as NIL/CoachPoints), and a number input on the editor Profile tab right after NIL Demand. Left `ExperiencePoints` out for now (not asked; trivial to add the same way if wanted).
+
+**Verified:** typecheck/lint/build clean; **round-tripped on a disposable SMU copy** — SkillPoints 11 → 42, saved, reopened, persisted. (Player editing is the normal safe write path — Section 10, not the experimental Force-Commit path.)
+
+---
 ## Template for new entries
 
 ```markdown
