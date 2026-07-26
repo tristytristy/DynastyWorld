@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import { getCheckUpdatesOnStartup } from '../../lib/updatePrefs';
 import type { UpdateCheckResult } from '../../../shared/types';
 
 /** Remembers which version the user chose "Later" on, so it doesn't nag again for the same one. */
@@ -25,6 +26,7 @@ export function UpdateNotice() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!getCheckUpdatesOnStartup()) return; // user turned off the launch check (About panel still checks manually)
     let cancelled = false;
     window.api.update
       .check()

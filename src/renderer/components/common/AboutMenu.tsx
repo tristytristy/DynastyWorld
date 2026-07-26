@@ -69,7 +69,7 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
             <span className="border border-[color:color-mix(in_srgb,var(--team-primary)_50%,transparent)] bg-[color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-2.5 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100">
               v{__APP_VERSION__}
             </span>
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">by Antigracity</span>
+            <span className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">by Evanzport Interactive</span>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-y border-slate-200/70 py-4 dark:border-white/5">

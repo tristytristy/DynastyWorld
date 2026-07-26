@@ -5,6 +5,7 @@ import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider
 import type { ColorMode } from '../../theme/themePreference';
 import type { AssetStatus } from '../../../shared/types';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import { getCheckUpdatesOnStartup, setCheckUpdatesOnStartup } from '../../lib/updatePrefs';
 
 function SegmentButton({
   label,
@@ -146,6 +147,7 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
     }
   };
   const [isOpen, setIsOpen] = useState(false);
+  const [checkOnStartup, setCheckOnStartupState] = useState(getCheckUpdatesOnStartup());
   const isDark = appearance === 'dark';
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -325,6 +327,34 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
               >
                 Change folder…
               </button>
+            </CollapsibleSection>
+          </div>
+
+          <div className="space-y-4">
+            <p className={`type-eyebrow ${subtleTextClass}`}>Updates</p>
+            <CollapsibleSection
+              title="Check for updates on startup"
+              isDark={isDark}
+              outerClass={sectionClass}
+              accessory={
+                <input
+                  id="pref-check-updates"
+                  type="checkbox"
+                  checked={checkOnStartup}
+                  onChange={(e) => {
+                    setCheckOnStartupState(e.target.checked);
+                    setCheckUpdatesOnStartup(e.target.checked);
+                  }}
+                  className="h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
+                  aria-label="Check for updates on startup"
+                />
+              }
+            >
+              <label htmlFor="pref-check-updates" className={`block cursor-pointer text-xs leading-5 ${subtleTextClass}`}>
+                When on, the app quietly checks for a newer version each time it launches and shows a one-time notice if
+                one is available (it never interrupts if you&apos;re offline). Turn it off to launch without checking —
+                you can always check manually from the About panel.
+              </label>
             </CollapsibleSection>
           </div>
         </div>
