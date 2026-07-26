@@ -82,6 +82,12 @@ export interface PlayerEditFields {
    * double digits. Distinct from SkillGroupCap1..6 (the per-group rating ceilings).
    */
   skillPoints: number;
+  /**
+   * Player.ExperiencePoints — the XP a player accrues from games, which converts
+   * into SkillPoints. Unsigned 20-bit field (real max 1,048,575); real rosters
+   * range into the low tens of thousands.
+   */
+  experiencePoints: number;
   isImpactPlayer: boolean;
   isCreated: boolean;
   isUserControlled: boolean;

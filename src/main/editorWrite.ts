@@ -77,6 +77,7 @@ function readPlayerFields(r: FranchiseRecord): PlayerEditFields {
     idealRecruitingPitch: String(r.IdealRecruitingPitch),
     nilDemand: Number(r.BaseNILValue),
     skillPoints: Number(r.SkillPoints),
+    experiencePoints: Number(r.ExperiencePoints),
     isImpactPlayer: Boolean(r.IsImpactPlayer),
     isCreated: Boolean(r.IsCreated),
     isUserControlled: Boolean(r.IsUserControlled),
@@ -110,6 +111,8 @@ function writePlayerFields(r: FranchiseRecord, fields: PlayerEditFields): void {
   // SkillPoints is an unsigned 15-bit field; clamp to its real range so an
   // over-range entry can't wrap to a garbage value (same guard as NIL/CoachPoints).
   r.SkillPoints = clamp(Math.round(fields.skillPoints), 0, 32767);
+  // ExperiencePoints is an unsigned 20-bit field; clamp to its real range.
+  r.ExperiencePoints = clamp(Math.round(fields.experiencePoints), 0, 1048575);
   r.IsImpactPlayer = fields.isImpactPlayer;
   r.IsCreated = fields.isCreated;
   r.IsUserControlled = fields.isUserControlled;
