@@ -1880,6 +1880,40 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **What's in 0.6.3 vs 0.6.2** (all detailed in the entries above): the Team Hub Statistics refactor (Team/Player split, filter-driven team stats, collapsible sections, honest per-game/season, 3rd-down-allowed, league-team stats); the new **NCAA Hub → Statistics** page (national team + player-stat leaderboards); the global **Team modal + clickable team names** everywhere (Phases 1–3); the **Check-for-Update** feature (this is the bootstrapping release that seeds it — it can detect the NEXT one); and the bug fixes — transfers showing HS recruits as FCS logos, the modal stuck-scroll + off-center positioning, and players/coaches showing initials instead of their portrait (EA truncation-dash). This is the first release built from committed history (the branch had accumulated 0.6.0–0.6.2's work uncommitted).
 
 ---
+## Phase — Research: save-phase map + sync-gating spec (2026-07-25)
+
+**Goal:** stop broken data by making sync phase-aware — the save is one mutable snapshot and different data is final at different calendar points (e.g. by Signing Day, TeamIDs have shuffled for next year). User captured a **full Auburn cycle** (2026→2027, 32 weekly saves) into `Dynasty Save Test/Full Season Saves`; I built a reusable `scratchpad/save-inspector.js` (phase fingerprint for any save) and read every transition.
+
+**Key finding — a clean numeric gate exists:** `SeasonInfo.CurrentWeekType` (PreSeason/RegularSeason/NationalChampionship/OffSeason) + `CurrentOffseasonStage` (1–9). Mapped the whole cycle: schedule editable in PreSeason (934 games) → locks in RegularSeason (944); postseason awards finalize during bowls; **OffSeason stage 1 = End of Season Recap** (season final, rosters still intact, pool 4,525) ← the clean anchor; **stage 2 = Players Leaving** (`LeavingPlayer` table populates, 2,618 rows); **stage 3–4 = roster churn** (pool → 9,793, TeamIDs change, awards thinned 600→243); **stage 7 = National Signing Day** (Signed → 4,369); new season resets in PreSeason.
+
+**Departures / draft reality:** `LeavingPlayer` (at stage 2) gives who left + why (`LeaveType`: `EarlyNFL_1..7` NFL declares by projected round, or `Transfer_<reason>`) + `ProjectRound` 1–7. But `PLYR_DRAFTROUND`/`PLYR_DRAFTPICK` stayed at sentinel the whole cycle — **CFB doesn't simulate the NFL draft pick-by-pick**, so a Departures log shows "declared, projected Round N," never a real pick number.
+
+**Coach carousel:** coach flips to the new team right AFTER the natty (user-confirmed from the JMU→Cincinnati work; ~week-18 `CoachTransactionHistoryEntry` + `PrevTeamIndex`). Rule: capture coach→team at **PreSeason Wk0**, lock it, don't re-read until the next Wk0 → the concluded season can't be corrupted by a carousel sync; `PrevTeamIndex` is the fallback if the first sync is post-flip. This retires the fragile "sync old school at bowl / not in carousel / new school at Wk0" instructions.
+
+**Deliverable:** full spec written to memory `reference-sync-phase-map` (phase detection, the cycle table, per-category capture rules mapping the user's wishlist, roster-churn timeline, coach rule + PrevTeamIndex fallback, finalize/lock). Enables: phase-aware sync + a sync-time phase notice; a **Departures log** (transfers-out w/ reason, NFL declares w/ projected round, graduations); **transfer reasons** on the Transfers page; a **coaching tree** (where former assistants took jobs, growing over seasons).
+
+**Still to confirm before building:** the offseason stage numbers hold in a 2nd offseason; weekly-honor capture timing; a real carousel save to pin the exact coach-flip stage. NO app code yet — research/spec only.
+
+---
+## Phase — Phase-aware sync: gating + season-lock + Departures log (2026-07-26)
+
+**Goal:** turn the research spec above into structure. Sync whenever you want without corrupting a concluded season — the gate is **silent** (normal "Synced" confirmation), the timing rules become code instead of advice.
+
+**Shipped:**
+- **Phase 1 — detection.** `extract-league.ts` now reads `SeasonInfo.CurrentWeekType` + `CurrentOffseasonStage` into `LeagueData`. New pure helper `shared/syncPhase.ts` (`deriveSyncPhase` → `{kind, offseasonStage, weekType, label}` + predicates `isScheduleFinal` / `isSeasonFinalizing` (offseason stage ≤ 2) / `isSeasonLocked` (stage ≥ 3)). Migration #9 `schema_v9_season_phase.sql` adds `seasons.synced_week_type`, `synced_offseason_stage`, `finalized`; `helpers.ts` gains `updateSeasonPhase()` + Season/SeasonRow fields.
+- **Phase 2 — gated ingestion.** `importExtraction.ts` classifies the save's phase and computes `blockWrite = finalizedElsewhere || isSeasonLocked || (existing.finalized && !finalizing)`. In-progress → writes all (but **skips schedule/leagueSchedule snapshots in PreSeason** — the 934→944 editable window). OffSeason stage ≤ 2 → writes final data + sets `finalized = 1`. Stage ≥ 3 or already-finalized → **overwrite blocked**, protecting the concluded season from stage-3+ roster churn (pool 4,525→9,793) and award thinning (600→243). Folds the existing coach-move lock into the one gate.
+- **Phase 3 — coach→team.** Satisfied by the phase-lock: coach→team is set when the season row is created and the offseason lock guarantees the post-natty flip can't touch the concluded season until the next Wk0. `PrevTeamIndex` fallback preserved. (Exact flip stage still to pin against a real carousel save.)
+- **Phase 4 — Departures.** New `extract-departures.ts` reads the `LeavingPlayer` table (most-populated instance), resolves each Player ref, classifies `EarlyNFL_1..7` → `nfl` (+ projected round), `Transfer_<reason>` → `transfer` (humanized reason), else `other` (graduation). Wired through `extract-all.ts` → `persistExtraction` (write-once snapshot during the finalize window) → new `getDepartures.ts` getter + IPC/preload/types (`PlayerDeparture`). `pages/Transfers.tsx` expanded into **"Transfers & Departures"**: a new **"Left the program"** card (NFL declarations with `Proj. Rd N` badge, graduations) + each transfers-out row tagged with its `Transfer_<reason>`.
+
+**Scope decisions:** NFL shows projected round only — CFB doesn't sim the draft, so no team/pick (user-confirmed). Phase 5 (coaching tree) deferred to its own plan.
+
+**Errors hit & fixes:** `reasonByPlayer` Map typed `Map<number, string|null>` (reason is nullable) — narrowed with an explicit `Map<number, string>` + cast after the truthy filter.
+
+**Verification:** typecheck + lint + build clean. Imported the real **W23 Players-Leaving** fixture into an isolated `CFB_USER_DATA_DIR` and queried through the actual preload API: `getDepartures` returned **2,618** departures (224 NFL w/ projected rounds + team names, 2,394 transfers, 0 other) — e.g. Jeremiah Smith WR 99 nfl R1 [Ohio State]. Screenshotted the Transfers page: "Left the program" correctly filters the 2,618 league-wide down to **Auburn's 3 NFL declarations** (Byrum Brown QB 92 Proj. Rd 4; Xavier Atkins ROLB 91 Rd 2; Jeremiah Cobb HB 89 Rd 6) with badges; transfers grid correctly shows its "needs two synced seasons" state (single-season import).
+
+**Still open:** confirm offseason stage numbers across a 2nd offseason; pin coach-flip stage with a real carousel save. Uncommitted as of this entry.
+
+---
 ## Template for new entries
 
 ```markdown

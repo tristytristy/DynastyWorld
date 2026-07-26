@@ -22,6 +22,7 @@ import {
 } from './extract-league-history';
 import { extractRivalries, type RivalryData } from './extract-rivalries';
 import { extractAwards, type AwardsData } from './extract-awards';
+import { extractDepartures, type DepartureData } from './extract-departures';
 import type { ExtractionStep, ExtractionStepStatus } from '../shared/types';
 
 export interface ExtractionData {
@@ -45,6 +46,8 @@ export interface ExtractionData {
   conferenceChampionship: ConferenceChampionshipData[];
   rivalries: RivalryData[];
   awards: AwardsData;
+  /** Who left the league this offseason + why (NFL declaration w/ projected round, or transfer reason). Empty except at OffSeason stage 2. See extract-departures.ts. */
+  departures: DepartureData[];
   userTeam: TeamData;
   /** Every completed year of league-wide history the save exposes (see extract-league-history.ts) — used to backfill history-only seasons the app never individually synced. */
   leagueHistory: YearSummaryData[];
@@ -135,6 +138,10 @@ export async function extractAll(
   awards.leagueAwards.push(...coachAwards);
   onProgress?.('awards', 'done');
 
+  // Departures — empty except at OffSeason stage 2 ("Players Leaving"); persist
+  // write-onces it onto the concluded season (see extract-departures.ts).
+  const departures = await extractDepartures(franchise);
+
   return {
     league,
     teams,
@@ -154,6 +161,7 @@ export async function extractAll(
     conferenceChampionship,
     rivalries,
     awards,
+    departures,
     userTeam,
     leagueHistory,
     coachMove,

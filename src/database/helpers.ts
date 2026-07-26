@@ -190,6 +190,9 @@ interface SeasonRow {
   conference_championship: number | null;
   national_championship: number | null;
   has_full_data: number;
+  synced_week_type: string | null;
+  synced_offseason_stage: number | null;
+  finalized: number;
 }
 
 export interface Season {
@@ -215,6 +218,12 @@ export interface Season {
   nationalChampionship: boolean;
   /** False for a lightweight, backfilled "history-only" season (see schema_v4_season_history_only.sql) — no roster/schedule/stats/teams snapshot exists, only 'yearSummary'. */
   hasFullData: boolean;
+  /** The calendar phase this season was last written at (SeasonInfo.CurrentWeekType); null until first written under phase-aware sync. See shared/syncPhase.ts. */
+  syncedWeekType: string | null;
+  /** OffSeason stage (1–9) at the last write, 0/null outside the offseason. */
+  syncedOffseasonStage: number | null;
+  /** True once captured at End of Season Recap (OffSeason stage 1) — locks the season against later dirty-offseason overwrites. */
+  finalized: boolean;
 }
 
 function mapSeason(row: SeasonRow): Season {
@@ -239,7 +248,28 @@ function mapSeason(row: SeasonRow): Season {
     conferenceChampionship: row.conference_championship === 1,
     nationalChampionship: row.national_championship === 1,
     hasFullData: row.has_full_data === 1,
+    syncedWeekType: row.synced_week_type,
+    syncedOffseasonStage: row.synced_offseason_stage,
+    finalized: row.finalized === 1,
   };
+}
+
+/**
+ * Records the calendar phase a season was just written at, and finalizes it once
+ * captured at End of Season Recap (see shared/syncPhase.ts). `finalized` is
+ * sticky — once true it stays true, so a later dirty-offseason sync can't un-lock
+ * a season it also refuses to overwrite.
+ */
+export function updateSeasonPhase(
+  seasonId: number,
+  weekType: string,
+  offseasonStage: number,
+  finalize: boolean,
+): void {
+  run(
+    'UPDATE seasons SET synced_week_type = ?, synced_offseason_stage = ?, finalized = CASE WHEN finalized = 1 THEN 1 ELSE ? END WHERE id = ?',
+    [weekType, offseasonStage, finalize ? 1 : 0, seasonId],
+  );
 }
 
 /**

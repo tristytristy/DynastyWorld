@@ -12,6 +12,16 @@ export interface LeagueData {
    * saves (2026 + 3 = 2029, 2026 + 1 = 2027).
    */
   baseCalendarYear: number;
+  /**
+   * The calendar phase of THIS sync — the basis for phase-aware ingestion (see
+   * shared/syncPhase.ts + memory reference-sync-phase-map). `currentWeekType` is
+   * PreSeason / RegularSeason / NationalChampionship / OffSeason; `currentOffseasonStage`
+   * is 1–9 only while OffSeason (0 otherwise). Full Auburn cycle mapped these
+   * exactly (2026→2027). NB: `currentStage` reads "NFLSeason" mid-college-season
+   * (Madden-inherited) — don't gate on it; use these two instead.
+   */
+  currentWeekType: string;
+  currentOffseasonStage: number;
 }
 
 export async function extractLeague(franchise: OpenFranchise): Promise<LeagueData> {
@@ -20,7 +30,14 @@ export async function extractLeague(franchise: OpenFranchise): Promise<LeagueDat
   const league = leagueTable.records[0];
 
   const seasonInfoTable = getLargestTable(franchise, 'SeasonInfo');
-  await seasonInfoTable.readRecords(['CurrentSeasonYear', 'CurrentWeek', 'CurrentStage', 'BaseCalendarYear']);
+  await seasonInfoTable.readRecords([
+    'CurrentSeasonYear',
+    'CurrentWeek',
+    'CurrentStage',
+    'BaseCalendarYear',
+    'CurrentWeekType',
+    'CurrentOffseasonStage',
+  ]);
   const seasonInfo = seasonInfoTable.records[0];
 
   return {
@@ -29,5 +46,7 @@ export async function extractLeague(franchise: OpenFranchise): Promise<LeagueDat
     currentWeek: Number(seasonInfo.CurrentWeek),
     currentStage: String(seasonInfo.CurrentStage),
     baseCalendarYear: Number(seasonInfo.BaseCalendarYear),
+    currentWeekType: String(seasonInfo.CurrentWeekType),
+    currentOffseasonStage: Number(seasonInfo.CurrentOffseasonStage),
   };
 }

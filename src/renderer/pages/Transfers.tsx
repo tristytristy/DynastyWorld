@@ -1,20 +1,73 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { TeamTransfers, TransferEntry } from '../../shared/types';
+import type { PlayerDeparture, TeamTransfers, TransferEntry } from '../../shared/types';
 import { PageHeader } from '../components/ui/PageHeader';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
-import { TeamLink } from '../components/common/TeamLink';
+import { TeamLink, resolveTeamIndex } from '../components/common/TeamLink';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
+import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
+
+/** NFL declarations + graduations (players who left the LEAGUE, not to another school). */
+function DeparturesCard({ departures, teamAssetName }: { departures: PlayerDeparture[]; teamAssetName?: string | null }) {
+  return (
+    <SurfaceCard>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">Left the program</h3>
+        <span className="tnum border border-slate-300/70 px-2.5 py-0.5 text-sm font-semibold text-slate-500 dark:border-slate-600 dark:text-slate-400">
+          {departures.length}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+        NFL declarations (projected round only — the game doesn&apos;t simulate the draft) and graduating seniors.
+      </p>
+      {departures.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
+          None recorded — sync at the offseason &quot;Players Leaving&quot; step to capture this.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {departures.map((d) => (
+            <div
+              key={d.playerId}
+              className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2.5 dark:border-slate-800 dark:bg-white/5"
+            >
+              <PlayerPortrait player={d} size="sm" className="!h-9 !w-9" teamAssetName={teamAssetName} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                  {d.firstName} {d.lastName}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {d.position} · {d.overallRating} OVR
+                </p>
+              </div>
+              {d.type === 'nfl' ? (
+                <span className="shrink-0 border border-amber-300/70 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:border-amber-500/40 dark:text-amber-300">
+                  NFL{d.projectedRound ? ` · Proj. Rd ${d.projectedRound}` : ''}
+                </span>
+              ) : (
+                <span className="shrink-0 border border-slate-300/70 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                  Graduated
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </SurfaceCard>
+  );
+}
 
 function TransferRow({
   entry,
   direction,
+  reason,
   onOpen,
 }: {
   entry: TransferEntry;
   direction: 'in' | 'out';
+  reason?: string;
   onOpen: (entry: TransferEntry) => void;
 }) {
   // For an incoming move the "other" school is where they came FROM; for an
@@ -45,6 +98,9 @@ function TransferRow({
           <span>{direction === 'in' ? 'from' : 'to'}</span>
           <TeamLink teamIndex={otherTeamIndex} teamName={otherTeam} size="sm" logoClassName="!h-4 !w-4" nameClassName="truncate" />
         </p>
+        {reason ? (
+          <p className="mt-0.5 truncate text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{reason}</p>
+        ) : null}
       </div>
       <span className="tnum shrink-0 text-xs font-semibold text-slate-400 dark:text-slate-500">{entry.seasonYear}</span>
     </div>
@@ -56,12 +112,14 @@ function TransferColumn({
   accent,
   entries,
   direction,
+  reasonByPlayer,
   onOpen,
 }: {
   title: string;
   accent: string;
   entries: TransferEntry[];
   direction: 'in' | 'out';
+  reasonByPlayer?: Map<number, string>;
   onOpen: (entry: TransferEntry) => void;
 }) {
   return (
@@ -75,7 +133,13 @@ function TransferColumn({
       ) : (
         <div className="mt-4 space-y-2">
           {entries.map((e) => (
-            <TransferRow key={`${e.playerId}-${e.seasonYear}`} entry={e} direction={direction} onOpen={onOpen} />
+            <TransferRow
+              key={`${e.playerId}-${e.seasonYear}`}
+              entry={e}
+              direction={direction}
+              reason={reasonByPlayer?.get(e.playerId)}
+              onOpen={onOpen}
+            />
           ))}
         </div>
       )}
@@ -86,8 +150,10 @@ function TransferColumn({
 export function Transfers() {
   const { id } = useParams<{ id: string }>();
   const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
+  const { selectedSeasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const [data, setData] = useState<TeamTransfers | null | undefined>(undefined);
+  const [departures, setDepartures] = useState<PlayerDeparture[]>([]);
 
   const focusTeamName = useMemo(
     () =>
@@ -96,6 +162,7 @@ export function Transfers() {
         : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null),
     [viewedTeamIndex, leagueTeams, userTeamName],
   );
+  const focusTeamIndex = viewedTeamIndex ?? resolveTeamIndex(focusTeamName ?? '', leagueTeams);
 
   useEffect(() => {
     setData(undefined);
@@ -108,6 +175,29 @@ export function Transfers() {
       cancelled = true;
     };
   }, [id, focusTeamName]);
+
+  // Departures (NFL declarations / graduations) + transfer reasons for the
+  // selected season — only present once synced at the offseason "Players Leaving" step.
+  useEffect(() => {
+    setDepartures([]);
+    if (!id || focusTeamIndex === null) return;
+    let cancelled = false;
+    window.api.db.getDepartures(id, focusTeamIndex, selectedSeasonId).then((result) => {
+      if (!cancelled) setDepartures(result ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, focusTeamIndex, selectedSeasonId]);
+
+  const reasonByPlayer = useMemo(
+    () =>
+      new Map<number, string>(
+        departures.filter((d) => d.type === 'transfer' && d.reason).map((d) => [d.playerId, d.reason as string]),
+      ),
+    [departures],
+  );
+  const leftTheLeague = useMemo(() => departures.filter((d) => d.type !== 'transfer'), [departures]);
 
   function openPlayer(entry: TransferEntry) {
     if (!id) return;
@@ -157,10 +247,13 @@ export function Transfers() {
             accent="border-red-300/70 text-red-700 dark:border-red-500/40 dark:text-red-300"
             entries={data.transfersOut}
             direction="out"
+            reasonByPlayer={reasonByPlayer}
             onOpen={openPlayer}
           />
         </div>
       )}
+
+      {leftTheLeague.length > 0 ? <DeparturesCard departures={leftTheLeague} /> : null}
     </div>
   );
 }

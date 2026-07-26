@@ -48,6 +48,7 @@ export const IPC = {
     getNcaaRecords: 'db:getNcaaRecords',
     getDynastyTrends: 'db:getDynastyTrends',
     getTransfers: 'db:getTransfers',
+    getDepartures: 'db:getDepartures',
     getDynastyTheme: 'db:getDynastyTheme',
     getSeasonTheme: 'db:getSeasonTheme',
     getTeamAwardDefinitions: 'db:getTeamAwardDefinitions',

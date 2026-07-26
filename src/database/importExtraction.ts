@@ -10,10 +10,12 @@ import {
   saveSnapshot,
   saveSnapshotCompressed,
   updateDynasty,
+  updateSeasonPhase,
   type Dynasty,
   type Season,
 } from './helpers';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
+import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
 import type { ImportResult } from '../shared/types';
 
 /**
@@ -118,15 +120,34 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     existing.userTeamId !== null &&
     existing.userTeamId !== userTeam.teamIndex;
 
-  if (!finalizedElsewhere) {
+  // Phase-aware sync (see shared/syncPhase.ts + memory reference-sync-phase-map).
+  // The save is one mutable snapshot; a mistimed sync would overwrite a finished
+  // season with churned data. Block this season's write when: the coach changed
+  // schools since (finalizedElsewhere); OR we're in the deep offseason (stage 3+,
+  // where players scatter to the pool and awards get thinned); OR the season is
+  // already finalized and this isn't a finalize-window refresh (i.e. a rewind to
+  // an earlier save). The finalize window is End of Season Recap + Players Leaving
+  // (offseason stage 1–2), where rosters are still intact.
+  const phase = deriveSyncPhase({
+    currentWeekType: league.currentWeekType,
+    currentOffseasonStage: league.currentOffseasonStage,
+  });
+  const finalizing = isSeasonFinalizing(phase);
+  const blockWrite = finalizedElsewhere || isSeasonLocked(phase) || (!!existing?.finalized && !finalizing);
+
+  if (!blockWrite) {
     saveSnapshot(season.id, 'league', extraction.league);
     saveSnapshot(season.id, 'teams', extraction.teams);
     saveSnapshot(season.id, 'coaches', extraction.coaches);
     saveSnapshot(season.id, 'roster', extraction.roster);
     saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
     saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
-    saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
-    saveSnapshot(season.id, 'schedule', extraction.schedule);
+    // Schedules are user-editable in the preseason (the game count settles once
+    // the season starts — 934→944), so only capture them once out of preseason.
+    if (isScheduleFinal(phase)) {
+      saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
+      saveSnapshot(season.id, 'schedule', extraction.schedule);
+    }
     saveSnapshot(season.id, 'recruits', extraction.recruits);
     // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
     saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
@@ -140,6 +161,11 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
     saveSnapshot(season.id, 'rivalries', extraction.rivalries);
     saveSnapshot(season.id, 'awards', extraction.awards);
+    // Departures are only present at OffSeason stage 2 — write-once so a later
+    // (or earlier) sync with an empty list never clobbers a captured one.
+    if (extraction.departures.length > 0) {
+      saveSnapshot(season.id, 'departures', extraction.departures);
+    }
 
     const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);
     if (currentYearSummary) saveSnapshot(season.id, 'yearSummary', currentYearSummary);
@@ -152,6 +178,10 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
       wins: userTeam.confWins + userTeam.nonConfWins,
       losses: userTeam.confLosses + userTeam.nonConfLosses,
     });
+
+    // Record the phase written at + finalize the season at End of Season Recap /
+    // Players Leaving so a later dirty-offseason sync can't overwrite it.
+    updateSeasonPhase(season.id, league.currentWeekType, phase.offseasonStage, finalizing);
   }
 
   // Backfill: real league-wide history exists for completed years the app

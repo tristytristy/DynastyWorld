@@ -1414,6 +1414,24 @@ export interface TeamTransfers {
   seasonPairsAvailable: number;
 }
 
+/** A player who left the program this offseason — from the game's LeavingPlayer table (see getDepartures / extract-departures). */
+export interface PlayerDeparture {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  overallRating: number;
+  portraitAssetName: string | null;
+  teamIndex: number;
+  teamName: string | null;
+  /** 'nfl' = declared for the NFL (projected round only — no team/pick); 'transfer' = entered the portal; 'other'. */
+  type: 'nfl' | 'transfer' | 'other';
+  /** NFL declarations: projected round 1–7. */
+  projectedRound: number | null;
+  /** Transfers: the game's stated reason, humanized (e.g. "Pro Potential"). */
+  reason: string | null;
+}
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -1719,6 +1737,7 @@ export interface DynastyApi {
     ) => Promise<import('../extractors/extract-ncaa-records').NcaaRecordsData | null>;
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
+    getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;

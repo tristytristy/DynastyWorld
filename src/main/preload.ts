@@ -61,6 +61,7 @@ const api: DynastyApi = {
     getNcaaRecords: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getNcaaRecords, dynastyId, seasonId),
     getDynastyTrends: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTrends, dynastyId),
     getTransfers: (dynastyId, focusTeamName) => ipcRenderer.invoke(IPC.db.getTransfers, dynastyId, focusTeamName),
+    getDepartures: (dynastyId, teamIndex, seasonId) => ipcRenderer.invoke(IPC.db.getDepartures, dynastyId, teamIndex, seasonId),
     getDynastyTheme: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTheme, dynastyId),
     getSeasonTheme: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSeasonTheme, dynastyId, seasonId),
     getTeamAwardDefinitions: () => ipcRenderer.invoke(IPC.db.getTeamAwardDefinitions),
