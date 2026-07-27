@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { HTMLAttributes, MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
@@ -7,6 +7,7 @@ import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
 import { PageHeader } from '../components/ui/PageHeader';
 import { usePlayerModal } from '../data/PlayerModalProvider';
+import { usePlayerHoverCard } from '../data/PlayerHoverProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
@@ -122,7 +123,7 @@ function SortableHeader({
   );
 }
 
-function PlayerCard({ player, onOpen, onEdit, teamAssetName }: { player: RosterPlayer; onOpen: () => void; onEdit?: (event: MouseEvent) => void; teamAssetName?: string | null }) {
+function PlayerCard({ player, onOpen, onEdit, teamAssetName, nameHoverProps }: { player: RosterPlayer; onOpen: () => void; onEdit?: (event: MouseEvent) => void; teamAssetName?: string | null; nameHoverProps?: HTMLAttributes<HTMLSpanElement> }) {
   return (
     <div
       role="button"
@@ -147,8 +148,10 @@ function PlayerCard({ player, onOpen, onEdit, teamAssetName }: { player: RosterP
           <div>
             <p className="flex items-center gap-1.5 font-semibold text-slate-950 dark:text-white">
               {onEdit && <EditButton onClick={onEdit} label={`Edit ${player.firstName} ${player.lastName}`} />}
-              {player.firstName} {player.lastName}
-              {player.isCaptain && <CaptainBadge />}
+              <span className="inline-flex items-center gap-1.5" {...nameHoverProps}>
+                {player.firstName} {player.lastName}
+                {player.isCaptain && <CaptainBadge />}
+              </span>
             </p>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span>
@@ -205,6 +208,13 @@ export function Roster() {
   const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
   const viewedTeamName =
     viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
+
+  // Hover-preview trading card: one hook, reused across every name in the list.
+  const { hoverProps } = usePlayerHoverCard();
+  const hoverTeamName = viewedTeamName ?? userTeamName;
+  const hoverSeasonYear = seasons.find((s) => s.id === seasonId)?.seasonYear ?? null;
+  const hoverFor = (player: RosterPlayer) =>
+    id ? hoverProps({ player, teamName: hoverTeamName, seasonYear: hoverSeasonYear, dynastyId: id }) : {};
 
   useEffect(() => {
     if (!id) return;
@@ -452,6 +462,7 @@ export function Roster() {
               key={player.id}
               player={player}
               teamAssetName={viewedTeamName ?? userTeamName}
+              nameHoverProps={hoverFor(player)}
               onOpen={() => openPlayer(player.id)}
               onEdit={
                 canEditRoster
@@ -516,7 +527,7 @@ export function Roster() {
                     </td>
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{player.jerseyNumber}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
-                      <span className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5" {...hoverFor(player)}>
                         {player.firstName} {player.lastName}
                         {player.isCaptain && <CaptainBadge />}
                       </span>

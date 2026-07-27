@@ -77,11 +77,17 @@ export function PlayerCard({
   const line = stats.slice(0, 4);
   const t = photoTransform ?? { x: 0, y: 0, scale: 1 };
   return (
+    // Wrapper carries the depth: a drop-shadow filter follows the clipped card's
+    // cut-corner silhouette (box-shadow would be clipped away by clip-path).
     <div
-      className="relative aspect-[330/496] w-full max-w-[340px] overflow-hidden rounded-2xl text-white shadow-[0_30px_70px_-30px_rgba(0,0,0,0.8)]"
+      className="relative aspect-[330/496] w-full max-w-[340px]"
+      style={{ filter: 'drop-shadow(0 20px 34px rgba(0,0,0,0.55))' }}
+    >
+    <div
+      className="corner-cut absolute inset-0 overflow-hidden text-white"
       style={{
         background: 'linear-gradient(160deg, var(--team-primary), color-mix(in srgb, var(--team-primary) 48%, #000))',
-        boxShadow: '0 30px 70px -30px rgba(0,0,0,0.8), inset 0 0 0 3px color-mix(in srgb, var(--team-secondary) 32%, transparent)',
+        boxShadow: 'inset 0 0 0 3px color-mix(in srgb, var(--team-secondary) 32%, transparent)',
       }}
     >
       {/* Full-bleed photo — the player portrait+jersey by default, or the user's uploaded photo */}
@@ -181,6 +187,7 @@ export function PlayerCard({
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
