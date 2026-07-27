@@ -6,6 +6,7 @@ import type {
   DynastyMatchCandidate,
   DynastySummary,
   DynastyTheme,
+  TeamTheme,
   GameLogEntry,
   GameDetailData,
   ImportResult,
@@ -42,6 +43,7 @@ import type { LeagueData } from '../../extractors/extract-league';
 import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../database/importExtraction';
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
 import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
+import { getTeamTheme } from '../../database/getTeamTheme';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
 import { getRoster } from '../../database/getRoster';
@@ -389,6 +391,13 @@ export function registerDatabaseHandlers(): void {
         primaryColor: dynasty.teamColorPrimary,
         secondaryColor: dynasty.teamColorSecondary,
       };
+    },
+  );
+
+  ipcMain.handle(
+    IPC.db.getTeamTheme,
+    async (_event, dynastyId: string, teamName: string, seasonId?: number): Promise<TeamTheme | null> => {
+      return getTeamTheme(dynastyId, teamName, seasonId);
     },
   );
 

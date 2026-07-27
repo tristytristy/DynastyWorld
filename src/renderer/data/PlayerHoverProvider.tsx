@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 're
 import { createPortal } from 'react-dom';
 import { PlayerCard } from '../components/common/PlayerCard';
 import { useTheme } from '../theme/ThemeProvider';
-import type { DynastyTheme, RosterPlayer } from '../../shared/types';
+import type { RosterPlayer, TeamTheme } from '../../shared/types';
 
 /** Everything the floating card needs — the player object we already hold at the hover site, plus its team/season context. */
 export interface PlayerHoverData {
@@ -31,9 +31,9 @@ const HOVER_DELAY_MS = 850;
 const CARD_W = 250;
 const CARD_H = Math.round((CARD_W * 496) / 330);
 
-// Themes rarely change within a session; cache so a hover never re-hits IPC for
-// a dynasty we've already themed.
-const themeCache = new Map<string, DynastyTheme | null>();
+// Team colors are stable within a session; cache by team so a hover never
+// re-hits IPC for a team we've already themed.
+const themeCache = new Map<string, TeamTheme | null>();
 
 function readTransform(dynastyId: string, playerId: number): { x: number; y: number; scale: number } {
   try {
@@ -51,17 +51,22 @@ function readTransform(dynastyId: string, playerId: number): { x: number; y: num
 /** The floating preview itself — resolves colors + the player's framed photo, then positions near the anchor. */
 function HoverCard({ data, rect }: HoverState) {
   const { resolveColorVars } = useTheme();
-  const [theme, setTheme] = useState<DynastyTheme | null>(() => themeCache.get(data.dynastyId) ?? null);
+  const cacheKey = `${data.dynastyId}::${data.teamName ?? ''}`;
+  const [theme, setTheme] = useState<TeamTheme | null>(() => themeCache.get(cacheKey) ?? null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (themeCache.has(data.dynastyId)) {
-      setTheme(themeCache.get(data.dynastyId) ?? null);
+    if (themeCache.has(cacheKey)) {
+      setTheme(themeCache.get(cacheKey) ?? null);
     } else {
-      window.api.db.getDynastyTheme(data.dynastyId).then((t) => {
-        themeCache.set(data.dynastyId, t);
-        if (!cancelled) setTheme(t);
+      const request = data.teamName
+        ? window.api.db.getTeamTheme(data.dynastyId, data.teamName)
+        : window.api.db.getDynastyTheme(data.dynastyId);
+      request.then((t) => {
+        const colors = t ? { primaryColor: t.primaryColor, secondaryColor: t.secondaryColor } : null;
+        themeCache.set(cacheKey, colors);
+        if (!cancelled) setTheme(colors);
       });
     }
     window.api.card.getPhoto(data.dynastyId, data.player.id).then((p) => {
@@ -72,7 +77,7 @@ function HoverCard({ data, rect }: HoverState) {
     return () => {
       cancelled = true;
     };
-  }, [data.dynastyId, data.player.id]);
+  }, [cacheKey, data.dynastyId, data.teamName, data.player.id]);
 
   const colorVars = resolveColorVars({ primary: theme?.primaryColor ?? null, secondary: theme?.secondaryColor ?? null });
 

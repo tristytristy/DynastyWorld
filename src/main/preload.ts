@@ -67,6 +67,7 @@ const api: DynastyApi = {
     getHeadToHead: (dynastyId) => ipcRenderer.invoke(IPC.db.getHeadToHead, dynastyId),
     getCoachingTree: (dynastyId) => ipcRenderer.invoke(IPC.db.getCoachingTree, dynastyId),
     getDynastyTheme: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTheme, dynastyId),
+    getTeamTheme: (dynastyId, teamName, seasonId) => ipcRenderer.invoke(IPC.db.getTeamTheme, dynastyId, teamName, seasonId),
     getSeasonTheme: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSeasonTheme, dynastyId, seasonId),
     getTeamAwardDefinitions: () => ipcRenderer.invoke(IPC.db.getTeamAwardDefinitions),
     getTeamAwardResults: (dynastyId, seasonId) =>

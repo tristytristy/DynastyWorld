@@ -29,6 +29,12 @@ export interface DynastyTheme {
   secondaryColor: string | null;
 }
 
+/** A team's own brand colors (any team, not just the user's) — themes a player's trading card to the team he plays for. See getTeamTheme. */
+export interface TeamTheme {
+  primaryColor: string | null;
+  secondaryColor: string | null;
+}
+
 export interface ImportResult {
   success: boolean;
   message: string;
@@ -1864,6 +1870,8 @@ export interface DynastyApi {
     getHeadToHead: (dynastyId: string) => Promise<HeadToHeadOpponent[]>;
     getCoachingTree: (dynastyId: string) => Promise<CoachingTree>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
+    /** A specific team's brand colors (any team), for theming a player's card to the team he plays for. Season optional (colors are stable). */
+    getTeamTheme: (dynastyId: string, teamName: string, seasonId?: number) => Promise<TeamTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;

@@ -54,6 +54,7 @@ export const IPC = {
     getHeadToHead: 'db:getHeadToHead',
     getCoachingTree: 'db:getCoachingTree',
     getDynastyTheme: 'db:getDynastyTheme',
+    getTeamTheme: 'db:getTeamTheme',
     getSeasonTheme: 'db:getSeasonTheme',
     getTeamAwardDefinitions: 'db:getTeamAwardDefinitions',
     getTeamAwardResults: 'db:getTeamAwardResults',

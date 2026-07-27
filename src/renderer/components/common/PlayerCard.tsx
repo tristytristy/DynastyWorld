@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { PlayerPortrait } from './PlayerPortrait';
 import { TeamLogo } from './TeamLogo';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { DynastyTheme, MediaItemResolved, RosterPlayer } from '../../../shared/types';
+import type { MediaItemResolved, RosterPlayer, TeamTheme } from '../../../shared/types';
 
 /**
  * Which stats headline the card, by default, when the user hasn't picked their
@@ -76,6 +76,28 @@ export function PlayerCard({
 }) {
   const line = stats.slice(0, 4);
   const t = photoTransform ?? { x: 0, y: 0, scale: 1 };
+
+  // Auto-fit the vertical name: a pro card keeps the surname bold at a fixed
+  // baseline and shrinks only names too long to fit (e.g. "Urionabarrenechea"),
+  // so every card reads as intentional. Measured against the card's own height,
+  // so it works at any size (full modal card or the small hover preview).
+  const nameBoxRef = useRef<HTMLDivElement>(null);
+  const nameInnerRef = useRef<HTMLDivElement>(null);
+  const [nameScale, setNameScale] = useState(1);
+  useLayoutEffect(() => {
+    const box = nameBoxRef.current;
+    const inner = nameInnerRef.current;
+    if (!box || !inner) return;
+    const measure = () => {
+      const available = box.clientHeight;
+      const needed = inner.scrollHeight; // vertical extent at base size (transform-independent)
+      setNameScale(needed > available && needed > 0 ? Math.max(0.42, available / needed) : 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [player.firstName, player.lastName]);
   return (
     // Wrapper carries the depth: a drop-shadow filter follows the clipped card's
     // cut-corner silhouette (box-shadow would be clipped away by clip-path).
@@ -142,14 +164,21 @@ export function PlayerCard({
         <span className="block text-[10px] tracking-[0.3em] opacity-85">OVR</span>
       </div>
 
-      {/* Vertical name — first (smaller) hugging the last (bigger), rising up from the bottom-left */}
-      <div className="absolute bottom-[100px] left-3 z-[4] flex items-end">
-        <span className="[writing-mode:vertical-rl] mr-[-5px] rotate-180 pb-1.5 text-[20px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
-          {player.firstName}
-        </span>
-        <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
-          {player.lastName.toUpperCase()}
-        </span>
+      {/* Vertical name — first (smaller) hugging the last (bigger), rising up from
+          the bottom-left; auto-scaled to fit within the bounded box. */}
+      <div ref={nameBoxRef} className="absolute bottom-[98px] left-3 top-[58px] z-[4] flex items-end overflow-hidden">
+        <div
+          ref={nameInnerRef}
+          className="flex origin-bottom-left items-end will-change-transform"
+          style={{ transform: `scale(${nameScale})` }}
+        >
+          <span className="[writing-mode:vertical-rl] mr-[-5px] rotate-180 pb-1.5 text-[20px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
+            {player.firstName}
+          </span>
+          <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
+            {player.lastName.toUpperCase()}
+          </span>
+        </div>
       </div>
 
       {/* Bottom band — meta line, a wide single-line stat row, and the gold team logo */}
@@ -228,18 +257,23 @@ export function PlayerCardTab({
   const [msg, setMsg] = useState<string | null>(null);
 
   // The modal is portaled to <body>, outside the dynasty container that sets the
-  // --team-* vars, so resolve them here and apply to the card wrapper.
+  // --team-* vars, so resolve them here and apply to the card wrapper. Themed to
+  // the player's OWN team (any team, not just the user's dynasty) so a non-user
+  // team's card wears that team's colors.
   const { resolveColorVars } = useTheme();
-  const [theme, setTheme] = useState<DynastyTheme | null>(null);
+  const [theme, setTheme] = useState<TeamTheme | null>(null);
   useEffect(() => {
     let cancelled = false;
-    window.api.db.getDynastyTheme(dynastyId).then((t) => {
-      if (!cancelled) setTheme(t);
+    const request = teamName
+      ? window.api.db.getTeamTheme(dynastyId, teamName)
+      : window.api.db.getDynastyTheme(dynastyId);
+    request.then((t) => {
+      if (!cancelled) setTheme(t ? { primaryColor: t.primaryColor, secondaryColor: t.secondaryColor } : null);
     });
     return () => {
       cancelled = true;
     };
-  }, [dynastyId]);
+  }, [dynastyId, teamName]);
   const colorVars = resolveColorVars({ primary: theme?.primaryColor ?? null, secondary: theme?.secondaryColor ?? null });
 
   // --- Which stats headline the card (per player, up to 4) ---
