@@ -99,6 +99,10 @@ export function CoachHub() {
   const [coaches, setCoaches] = useState<CoachOverview | null | undefined>(undefined);
   const [history, setHistory] = useState<ProgramHistoryOverview | null | undefined>(undefined);
   const [coachResumes, setCoachResumes] = useState<Map<string, CoachResume> | undefined>(undefined);
+  // The user coach's own position each synced season — the piece the program
+  // timeline lacks, and what turns it into a career résumé (following the coach
+  // across school changes, HC/OC/DC year to year).
+  const [userPositionByYear, setUserPositionByYear] = useState<Map<number, string>>(new Map());
   const { openCoachEditor } = useEditorModal();
 
   useEffect(() => {
@@ -130,7 +134,15 @@ export function CoachHub() {
         schedule: await window.api.db.getSchedule(id, season.id),
       })),
     ).then((results) => {
-      if (!cancelled) setCoachResumes(buildCoachResumeMap(results));
+      if (cancelled) return;
+      setCoachResumes(buildCoachResumeMap(results));
+      setUserPositionByYear(
+        new Map(
+          results
+            .filter((r) => r.coaches?.userCoach)
+            .map((r) => [r.seasonYear, r.coaches!.userCoach!.position] as const),
+        ),
+      );
     });
 
     return () => {
@@ -322,6 +334,8 @@ export function CoachHub() {
                 <StatTile label="Draft picks" value={String(career.draftPicks)} />
                 <StatTile label="1st round picks" value={String(career.firstRoundDraftPicks)} />
                 <StatTile label="Top-5 recruit classes" value={String(career.top5RecruitClasses)} />
+                <StatTile label="Players developed to max" value={String(career.playersMaxProgressed)} />
+                <StatTile label="Prestige gains" value={String(career.numPrestigeIncreases)} />
               </div>
             </>
           ) : (
@@ -353,11 +367,45 @@ export function CoachHub() {
       {history && history.seasons.length > 0 && (
         <SurfaceCard>
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-            Previous Seasons
+            Career Résumé
           </p>
           <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-            Timeline
+            {userCoach ? `${userCoach.firstName} ${userCoach.lastName}` : overview.teamName}&apos;s coaching journey
           </h3>
+          {(() => {
+            const rs = history.seasons;
+            const schools = [...new Map(rs.map((s) => [s.teamName, s.teamName])).keys()];
+            const trackedWins = rs.reduce((sum, s) => sum + s.wins, 0);
+            const trackedLosses = rs.reduce((sum, s) => sum + s.losses, 0);
+            const natTitles = rs.filter((s) => s.nationalChampion).length;
+            const confTitles = rs.filter((s) => s.conferenceChampion).length;
+            return (
+              <>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <StatTile label="Seasons tracked" value={String(rs.length)} />
+                  <StatTile label="Tracked record" value={recordLine(trackedWins, trackedLosses)} />
+                  <StatTile label="National titles" value={String(natTitles)} />
+                  <StatTile label="Conf. titles" value={String(confTitles)} />
+                </div>
+                {schools.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {schools.length === 1 ? 'School' : `${schools.length} schools`}:
+                    </span>
+                    {schools.map((school) => (
+                      <span
+                        key={school}
+                        className="inline-flex items-center gap-1.5 border border-slate-200/80 bg-slate-50/85 px-2 py-1 text-xs font-medium text-slate-700 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
+                      >
+                        <TeamLogo team={{ assetName: school, label: school }} size="sm" className="!h-4 !w-4" />
+                        {school}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <ul className="mt-4 space-y-2">
             {history.seasons.map((season) => {
               const bowlLogoPath = season.bowlAppearance ? getBowlLogoPath(season.bowlAssetName) : null;
@@ -376,7 +424,13 @@ export function CoachHub() {
                         {season.seasonYear} — {season.teamName}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {season.headCoachName ?? 'Unknown coach'}
+                        {(() => {
+                          const pos = userPositionByYear.get(season.seasonYear);
+                          if (!pos) return season.headCoachName ?? 'Unknown coach';
+                          // If the user WAS the head coach, "HC: <self>" is redundant.
+                          const showHc = pos !== 'HeadCoach' && season.headCoachName;
+                          return `${spaceCamelCase(pos)}${showHc ? ` · HC: ${season.headCoachName}` : ''}`;
+                        })()}
                       </p>
                     </div>
                   </div>
