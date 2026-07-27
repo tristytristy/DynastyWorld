@@ -53,6 +53,20 @@ export function deriveSyncPhase(input: SyncPhaseInput): SyncPhase {
   return { kind, offseasonStage, weekType, label };
 }
 
+/**
+ * A user-facing label for WHERE in the in-game calendar a save sits — e.g.
+ * "Preseason", "Week 7", "Postseason", "End of Season Recap". Shown on the
+ * dashboard so you can tell at a glance what point each dynasty's save is paused
+ * at. (Distinct from SyncPhase.label, which is terse and diagnostic.)
+ */
+export function formatSaveWeek(input: SyncPhaseInput & { currentWeek: number }): string {
+  const phase = deriveSyncPhase(input);
+  if (phase.kind === 'preseason') return 'Preseason';
+  if (phase.kind === 'regular') return input.currentWeek > 0 ? `Week ${input.currentWeek}` : 'Regular Season';
+  if (phase.kind === 'offseason') return phase.label; // "End of Season Recap", "Players Leaving", "Offseason · stage N"
+  return 'Postseason'; // bowls / playoff / national championship
+}
+
 /** The season is still being PLAYED — safe to keep overwriting its snapshot each sync. */
 export function isSeasonInProgress(p: SyncPhase): boolean {
   return p.kind !== 'offseason';

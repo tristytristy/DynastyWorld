@@ -74,6 +74,18 @@ function ExportIcon() {
   );
 }
 
+const COACH_POSITION_LABELS: Record<string, string> = {
+  HeadCoach: 'Head Coach',
+  OffensiveCoordinator: 'Offensive Coordinator',
+  DefensiveCoordinator: 'Defensive Coordinator',
+};
+
+/** Humanize the coach role enum for display (falls back to a camelCase split for any unmapped value). */
+function formatCoachPosition(position: string | null): string | null {
+  if (!position) return null;
+  return COACH_POSITION_LABELS[position] ?? position.replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+
 /** DynastySummary only carries a combined display name — split it for CoachPortrait's initials fallback and alt text. */
 function coachPortraitIdentity(
   coachName: string | null,
@@ -394,10 +406,20 @@ export function Dashboard() {
                       <h3 className="font-display text-page-title font-bold text-slate-950 dark:text-white">
                         {dynasty.coachName ?? dynasty.teamName}
                       </h3>
+                      {formatCoachPosition(dynasty.coachPosition) && (
+                        <p className="type-eyebrow mt-1 text-slate-400 dark:text-slate-500">
+                          {formatCoachPosition(dynasty.coachPosition)}
+                        </p>
+                      )}
                       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{dynasty.teamName}</p>
                       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         {dynasty.seasonYear !== null ? `Season ${dynasty.seasonYear}` : 'Awaiting season sync'}
                       </p>
+                      {dynasty.savePhaseLabel && (
+                        <span className="mt-2 inline-flex items-center border border-[var(--team-primary)]/45 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-2 py-0.5 text-xs font-semibold text-[var(--team-accent-text)] dark:text-white">
+                          {dynasty.savePhaseLabel}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 opacity-0 transition duration-200 focus-within:opacity-100 group-hover:opacity-100">

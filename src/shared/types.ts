@@ -16,7 +16,11 @@ export interface DynastySummary {
   secondaryColor: string | null;
   /** The human-controlled coach's name — Head Coach, Offensive Coordinator, or Defensive Coordinator, whichever the user actually plays as. A dynasty is identified by its coach, not its current job (team). */
   coachName: string | null;
+  /** The user coach's role enum (HeadCoach / OffensiveCoordinator / DefensiveCoordinator); humanized for display. Null on history-only seasons. */
+  coachPosition: string | null;
   coachPortraitAssetName: string | null;
+  /** Where in the in-game calendar the last synced save sits — e.g. "Preseason", "Week 7", "End of Season Recap". Null on history-only seasons. */
+  savePhaseLabel: string | null;
 }
 
 export interface DynastyTheme {

@@ -34,8 +34,11 @@ import {
   getDynastyById,
   getDynasties,
   getSeasonsByDynasty,
+  getSnapshot,
   resolveSeasonTeam,
 } from '../../database/helpers';
+import { formatSaveWeek } from '../../shared/syncPhase';
+import type { LeagueData } from '../../extractors/extract-league';
 import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../database/importExtraction';
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
 import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
@@ -91,6 +94,19 @@ export function registerDatabaseHandlers(): void {
             }
           : null;
       const userCoach = getCoaches(dynasty.id, currentSeason?.id)?.userCoach ?? null;
+      // The in-game calendar point of the last synced save, from that season's
+      // league snapshot (has currentWeek + the phase fields). Null for a
+      // history-only season (no league snapshot).
+      const league = currentSeason ? getSnapshot<LeagueData>(currentSeason.id, 'league') : null;
+      // currentWeekType only exists in snapshots taken with the phase-aware
+      // extractor (v1.0+); older seasons show no label until re-synced.
+      const savePhaseLabel = league?.currentWeekType
+        ? formatSaveWeek({
+            currentWeekType: league.currentWeekType,
+            currentOffseasonStage: league.currentOffseasonStage,
+            currentWeek: league.currentWeek,
+          })
+        : null;
 
       return {
         id: dynasty.id,
@@ -101,7 +117,9 @@ export function registerDatabaseHandlers(): void {
         primaryColor: dynasty.teamColorPrimary,
         secondaryColor: dynasty.teamColorSecondary,
         coachName: userCoach ? `${userCoach.firstName} ${userCoach.lastName}`.trim() : null,
+        coachPosition: userCoach?.position ?? null,
         coachPortraitAssetName: userCoach?.portraitAssetName ?? null,
+        savePhaseLabel,
       };
     });
   });

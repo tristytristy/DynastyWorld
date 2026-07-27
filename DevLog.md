@@ -1962,6 +1962,17 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Verified:** typecheck/lint/build clean. On the user's EVANZSYNC dynasty (Sacramento State, 4,100 recruits), the checkbox reads **"Interested in Sac State"** and toggling it (real onChange) filtered to **198** recruits — those with Sac State in their top schools. Screenshot confirms both checkboxes render, default unchecked, correct team name. (Note: the screenshot harness can't visually hold a React controlled-checkbox's checked state via synthetic events — a tooling limitation, not a bug; real mouse clicks toggle normally, as the 4,100→198 onChange result proved.)
 
 ---
+## Phase — Dashboard cards: coach position + in-game save week (2026-07-26)
+
+**Ask:** on the dynasty-select (Dashboard) cards, show the user coach's **position** and the **in-game week** the save sits at.
+
+**Shipped:** `DynastySummary` gained `coachPosition` + `savePhaseLabel`. The `getDynasties` IPC now sets `coachPosition` from the resolved `userCoach.position`, and `savePhaseLabel` from the current season's **league snapshot** (which carries `currentWeek` + the phase fields) via a new `formatSaveWeek()` in `shared/syncPhase.ts` — "Preseason" / "Week N" / "Postseason" / the offseason stage label ("End of Season Recap", "Players Leaving", …). Dashboard card renders the position as a small uppercase eyebrow under the coach name, and the week as a team-tinted chip under the season line (`formatCoachPosition` humanizes the role enum: HeadCoach → "Head Coach", etc.).
+
+**Notes:** `coachPosition` works on any full-data season (it's in the coaches snapshot). The `savePhaseLabel` chip only appears for seasons synced with the phase-aware extractor (v1.0+) — older league snapshots have no `currentWeekType`, so the label is suppressed until a re-sync rather than guessing.
+
+**Verified:** typecheck/lint/build clean. Live on the user's EVANZSYNC dynasty via IPC + screenshot — Patrick Evanz shows **Offensive Coordinator** + a **Preseason** chip (Sac State, 2026). (Nice real-world confirmation the user plays as an OC, not a HC — so the position line is genuinely informative.)
+
+---
 ## Template for new entries
 
 ```markdown
