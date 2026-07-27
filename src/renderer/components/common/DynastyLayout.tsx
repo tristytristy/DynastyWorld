@@ -22,11 +22,12 @@ function sectionTabClass(active: boolean): string {
 // keep flat URLs (pathless layout shells), so a section highlights by
 // membership, not URL prefix.
 const TEAM_PATHS = new Set([
-  'team-hub', 'roster', 'schedule', 'statistics', 'trends', 'transfers',
-  'media', 'team-awards', 'weekly-honors', 'history',
+  'team-hub', 'roster', 'schedule', 'rivalries', 'statistics', 'trends', 'transfers',
+  'team-awards', 'weekly-honors', 'history',
 ]);
 const LEAGUE_PATHS = new Set(['ncaa-hub', 'standings', 'annual-awards', 'all-america']);
 const RECRUIT_PATHS = new Set(['recruiting', 'recruits']);
+const MEDIA_PATHS = new Set(['media']);
 
 function SeasonSwitcher() {
   const { seasons, selectedSeasonId, setSelectedSeasonId } = useSelectedSeason();
@@ -80,7 +81,7 @@ function HistoryOnlySeasonBanner({ dynastyId }: { dynastyId: string }) {
   );
 }
 
-/** Top-level section nav: Coach Hub · Team Hub · NCAA Hub · Recruit Hub. Highlights by section membership since pages keep flat URLs. */
+/** Top-level section nav: Coach Hub · Team Hub · NCAA Hub · Recruit Hub · Media Hub. Highlights by section membership since pages keep flat URLs. */
 function DynastyNav({ id }: { id: string }) {
   const location = useLocation();
   const sub = location.pathname.split(`/dynasty/${id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
@@ -90,7 +91,9 @@ function DynastyNav({ id }: { id: string }) {
       ? 'league'
       : RECRUIT_PATHS.has(sub)
         ? 'recruit'
-        : 'coach';
+        : MEDIA_PATHS.has(sub)
+          ? 'media'
+          : 'coach';
 
   return (
     <nav className="border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-md dark:border-white/10 dark:bg-[#181b1f]">
@@ -106,6 +109,9 @@ function DynastyNav({ id }: { id: string }) {
         </Link>
         <Link to={`/dynasty/${id}/recruiting`} className={sectionTabClass(section === 'recruit')}>
           Recruit Hub
+        </Link>
+        <Link to={`/dynasty/${id}/media`} className={sectionTabClass(section === 'media')}>
+          Media Hub
         </Link>
         <SeasonSwitcher />
       </div>

@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { CoachHub } from './pages/CoachHub';
 import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
+import { PairLayout } from './components/common/PairLayout';
 import { NcaaHubLayout } from './pages/NcaaHubLayout';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
@@ -64,18 +65,27 @@ export function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dynasty/:id" element={<DynastyLayout />}>
                     <Route index element={<CoachHub />} />
+                    {/* Media Hub — its own top-level section (dynasty-wide, season-scoped), not team-scoped. */}
+                    <Route path="media" element={<Media />} />
                     {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
                     <Route element={<TeamHubLayout />}>
                       <Route path="team-hub" element={<DynastyOverview />} />
-                      <Route path="roster" element={<Roster />} />
-                      <Route path="schedule" element={<Schedule />} />
-                      <Route path="rivalries" element={<Rivalries />} />
-                      <Route path="statistics" element={<Statistics />} />
-                      <Route path="trends" element={<DynastyTrends />} />
-                      <Route path="transfers" element={<Transfers />} />
-                      <Route path="media" element={<Media />} />
-                      <Route path="team-awards" element={<TeamAwards />} />
-                      <Route path="weekly-honors" element={<WeeklyHonors />} />
+                      <Route element={<PairLayout items={[{ to: 'roster', label: 'Roster' }, { to: 'transfers', label: 'Transfers' }]} />}>
+                        <Route path="roster" element={<Roster />} />
+                        <Route path="transfers" element={<Transfers />} />
+                      </Route>
+                      <Route element={<PairLayout items={[{ to: 'schedule', label: 'Schedule' }, { to: 'rivalries', label: 'Rivalries' }]} />}>
+                        <Route path="schedule" element={<Schedule />} />
+                        <Route path="rivalries" element={<Rivalries />} />
+                      </Route>
+                      <Route element={<PairLayout items={[{ to: 'statistics', label: 'Season Stats' }, { to: 'trends', label: 'Trends' }]} />}>
+                        <Route path="statistics" element={<Statistics />} />
+                        <Route path="trends" element={<DynastyTrends />} />
+                      </Route>
+                      <Route element={<PairLayout items={[{ to: 'team-awards', label: 'Season Awards' }, { to: 'weekly-honors', label: 'Weekly Honors' }]} />}>
+                        <Route path="team-awards" element={<TeamAwards />} />
+                        <Route path="weekly-honors" element={<WeeklyHonors />} />
+                      </Route>
                       <Route path="history" element={<History />} />
                     </Route>
                     {/* NCAA Hub section — the nation. */}
