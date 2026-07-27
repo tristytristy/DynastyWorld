@@ -1940,6 +1940,19 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Verified:** typecheck/lint/build clean; **round-tripped on a disposable SMU copy** — SkillPoints 11 → 42, saved, reopened, persisted. (Player editing is the normal safe write path — Section 10, not the experimental Force-Commit path.)
 
 ---
+## Phase — Recruit Hub Watchlist (2026-07-26)
+
+**Ask:** a new Recruit Hub page, **Watchlist** — mark recruits from the national pool with a checkbox to "watch for later," looking no different from the other recruit pages. Plus (conditionally) a "Recommended" filter *if* that data exists in the save.
+
+**Recommended — not available:** probed the save (EVANZSYNC, the user's current active dynasty; the SMU/Auburn saves are gone). No `Recommend`/`Suggest` table and no such field on `Player` or `UserRecruitTarget`; the recruiting tables are all board/scouting/draft. The game's "Recommended" list is a live UI computation from team needs/fit, not persisted — so the recommended filter was skipped (per the ask).
+
+**Shipped:** the watchlist is app-side local state, not a save write — mirrors how the recruiting-experience prefs persist. New `data/useWatchlist.ts` hook stores a per-dynasty `Set<playerId>` in localStorage (`cfb.watchlist.<dynastyId>`), keyed by the recruit's **PresentationId** (what the app already exposes as `playerId`) so a flagged recruit survives re-syncs. `NationalRecruits.tsx` gained a `watchlistOnly` mode (reusing the same browser as `boardOnly`), a ☆/★ star toggle in each table row's prospect cell, and a "Watchlist" checkbox in the profile panel; the star dashboard + count line are watchlist-aware, with an empty-state hint. New **Watchlist** tab in `RecruitHubLayout` + `/watchlist` route → `<NationalRecruits watchlistOnly />`.
+
+**Design note:** used a plain hook (not a provider) — the three recruit sub-pages are separate routes never mounted together, so each loads fresh from localStorage on mount and stays correct; skipped a live tab-count badge since a second hook instance in the layout would read stale (no shared reactive store). Fine trade for zero extra wiring.
+
+**Verified:** typecheck/lint/build clean; imported EVANZSYNC (4,100 recruits) into an isolated dir, seeded 6 watchlist ids via localStorage, and screenshotted — Watchlist page shows "6 of 6" with filled stars and reads identically to National Recruits; the National Recruits page shows hollow stars per row and the panel's "☆ Watchlist" checkbox on a selected recruit.
+
+---
 ## Template for new entries
 
 ```markdown

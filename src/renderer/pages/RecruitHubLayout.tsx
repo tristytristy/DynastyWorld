@@ -37,6 +37,7 @@ export function RecruitHubLayout() {
       <div className="flex items-center gap-1.5 overflow-x-auto border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
         {tab('/recruiting', 'My Board')}
         {tab('/recruits', 'National Recruits')}
+        {tab('/watchlist', 'Watchlist')}
       </div>
 
       <Outlet />

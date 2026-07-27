@@ -90,6 +90,7 @@ export function App() {
                     <Route element={<RecruitHubLayout />}>
                       <Route path="recruiting" element={<NationalRecruits boardOnly />} />
                       <Route path="recruits" element={<NationalRecruits />} />
+                      <Route path="watchlist" element={<NationalRecruits watchlistOnly />} />
                     </Route>
 
                     <Route element={<NcaaHubLayout />}>

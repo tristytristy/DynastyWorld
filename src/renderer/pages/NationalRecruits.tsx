@@ -10,8 +10,30 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitingExperience } from '../data/RecruitingExperienceProvider';
 import { useViewedTeamOptional } from '../data/ViewedTeamProvider';
+import { useWatchlist } from '../data/useWatchlist';
 import { formatClassYearShort } from '../lib/recruitFormat';
 import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
+
+/** A star toggle for the watchlist — filled when watching, hollow otherwise. */
+function WatchStar({ watched, onToggle, className = '' }: { watched: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-pressed={watched}
+      aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+      title={watched ? 'On your watchlist — click to remove' : 'Add to watchlist'}
+      className={`inline-flex shrink-0 items-center justify-center transition ${
+        watched ? 'text-amber-500 dark:text-amber-400' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'
+      } ${className}`}
+    >
+      <span className="text-base leading-none">{watched ? '★' : '☆'}</span>
+    </button>
+  );
+}
 
 /** Colored stage badge — each decision-funnel stage gets one accent, never color-alone (the label is always present). */
 const STAGE_STYLE: Record<string, { label: string; cls: string }> = {
@@ -99,6 +121,8 @@ function LockPill({ unlocked, onClick, revealLabel = 'Reveal' }: { unlocked: boo
 function RecruitPanel({
   recruit,
   canEdit,
+  watched,
+  onToggleWatch,
   onEdit,
   onEditRecruiting,
   onOpenFull,
@@ -111,6 +135,8 @@ function RecruitPanel({
 }: {
   recruit: NationalRecruit | null;
   canEdit: boolean;
+  watched: boolean;
+  onToggleWatch: () => void;
   onEdit: (r: NationalRecruit) => void;
   onEditRecruiting: (r: NationalRecruit) => void;
   onOpenFull: (r: NationalRecruit) => void;
@@ -161,6 +187,19 @@ function RecruitPanel({
             {recruit.gemBust === 'GEM' && <span className="border border-emerald-300/70 bg-emerald-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">Gem</span>}
             {recruit.onUserBoard && <span className="border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--team-accent-text)] dark:text-white">On board</span>}
           </div>
+          {/* Watchlist — app-side "keep an eye on this one" flag, saved locally (not to the save). */}
+          <label className="mt-2 inline-flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={watched}
+              onChange={onToggleWatch}
+              className="h-4 w-4 accent-[var(--team-primary)]"
+            />
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className={watched ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}>{watched ? '★' : '☆'}</span>
+              Watchlist
+            </span>
+          </label>
         </div>
       </div>
 
@@ -338,12 +377,14 @@ function Row({ k, v }: { k: string; v: string }) {
  * with `boardOnly`, as the My Board page (`/recruiting`) scoped to the user's
  * board so both pages navigate identically.
  */
-export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } = {}) {
+export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: { boardOnly?: boolean; watchlistOnly?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const { openPlayerEditor } = useEditorModal();
   const { ovr, athletic, experimentalSaveEditing } = useRecruitingExperience();
+  const watchlist = useWatchlist(id);
+  const watchedIds = watchlist.ids;
   const [forceCommitRecruit, setForceCommitRecruit] = useState<NationalRecruit | null>(null);
 
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
@@ -389,6 +430,7 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
     const list = recruits ?? [];
     const q = search.trim().toLowerCase();
     const result = list.filter((r) => {
+      if (watchlistOnly && !watchedIds.has(r.playerId)) return false;
       if (position && r.position !== position) return false;
       if (stars && r.stars !== Number(stars)) return false;
       if (classYear && r.classYear !== classYear) return false;
@@ -415,7 +457,7 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, board, sortKey, sortDir]);
+  }, [recruits, search, position, stars, classYear, homeState, stage, board, sortKey, sortDir, watchlistOnly, watchedIds]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
@@ -508,19 +550,21 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
   return (
     <div className="space-y-5">
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">{boardOnly ? 'My Board' : 'Recruits'}</p>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">{watchlistOnly ? 'Watchlist' : boardOnly ? 'My Board' : 'Recruits'}</p>
         <h2 className="mt-1 font-display text-page-title font-bold text-slate-950 dark:text-white">
-          {boardOnly ? 'Your recruiting board.' : 'Every prospect in the country.'}
+          {watchlistOnly ? 'Recruits you’re watching.' : boardOnly ? 'Your recruiting board.' : 'Every prospect in the country.'}
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          {boardOnly
-            ? 'Every prospect on your board — filter and sort, then open one for their school interest, athletic snapshot, and the same editing + Force Commit controls as the national browser.'
-            : 'The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.'}
+          {watchlistOnly
+            ? 'Prospects you’ve starred to keep an eye on — the same browser as National Recruits, filtered to your picks. Uncheck the star to drop one. Saved on this computer, not to your game save.'
+            : boardOnly
+              ? 'Every prospect on your board — filter and sort, then open one for their school interest, athletic snapshot, and the same editing + Force Commit controls as the national browser.'
+              : 'The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.'}
         </p>
       </div>
 
-      {/* Dashboard — star distribution (national pool only; the board is small enough that the count line suffices there). */}
-      {!boardOnly && (
+      {/* Dashboard — star distribution (national pool only; the board and watchlist are small enough that the count line suffices there). */}
+      {!boardOnly && !watchlistOnly && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           <StatTile label="Recruits" value={dash.total.toLocaleString()} />
           <StatTile label="5-Star" value={dash.s5.toLocaleString()} />
@@ -578,7 +622,7 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
 
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''}
-            {boardOnly ? ' on your board' : ` (${dash.total.toLocaleString()} total)`}
+            {boardOnly ? ' on your board' : watchlistOnly ? ' on your watchlist' : ` (${dash.total.toLocaleString()} total)`}
             {filtered.length > RENDER_CAP && ' — narrow with filters to see more'}
           </p>
 
@@ -613,6 +657,7 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
                       >
                         <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'border-l-[3px] border-l-[var(--team-primary)] bg-[color:color-mix(in_srgb,var(--team-primary)_28%,var(--surface-card,#fff))]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
                           <div className="flex items-center gap-2.5">
+                            <WatchStar watched={watchedIds.has(r.playerId)} onToggle={() => watchlist.toggle(r.playerId)} />
                             <span className="tnum w-6 shrink-0 text-right text-xs font-bold text-slate-400 dark:text-slate-500">{r.nationalRank || '—'}</span>
                             <PlayerPortrait player={r} size="sm" className="!h-8 !w-8 shrink-0" />
                             <div className="min-w-0">
@@ -649,7 +694,11 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
                     );
                   })}
                   {shown.length === 0 && (
-                    <tr><td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-400 dark:text-slate-500">No recruits match these filters.</td></tr>
+                    <tr><td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                      {watchlistOnly && watchlist.count === 0
+                        ? 'Your watchlist is empty — add recruits with the ☆ star on any prospect in National Recruits (or the checkbox in a prospect’s panel).'
+                        : 'No recruits match these filters.'}
+                    </td></tr>
                   )}
                 </tbody>
               </table>
@@ -662,6 +711,8 @@ export function NationalRecruits({ boardOnly = false }: { boardOnly?: boolean } 
           <RecruitPanel
             recruit={selected}
             canEdit={canEdit}
+            watched={selected ? watchedIds.has(selected.playerId) : false}
+            onToggleWatch={() => selected && watchlist.toggle(selected.playerId)}
             onEdit={editRecruit}
             onEditRecruiting={setEditingRecruit}
             onOpenFull={openFull}
