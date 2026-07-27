@@ -1,6 +1,6 @@
-# CFB Dynasty Hub — 2.0 Beta 🧪
+# CFB Dynasty Hub — 1.5 🏈
 
-A big one. **Version 2** brings player **trading cards**, a **Media Hub** that finally handles a whole game's worth of screenshots at once, a cleaner Team Hub, and an all-black look. It's a **beta** — everything's tested and stable, but it's a large step, so kick the tires and tell us what feels off.
+A big feature update to 1.0. **1.5** brings player **trading cards**, a grown-up **Media Hub**, a cleaner Team Hub, and an all-black look — and it's a normal in-place update, so your graphics come with it (no separate image-data download).
 
 ---
 
@@ -55,8 +55,8 @@ Some of this reads your save fresh to take effect.
 
 ## 📥 How to update
 
-Run the **2.0.0-beta** installer — it updates the app in place. You do **not** need to reinstall the image data; your existing graphics pack still works. (If Windows shows a blue SmartScreen notice, click *More info → Run anyway* — normal for a small indie app.)
+Just run **CFB Dynasty Hub Setup 1.5.0.exe** — it updates the app in place, graphics and all. You do **not** need to reinstall the image data. (If Windows shows a blue SmartScreen notice, click *More info → Run anyway* — normal for a small indie app.)
 
 ---
 
-*It's a beta — if anything looks wrong, say so. Made by Evanzport Interactive.* 🏈
+*Made by Evanzport Interactive. Thanks for playing — here's to a hundred more seasons.* 🏈
