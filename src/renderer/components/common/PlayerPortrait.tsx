@@ -101,12 +101,19 @@ export function PlayerPortrait({
       ? `${className} max-h-[22rem] max-w-full rounded-xl ${fit} object-top`
       : `${sizeClass} ${className} shrink-0 rounded-xl ${fit} object-top`;
 
+  // Rule of thirds: raise the head so the eyes land near the upper-third line
+  // (portraits share a 512² composition, so one transform reads right for all).
+  const fillStyle = fill
+    ? ({ transform: 'translateY(-23%) scale(1.08)', transformOrigin: '50% 0%' } as const)
+    : undefined;
+
   const portraitImg = (
     <img
       src={src}
       alt={`${player.firstName} ${player.lastName}`}
       onError={() => setCandidateIndex((current) => current + 1)}
       className={imgClass}
+      style={fillStyle}
       draggable={false}
     />
   );
@@ -145,6 +152,7 @@ export function PlayerPortrait({
           event.currentTarget.style.display = 'none';
         }}
         className={`pointer-events-none absolute inset-0 h-full w-full ${fill ? '' : 'rounded-xl'} ${fit} object-top`}
+        style={fillStyle}
       />
     </span>
   );

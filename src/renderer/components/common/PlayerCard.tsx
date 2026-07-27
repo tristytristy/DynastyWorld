@@ -143,11 +143,11 @@ export function PlayerCard({
       </div>
 
       {/* Vertical name — first (smaller) hugging the last (bigger), rising up from the bottom-left */}
-      <div className="absolute bottom-[100px] left-3 z-[4] flex items-end gap-1">
-        <span className="[writing-mode:vertical-rl] rotate-180 pb-1 text-[21px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
+      <div className="absolute bottom-[100px] left-3 z-[4] flex items-end">
+        <span className="[writing-mode:vertical-rl] mr-[-5px] rotate-180 pb-1.5 text-[20px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
           {player.firstName}
         </span>
-        <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
+        <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
           {player.lastName.toUpperCase()}
         </span>
       </div>
