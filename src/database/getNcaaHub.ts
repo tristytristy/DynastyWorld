@@ -17,6 +17,15 @@ import type {
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * The catch-all teamIndex the game parks every non-FBS placeholder under
+ * (Practice + the five "FCS East/West/…" buckets all share 255). They carry
+ * sentinel rank values (e.g. cfpRank 255) that would otherwise leak into the
+ * NCAA hub's rankings/playoff picture, so they're filtered out everywhere here —
+ * the NCAA hub is an FBS view.
+ */
+const FCS_POOL_TEAM_INDEX = 255;
+
 function normalizeRank(rank: number): number | null {
   return rank > 0 ? rank : null;
 }
@@ -399,7 +408,9 @@ export function getNcaaHub(dynastyId: string, seasonId?: number): NcaaHubOvervie
   if (!season || season.dynastyId !== dynastyId || season.userTeamId === null) return undefined;
 
   const userTeamId = season.userTeamId;
-  const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
+  // Exclude the FCS/placeholder pool (index 255) up front so it never surfaces in
+  // any NCAA-hub ranking, the playoff picture, conference leaders, etc.
+  const teams = (getSnapshot<TeamData[]>(season.id, 'teams') ?? []).filter((t) => t.teamIndex !== FCS_POOL_TEAM_INDEX);
   const schedule = getSnapshot<GameData[]>(season.id, 'schedule') ?? [];
   const coaches = getSnapshot<CoachData[]>(season.id, 'coaches') ?? [];
   const awards = getSnapshot<AwardsData>(season.id, 'awards');

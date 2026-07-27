@@ -33,6 +33,14 @@ function recordLine(wins: number, losses: number): string {
   return `${wins}-${losses}`;
 }
 
+/** 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th", 11 -> "11th", 21 -> "21st"… */
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
 /** Each staff member's own win-loss record for the seasons they've actually been on this staff, keyed by coach name across every imported season. */
 function buildCoachResumeMap(
   seasons: { seasonYear: number; coaches: CoachOverview | null; schedule: ScheduleOverview | null }[],
@@ -197,8 +205,9 @@ export function CoachHub() {
                   </p>
                 )}
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  {overview.teamName}
-                  {userCoach ? ` — ${userCoach.seasonsWithTeam} ${userCoach.seasonsWithTeam === 1 ? 'year' : 'years'} with the program` : ''}
+                  {userCoach
+                    ? `${ordinal(userCoach.seasonsWithTeam + 1)} year as ${spaceCamelCase(userCoach.position)} with ${overview.teamName}`
+                    : overview.teamName}
                 </p>
                 {userCoach && (
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">

@@ -1973,6 +1973,17 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Verified:** typecheck/lint/build clean. Live on the user's EVANZSYNC dynasty via IPC + screenshot — Patrick Evanz shows **Offensive Coordinator** + a **Preseason** chip (Sac State, 2026). (Nice real-world confirmation the user plays as an OC, not a HC — so the position line is genuinely informative.)
 
 ---
+## Phase — Coach tenure phrasing + NCAA-hub FCS exclusion (2026-07-26)
+
+**Two user asks.**
+
+**1. Coach Hub tenure line.** Was "{teamName} — 0 years with the program". Now reads **"1st year as {Position} with {teamName}"** — ordinal counting from `seasonsWithTeam + 1` (0→1st, 1→2nd, 2→3rd, …) via a new `ordinal()` helper in `CoachHub.tsx`. Verified on EVANZSYNC: Patrick Evanz shows "1st year as Offensive Coordinator with Sac State".
+
+**2. NCAA hub — no FCS pool.** The Overview's "Early CFP bracket watch" was listing the five FCS/placeholder buckets (all teamIndex 255) because they carry a sentinel `cfpRank` of 255 that slipped past the `cfpRank > 0` filter (especially in preseason when no real team is CFP-ranked). Fixed by excluding `FCS_POOL_TEAM_INDEX` (255) from the `teams` list at the top of `getNcaaHub` — so it's gone from the playoff picture, Top 25, recruiting buzz, record watch, and conference leaders in one place. Standings already skipped null-conference teams (the pool), and national stats/players already excluded 255, so no other changes needed. Verified: playoff picture returns 0 entries in preseason (was 5 FCS buckets), `anyFCS: false`.
+
+**Verified:** typecheck/lint/build clean; both confirmed via IPC + screenshot on the user's EVANZSYNC dynasty.
+
+---
 ## Template for new entries
 
 ```markdown
