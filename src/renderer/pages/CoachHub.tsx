@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { CoachCard, EditButton, coachKey, spaceCamelCase, type CoachResume } from '../components/common/CoachCard';
 import { CoachPortrait } from '../components/common/CoachPortrait';
 import { TeamLogo } from '../components/common/TeamLogo';
+import { TeamLink } from '../components/common/TeamLink';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -10,11 +11,108 @@ import { StatTile } from '../components/ui/StatTile';
 import { getBowlLogoPath, getConferenceChampionshipTrophyPath, getTrophyImagePath } from '../lib/trophyAssetMapping';
 import type {
   Coach,
+  CoachingTree,
   CoachOverview,
   ProgramHistoryOverview,
   ScheduleOverview,
   SeasonOverview,
 } from '../../shared/types';
+
+/** "'26" / "'26–'28" for a coach's tenure span. */
+function yearsSpan(a: number, b: number): string {
+  const y = (n: number) => `'${String(n).slice(-2)}`;
+  return a === b ? y(a) : `${y(a)}–${y(b)}`;
+}
+
+/** The coaching-tree branches — where your former staffers went, head-coach promotions first. */
+function CoachingTreeSection({ tree }: { tree: CoachingTree }) {
+  if (tree.entries.length === 0) {
+    return (
+      <SurfaceCard>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Coaching Tree</p>
+        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Where your people go</h3>
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          As assistants leave your staff for jobs elsewhere, they&apos;ll branch out here — with the role they held under
+          you and where they landed. Sync each season and your tree grows.
+        </p>
+      </SurfaceCard>
+    );
+  }
+  return (
+    <SurfaceCard>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Coaching Tree</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            Where your people went
+          </h3>
+        </div>
+        <div className="flex gap-3">
+          <StatTile label="Coaches produced" value={String(tree.coachesProduced)} />
+          <StatTile label="Now head coaches" value={String(tree.headCoachesProduced)} />
+        </div>
+      </div>
+
+      {/* Root node — you */}
+      {tree.rootCoachName && (
+        <div className="mt-4 inline-flex items-center gap-2 border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-3 py-1.5">
+          <span className="text-sm font-bold text-slate-900 dark:text-white">{tree.rootCoachName}</span>
+          {tree.rootTeamName && <span className="text-xs text-slate-500 dark:text-slate-400">· {tree.rootTeamName}</span>}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-2.5">
+        {tree.entries.map((e) => (
+          <div
+            key={e.presentationId}
+            className={`flex flex-col gap-3 border-l-[3px] bg-slate-50/70 p-3 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between ${
+              e.isHeadCoachNow
+                ? 'border-l-amber-400 border-y border-r border-y-amber-300/40 border-r-amber-300/40 dark:border-y-amber-500/25 dark:border-r-amber-500/25'
+                : 'border-l-[var(--team-primary)]/60 border-y border-r border-y-slate-200/70 border-r-slate-200/70 dark:border-y-slate-800 dark:border-r-slate-800'
+            }`}
+          >
+            {/* Left: the coach + role under you */}
+            <div className="flex min-w-0 items-center gap-3">
+              <CoachPortrait
+                coach={{ firstName: e.name.split(' ')[0] ?? '', lastName: e.name.split(' ').slice(1).join(' '), portraitAssetName: e.portraitAssetName }}
+                size="sm"
+                className="!h-10 !w-10 shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900 dark:text-white">{e.name}</p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                  Your {e.positionsUnderYou.map(spaceCamelCase).join(' / ')} · {yearsSpan(e.firstYearWithYou, e.lastYearWithYou)}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: where they are now */}
+            <div className="flex items-center gap-2.5 sm:justify-end">
+              <span className="hidden text-slate-300 dark:text-slate-600 sm:inline" aria-hidden="true">→</span>
+              {e.nowTeamName && (
+                <TeamLogo team={{ assetName: e.nowTeamName, label: e.nowTeamName }} size="sm" className="!h-6 !w-6 shrink-0" />
+              )}
+              <div className="min-w-0 text-left sm:text-right">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-white sm:justify-end">
+                  {e.isHeadCoachNow && (
+                    <span className="border border-amber-400/60 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      Head Coach
+                    </span>
+                  )}
+                  <TeamLink teamIndex={e.nowTeamIndex ?? undefined} teamName={e.nowTeamName ?? 'Unknown'} nameClassName="truncate" />
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {e.nowPosition ? spaceCamelCase(e.nowPosition) : 'Coach'}
+                  {e.nowSeasonYear ? ` · as of ${e.nowSeasonYear}` : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </SurfaceCard>
+  );
+}
 
 const nationalChampionshipTrophyPath = getTrophyImagePath({
   kind: 'national-championship',
@@ -103,7 +201,20 @@ export function CoachHub() {
   // timeline lacks, and what turns it into a career résumé (following the coach
   // across school changes, HC/OC/DC year to year).
   const [userPositionByYear, setUserPositionByYear] = useState<Map<number, string>>(new Map());
+  const [coachingTree, setCoachingTree] = useState<CoachingTree | null>(null);
   const { openCoachEditor } = useEditorModal();
+
+  // The coaching tree is dynasty-level (season-over-season staff diff), not per-season.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    window.api.db.getCoachingTree(id).then((t) => {
+      if (!cancelled) setCoachingTree(t);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -474,6 +585,8 @@ export function CoachHub() {
           </ul>
         </SurfaceCard>
       )}
+
+      {coachingTree && <CoachingTreeSection tree={coachingTree} />}
     </div>
   );
 }

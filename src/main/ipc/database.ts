@@ -70,6 +70,7 @@ import { getDepartures } from '../../database/getDepartures';
 import { globalSearch } from '../../database/globalSearch';
 import { getPlayerDevelopment } from '../../database/getPlayerDevelopment';
 import { getHeadToHead } from '../../database/getHeadToHead';
+import { getCoachingTree } from '../../database/getCoachingTree';
 import {
   confirmTeamAwardWinner,
   finalizeTeamAwards,
@@ -367,6 +368,10 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.getHeadToHead, async (_event, dynastyId: string) => {
     return getHeadToHead(dynastyId);
+  });
+
+  ipcMain.handle(IPC.db.getCoachingTree, async (_event, dynastyId: string) => {
+    return getCoachingTree(dynastyId);
   });
 
   ipcMain.handle(IPC.db.getTransfers, async (_event, dynastyId: string, focusTeamName: string) => {

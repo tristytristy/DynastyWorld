@@ -1279,6 +1279,33 @@ export interface LeagueTeamRoster {
 }
 
 /** One school pursuing a recruit (from the recruit's top-schools list), with its 0-99 influence — the recruiting battle. */
+/** One former staffer in the coaching tree — someone who was on your staff and is now elsewhere. */
+export interface CoachingTreeEntry {
+  presentationId: number;
+  name: string;
+  portraitAssetName: string | null;
+  /** The role(s) they held under you (HeadCoach/OffensiveCoordinator/DefensiveCoordinator). */
+  positionsUnderYou: string[];
+  firstYearWithYou: number;
+  lastYearWithYou: number;
+  nowTeamIndex: number | null;
+  nowTeamName: string | null;
+  nowPosition: string | null;
+  nowSeasonYear: number | null;
+  /** They're now a head coach somewhere — the prestige branch. */
+  isHeadCoachNow: boolean;
+}
+
+/** "Where your people went" — the program's coaching tree (getCoachingTree). */
+export interface CoachingTree {
+  rootCoachName: string | null;
+  rootTeamName: string | null;
+  /** Former staffers who moved on, head-coach promotions first. */
+  entries: CoachingTreeEntry[];
+  coachesProduced: number;
+  headCoachesProduced: number;
+}
+
 /** One game in a head-to-head series (getHeadToHead), from the user's perspective. */
 export interface HeadToHeadGame {
   seasonYear: number;
@@ -1835,6 +1862,7 @@ export interface DynastyApi {
     globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
     getPlayerDevelopment: (dynastyId: string, playerId: number) => Promise<PlayerDevelopmentSeason[]>;
     getHeadToHead: (dynastyId: string) => Promise<HeadToHeadOpponent[]>;
+    getCoachingTree: (dynastyId: string) => Promise<CoachingTree>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;

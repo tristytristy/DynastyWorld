@@ -2040,3 +2040,13 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 ## Phase — Rivalries & Head-to-Head (2026-07-27)
 
 **Premium add.** All-time series record vs every opponent the program has played across synced seasons. New `getHeadToHead.ts` walks each full-data season's `getSchedule` (played games only), aggregates by opponent into series W-L-T, current streak, average scoring margin, and the game-by-game list (newest first), flagging the game's designated rivals (`isRivalryGame`/`rivalryName` were already on each game). New types + IPC/preload/handler. UI: a new **Rivalries** tab on Team Hub (`Rivalries.tsx` + `/rivalries` route) — rival cards up top (series / avg margin / meetings + game list) and an all-time series table for everyone else, opponent names are TeamLinks. Verified: typecheck/lint/build clean; getter returns [] correctly on a preseason save (no played games) and the tab/header/empty-state render. Populated view reuses the same rendering; the aggregation mirrors the proven getTransfers season-diff pattern. Grows with each synced season. NOT released.
+
+## Phase — Coaching Tree (2026-07-27)
+
+**The deferred Phase-5 feature, now built — no special carousel save needed.** The user's insight was right: every Wk0 sync already snapshots every staff on every team (keyed by stable PresentationId), so the tree is a season-over-season staff diff, same mechanic as Transfers.
+
+**Backend:** `getCoachingTree.ts` (`getCoachingTree(dynastyId)` → `CoachingTree`) walks full-data seasons oldest→newest, building (a) everyone who was ever on the user's staff (excluding the user coach, skipping the shared-id-0 generated coordinators) with the role(s) + years they served, and (b) each coach's most-recent sighting anywhere in the league. A "branch" = a former staffer whose latest team ≠ the user's current team → returns name, role-under-you, years, and where they are now, with head-coach promotions flagged and sorted first. New `CoachingTree`/`CoachingTreeEntry` types + IPC/preload/handler.
+
+**UI:** a premium **Coaching Tree** section on Coach Hub — a stat strip (coaches produced / now head coaches), a root node (you + your team), and branch rows: portrait + "Your {role} · {years}" → arrow → destination team logo + role, HC promotions with a gold left-accent + "HEAD COACH" badge, opponent/destination names as TeamLinks. Empty-state until an assistant actually leaves.
+
+**Verified:** typecheck/lint/build clean; empty-state renders on the single-season EVANZSYNC; populated design confirmed via a standalone mock render (root + 4 branches, 2 HC promotions gold-flagged). Needs 2+ synced seasons with a departing coach to populate live. NOT released.
