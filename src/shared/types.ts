@@ -1279,6 +1279,16 @@ export interface LeagueTeamRoster {
 }
 
 /** One school pursuing a recruit (from the recruit's top-schools list), with its 0-99 influence — the recruiting battle. */
+/** One season in a player's rating arc (getPlayerDevelopment) — for the OVR-over-seasons chart. */
+export interface PlayerDevelopmentSeason {
+  seasonYear: number;
+  overallRating: number;
+  position: string;
+  /** Freshman / Sophomore / … that season — shows class progression alongside OVR. */
+  schoolYear: string;
+  teamName: string | null;
+}
+
 /** One player hit in the global search. `id` opens the player modal; `teamIndex` themes it. */
 export interface GlobalSearchPlayer {
   id: number;
@@ -1792,6 +1802,7 @@ export interface DynastyApi {
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
     globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
+    getPlayerDevelopment: (dynastyId: string, playerId: number) => Promise<PlayerDevelopmentSeason[]>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;

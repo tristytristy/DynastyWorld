@@ -2014,3 +2014,13 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 
 
 
+
+## Phase — Player Development Tracker (2026-07-27)
+
+**Premium feature #3 of 4.** A player's OVR arc across every synced season — the payoff of syncing yearly.
+
+**Backend:** new `getPlayerDevelopment.ts` (`getPlayerDevelopment(dynastyId, playerId)` → `PlayerDevelopmentSeason[]`) walks each full-data season's **league-wide** roster snapshot (works for any player, not just the user's team), finds them by stable PresentationId, returns per-season `{ seasonYear, overallRating, position, schoolYear, teamName }` oldest→newest. New type + IPC/preload/handler.
+
+**UI:** a **Development** card on the player modal's Overview tab (`PlayerProfileContent`) — a header strip (current OVR, change since first tracked, peak) + a reused `TrendLineChart` (the app's validated dataviz line chart) plotting OVR by season. With one season it shows a friendly "grows into a curve" note instead of a one-point line; the chart draws from 2 seasons on.
+
+**Verified:** typecheck/lint/build clean; `getPlayerDevelopment` returns correct per-season lines via IPC (e.g. "Jide Abasiri → 2026:87 Junior, USC"); screenshot of Carson Conklin's modal shows the Development card (73 current OVR · 0 since 2026 · 73 peak, single-season note). Multi-point chart reuses the proven TrendLineChart. NOT released.

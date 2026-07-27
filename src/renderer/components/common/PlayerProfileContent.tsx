@@ -13,6 +13,7 @@ import { useEditorModal } from '../../data/EditorModalProvider';
 import { EditButton } from './CoachCard';
 import { MediaGallery } from './MediaGallery';
 import { PlayerNotesTab } from './PlayerNotesTab';
+import { TrendLineChart, type ChartSeries } from '../charts/TrendCharts';
 import type {
   AwardsOverview,
   SeasonSummary,
@@ -24,6 +25,7 @@ import type {
   MediaItemResolved,
   OffensiveGameLine,
   OffensiveStatLine,
+  PlayerDevelopmentSeason,
   PlayerEditFields,
   PlayerStats,
   RosterPlayer,
@@ -801,7 +803,21 @@ export function PlayerProfileContent({
   const [heroTeamName, setHeroTeamName] = useState<string | null>(null);
   const [tab, setTab] = useState<ProfileTab>('overview');
   const [seasonsList, setSeasonsList] = useState<SeasonSummary[]>([]);
+  const [development, setDevelopment] = useState<PlayerDevelopmentSeason[]>([]);
   const { openPlayerEditor } = useEditorModal();
+
+  // The player's OVR arc across every synced season (getPlayerDevelopment walks
+  // each season's league roster by PresentationId) — powers the Development chart.
+  useEffect(() => {
+    let cancelled = false;
+    setDevelopment([]);
+    window.api.db.getPlayerDevelopment(dynastyId, playerId).then((rows) => {
+      if (!cancelled) setDevelopment(rows ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, playerId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1157,6 +1173,63 @@ export function PlayerProfileContent({
                 jumpLabel="Awards & honors"
               />
             </div>
+
+            {development.length > 0 &&
+              (() => {
+                const first = development[0];
+                const last = development[development.length - 1];
+                const ovrs = development.map((d) => d.overallRating);
+                const peak = Math.max(...ovrs);
+                const change = last.overallRating - first.overallRating;
+                const series: ChartSeries[] = [
+                  { key: 'ovr', label: 'OVR', color: 'blue', points: development.map((d) => ({ x: d.seasonYear, y: d.overallRating })) },
+                ];
+                return (
+                  <SurfaceCard className="mt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Development</p>
+                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">Overall rating across every synced season.</p>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        <span>
+                          <span className="type-stat-sm">{last.overallRating}</span>{' '}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">current OVR</span>
+                        </span>
+                        <span>
+                          <span
+                            className={`type-stat-sm ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-red-600 dark:text-red-400' : ''}`}
+                          >
+                            {change > 0 ? `+${change}` : change}
+                          </span>{' '}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">since {first.seasonYear}</span>
+                        </span>
+                        <span>
+                          <span className="type-stat-sm">{peak}</span>{' '}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">peak</span>
+                        </span>
+                      </div>
+                    </div>
+                    {development.length > 1 ? (
+                      <div className="mt-3">
+                        <TrendLineChart
+                          series={series}
+                          xTicks={development.map((d) => d.seasonYear)}
+                          formatX={(x) => String(x)}
+                          formatY={(y) => String(Math.round(y))}
+                          yMinHint={Math.max(0, Math.min(...ovrs) - 3)}
+                          height={200}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                        One season tracked so far — {first.seasonYear}: {first.overallRating} OVR as a {first.schoolYear}. Sync each
+                        season and this grows into a development curve.
+                      </p>
+                    )}
+                  </SurfaceCard>
+                );
+              })()}
           </>
         )}
 
