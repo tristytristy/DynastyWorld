@@ -90,11 +90,13 @@ export function PlayerCard({
         className={`absolute inset-0 overflow-hidden ${onPhotoPointerDown ? 'cursor-move touch-none' : ''}`}
       >
         {photoUrl ? (
+          // object-contain so a wide (16:9) photo arrives whole — the user zooms
+          // in and drags to frame it, and overflow-hidden keeps it in the card.
           <img
             src={photoUrl}
             draggable={false}
             alt=""
-            className="absolute inset-0 h-full w-full select-none object-cover"
+            className="absolute inset-0 h-full w-full select-none object-contain"
             style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.scale})`, transformOrigin: 'center' }}
           />
         ) : (
@@ -423,7 +425,7 @@ export function PlayerCardTab({
           <input
             type="range"
             min={1}
-            max={3}
+            max={5}
             step={0.02}
             value={transform.scale}
             onChange={onZoom}
@@ -433,7 +435,9 @@ export function PlayerCardTab({
         </div>
       )}
       {photoPath && (
-        <p className="-mt-1 text-xs text-slate-400 dark:text-slate-500">Drag the photo to reposition it.</p>
+        <p className="-mt-1 text-xs text-slate-400 dark:text-slate-500">
+          The full photo shows at first — zoom in to fill the card, then drag to frame it.
+        </p>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2">
