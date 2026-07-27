@@ -91,6 +91,7 @@ export const IPC = {
   },
   card: {
     pickPhoto: 'card:pickPhoto',
+    setPhotoFromPath: 'card:setPhotoFromPath',
     getPhoto: 'card:getPhoto',
     removePhoto: 'card:removePhoto',
   },

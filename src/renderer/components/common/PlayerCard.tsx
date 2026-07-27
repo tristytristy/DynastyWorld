@@ -3,7 +3,45 @@ import type { CSSProperties } from 'react';
 import { PlayerPortrait } from './PlayerPortrait';
 import { TeamLogo } from './TeamLogo';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { DynastyTheme, RosterPlayer } from '../../../shared/types';
+import type { DynastyTheme, MediaItemResolved, RosterPlayer } from '../../../shared/types';
+
+/**
+ * Which stats headline the card, by default, when the user hasn't picked their
+ * own. Higher wins; anything unlisted sits in the middle, and "Games" is pushed
+ * to the bottom so a marquee line (Pass Yds, Pass TD, …) leads instead. A player
+ * is only ever one side of the ball, so the shared 'INT' label is unambiguous
+ * per card.
+ */
+const STAT_PRIORITY: Record<string, number> = {
+  'Pass Yds': 100,
+  'Pass TD': 96,
+  'Rush Yds': 92,
+  'Rush TD': 90,
+  'Rec Yds': 88,
+  'Rec TD': 86,
+  Tackles: 100,
+  Sacks: 96,
+  TFL: 88,
+  Rec: 74,
+  'Pass Def.': 72,
+  'Forced Fum.': 70,
+  'Comp/Att': 68,
+  'Fum. Rec.': 66,
+  INT: 62,
+  'Int Yds': 58,
+  Assists: 56,
+  'Rush Att': 40,
+  'Pass Att': 30,
+  Games: 0,
+};
+
+/** The default marquee stats (up to 3) for a card, most-notable first. */
+function defaultStatLabels(stats: { label: string; value: string }[]): string[] {
+  return [...stats]
+    .sort((a, b) => (STAT_PRIORITY[b.label] ?? 50) - (STAT_PRIORITY[a.label] ?? 50))
+    .slice(0, 3)
+    .map((s) => s.label);
+}
 
 /** Humanize a dev-trait/scheme enum lightly (camelCase → spaced). */
 function spaced(value: string): string {
@@ -36,7 +74,7 @@ export function PlayerCard({
   /** When provided, the photo area is draggable to reposition the custom photo. */
   onPhotoPointerDown?: (e: React.PointerEvent) => void;
 }) {
-  const line = stats.slice(0, 3);
+  const line = stats.slice(0, 4);
   const t = photoTransform ?? { x: 0, y: 0, scale: 1 };
   return (
     <div
@@ -101,9 +139,9 @@ export function PlayerCard({
         <span className="block text-[10px] tracking-[0.3em] opacity-85">OVR</span>
       </div>
 
-      {/* Vertical name — first (smaller) beside last (bigger), rising up from the bottom-left */}
-      <div className="absolute bottom-[104px] left-3 z-[4] flex items-end gap-4">
-        <span className="[writing-mode:vertical-rl] rotate-180 pb-0.5 text-[22px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
+      {/* Vertical name — first (smaller) hugging the last (bigger), rising up from the bottom-left */}
+      <div className="absolute bottom-[100px] left-3 z-[4] flex items-end gap-1">
+        <span className="[writing-mode:vertical-rl] rotate-180 pb-1 text-[21px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
           {player.firstName}
         </span>
         <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
@@ -111,26 +149,33 @@ export function PlayerCard({
         </span>
       </div>
 
-      {/* Bottom band — meta + stat tiles + team logo */}
-      <div className="absolute inset-x-0 bottom-0 z-10 pb-4 pl-[78px] pr-4 pt-2">
-        <p className="text-center text-[11px] opacity-85">
+      {/* Bottom band — meta line, a wide single-line stat row, and the gold team logo */}
+      <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-4 pt-2">
+        <p className="mb-2 text-[11px] font-medium tracking-wide opacity-85">
           {[teamName, spaced(player.schoolYear), seasonYear].filter(Boolean).join(' · ')}
         </p>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {line.map((s) => (
-            <div
-              key={s.label}
-              className="h-[54px] flex-1 rounded-md border bg-black/30 px-1 py-2 text-center"
-              style={{ borderColor: 'color-mix(in srgb, var(--team-secondary) 32%, transparent)' }}
-            >
-              <p className="text-lg font-extrabold" style={{ color: 'var(--team-secondary)' }}>{s.value}</p>
-              <p className="mt-0.5 text-[9px] tracking-[0.12em] opacity-70">{s.label.toUpperCase()}</p>
+        <div className="flex items-end justify-between gap-3">
+          {line.length > 0 && (
+            <div className="flex flex-1 items-end justify-between gap-2 pr-1">
+              {line.map((s) => (
+                <div key={s.label} className="min-w-0">
+                  <p className="text-[19px] font-extrabold leading-none" style={{ color: 'var(--team-secondary)' }}>
+                    {s.value}
+                  </p>
+                  <p className="mt-1 whitespace-nowrap text-[8.5px] font-semibold uppercase tracking-[0.11em] opacity-70">
+                    {s.label}
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
           {teamName && (
-            <div className="flex h-[54px] w-[52px] shrink-0 items-center justify-center">
-              <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" className="!h-11 !w-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]" />
-            </div>
+            <TeamLogo
+              team={{ assetName: teamName, label: teamName }}
+              size="lg"
+              variant="gold"
+              className="!h-12 !w-12 shrink-0 drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)]"
+            />
           )}
         </div>
       </div>
@@ -193,6 +238,42 @@ export function PlayerCardTab({
   }, [dynastyId]);
   const colorVars = resolveColorVars({ primary: theme?.primaryColor ?? null, secondary: theme?.secondaryColor ?? null });
 
+  // --- Which stats headline the card (per player, up to 4) ---
+  const statsKey = `cfb.cardstats.${dynastyId}.${player.id}`;
+  const statsSignature = stats.map((s) => s.label).join('|');
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(() => defaultStatLabels(stats));
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(statsKey);
+      const saved = raw ? (JSON.parse(raw) as string[]) : null;
+      const valid = Array.isArray(saved) ? saved.filter((l) => stats.some((s) => s.label === l)) : [];
+      setSelectedLabels(valid.length > 0 ? valid.slice(0, 4) : defaultStatLabels(stats));
+    } catch {
+      setSelectedLabels(defaultStatLabels(stats));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statsKey, statsSignature]);
+
+  function toggleStat(label: string) {
+    setSelectedLabels((prev) => {
+      let next: string[];
+      if (prev.includes(label)) next = prev.filter((l) => l !== label);
+      else if (prev.length >= 4) next = prev; // cap the card at four stats
+      else next = [...prev, label];
+      try {
+        localStorage.setItem(statsKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  // Selected stats, in the user's pick order.
+  const selectedStats = selectedLabels
+    .map((l) => stats.find((s) => s.label === l))
+    .filter((s): s is { label: string; value: string } => Boolean(s));
+
   // --- Custom photo (per player) ---
   const transformKey = `cfb.cardphoto.${dynastyId}.${player.id}`;
   const [photoPath, setPhotoPath] = useState<string | null>(null);
@@ -243,6 +324,28 @@ export function PlayerCardTab({
   async function removePhoto() {
     await window.api.card.removePhoto(dynastyId, player.id);
     setPhotoPath(null);
+  }
+
+  // --- Reuse a photo already tagged to this player in the media gallery ---
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaImages, setMediaImages] = useState<MediaItemResolved[] | null>(null);
+  async function toggleMediaPicker() {
+    const next = !mediaOpen;
+    setMediaOpen(next);
+    if (next && mediaImages === null) {
+      const items = await window.api.media.listForPlayer(dynastyId, player.id);
+      setMediaImages(items.filter((m) => m.mediaType === 'image'));
+    }
+  }
+  async function chooseMediaPhoto(absolutePath: string) {
+    const p = await window.api.card.setPhotoFromPath(dynastyId, player.id, absolutePath);
+    if (p) {
+      setPhotoPath(p);
+      setPhotoVersion((v) => v + 1);
+      setTransform(DEFAULT_TRANSFORM);
+      saveTransform(DEFAULT_TRANSFORM);
+      setMediaOpen(false);
+    }
   }
 
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -306,7 +409,7 @@ export function PlayerCardTab({
           player={player}
           teamName={teamName}
           seasonYear={seasonYear}
-          stats={stats}
+          stats={selectedStats}
           photoUrl={photoUrl}
           photoTransform={transform}
           onPhotoPointerDown={photoPath ? onPhotoPointerDown : undefined}
@@ -337,6 +440,9 @@ export function PlayerCardTab({
         <button type="button" onClick={pickPhoto} className={BTN}>
           {photoPath ? 'Change photo' : 'Add your photo'}
         </button>
+        <button type="button" onClick={toggleMediaPicker} className={BTN}>
+          From media
+        </button>
         {photoPath && (
           <button type="button" onClick={removePhoto} className={BTN}>
             Remove photo
@@ -346,6 +452,69 @@ export function PlayerCardTab({
           {busy ? 'Saving…' : 'Download card (PNG)'}
         </button>
       </div>
+
+      {/* Pick from photos already tagged to this player in the media gallery */}
+      {mediaOpen && (
+        <div className="w-full max-w-[340px]">
+          {mediaImages === null ? (
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500">Loading…</p>
+          ) : mediaImages.length === 0 ? (
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500">
+              No photos tagged with {player.firstName} yet. Tag them in the Media gallery to reuse here.
+            </p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2">
+              {mediaImages.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => chooseMediaPhoto(m.absolutePath)}
+                  title={m.description || m.gameLabel || 'Use this photo'}
+                  className="group aspect-square overflow-hidden rounded border border-slate-300/70 transition hover:border-[var(--team-primary)] dark:border-slate-700"
+                >
+                  <img
+                    src={fileUrl(m.absolutePath)}
+                    alt=""
+                    draggable={false}
+                    className="h-full w-full object-cover transition group-hover:scale-105"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stat picker — choose which (up to 4) span the bottom of the card */}
+      {stats.length > 0 && (
+        <div className="w-full max-w-[340px]">
+          <p className="mb-1.5 text-center text-xs text-slate-400 dark:text-slate-500">
+            Card stats — pick up to 4 ({selectedLabels.length}/4)
+          </p>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {stats.map((s) => {
+              const on = selectedLabels.includes(s.label);
+              const full = !on && selectedLabels.length >= 4;
+              return (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => toggleStat(s.label)}
+                  disabled={full}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                    on
+                      ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                      : 'border-slate-300/80 text-slate-600 hover:border-[var(--team-primary)] disabled:opacity-40 dark:border-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {msg && <p className="text-xs text-slate-400 dark:text-slate-500">{msg}</p>}
     </div>
   );

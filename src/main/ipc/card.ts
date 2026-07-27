@@ -22,13 +22,31 @@ async function findPhoto(dynastyId: string, playerId: number): Promise<string | 
   }
 }
 
+/** Copies a source image into this player's card slot, replacing any prior photo. Returns the stored path, or null on an unsupported type. */
+async function storePhoto(dynastyId: string, playerId: number, source: string): Promise<string | null> {
+  const ext = path.extname(source).slice(1).toLowerCase();
+  if (!IMAGE_EXTENSIONS.includes(ext)) return null;
+
+  const dir = cardPhotoDir(dynastyId);
+  await fs.mkdir(dir, { recursive: true });
+  // Replace any prior photo (possibly a different extension) for this player.
+  const prior = await findPhoto(dynastyId, playerId);
+  if (prior) await fs.unlink(prior).catch(() => {});
+
+  const dest = path.join(dir, `${playerId}.${ext}`);
+  await fs.copyFile(source, dest);
+  return dest;
+}
+
 /**
  * Custom player-card photos — a user can drop their own image (e.g. a game
- * screenshot) onto a player's trading card. The file is copied into the app's
- * own userData (one per player, keyed by playerId), never referenced from its
- * original location, so moving/deleting the original doesn't break the card.
- * The renderer displays it via a file:/// URL (same as the media gallery) and
- * stores the pan/zoom framing itself; this module just owns the file.
+ * screenshot) onto a player's trading card, either by picking a file or by
+ * reusing a photo already tagged to that player in the media gallery. The file
+ * is copied into the app's own userData (one per player, keyed by playerId),
+ * never referenced from its original location, so moving/deleting the original
+ * doesn't break the card. The renderer displays it via a file:/// URL (same as
+ * the media gallery) and stores the pan/zoom framing itself; this module just
+ * owns the file.
  */
 export function registerCardHandlers(): void {
   ipcMain.handle(
@@ -40,20 +58,16 @@ export function registerCardHandlers(): void {
         filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }],
       });
       if (result.canceled || result.filePaths.length === 0) return null;
+      return storePhoto(dynastyId, playerId, result.filePaths[0]);
+    },
+  );
 
-      const source = result.filePaths[0];
-      const ext = path.extname(source).slice(1).toLowerCase();
-      if (!IMAGE_EXTENSIONS.includes(ext)) return null;
-
-      const dir = cardPhotoDir(dynastyId);
-      await fs.mkdir(dir, { recursive: true });
-      // Replace any prior photo (possibly a different extension) for this player.
-      const prior = await findPhoto(dynastyId, playerId);
-      if (prior) await fs.unlink(prior).catch(() => {});
-
-      const dest = path.join(dir, `${playerId}.${ext}`);
-      await fs.copyFile(source, dest);
-      return dest;
+  // Reuse an existing gallery photo (already tagged to this player) as the card
+  // image — no native dialog, just copy the given library path into the slot.
+  ipcMain.handle(
+    IPC.card.setPhotoFromPath,
+    async (_event, dynastyId: string, playerId: number, sourcePath: string): Promise<string | null> => {
+      return storePhoto(dynastyId, playerId, sourcePath);
     },
   );
 

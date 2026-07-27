@@ -123,6 +123,8 @@ const api: DynastyApi = {
   },
   card: {
     pickPhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.pickPhoto, dynastyId, playerId),
+    setPhotoFromPath: (dynastyId, playerId, sourcePath) =>
+      ipcRenderer.invoke(IPC.card.setPhotoFromPath, dynastyId, playerId, sourcePath),
     getPhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.getPhoto, dynastyId, playerId),
     removePhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.removePhoto, dynastyId, playerId),
   },

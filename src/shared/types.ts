@@ -1925,6 +1925,8 @@ export interface DynastyApi {
   card: {
     /** Pick an image and store it as this player's custom card photo; returns its absolute path, or null if cancelled. */
     pickPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
+    /** Store an existing image (e.g. a gallery photo tagged to this player) as the card photo; returns its stored path, or null if the type is unsupported. */
+    setPhotoFromPath: (dynastyId: string, playerId: number, sourcePath: string) => Promise<string | null>;
     /** The player's stored custom card photo path, or null if none. */
     getPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
     /** Remove the player's custom card photo. */
