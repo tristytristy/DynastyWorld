@@ -6,6 +6,14 @@ import type { ColorMode } from '../../theme/themePreference';
 import type { AssetStatus } from '../../../shared/types';
 import { CenteredModalPanel } from './CenteredModalPanel';
 import { getCheckUpdatesOnStartup, setCheckUpdatesOnStartup } from '../../lib/updatePrefs';
+import {
+  HOVER_DELAY_MAX,
+  HOVER_DELAY_MIN,
+  getPlayerCardHoverDelayMs,
+  getPlayerCardHoverEnabled,
+  setPlayerCardHoverDelayMs,
+  setPlayerCardHoverEnabled,
+} from '../../lib/hoverCardPrefs';
 
 function SegmentButton({
   label,
@@ -148,6 +156,8 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
   };
   const [isOpen, setIsOpen] = useState(false);
   const [checkOnStartup, setCheckOnStartupState] = useState(getCheckUpdatesOnStartup());
+  const [cardHoverEnabled, setCardHoverEnabledState] = useState(getPlayerCardHoverEnabled());
+  const [cardHoverDelay, setCardHoverDelayState] = useState(getPlayerCardHoverDelayMs());
   const isDark = appearance === 'dark';
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -245,6 +255,59 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
                   isDark={isDark}
                   onSelect={setColorMode}
                 />
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Player card preview"
+              isDark={isDark}
+              outerClass={sectionClass}
+              accessory={
+                <input
+                  id="pref-card-hover"
+                  type="checkbox"
+                  checked={cardHoverEnabled}
+                  onChange={(e) => {
+                    setCardHoverEnabledState(e.target.checked);
+                    setPlayerCardHoverEnabled(e.target.checked);
+                  }}
+                  className="h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
+                  aria-label="Show the player card on hover"
+                />
+              }
+            >
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                Rest on a player&apos;s name and their trading card pops up. Turn it off to browse without previews.
+              </p>
+              <div className={`mt-3 ${cardHoverEnabled ? '' : 'pointer-events-none opacity-40'}`}>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="pref-card-hover-delay" className={`text-xs font-medium ${subtleTextClass}`}>
+                    Time before it appears
+                  </label>
+                  <span className={`proportional-nums text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {(cardHoverDelay / 1000).toFixed(2)}s
+                  </span>
+                </div>
+                <input
+                  id="pref-card-hover-delay"
+                  type="range"
+                  min={HOVER_DELAY_MIN}
+                  max={HOVER_DELAY_MAX}
+                  step={50}
+                  value={cardHoverDelay}
+                  disabled={!cardHoverEnabled}
+                  onChange={(e) => {
+                    const next = Number(e.target.value);
+                    setCardHoverDelayState(next);
+                    setPlayerCardHoverDelayMs(next);
+                  }}
+                  className="mt-2 w-full cursor-pointer accent-[var(--team-primary)]"
+                  aria-label="Time before the player card appears"
+                />
+                <div className={`mt-1 flex justify-between text-[10px] ${subtleTextClass}`}>
+                  <span>Faster</span>
+                  <span>Slower</span>
+                </div>
               </div>
             </CollapsibleSection>
           </div>

@@ -3,6 +3,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 're
 import { createPortal } from 'react-dom';
 import { PlayerCard } from '../components/common/PlayerCard';
 import { useTheme } from '../theme/ThemeProvider';
+import { getPlayerCardHoverDelayMs, getPlayerCardHoverEnabled } from '../lib/hoverCardPrefs';
 import type { RosterPlayer, TeamTheme } from '../../shared/types';
 
 /** Everything the floating card needs — the player object we already hold at the hover site, plus its team/season context. */
@@ -27,7 +28,6 @@ interface PlayerHoverContextValue {
 
 const PlayerHoverContext = createContext<PlayerHoverContextValue | null>(null);
 
-const HOVER_DELAY_MS = 850;
 const CARD_W = 250;
 const CARD_H = Math.round((CARD_W * 496) / 330);
 
@@ -158,9 +158,10 @@ export function usePlayerHoverCard() {
       hoverProps(data: PlayerHoverData) {
         return {
           onMouseEnter(event: ReactMouseEvent) {
+            if (!getPlayerCardHoverEnabled()) return; // preview turned off in Preferences
             const el = event.currentTarget as HTMLElement;
             window.clearTimeout(timer.current);
-            timer.current = window.setTimeout(() => show(data, el.getBoundingClientRect()), HOVER_DELAY_MS);
+            timer.current = window.setTimeout(() => show(data, el.getBoundingClientRect()), getPlayerCardHoverDelayMs());
           },
           onMouseLeave() {
             window.clearTimeout(timer.current);

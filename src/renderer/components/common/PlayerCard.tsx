@@ -231,6 +231,10 @@ function fileUrl(absolutePath: string): string {
 const BTN =
   'border border-slate-300/80 bg-white/85 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white';
 
+/** The compact rollover pills over the card (Edit / Export). */
+const PILL_BTN =
+  'rounded-full px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60';
+
 /**
  * The player-modal "Card" tab — the card plus its editor: drop your own photo
  * (a game screenshot), drag to reposition, zoom to frame, and download as PNG.
@@ -255,6 +259,11 @@ export function PlayerCardTab({
   const cardRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // Default is a clean, control-free card; hovering reveals Edit/Export, and
+  // Edit opens the full editor. Keeps the surface uncluttered until asked for.
+  const [editing, setEditing] = useState(false);
+  // While exporting, hide the hover overlay so it can't land in the captured PNG.
+  const [capturing, setCapturing] = useState(false);
 
   // The modal is portaled to <body>, outside the dynasty container that sets the
   // --team-* vars, so resolve them here and apply to the card wrapper. Themed to
@@ -424,6 +433,9 @@ export function PlayerCardTab({
     if (!el) return;
     setBusy(true);
     setMsg(null);
+    // Drop the hover overlay for one frame so only the card lands in the capture.
+    setCapturing(true);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     try {
       const r = el.getBoundingClientRect();
       const result = await window.api.export.playerCardToPng(playerName, {
@@ -435,6 +447,7 @@ export function PlayerCardTab({
       setMsg(result.message);
     } finally {
       setBusy(false);
+      setCapturing(false);
     }
   }
 
@@ -442,56 +455,80 @@ export function PlayerCardTab({
 
   return (
     <div className="flex flex-col items-center gap-4 py-4">
-      <div ref={cardRef} className="w-full max-w-[340px]" style={colorVars as unknown as CSSProperties}>
-        <PlayerCard
-          player={player}
-          teamName={teamName}
-          seasonYear={seasonYear}
-          stats={selectedStats}
-          photoUrl={photoUrl}
-          photoTransform={transform}
-          onPhotoPointerDown={photoPath ? onPhotoPointerDown : undefined}
-        />
-      </div>
-
-      {/* Photo controls */}
-      {photoPath && (
-        <div className="flex w-full max-w-[340px] items-center gap-2">
-          <span className="text-xs text-slate-400 dark:text-slate-500">Zoom</span>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            step={0.02}
-            value={transform.scale}
-            onChange={onZoom}
-            className="flex-1 accent-[var(--team-primary)]"
-            aria-label="Zoom photo"
+      <div className="group relative w-full max-w-[340px]">
+        <div ref={cardRef} className="w-full" style={colorVars as unknown as CSSProperties}>
+          <PlayerCard
+            player={player}
+            teamName={teamName}
+            seasonYear={seasonYear}
+            stats={selectedStats}
+            photoUrl={photoUrl}
+            photoTransform={transform}
+            onPhotoPointerDown={editing && photoPath ? onPhotoPointerDown : undefined}
           />
         </div>
-      )}
-      {photoPath && (
-        <p className="-mt-1 text-xs text-slate-400 dark:text-slate-500">
-          The full photo shows at first — zoom in to fill the card, then drag to frame it.
-        </p>
-      )}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" onClick={pickPhoto} className={BTN}>
-          {photoPath ? 'Change photo' : 'Add your photo'}
-        </button>
-        <button type="button" onClick={toggleMediaPicker} className={BTN}>
-          From media
-        </button>
-        {photoPath && (
-          <button type="button" onClick={removePhoto} className={BTN}>
-            Remove photo
-          </button>
+        {/* Clean by default: Edit / Export surface only on rollover (or keyboard
+            focus), centered over the card. Hidden while editing or capturing. */}
+        {!editing && !capturing && (
+          <div className="corner-cut pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/0 opacity-0 transition duration-200 focus-within:bg-black/45 focus-within:opacity-100 group-hover:bg-black/45 group-hover:opacity-100">
+            <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/20 bg-black/60 p-1 backdrop-blur-md">
+              <button type="button" onClick={() => setEditing(true)} className={PILL_BTN}>
+                Edit
+              </button>
+              <span className="h-4 w-px bg-white/25" aria-hidden="true" />
+              <button type="button" onClick={download} disabled={busy} className={PILL_BTN}>
+                {busy ? 'Saving…' : 'Export'}
+              </button>
+            </div>
+          </div>
         )}
-        <button type="button" onClick={download} disabled={busy} className={BTN}>
-          {busy ? 'Saving…' : 'Download card (PNG)'}
-        </button>
       </div>
+
+      {/* The editor — revealed only after Edit; stays open until Done so the
+          controls don't vanish while you're using them. */}
+      {editing && (
+        <div className="flex w-full max-w-[340px] flex-col items-center gap-4">
+          {photoPath && (
+            <div className="flex w-full items-center gap-2">
+              <span className="text-xs text-slate-400 dark:text-slate-500">Zoom</span>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={0.02}
+                value={transform.scale}
+                onChange={onZoom}
+                className="flex-1 accent-[var(--team-primary)]"
+                aria-label="Zoom photo"
+              />
+            </div>
+          )}
+          {photoPath && (
+            <p className="-mt-2 text-xs text-slate-400 dark:text-slate-500">
+              The full photo shows at first — zoom in to fill the card, then drag to frame it.
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button type="button" onClick={pickPhoto} className={BTN}>
+              {photoPath ? 'Change photo' : 'Add your photo'}
+            </button>
+            <button type="button" onClick={toggleMediaPicker} className={BTN}>
+              From media
+            </button>
+            {photoPath && (
+              <button type="button" onClick={removePhoto} className={BTN}>
+                Remove photo
+              </button>
+            )}
+            <button type="button" onClick={download} disabled={busy} className={BTN}>
+              {busy ? 'Saving…' : 'Download card (PNG)'}
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className={BTN}>
+              Done
+            </button>
+          </div>
 
       {/* Pick from photos already tagged to this player in the media gallery */}
       {mediaOpen && (
@@ -552,6 +589,8 @@ export function PlayerCardTab({
               );
             })}
           </div>
+        </div>
+      )}
         </div>
       )}
 
