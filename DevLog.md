@@ -2024,3 +2024,15 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **UI:** a **Development** card on the player modal's Overview tab (`PlayerProfileContent`) — a header strip (current OVR, change since first tracked, peak) + a reused `TrendLineChart` (the app's validated dataviz line chart) plotting OVR by season. With one season it shows a friendly "grows into a curve" note instead of a one-point line; the chart draws from 2 seasons on.
 
 **Verified:** typecheck/lint/build clean; `getPlayerDevelopment` returns correct per-season lines via IPC (e.g. "Jide Abasiri → 2026:87 Junior, USC"); screenshot of Carson Conklin's modal shows the Development card (73 current OVR · 0 since 2026 · 73 peak, single-season note). Multi-point chart reuses the proven TrendLineChart. NOT released.
+
+## Phase — Season-in-Review Yearbook (2026-07-27)
+
+**Premium feature #4 of 4 — batch complete** (Coach Résumé ✓, Global Search ✓, Player Dev Tracker ✓, Yearbook ✓). A shareable, self-contained per-season recap page — extends the program-history HTML export to a single season.
+
+**Backend:** new `yearbookExport.ts` `buildYearbookHtml(overview, historySeason, awards, schedule, colors)` — a dependency-free, image-free HTML file (same philosophy as htmlExport.ts) with a team-colored header (year, team, coach, record, champion badges), a resume-tile strip (record/conf/AP/coaches/CFP/recruiting-class/prestige), a postseason line, an Honors panel (the user team's national award winners, All-Americans, the Heisman with a "YOUR PLAYER" flag, weekly-honor count), and the game-by-game schedule (W/L colored). New export IPC `seasonYearbookToHtml(dynastyId, seasonId)` gathers `getSeasonOverview` + the matching `getHistory` season + `getAwards` + `getSchedule`, then save-dialog + writeFile (mirrors historyToHtml). Blocks history-only seasons.
+
+**UI:** a **"Season Yearbook ↗"** button in the Team Hub Overview masthead (uses the selected season) with an inline result message.
+
+**Verified:** typecheck/lint/build clean; rendered `buildYearbookHtml` with mock Sac State data in a headless window and screenshotted — header/badges, tiles, postseason, honors (Heisman "YOUR PLAYER", All-Americans, weekly count), and the game-by-game table all render correctly in team colors. Getter wiring mirrors the proven history export. NOT released.
+
+**All four premium features are committed on the working branch, part of the next update (not in the 1.0 .exe).**

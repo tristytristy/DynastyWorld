@@ -272,6 +272,20 @@ export function DynastyOverview() {
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
   const { openTeamBudgetEditor } = useEditorModal();
   const { openPlayerModal } = usePlayerModal();
+  const [yearbookMsg, setYearbookMsg] = useState<string | null>(null);
+  const [yearbookBusy, setYearbookBusy] = useState(false);
+
+  async function exportYearbook() {
+    if (!id || seasonId === undefined) return;
+    setYearbookBusy(true);
+    setYearbookMsg(null);
+    try {
+      const result = await window.api.export.seasonYearbookToHtml(id, seasonId);
+      setYearbookMsg(result.message);
+    } finally {
+      setYearbookBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -355,11 +369,25 @@ export function DynastyOverview() {
 
           </div>
 
-          {userTeamIndex !== null && id && (
-            <BudgetButton
-              onClick={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
-            />
-          )}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {id && seasonId !== undefined && (
+              <button
+                type="button"
+                onClick={exportYearbook}
+                disabled={yearbookBusy}
+                title={`Export a shareable ${overview.seasonYear} Season in Review page`}
+                className="inline-flex items-center gap-2 border border-slate-300/80 bg-white/85 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
+              >
+                {yearbookBusy ? 'Exporting…' : 'Season Yearbook ↗'}
+              </button>
+            )}
+            {userTeamIndex !== null && id && (
+              <BudgetButton
+                onClick={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
+              />
+            )}
+            {yearbookMsg && <p className="max-w-[16rem] text-right text-xs text-slate-400 dark:text-slate-500">{yearbookMsg}</p>}
+          </div>
         </div>
 
         <div className="mt-6 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(37,99,235,0.85)]">

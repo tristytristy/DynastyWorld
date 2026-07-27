@@ -1833,6 +1833,7 @@ export interface DynastyApi {
   };
   export: {
     historyToHtml: (dynastyId: string) => Promise<ExportResult>;
+    seasonYearbookToHtml: (dynastyId: string, seasonId: number) => Promise<ExportResult>;
   };
   editor: {
     backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;
