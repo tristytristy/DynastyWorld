@@ -106,12 +106,7 @@ export function PlayerCard({
             style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.scale})`, transformOrigin: 'center' }}
           />
         ) : (
-          <PlayerPortrait
-            player={player}
-            teamAssetName={teamName}
-            size="lg"
-            className="!absolute !inset-0 !h-full !w-full [&_img]:!h-full [&_img]:!w-full [&_img]:!object-cover [&_img]:!object-top"
-          />
+          <PlayerPortrait player={player} teamAssetName={teamName} size="lg" fill />
         )}
       </div>
 

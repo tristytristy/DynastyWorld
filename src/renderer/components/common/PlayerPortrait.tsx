@@ -14,11 +14,19 @@ export function PlayerPortrait({
   large = false,
   onClick,
   teamAssetName,
+  fill = false,
 }: {
   player: { firstName: string; lastName: string; portraitAssetName: string | null };
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   large?: boolean;
+  /**
+   * Full-bleed: the portrait (and its jersey overlay / initials fallback) fill a
+   * positioned parent edge-to-edge instead of a fixed size box. Used by the
+   * trading card. Reliable across all three render paths, unlike passing
+   * `!absolute` via className, which collapses the jersey wrapper.
+   */
+  fill?: boolean;
   /** When provided, the portrait becomes a keyboard-accessible click target (e.g. to open the player modal) instead of a static image. */
   onClick?: () => void;
   /**
@@ -70,10 +78,15 @@ export function PlayerPortrait({
 
   // No portrait → initials placeholder (no body to dress in a jersey).
   if (!src) {
+    const initialsBox = fill
+      ? 'absolute inset-0 h-full w-full'
+      : large
+        ? 'max-h-[22rem] max-w-full px-6 py-4'
+        : sizeClass;
     return (
       <div
         {...interactiveProps}
-        className={`${large ? 'max-h-[22rem] max-w-full px-6 py-4' : sizeClass} ${className} inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-200 text-2xl font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 ${interactiveClass}`}
+        className={`${initialsBox} ${className} inline-flex shrink-0 items-center justify-center ${fill ? '' : 'rounded-xl'} bg-slate-200 text-2xl font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 ${interactiveClass}`}
       >
         {initials(player.firstName, player.lastName)}
       </div>
@@ -81,9 +94,12 @@ export function PlayerPortrait({
   }
 
   const fit = large ? 'object-contain' : 'object-cover';
-  const imgClass = large
-    ? `${className} max-h-[22rem] max-w-full rounded-xl ${fit} object-top`
-    : `${sizeClass} ${className} shrink-0 rounded-xl ${fit} object-top`;
+  // Full-bleed image: absolute-fill a positioned parent (the card), edge-to-edge.
+  const imgClass = fill
+    ? `${className} absolute inset-0 h-full w-full object-cover object-top`
+    : large
+      ? `${className} max-h-[22rem] max-w-full rounded-xl ${fit} object-top`
+      : `${sizeClass} ${className} shrink-0 rounded-xl ${fit} object-top`;
 
   const portraitImg = (
     <img
@@ -111,10 +127,14 @@ export function PlayerPortrait({
     );
   }
 
-  // Portrait + jersey overlay: the wrapper shrinks to the portrait, the jersey
-  // sits in the same box with the same object-fit so the two register exactly.
+  // Portrait + jersey overlay: the jersey sits in the same box with the same
+  // object-fit so the two register exactly. When filling, the wrapper spans the
+  // positioned parent; otherwise it shrinks to the portrait's fixed size.
   return (
-    <span {...interactiveProps} className={`relative inline-block shrink-0 ${interactiveClass}`}>
+    <span
+      {...interactiveProps}
+      className={`${fill ? 'absolute inset-0 block' : 'relative inline-block shrink-0'} ${interactiveClass}`}
+    >
       {portraitImg}
       <img
         src={jerseySrc}
@@ -124,7 +144,7 @@ export function PlayerPortrait({
         onError={(event: SyntheticEvent<HTMLImageElement>) => {
           event.currentTarget.style.display = 'none';
         }}
-        className={`pointer-events-none absolute inset-0 h-full w-full rounded-xl ${fit} object-top`}
+        className={`pointer-events-none absolute inset-0 h-full w-full ${fill ? '' : 'rounded-xl'} ${fit} object-top`}
       />
     </span>
   );
