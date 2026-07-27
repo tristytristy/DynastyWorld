@@ -1,5 +1,8 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
+import fs from 'fs/promises';
+import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
+import { mediaDirFor } from './media';
 import type {
   AwardsOverview,
   CoachOverview,
@@ -194,6 +197,11 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.deleteDynasty, async (_event, dynastyId: string): Promise<void> => {
     deleteDynasty(dynastyId);
+    // The DB cascade only drops the rows — also remove the dynasty's on-disk file
+    // stores (media library + custom card photos) so nothing is left orphaned on
+    // the user's drive.
+    await fs.rm(mediaDirFor(dynastyId), { recursive: true, force: true }).catch(() => {});
+    await fs.rm(path.join(app.getPath('userData'), 'card-photos', dynastyId), { recursive: true, force: true }).catch(() => {});
   });
 
   ipcMain.handle(IPC.db.getSeasons, async (_event, dynastyId: string): Promise<SeasonSummary[]> => {
