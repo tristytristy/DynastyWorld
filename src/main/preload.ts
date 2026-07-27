@@ -136,6 +136,7 @@ const api: DynastyApi = {
     listForPlayer: (dynastyId, playerId) => ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
     listForGame: (dynastyId, seasonId, gameId) => ipcRenderer.invoke(IPC.media.listForGame, dynastyId, seasonId, gameId),
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
+    reorder: (dynastyId, seasonId, orderedIds) => ipcRenderer.invoke(IPC.media.reorder, dynastyId, seasonId, orderedIds),
     remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
   },
   notes: {

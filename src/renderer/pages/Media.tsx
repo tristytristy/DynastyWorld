@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent as ReactDragEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
 import type { MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
@@ -246,7 +248,10 @@ function MediaLightbox({
   const navButtonClass =
     'border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
 
-  return (
+  // Portal to <body>: the Media page lives inside the app shell's backdrop-blur
+  // <main>, which creates a containing block that would trap a `fixed` overlay
+  // and load it off-center (top/bottom) instead of centered in the viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md md:p-8"
       role="presentation"
@@ -402,7 +407,8 @@ function MediaLightbox({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -414,9 +420,15 @@ export function Media() {
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [dragOverUpload, setDragOverUpload] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchGameId, setBatchGameId] = useState('');
+  const dragIndexRef = useRef<number | null>(null);
 
   const seasonYear = seasons.find((s) => s.id === seasonId)?.seasonYear;
+  const importing = importProgress !== null;
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -427,22 +439,106 @@ export function Media() {
     if (!id) return;
     setItems(undefined);
     setLightboxIndex(null);
+    setSelectMode(false);
+    setSelectedIds(new Set());
     refresh();
     window.api.db.getSchedule(id, seasonId).then((result) => setSchedule(result ?? null));
     window.api.db.getRoster(id, seasonId).then((result) => setRoster(result ?? []));
   }, [id, seasonId, refresh]);
 
+  // File-by-file import so a real progress bar is possible (file copies are fast;
+  // the extra IPC round-trips for a batch of screenshots are negligible). Shared
+  // by the picker button and the drag-and-drop drop zone.
+  const importFiles = useCallback(
+    async (paths: string[]) => {
+      if (!id || seasonId === undefined || importing || paths.length === 0) return;
+      setImportProgress({ done: 0, total: paths.length });
+      try {
+        for (let i = 0; i < paths.length; i++) {
+          await window.api.media.addFiles(id, seasonId, [paths[i]]);
+          setImportProgress({ done: i + 1, total: paths.length });
+        }
+        refresh();
+      } finally {
+        setImportProgress(null);
+      }
+    },
+    [id, seasonId, importing, refresh],
+  );
+
   async function handleUpload() {
-    if (!id || seasonId === undefined || uploading) return;
     const picked = await window.api.media.pickFiles();
-    if (!picked || picked.length === 0) return;
-    setUploading(true);
-    try {
-      await window.api.media.addFiles(id, seasonId, picked);
-      refresh();
-    } finally {
-      setUploading(false);
+    if (picked) importFiles(picked);
+  }
+
+  // --- Drag-and-drop upload (drop OS files anywhere on the grid) ---
+  function onGridDragOver(event: ReactDragEvent) {
+    if (!importing && event.dataTransfer.types.includes('Files')) {
+      event.preventDefault();
+      setDragOverUpload(true);
     }
+  }
+  function onGridDrop(event: ReactDragEvent) {
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (files.length === 0) return; // an internal reorder drop — handled on the tile
+    event.preventDefault();
+    setDragOverUpload(false);
+    const paths = files
+      .map((f) => (f as File & { path?: string }).path)
+      .filter((p): p is string => typeof p === 'string' && p.length > 0);
+    if (paths.length) importFiles(paths);
+  }
+
+  // --- Drag-to-reorder (normal mode) ---
+  async function onTileDrop(event: ReactDragEvent, index: number) {
+    if (Array.from(event.dataTransfer.files ?? []).length > 0) return; // file drop → let the grid upload
+    const from = dragIndexRef.current;
+    dragIndexRef.current = null;
+    if (from === null || from === index || !items || !id || seasonId === undefined) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(index, 0, moved);
+    setItems(next);
+    await window.api.media.reorder(id, seasonId, next.map((m) => m.id));
+  }
+
+  // --- Batch selection ---
+  function toggleSelect(mediaId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(mediaId)) next.delete(mediaId);
+      else next.add(mediaId);
+      return next;
+    });
+  }
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBatchGameId('');
+  }
+
+  async function batchSetGame() {
+    if (!items || selectedIds.size === 0) return;
+    const gid = batchGameId === '' ? null : Number(batchGameId);
+    for (const m of items.filter((it) => selectedIds.has(it.id))) {
+      await window.api.media.update(m.id, { gameId: gid, description: m.description, playerIds: m.playerIds });
+    }
+    refresh();
+    exitSelectMode();
+  }
+  async function batchDelete() {
+    if (selectedIds.size === 0) return;
+    const ok = await confirm({
+      ...DELETE_MEDIA_CONFIRM,
+      title: `Delete ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}?`,
+      message: 'These files are removed from this dynasty’s library and cannot be undone.',
+    });
+    if (!ok) return;
+    for (const mediaId of selectedIds) await window.api.media.remove(mediaId);
+    refresh();
+    exitSelectMode();
   }
 
   function handleSaved(item: MediaItemWithPath, patch: MediaItemPatch) {
@@ -459,51 +555,173 @@ export function Media() {
   if (!id) return null;
 
   const games = schedule?.games ?? [];
+  const hasItems = !!items && items.length > 0;
+
+  const selectClass =
+    'border border-slate-200/80 bg-slate-50/85 px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] disabled:opacity-50 dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Media"
         title="The season, in pictures."
-        description={`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Uploads are saved into this dynasty's own library.`}
+        description={`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Drag to reorder, drop files in to add, and use Select for batch edits.`}
         actions={
-          <Button onClick={handleUpload} disabled={uploading || seasonId === undefined}>
-            {uploading ? 'Adding...' : 'Add photos / videos'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasItems && (
+              <Button variant="secondary" onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}>
+                {selectMode ? 'Cancel' : 'Select'}
+              </Button>
+            )}
+            <Button onClick={handleUpload} disabled={importing || seasonId === undefined}>
+              {importing ? 'Importing…' : 'Add photos / videos'}
+            </Button>
+          </div>
         }
       />
+
+      {/* Import progress bar */}
+      {importProgress && (
+        <SurfaceCard className="py-3">
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Importing photos…</span>
+            <span className="tnum">
+              {importProgress.done} / {importProgress.total}
+            </span>
+          </div>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+            <div
+              className="h-full bg-[var(--team-primary)] transition-all duration-base"
+              style={{ width: `${importProgress.total ? Math.round((importProgress.done / importProgress.total) * 100) : 0}%` }}
+            />
+          </div>
+        </SurfaceCard>
+      )}
+
+      {/* Batch toolbar (Select mode) */}
+      {selectMode && (
+        <SurfaceCard className="flex flex-wrap items-center gap-3 py-3">
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{selectedIds.size} selected</span>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set((items ?? []).map((m) => m.id)))}
+            className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
+          >
+            Select all
+          </button>
+          <div className="h-5 w-px bg-slate-300/70 dark:bg-slate-700/70" aria-hidden="true" />
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            Set game
+            <select
+              value={batchGameId}
+              onChange={(e) => setBatchGameId(e.target.value)}
+              disabled={selectedIds.size === 0}
+              aria-label="Game to assign to the selected media"
+              className={selectClass}
+            >
+              <option value="">Not from a specific game</option>
+              {games.map((game) => (
+                <option key={game.gameId} value={game.gameId}>
+                  {gameLabel(game)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button onClick={batchSetGame} disabled={selectedIds.size === 0}>
+            Apply to {selectedIds.size}
+          </Button>
+          <button
+            type="button"
+            onClick={batchDelete}
+            disabled={selectedIds.size === 0}
+            className="border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-red-400 dark:hover:bg-red-950/60"
+          >
+            Delete selected
+          </button>
+          <div className="ml-auto">
+            <Button variant="secondary" onClick={exitSelectMode}>
+              Done
+            </Button>
+          </div>
+        </SurfaceCard>
+      )}
 
       {items === undefined && (
         <SurfaceCard className="text-center text-sm text-slate-400 dark:text-slate-500">Loading media...</SurfaceCard>
       )}
 
       {items !== undefined && (items === null || items.length === 0) && (
-        <SurfaceCard className="py-14 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            No media for this season yet. Add screenshots or clips and build the season&apos;s story.
-          </p>
-          <div className="mt-4">
-            <Button onClick={handleUpload} disabled={uploading || seasonId === undefined}>
-              {uploading ? 'Adding...' : 'Add photos / videos'}
-            </Button>
-          </div>
-        </SurfaceCard>
+        <div onDragOver={onGridDragOver} onDragLeave={() => setDragOverUpload(false)} onDrop={onGridDrop}>
+          <SurfaceCard
+            className={`py-14 text-center transition ${dragOverUpload ? 'outline outline-2 outline-offset-2 outline-[var(--team-primary)]' : ''}`}
+          >
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              No media for this season yet. Add screenshots or clips — or drag &amp; drop them here — to build the season&apos;s
+              story.
+            </p>
+            <div className="mt-4">
+              <Button onClick={handleUpload} disabled={importing || seasonId === undefined}>
+                {importing ? 'Importing…' : 'Add photos / videos'}
+              </Button>
+            </div>
+          </SurfaceCard>
+        </div>
       )}
 
       {items && items.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div
+          onDragOver={onGridDragOver}
+          onDragLeave={(e) => {
+            if (e.currentTarget === e.target) setDragOverUpload(false);
+          }}
+          onDrop={onGridDrop}
+          className={`grid grid-cols-2 gap-3 rounded p-1 transition md:grid-cols-3 xl:grid-cols-4 ${
+            dragOverUpload ? 'outline-dashed outline-2 outline-offset-2 outline-[var(--team-primary)]' : ''
+          }`}
+        >
           {items.map((item, index) => {
             const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
             const caption = game ? gameLabel(game) : item.description || 'Add details';
+            const selected = selectedIds.has(item.id);
             return (
               <div
                 key={item.id}
-                className="group relative aspect-video overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
+                role="button"
+                tabIndex={0}
+                draggable={!selectMode}
+                onDragStart={(e) => {
+                  dragIndexRef.current = index;
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(index));
+                }}
+                onDragEnd={() => {
+                  dragIndexRef.current = null;
+                }}
+                onDragOver={(e) => {
+                  if (dragIndexRef.current !== null) e.preventDefault();
+                }}
+                onDrop={(e) => onTileDrop(e, index)}
+                onClick={() => (selectMode ? toggleSelect(item.id) : setLightboxIndex(index))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (selectMode) toggleSelect(item.id);
+                    else setLightboxIndex(index);
+                  }
+                }}
+                aria-label={selectMode ? `Select media: ${caption}` : `Open media: ${caption}`}
+                className={`group relative aspect-video overflow-hidden border bg-slate-950 text-left transition ${
+                  selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+                } ${
+                  selected
+                    ? 'border-[var(--team-primary)] outline outline-2 outline-[var(--team-primary)]'
+                    : 'border-slate-200/80 hover:border-[var(--team-primary)] dark:border-slate-800'
+                }`}
               >
                 {item.mediaType === 'video' ? (
                   <>
-                    <video src={fileUrl(item.absolutePath)} preload="metadata" muted className="h-full w-full object-cover" />
-                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/60 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-white">
+                    <video src={fileUrl(item.absolutePath)} preload="metadata" muted className="pointer-events-none h-full w-full object-cover" />
+                    <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/60 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-white">
                       ▶ Video
                     </span>
                   </>
@@ -512,30 +730,38 @@ export function Media() {
                     src={fileUrl(item.absolutePath)}
                     alt={caption}
                     loading="lazy"
-                    className="h-full w-full object-cover transition duration-base ease-standard group-hover:scale-[1.03]"
+                    className="pointer-events-none h-full w-full object-cover transition duration-base ease-standard group-hover:scale-[1.03]"
                     draggable={false}
                   />
                 )}
-                {/* Full-tile click target opens the lightbox. Sits above the media
-                    but below the bottom bar's interactive controls (the trash). */}
-                <button
-                  type="button"
-                  onClick={() => setLightboxIndex(index)}
-                  aria-label={`Open media: ${caption}`}
-                  className="absolute inset-0 z-10"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (await confirm(DELETE_MEDIA_CONFIRM)) handleDeleted(item);
-                    }}
-                    aria-label={`Delete media: ${caption}`}
-                    title="Delete"
-                    className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
+
+                {selectMode && (
+                  <span
+                    className={`pointer-events-none absolute left-2 top-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
+                      selected
+                        ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                        : 'border-white/70 bg-slate-950/50 text-transparent'
+                    }`}
                   >
-                    <TrashIcon />
-                  </button>
+                    ✓
+                  </span>
+                )}
+
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6">
+                  {!selectMode && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (await confirm(DELETE_MEDIA_CONFIRM)) handleDeleted(item);
+                      }}
+                      aria-label={`Delete media: ${caption}`}
+                      title="Delete"
+                      className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
                   {item.playerIds.length > 0 && (
                     <span className="tnum shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-300">

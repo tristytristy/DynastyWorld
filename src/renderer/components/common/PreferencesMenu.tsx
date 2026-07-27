@@ -111,7 +111,7 @@ function CollapsibleSection({
   isDark,
   outerClass,
   accessory,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: {
   title: string;

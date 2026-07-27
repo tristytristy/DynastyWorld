@@ -103,6 +103,7 @@ export const IPC = {
     listForPlayer: 'media:listForPlayer',
     listForGame: 'media:listForGame',
     update: 'media:update',
+    reorder: 'media:reorder',
     remove: 'media:remove',
   },
   notes: {

@@ -7,6 +7,7 @@ import schemaV6 from './schema_v6_media.sql';
 import schemaV7 from './schema_v7_player_notes.sql';
 import schemaV8 from './schema_v8_season_coach.sql';
 import schemaV9 from './schema_v9_season_phase.sql';
+import schemaV10 from './schema_v10_media_order.sql';
 
 export interface Migration {
   version: number;
@@ -28,4 +29,5 @@ export const MIGRATIONS: Migration[] = [
   { version: 7, name: 'player_notes', sql: schemaV7 },
   { version: 8, name: 'season_coach', sql: schemaV8 },
   { version: 9, name: 'season_phase', sql: schemaV9 },
+  { version: 10, name: 'media_order', sql: schemaV10 },
 ];

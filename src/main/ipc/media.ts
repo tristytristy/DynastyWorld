@@ -9,6 +9,7 @@ import {
   listMediaForGame,
   listMediaForPlayer,
   listMediaItems,
+  reorderMedia,
   updateMediaItem,
 } from '../../database/media';
 import type { MediaItemResolved } from '../../shared/types';
@@ -114,6 +115,13 @@ export function registerMediaHandlers(): void {
   ipcMain.handle(IPC.media.update, async (_event, id: number, patch: MediaItemPatch): Promise<void> => {
     updateMediaItem(id, patch);
   });
+
+  ipcMain.handle(
+    IPC.media.reorder,
+    async (_event, dynastyId: string, seasonId: number, orderedIds: number[]): Promise<void> => {
+      reorderMedia(dynastyId, seasonId, orderedIds);
+    },
+  );
 
   ipcMain.handle(IPC.media.remove, async (_event, id: number): Promise<void> => {
     const removed = deleteMediaItem(id);

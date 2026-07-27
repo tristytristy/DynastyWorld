@@ -53,7 +53,7 @@ export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[
   if (!season || season.dynastyId !== dynastyId) return undefined;
 
   const stmt = getDb().prepare(
-    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? AND season_id = ? ORDER BY created_at DESC, id DESC',
+    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? AND season_id = ? ORDER BY sort_order ASC, created_at DESC, id DESC',
   );
   stmt.bind([dynastyId, season.id]);
   const items: MediaItem[] = [];
@@ -62,6 +62,24 @@ export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[
   }
   stmt.free();
   return items;
+}
+
+/**
+ * Persist a user-chosen drag order for a season's media. `orderedIds` is the
+ * full list of that season's item ids in the desired display order; each row's
+ * sort_order becomes its index. Ignored ids not in the season are harmless.
+ */
+export function reorderMedia(dynastyId: string, seasonId: number, orderedIds: number[]): void {
+  const db = getDb();
+  orderedIds.forEach((mediaId, index) => {
+    db.run('UPDATE media_items SET sort_order = ? WHERE id = ? AND dynasty_id = ? AND season_id = ?', [
+      index,
+      mediaId,
+      dynastyId,
+      seasonId,
+    ]);
+  });
+  persist();
 }
 
 /**
@@ -154,9 +172,11 @@ export function addMediaItem(
 
   const createdAt = new Date().toISOString();
   const db = getDb();
+  // New uploads sort to the front (lowest order), preserving newest-first.
   db.run(
-    'INSERT INTO media_items (dynasty_id, season_id, file_name, media_type, description, player_ids_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [dynastyId, seasonId, fileName, mediaType, '', '[]', createdAt],
+    `INSERT INTO media_items (dynasty_id, season_id, file_name, media_type, description, player_ids_json, created_at, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM media_items WHERE dynasty_id = ? AND season_id = ?))`,
+    [dynastyId, seasonId, fileName, mediaType, '', '[]', createdAt, dynastyId, seasonId],
   );
   const idStmt = db.prepare('SELECT last_insert_rowid() AS id');
   idStmt.step();

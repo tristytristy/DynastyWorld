@@ -1951,6 +1951,8 @@ export interface DynastyApi {
     /** Everything linked to one game — the media section on the Game info page. */
     listForGame: (dynastyId: string, seasonId: number | undefined, gameId: number) => Promise<MediaItemResolved[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
+    /** Persist a drag-chosen order: `orderedIds` is the season's item ids in display order. */
+    reorder: (dynastyId: string, seasonId: number, orderedIds: number[]) => Promise<void>;
     remove: (id: number) => Promise<void>;
   };
   notes: {
