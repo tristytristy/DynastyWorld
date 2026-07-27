@@ -20,12 +20,21 @@ export function PlayerCard({
   player,
   teamName,
   stats,
+  photoUrl,
+  photoTransform,
+  onPhotoPointerDown,
 }: {
   player: RosterPlayer;
   teamName: string | null;
   stats: { label: string; value: string }[];
+  /** A user-supplied custom photo (file:// URL). When set, it replaces the portrait as the hero. */
+  photoUrl?: string | null;
+  photoTransform?: { x: number; y: number; scale: number };
+  /** When provided, the photo area is draggable to reposition the custom photo. */
+  onPhotoPointerDown?: (e: React.PointerEvent) => void;
 }) {
   const line = stats.slice(0, 3);
+  const t = photoTransform ?? { x: 0, y: 0, scale: 1 };
   return (
     <div
       className="relative aspect-[330/496] w-full max-w-[340px] overflow-hidden rounded-2xl text-white shadow-[0_30px_70px_-30px_rgba(0,0,0,0.8)]"
@@ -34,15 +43,28 @@ export function PlayerCard({
         boxShadow: '0 30px 70px -30px rgba(0,0,0,0.8), inset 0 0 0 3px color-mix(in srgb, var(--team-secondary) 32%, transparent)',
       }}
     >
-      {/* Photo hero — portrait + jersey, plus jersey-number watermark and a foil sheen */}
-      <div className="absolute inset-x-0 top-0 flex h-[66%] items-end justify-center overflow-hidden">
+      {/* Photo hero — portrait + jersey (or the user's custom photo), plus the jersey-number watermark and foil sheen */}
+      <div
+        onPointerDown={onPhotoPointerDown}
+        className={`absolute inset-x-0 top-0 flex h-[66%] items-end justify-center overflow-hidden ${onPhotoPointerDown ? 'cursor-move touch-none' : ''}`}
+      >
         <span
           className="tnum absolute -right-2 top-2 select-none font-black leading-none tracking-tighter"
           style={{ fontSize: '150px', color: 'rgba(255,255,255,0.08)' }}
         >
           {player.jerseyNumber}
         </span>
-        <PlayerPortrait player={player} teamAssetName={teamName} size="lg" className="!h-[92%] !w-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.45)]" />
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            draggable={false}
+            alt=""
+            className="absolute inset-0 h-full w-full select-none object-cover"
+            style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.scale})`, transformOrigin: 'center' }}
+          />
+        ) : (
+          <PlayerPortrait player={player} teamAssetName={teamName} size="lg" className="!h-[92%] !w-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.45)]" />
+        )}
         <div
           className="pointer-events-none absolute inset-0"
           style={{ background: 'linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.14) 46%, rgba(255,255,255,0.02) 56%, transparent 72%)' }}
@@ -103,7 +125,27 @@ export function PlayerCard({
   );
 }
 
-/** The player-modal "Card" tab — renders the card centered with a Download (PNG) action. */
+interface PhotoTransform {
+  x: number;
+  y: number;
+  scale: number;
+}
+const DEFAULT_TRANSFORM: PhotoTransform = { x: 0, y: 0, scale: 1 };
+
+/** A local file path as a renderer-loadable file:// URL (same scheme the media gallery uses). */
+function fileUrl(absolutePath: string): string {
+  return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
+}
+
+const BTN =
+  'border border-slate-300/80 bg-white/85 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white';
+
+/**
+ * The player-modal "Card" tab — the card plus its editor: drop your own photo
+ * (a game screenshot), drag to reposition, zoom to frame, and download as PNG.
+ * The photo lives in the app's userData (per player); the pan/zoom framing is
+ * saved locally (localStorage), keyed by dynasty + player.
+ */
 export function PlayerCardTab({
   player,
   teamName,
@@ -120,8 +162,9 @@ export function PlayerCardTab({
   const cardRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  // The player modal is portaled to <body>, outside the dynasty container that
-  // sets the --team-* vars, so resolve them here and apply to the card wrapper.
+
+  // The modal is portaled to <body>, outside the dynasty container that sets the
+  // --team-* vars, so resolve them here and apply to the card wrapper.
   const { resolveColorVars } = useTheme();
   const [theme, setTheme] = useState<DynastyTheme | null>(null);
   useEffect(() => {
@@ -134,6 +177,91 @@ export function PlayerCardTab({
     };
   }, [dynastyId]);
   const colorVars = resolveColorVars({ primary: theme?.primaryColor ?? null, secondary: theme?.secondaryColor ?? null });
+
+  // --- Custom photo (per player) ---
+  const transformKey = `cfb.cardphoto.${dynastyId}.${player.id}`;
+  const [photoPath, setPhotoPath] = useState<string | null>(null);
+  const [photoVersion, setPhotoVersion] = useState(0); // cache-bust the <img> after a re-pick
+  const [transform, setTransform] = useState<PhotoTransform>(DEFAULT_TRANSFORM);
+  const transformRef = useRef(transform);
+  useEffect(() => {
+    transformRef.current = transform;
+  }, [transform]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPhotoPath(null);
+    setPhotoVersion((v) => v + 1);
+    window.api.card.getPhoto(dynastyId, player.id).then((p) => {
+      if (!cancelled) setPhotoPath(p);
+    });
+    try {
+      const raw = localStorage.getItem(transformKey);
+      setTransform(raw ? { ...DEFAULT_TRANSFORM, ...(JSON.parse(raw) as PhotoTransform) } : DEFAULT_TRANSFORM);
+    } catch {
+      setTransform(DEFAULT_TRANSFORM);
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynastyId, player.id]);
+
+  function saveTransform(next: PhotoTransform) {
+    try {
+      localStorage.setItem(transformKey, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function pickPhoto() {
+    const p = await window.api.card.pickPhoto(dynastyId, player.id);
+    if (p) {
+      setPhotoPath(p);
+      setPhotoVersion((v) => v + 1);
+      setTransform(DEFAULT_TRANSFORM);
+      saveTransform(DEFAULT_TRANSFORM);
+    }
+  }
+
+  async function removePhoto() {
+    await window.api.card.removePhoto(dynastyId, player.id);
+    setPhotoPath(null);
+  }
+
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  function onPhotoPointerDown(e: React.PointerEvent) {
+    if (!photoPath) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: transformRef.current.x, origY: transformRef.current.y };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+  function onPointerMove(e: PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    setTransform((prev) => ({ ...prev, x: d.origX + (e.clientX - d.startX), y: d.origY + (e.clientY - d.startY) }));
+  }
+  function onPointerUp() {
+    dragRef.current = null;
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    saveTransform(transformRef.current);
+  }
+  useEffect(() => () => {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onZoom(e: React.ChangeEvent<HTMLInputElement>) {
+    const scale = Number(e.target.value);
+    setTransform((prev) => {
+      const next = { ...prev, scale };
+      saveTransform(next);
+      return next;
+    });
+  }
 
   async function download() {
     const el = cardRef.current;
@@ -154,22 +282,55 @@ export function PlayerCardTab({
     }
   }
 
+  const photoUrl = photoPath ? `${fileUrl(photoPath)}?v=${photoVersion}` : null;
+
   return (
     <div className="flex flex-col items-center gap-4 py-4">
       <div ref={cardRef} className="w-full max-w-[340px]" style={colorVars as unknown as CSSProperties}>
-        <PlayerCard player={player} teamName={teamName} stats={stats} />
+        <PlayerCard
+          player={player}
+          teamName={teamName}
+          stats={stats}
+          photoUrl={photoUrl}
+          photoTransform={transform}
+          onPhotoPointerDown={photoPath ? onPhotoPointerDown : undefined}
+        />
       </div>
-      <div className="flex flex-col items-center gap-1.5">
-        <button
-          type="button"
-          onClick={download}
-          disabled={busy}
-          className="border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
-        >
+
+      {/* Photo controls */}
+      {photoPath && (
+        <div className="flex w-full max-w-[340px] items-center gap-2">
+          <span className="text-xs text-slate-400 dark:text-slate-500">Zoom</span>
+          <input
+            type="range"
+            min={1}
+            max={3}
+            step={0.02}
+            value={transform.scale}
+            onChange={onZoom}
+            className="flex-1 accent-[var(--team-primary)]"
+            aria-label="Zoom photo"
+          />
+        </div>
+      )}
+      {photoPath && (
+        <p className="-mt-1 text-xs text-slate-400 dark:text-slate-500">Drag the photo to reposition it.</p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button type="button" onClick={pickPhoto} className={BTN}>
+          {photoPath ? 'Change photo' : 'Add your photo'}
+        </button>
+        {photoPath && (
+          <button type="button" onClick={removePhoto} className={BTN}>
+            Remove photo
+          </button>
+        )}
+        <button type="button" onClick={download} disabled={busy} className={BTN}>
           {busy ? 'Saving…' : 'Download card (PNG)'}
         </button>
-        {msg && <p className="text-xs text-slate-400 dark:text-slate-500">{msg}</p>}
       </div>
+      {msg && <p className="text-xs text-slate-400 dark:text-slate-500">{msg}</p>}
     </div>
   );
 }

@@ -89,6 +89,11 @@ export const IPC = {
     forceCommitRecruit: 'editor:forceCommitRecruit',
     searchPortraits: 'editor:searchPortraits',
   },
+  card: {
+    pickPhoto: 'card:pickPhoto',
+    getPhoto: 'card:getPhoto',
+    removePhoto: 'card:removePhoto',
+  },
   media: {
     pickFiles: 'media:pickFiles',
     addFiles: 'media:addFiles',

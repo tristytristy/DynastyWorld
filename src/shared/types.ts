@@ -1922,6 +1922,14 @@ export interface DynastyApi {
       page: number,
     ) => Promise<PortraitSearchResponse>;
   };
+  card: {
+    /** Pick an image and store it as this player's custom card photo; returns its absolute path, or null if cancelled. */
+    pickPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
+    /** The player's stored custom card photo path, or null if none. */
+    getPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
+    /** Remove the player's custom card photo. */
+    removePhoto: (dynastyId: string, playerId: number) => Promise<void>;
+  };
   media: {
     /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
     pickFiles: () => Promise<string[] | null>;

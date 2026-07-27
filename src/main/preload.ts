@@ -121,6 +121,11 @@ const api: DynastyApi = {
     searchPortraits: (kind, query, filters, page) =>
       ipcRenderer.invoke(IPC.editor.searchPortraits, kind, query, filters, page),
   },
+  card: {
+    pickPhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.pickPhoto, dynastyId, playerId),
+    getPhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.getPhoto, dynastyId, playerId),
+    removePhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.removePhoto, dynastyId, playerId),
+  },
   media: {
     pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
     addFiles: (dynastyId, seasonId, filePaths) => ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),

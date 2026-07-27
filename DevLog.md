@@ -2062,3 +2062,13 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Download:** new `export.playerCardToPng(fileName, rect)` IPC — the renderer sends the card element's bounding rect, main `capturePage(clip)`s that region and saves a PNG via a save dialog (pixel-perfect, includes the rendered portrait/jersey).
 
 **Verified:** typecheck/lint/build clean; in-app on EVANZSYNC the Card tab renders Carson Conklin's card in Sac State green + gold with the real portrait/jersey, vertical names, gold OVR, and the Download button. Stat strip appears once the player has season stats. (Phase 2, not built: drop-your-own-photo pan/zoom editor.) NOT released.
+
+## Phase — Player-card custom photo (drop your own image) (2026-07-27)
+
+**The deferred "phase 2" of the trading card.** Users can now put their own image (a game screenshot) on a player's card, reposition and zoom it, and it exports with the card.
+
+**Storage (main):** new `ipc/card.ts` (`registerCardHandlers`, wired in all three main branches) — `card.pickPhoto` opens an image picker and copies the file into `userData/card-photos/<dynastyId>/<playerId>.<ext>` (one per player, replacing any prior), `card.getPhoto` finds it, `card.removePhoto` deletes it. The file is copied in (never referenced in place), same philosophy as the media gallery. New `card` IPC namespace + types + preload.
+
+**UI (PlayerCard/PlayerCardTab):** when a custom photo exists it replaces the portrait as the hero — an `<img>` (object-cover) with a `translate()/scale()` transform driven by **drag-to-pan** (pointer events) and a **Zoom slider**; the pan/zoom framing persists in localStorage keyed by dynasty+player. Controls: **Add/Change photo**, **Remove photo**, the zoom slider + "drag to reposition" hint, and the existing **Download card (PNG)** — the capturePage export includes the framed photo automatically.
+
+**Verified:** typecheck/lint/build clean; in-app the Card tab shows "Add your photo" with no photo, and — with a seeded image + transform — the photo fills the hero framed by the pan/zoom, overlays on top, with the Zoom slider + Change/Remove/Download controls. (Native file-pick can't be driven headless but the whole render/transform/persist path is verified.) NOT released.

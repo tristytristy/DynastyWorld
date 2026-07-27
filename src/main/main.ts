@@ -11,6 +11,7 @@ import { registerExtractionHandlers } from './ipc/extraction';
 import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
+import { registerCardHandlers } from './ipc/card';
 import { registerNotesHandlers } from './ipc/notes';
 import { registerUpdateHandlers } from './ipc/update';
 import {
@@ -432,6 +433,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerCardHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       try {
@@ -455,6 +457,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerCardHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       // Diagnostic/screenshot runs keep no menu bar so its height doesn't shift
@@ -574,6 +577,7 @@ app
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
+      registerCardHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       // Native menu bar (File/Edit/View/Window) — reload, DevTools, zoom, and
