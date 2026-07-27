@@ -1984,6 +1984,17 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Verified:** typecheck/lint/build clean; both confirmed via IPC + screenshot on the user's EVANZSYNC dynasty.
 
 ---
+## Phase — Global Search (2026-07-26)
+
+**Premium feature #2 of 4** (the batch: Coach Résumé ✓, Global Search ✓, Player Dev Tracker, Yearbook). A one-box search to jump to any player, coach, or team.
+
+**Backend:** new `globalSearch.ts` (`globalSearch(dynastyId, query, seasonId?)` → `{players, coaches, teams}`) runs server-side over a season's snapshots — reuses `getAllLeaguePlayers` (filters the ~16k league roster by name, sorts by OVR, top 12), reads the `coaches` snapshot (all staffs, name match, top 8) and `teams` snapshot (name match, top 8), all excluding the FCS pool (255). Keeps 16k players off the wire. New `GlobalSearchResults`/`Player`/`Coach`/`Team` types + IPC channel/preload/handler.
+
+**UI:** new `GlobalSearch.tsx` in the Sidebar Tools — a command-palette modal (reuses `CenteredModalPanel`) opened by the sidebar button or **Cmd/Ctrl+K**. Debounced (180ms) query; grouped results with portraits/logos; Enter opens the top hit; a player result opens the player modal, a team opens the team modal, a coach jumps to their team's modal (no standalone coach modal exists). Dynasty id parsed from the URL (searches the current season); the trigger/shortcut only exist inside a dynasty. Controlled-input + provider hooks all sit under the root PlayerModal/TeamModal providers, so it works from the shared sidebar.
+
+**Verified:** typecheck/lint/build clean; on EVANZSYNC, "smith" returns the ranked player list (Jeremiah Smith WR Ohio State 99 OVR → …) with portraits + team + OVR, screenshot-confirmed.
+
+---
 ## Template for new entries
 
 ```markdown

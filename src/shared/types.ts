@@ -1279,6 +1279,42 @@ export interface LeagueTeamRoster {
 }
 
 /** One school pursuing a recruit (from the recruit's top-schools list), with its 0-99 influence — the recruiting battle. */
+/** One player hit in the global search. `id` opens the player modal; `teamIndex` themes it. */
+export interface GlobalSearchPlayer {
+  id: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  teamName: string;
+  teamIndex: number;
+  overallRating: number;
+  portraitAssetName: string | null;
+}
+
+/** One coach hit — clicking jumps to their team's card (no standalone coach modal). */
+export interface GlobalSearchCoach {
+  firstName: string;
+  lastName: string;
+  position: string;
+  teamName: string | null;
+  teamIndex: number;
+  portraitAssetName: string | null;
+}
+
+/** One team hit — opens the team modal. */
+export interface GlobalSearchTeam {
+  teamIndex: number;
+  displayName: string;
+  conferenceName: string | null;
+}
+
+/** Grouped results for the one-box global search (players / coaches / teams). */
+export interface GlobalSearchResults {
+  players: GlobalSearchPlayer[];
+  coaches: GlobalSearchCoach[];
+  teams: GlobalSearchTeam[];
+}
+
 export interface NationalRecruitSchool {
   teamIndex: number;
   teamName: string;
@@ -1755,6 +1791,7 @@ export interface DynastyApi {
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
+    globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;

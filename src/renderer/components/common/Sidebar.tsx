@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { TeamLogo } from './TeamLogo';
+import { GlobalSearch } from './GlobalSearch';
 import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
@@ -110,6 +111,7 @@ export function Sidebar() {
         <div className="mt-6 border-t border-slate-200/70 pt-4 dark:border-white/10">
           <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
           <div className="space-y-2">
+            <GlobalSearch triggerClassName={UTILITY_TRIGGER_CLASS} />
             <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />

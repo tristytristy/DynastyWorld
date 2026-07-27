@@ -67,6 +67,7 @@ import { getNcaaRecords } from '../../database/getNcaaRecords';
 import { getDynastyTrends } from '../../database/getDynastyTrends';
 import { getTransfers } from '../../database/getTransfers';
 import { getDepartures } from '../../database/getDepartures';
+import { globalSearch } from '../../database/globalSearch';
 import {
   confirmTeamAwardWinner,
   finalizeTeamAwards,
@@ -352,6 +353,10 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.getDepartures, async (_event, dynastyId: string, teamIndex: number | null, seasonId?: number) => {
     return getDepartures(dynastyId, teamIndex, seasonId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.globalSearch, async (_event, dynastyId: string, query: string, seasonId?: number) => {
+    return globalSearch(dynastyId, query, seasonId);
   });
 
   ipcMain.handle(IPC.db.getTransfers, async (_event, dynastyId: string, focusTeamName: string) => {
