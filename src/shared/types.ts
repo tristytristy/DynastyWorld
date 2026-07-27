@@ -1279,6 +1279,37 @@ export interface LeagueTeamRoster {
 }
 
 /** One school pursuing a recruit (from the recruit's top-schools list), with its 0-99 influence — the recruiting battle. */
+/** One game in a head-to-head series (getHeadToHead), from the user's perspective. */
+export interface HeadToHeadGame {
+  seasonYear: number;
+  week: number;
+  isHome: boolean;
+  neutral: boolean;
+  result: 'W' | 'L' | 'T';
+  teamScore: number;
+  opponentScore: number;
+  /** Set for a postseason/bowl meeting. */
+  bowlName: string | null;
+}
+
+/** The program's all-time series vs one opponent across synced seasons (getHeadToHead). */
+export interface HeadToHeadOpponent {
+  opponentTeamIndex: number | null;
+  opponentName: string;
+  /** The opponent is one of the program's save-designated rivals. */
+  isRival: boolean;
+  rivalryName: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  /** Average scoring margin from the user's perspective (positive = outscoring them). */
+  avgMargin: number;
+  streakType: 'W' | 'L' | 'T' | null;
+  streakCount: number;
+  /** Every played meeting, newest first. */
+  games: HeadToHeadGame[];
+}
+
 /** One season in a player's rating arc (getPlayerDevelopment) — for the OVR-over-seasons chart. */
 export interface PlayerDevelopmentSeason {
   seasonYear: number;
@@ -1803,6 +1834,7 @@ export interface DynastyApi {
     getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
     globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
     getPlayerDevelopment: (dynastyId: string, playerId: number) => Promise<PlayerDevelopmentSeason[]>;
+    getHeadToHead: (dynastyId: string) => Promise<HeadToHeadOpponent[]>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;

@@ -35,6 +35,7 @@ export function TeamHubLayout() {
           {tab('/team-hub', 'Overview', true)}
           {tab('/roster', 'Roster')}
           {tab('/schedule', 'Schedule')}
+          {tab('/rivalries', 'Rivalries')}
           {tab('/statistics', 'Statistics')}
           {tab('/trends', 'Trends')}
           {tab('/transfers', 'Transfers')}

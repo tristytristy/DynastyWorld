@@ -10,6 +10,7 @@ import { NcaaHubLayout } from './pages/NcaaHubLayout';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
+import { Rivalries } from './pages/Rivalries';
 import { NcaaHub } from './pages/NcaaHub';
 import { NcaaRecords } from './pages/NcaaRecords';
 import { Roster } from './pages/Roster';
@@ -78,6 +79,7 @@ export function App() {
                       <Route path="team-hub" element={<DynastyOverview />} />
                       <Route path="roster" element={<Roster />} />
                       <Route path="schedule" element={<Schedule />} />
+                      <Route path="rivalries" element={<Rivalries />} />
                       <Route path="statistics" element={<Statistics />} />
                       <Route path="trends" element={<DynastyTrends />} />
                       <Route path="transfers" element={<Transfers />} />

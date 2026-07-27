@@ -51,6 +51,7 @@ export const IPC = {
     getDepartures: 'db:getDepartures',
     globalSearch: 'db:globalSearch',
     getPlayerDevelopment: 'db:getPlayerDevelopment',
+    getHeadToHead: 'db:getHeadToHead',
     getDynastyTheme: 'db:getDynastyTheme',
     getSeasonTheme: 'db:getSeasonTheme',
     getTeamAwardDefinitions: 'db:getTeamAwardDefinitions',
