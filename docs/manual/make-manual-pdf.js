@@ -14,7 +14,7 @@
 // (The in-app manual.html instead references these assets from the app bundle —
 //  see the CopyWebpackPlugin transform in webpack.config.js.)
 //
-// Output: "Dynasty Hub - User Manual.pdf" at the repo root.
+// Output: "Dynasty Hub - User Manual.pdf" in docs/manual/ (beside this script).
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -24,7 +24,7 @@ const ROOT = path.resolve(HERE, '..', '..'); // repo root
 const FONTS = path.join(ROOT, 'public/assets/fonts');
 const LOGO = path.join(ROOT, 'public/assets/Logo/Logo-mark.png');
 const SPLASH = path.join(ROOT, 'public/assets/splash/spshscr.png');
-const OUT_PDF = path.join(ROOT, 'Dynasty Hub - User Manual.pdf');
+const OUT_PDF = path.join(HERE, 'Dynasty Hub - User Manual.pdf');
 
 function dataUri(file, mime) {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;

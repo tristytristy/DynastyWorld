@@ -33,8 +33,8 @@ The in-app **Help** menu covers the day-to-day workflow (when to sync, History-O
 | `src/teamAwards` | App-calculated award engine (out of React by design) |
 | `public/assets` | Portraits, logos, trophies, fonts (bundled into `dist/`) |
 | `DevLog.md` | The development log — read this first for context |
-| `MASTER_ROADMAP_v2.md` | Roadmap, version history, pre-release backlog |
-| `docs/` | Assessments and plans (portraits, audit, visual overhaul) |
+| `docs/planning/MASTER_ROADMAP_v2.md` | Roadmap, version history, pre-release backlog |
+| `docs/` | Assessments, plans, onboarding, manual, releases (see `docs/` subfolders) |
 
 User data lives in `%APPDATA%/cfb-dynasty-hub/` (`dynasty-archive.sqlite` + rolling backups; automatic corruption recovery on startup).
 

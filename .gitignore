@@ -25,5 +25,5 @@ Dynasty Save Test/
 .claude/settings.local.json
 
 # Generated user manual (regenerate with `npm run manual` from docs/manual/)
-Dynasty Hub - User Manual.pdf
+docs/manual/Dynasty Hub - User Manual.pdf
 docs/manual/manual.rendered.html

@@ -13,7 +13,7 @@ The source for **Dynasty Hub — User Manual.pdf**.
 npm run manual
 ```
 
-This writes **`Dynasty Hub - User Manual.pdf`** to the repo root. Because the version is read from `package.json` at render time, bumping the app version and re-running is all it takes to keep the manual in sync.
+This writes **`Dynasty Hub - User Manual.pdf`** here in `docs/manual/`. Because the version is read from `package.json` at render time, bumping the app version and re-running is all it takes to keep the manual in sync.
 
 ## Notes
 
