@@ -1239,6 +1239,7 @@ export function PlayerProfileContent({
           <PlayerCardTab
             player={player}
             teamName={heroTeamName}
+            seasonYear={seasonsList.find((s) => s.id === resolvedSeasonId)?.seasonYear ?? null}
             stats={seasonTiles.map((t) => ({ label: t.label, value: String(t.value) }))}
             playerName={`${player.firstName} ${player.lastName}`}
             dynastyId={dynastyId}

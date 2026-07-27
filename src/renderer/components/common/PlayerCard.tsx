@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { PlayerPortrait } from './PlayerPortrait';
+import { TeamLogo } from './TeamLogo';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { DynastyTheme, RosterPlayer } from '../../../shared/types';
 
@@ -19,6 +20,7 @@ function spaced(value: string): string {
 export function PlayerCard({
   player,
   teamName,
+  seasonYear,
   stats,
   photoUrl,
   photoTransform,
@@ -26,6 +28,7 @@ export function PlayerCard({
 }: {
   player: RosterPlayer;
   teamName: string | null;
+  seasonYear?: number | null;
   stats: { label: string; value: string }[];
   /** A user-supplied custom photo (file:// URL). When set, it replaces the portrait as the hero. */
   photoUrl?: string | null;
@@ -43,17 +46,11 @@ export function PlayerCard({
         boxShadow: '0 30px 70px -30px rgba(0,0,0,0.8), inset 0 0 0 3px color-mix(in srgb, var(--team-secondary) 32%, transparent)',
       }}
     >
-      {/* Photo hero — portrait + jersey (or the user's custom photo), plus the jersey-number watermark and foil sheen */}
+      {/* Full-bleed photo — the player portrait+jersey by default, or the user's uploaded photo */}
       <div
         onPointerDown={onPhotoPointerDown}
-        className={`absolute inset-x-0 top-0 flex h-[66%] items-end justify-center overflow-hidden ${onPhotoPointerDown ? 'cursor-move touch-none' : ''}`}
+        className={`absolute inset-0 overflow-hidden ${onPhotoPointerDown ? 'cursor-move touch-none' : ''}`}
       >
-        <span
-          className="tnum absolute -right-2 top-2 select-none font-black leading-none tracking-tighter"
-          style={{ fontSize: '150px', color: 'rgba(255,255,255,0.08)' }}
-        >
-          {player.jerseyNumber}
-        </span>
         {photoUrl ? (
           <img
             src={photoUrl}
@@ -63,64 +60,80 @@ export function PlayerCard({
             style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.scale})`, transformOrigin: 'center' }}
           />
         ) : (
-          <PlayerPortrait player={player} teamAssetName={teamName} size="lg" className="!h-[92%] !w-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.45)]" />
+          <PlayerPortrait
+            player={player}
+            teamAssetName={teamName}
+            size="lg"
+            className="!absolute !inset-0 !h-full !w-full [&_img]:!h-full [&_img]:!w-full [&_img]:!object-cover [&_img]:!object-top"
+          />
         )}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: 'linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.14) 46%, rgba(255,255,255,0.02) 56%, transparent 72%)' }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: 'linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--team-primary) 60%, #000) 100%)' }}
-        />
       </div>
+
+      {/* Jersey-number watermark */}
+      <span
+        className="tnum pointer-events-none absolute right-1 top-16 z-[1] select-none font-black leading-none tracking-tighter"
+        style={{ fontSize: '150px', color: 'rgba(255,255,255,0.10)' }}
+      >
+        {player.jerseyNumber}
+      </span>
+
+      {/* Bottom fade for legibility + foil sheen */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{ background: 'linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--team-primary) 55%, #000) 74%, color-mix(in srgb, var(--team-primary) 40%, #000) 100%)' }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{ background: 'linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.12) 46%, rgba(255,255,255,0.02) 56%, transparent 72%)' }}
+      />
 
       {/* Position + OVR */}
       <span
         className="absolute left-4 top-4 z-10 rounded border px-2.5 py-1 text-xs font-extrabold tracking-widest"
-        style={{ borderColor: 'var(--team-secondary)', color: 'var(--team-secondary)', background: 'rgba(0,0,0,0.25)' }}
+        style={{ borderColor: 'var(--team-secondary)', color: 'var(--team-secondary)', background: 'rgba(0,0,0,0.28)' }}
       >
         {player.position}
       </span>
-      <div className="absolute right-4 top-3 z-10 text-right leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+      <div className="absolute right-4 top-3 z-10 text-right leading-none drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]">
         <span className="text-[44px] font-extrabold" style={{ color: 'var(--team-secondary)' }}>
           {player.overallRating}
         </span>
-        <span className="block text-[10px] tracking-[0.3em] opacity-80">OVR</span>
+        <span className="block text-[10px] tracking-[0.3em] opacity-85">OVR</span>
       </div>
 
-      {/* Vertical name — first (smaller) beside last (bigger), rising up the left */}
-      <div className="pointer-events-none absolute left-0 top-0 z-[2] h-[66%] w-24" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.55), transparent)' }} />
-      <div className="absolute left-2 top-0 z-[4] flex h-[66%] items-end gap-4">
-        <span className="[writing-mode:vertical-rl] rotate-180 pb-0.5 text-[22px] font-semibold tracking-wide opacity-90 drop-shadow-[0_3px_16px_rgba(0,0,0,0.85)]">
+      {/* Vertical name — first (smaller) beside last (bigger), rising up from the bottom-left */}
+      <div className="absolute bottom-[104px] left-3 z-[4] flex items-end gap-4">
+        <span className="[writing-mode:vertical-rl] rotate-180 pb-0.5 text-[22px] font-semibold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
           {player.firstName}
         </span>
-        <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.85)]">
+        <span className="[writing-mode:vertical-rl] rotate-180 text-[46px] font-extrabold tracking-wide drop-shadow-[0_3px_16px_rgba(0,0,0,0.9)]">
           {player.lastName.toUpperCase()}
         </span>
       </div>
 
-      {/* Bottom band — meta + season stats */}
-      <div className="absolute inset-x-0 bottom-0 h-[34%] pb-8 pl-[86px] pr-5 pt-4">
-        <p className="text-[11.5px] opacity-75">
-          {teamName ? `${teamName} · ` : ''}
-          {spaced(player.schoolYear)}
-          {player.developmentTrait ? ` · ${spaced(player.developmentTrait)} dev` : ''}
+      {/* Bottom band — meta + stat tiles + team logo */}
+      <div className="absolute inset-x-0 bottom-0 z-10 pb-4 pl-[78px] pr-4 pt-2">
+        <p className="text-center text-[11px] opacity-85">
+          {[teamName, spaced(player.schoolYear), seasonYear].filter(Boolean).join(' · ')}
         </p>
-        {line.length > 0 && (
-          <div className="mt-4 flex gap-2">
-            {line.map((s) => (
-              <div key={s.label} className="flex-1 rounded-md border border-white/15 bg-black/30 px-1 py-2.5 text-center">
-                <p className="text-lg font-extrabold" style={{ color: 'var(--team-secondary)' }}>{s.value}</p>
-                <p className="mt-0.5 text-[9px] tracking-[0.14em] opacity-65">{s.label.toUpperCase()}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {line.map((s) => (
+            <div
+              key={s.label}
+              className="h-[54px] flex-1 rounded-md border bg-black/30 px-1 py-2 text-center"
+              style={{ borderColor: 'color-mix(in srgb, var(--team-secondary) 32%, transparent)' }}
+            >
+              <p className="text-lg font-extrabold" style={{ color: 'var(--team-secondary)' }}>{s.value}</p>
+              <p className="mt-0.5 text-[9px] tracking-[0.12em] opacity-70">{s.label.toUpperCase()}</p>
+            </div>
+          ))}
+          {teamName && (
+            <div className="flex h-[54px] w-[52px] shrink-0 items-center justify-center">
+              <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" className="!h-11 !w-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]" />
+            </div>
+          )}
+        </div>
       </div>
-      <p className="absolute inset-x-0 bottom-2.5 z-10 text-center text-[9px] tracking-[0.15em] opacity-50">
-        College Football 27 Dynasty Hub
-      </p>
     </div>
   );
 }
@@ -149,12 +162,14 @@ const BTN =
 export function PlayerCardTab({
   player,
   teamName,
+  seasonYear,
   stats,
   playerName,
   dynastyId,
 }: {
   player: RosterPlayer;
   teamName: string | null;
+  seasonYear?: number | null;
   stats: { label: string; value: string }[];
   playerName: string;
   dynastyId: string;
@@ -290,6 +305,7 @@ export function PlayerCardTab({
         <PlayerCard
           player={player}
           teamName={teamName}
+          seasonYear={seasonYear}
           stats={stats}
           photoUrl={photoUrl}
           photoTransform={transform}
