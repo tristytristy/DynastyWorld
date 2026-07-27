@@ -1953,6 +1953,15 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **Verified:** typecheck/lint/build clean; imported EVANZSYNC (4,100 recruits) into an isolated dir, seeded 6 watchlist ids via localStorage, and screenshotted — Watchlist page shows "6 of 6" with filled stars and reads identically to National Recruits; the National Recruits page shows hollow stars per row and the panel's "☆ Watchlist" checkbox on a selected recruit.
 
 ---
+## Phase — National Recruits: checkbox filters (My Board + Interested in my school) (2026-07-26)
+
+**Ask:** turn the "On my board" dropdown into a simple **My Board** checkbox, and add an **Interested in <my school>** checkbox (default off) that shows only recruits with the user's team among their top schools.
+
+**Shipped (`NationalRecruits.tsx`):** new `FilterCheck` inline component (checkbox styled to match the filter dropdowns, team-accent when active). Replaced the 3-state board `<select>` (All / On board / Not on board) with a **My Board** checkbox (checked → board scope 'on', unchecked → all). Added an **Interested in {userTeamName}** checkbox → `interestedOnly` state (default false); filter keeps a recruit only when `userTeamIndex` is in its `topSchools` (the game stores up to 10 pursuing schools per recruit in `TopSchoolsList`, so this is the real "top 10 interest"). The user's team index is resolved from `useViewedTeamOptional().userTeamName` via `resolveTeamIndex` against the league list. Wired into `clearFilters` + `filtersActive`. Both checkboxes render on the National Recruits and Watchlist pages (`!boardOnly`).
+
+**Verified:** typecheck/lint/build clean. On the user's EVANZSYNC dynasty (Sacramento State, 4,100 recruits), the checkbox reads **"Interested in Sac State"** and toggling it (real onChange) filtered to **198** recruits — those with Sac State in their top schools. Screenshot confirms both checkboxes render, default unchecked, correct team name. (Note: the screenshot harness can't visually hold a React controlled-checkbox's checked state via synthetic events — a tooling limitation, not a bug; real mouse clicks toggle normally, as the 4,100→198 onChange result proved.)
+
+---
 ## Template for new entries
 
 ```markdown

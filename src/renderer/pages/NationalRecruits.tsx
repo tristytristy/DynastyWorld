@@ -10,6 +10,7 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useRecruitingExperience } from '../data/RecruitingExperienceProvider';
 import { useViewedTeamOptional } from '../data/ViewedTeamProvider';
+import { resolveTeamIndex } from '../components/common/TeamLink';
 import { useWatchlist } from '../data/useWatchlist';
 import { formatClassYearShort } from '../lib/recruitFormat';
 import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
@@ -66,6 +67,22 @@ function formatNil(k: number): string {
 
 const FILTER_SELECT =
   'border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-200';
+
+/** A checkbox styled to sit inline with the filter dropdowns. Active state gets the team accent. */
+function FilterCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label
+      className={`inline-flex cursor-pointer select-none items-center gap-2 border px-3 py-2 text-sm transition ${
+        checked
+          ? 'border-[var(--team-primary)] bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-accent-text)] dark:text-white'
+          : 'border-slate-200/80 bg-white/80 text-slate-700 hover:border-[var(--team-primary)]/60 dark:border-slate-800 dark:bg-white/5 dark:text-slate-200'
+      }`}
+    >
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-[var(--team-primary)]" />
+      <span className="whitespace-nowrap font-medium">{label}</span>
+    </label>
+  );
+}
 
 const RENDER_CAP = 200;
 
@@ -385,6 +402,11 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
   const { ovr, athletic, experimentalSaveEditing } = useRecruitingExperience();
   const watchlist = useWatchlist(id);
   const watchedIds = watchlist.ids;
+  const viewedTeam = useViewedTeamOptional();
+  const userTeamName = viewedTeam?.userTeamName ?? null;
+  // The user's own team index, for the "interested in my school" filter (recruit
+  // has the user's team among their top schools). Resolved from the league list.
+  const userTeamIndex = userTeamName ? resolveTeamIndex(userTeamName, viewedTeam?.leagueTeams) : null;
   const [forceCommitRecruit, setForceCommitRecruit] = useState<NationalRecruit | null>(null);
 
   const [recruits, setRecruits] = useState<NationalRecruit[] | null | undefined>(undefined);
@@ -397,7 +419,8 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
   const [classYear, setClassYear] = useState('');
   const [homeState, setHomeState] = useState('');
   const [stage, setStage] = useState('');
-  const [board, setBoard] = useState(boardOnly ? 'on' : ''); // '' = all, 'on' = on my board, 'off' = not on board
+  const [board, setBoard] = useState(boardOnly ? 'on' : ''); // '' = all, 'on' = on my board (checkbox)
+  const [interestedOnly, setInterestedOnly] = useState(false); // recruits with the user's team in their top schools
   const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -437,7 +460,12 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
       if (homeState && r.homeState !== homeState) return false;
       if (stage && r.recruitStage !== stage) return false;
       if (board === 'on' && !r.onUserBoard) return false;
-      if (board === 'off' && r.onUserBoard) return false;
+      if (
+        interestedOnly &&
+        userTeamIndex !== null &&
+        !r.topSchools.some((s) => s.teamIndex === userTeamIndex)
+      )
+        return false;
       if (q) {
         const hay = `${r.firstName} ${r.lastName} ${r.hometown} ${r.homeState} ${r.pipeline} ${r.position}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -457,7 +485,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, board, sortKey, sortDir, watchlistOnly, watchedIds]);
+  }, [recruits, search, position, stars, classYear, homeState, stage, board, interestedOnly, userTeamIndex, sortKey, sortDir, watchlistOnly, watchedIds]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
@@ -491,6 +519,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     setHomeState('');
     setStage('');
     setBoard(boardOnly ? 'on' : ''); // keep the board scope on the My Board page
+    setInterestedOnly(false);
   }
 
   function openFull(r: NationalRecruit) {
@@ -535,7 +564,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     );
   }
 
-  const filtersActive = !!(search || position || stars || classYear || homeState || stage || (!boardOnly && board));
+  const filtersActive = !!(search || position || stars || classYear || homeState || stage || (!boardOnly && board) || interestedOnly);
   const shown = filtered.slice(0, RENDER_CAP);
 
   const th = (key: SortKey, label: string, alignRight = false) => (
@@ -607,11 +636,14 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
               {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
             </select>
             {!boardOnly && (
-              <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board status" className={FILTER_SELECT}>
-                <option value="">All recruits</option>
-                <option value="on">On my board</option>
-                <option value="off">Not on board</option>
-              </select>
+              <FilterCheck label="My Board" checked={board === 'on'} onChange={(c) => setBoard(c ? 'on' : '')} />
+            )}
+            {!boardOnly && (
+              <FilterCheck
+                label={userTeamName ? `Interested in ${userTeamName}` : 'Interested in my school'}
+                checked={interestedOnly}
+                onChange={setInterestedOnly}
+              />
             )}
             {filtersActive && (
               <button type="button" onClick={clearFilters} className="border border-slate-200/80 px-3 py-2 text-sm text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white">
