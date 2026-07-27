@@ -517,7 +517,7 @@ export function NcaaHub() {
   return (
     <div className="space-y-6">
       <SurfaceCard className="overflow-hidden p-0">
-        <div className="relative bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.06),rgba(30,41,59,0.01))] px-6 py-7 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_32%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(30,41,59,0.9))] sm:px-8 sm:py-8">
+        <div className="relative bg-slate-100/50 px-6 py-7 dark:bg-white/[0.03] sm:px-8 sm:py-8">
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
               <p className="type-eyebrow text-slate-400 dark:text-slate-500">

@@ -24,6 +24,24 @@ module.exports = {
           800: '#1e40af',
           900: '#1e3a8a',
         },
+        // The UI gray. Default Tailwind `slate` is blue-tinted, which read as a
+        // navy cast on every dark surface. Remapped to a true-neutral ramp (with
+        // a near-black deep end) so the base theme is black, not blue — team
+        // color lives only in accents (buttons, text, borders, the card), never
+        // in the ambient ground. Same lightness ramp as slate, hue removed.
+        slate: {
+          50: '#fafafa',
+          100: '#f4f4f5',
+          200: '#e6e6e8',
+          300: '#d2d2d5',
+          400: '#9a9a9f',
+          500: '#6c6c72',
+          600: '#4d4d52',
+          700: '#38383c',
+          800: '#1f1f22',
+          900: '#141416',
+          950: '#0a0a0b',
+        },
       },
       fontFamily: {
         sans: 'var(--font-sans)',

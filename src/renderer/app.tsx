@@ -54,20 +54,10 @@ export function App() {
 
             <main
               style={ANGLED_PANEL}
-              className="relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-[#0a0a0a]"
+              className="relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-black"
             >
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0))]" />
-              {/* Subtle accent glow rising from the bottom-right corner, tinted
-                  with the active theme's primary (team color in Team Mode). Kept
-                  low-alpha so it reads as atmosphere, not a spotlight. */}
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  backgroundImage:
-                    'radial-gradient(75% 65% at 100% 100%, color-mix(in srgb, var(--team-primary) 15%, transparent), transparent 60%)',
-                }}
-              />
-              {/* Signature left edge — now the selected team's color, so the program is present in the chrome itself. */}
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]" />
+              {/* Signature left edge — the selected team's color, a thin accent so the program is present in the chrome (accent only — the ground stays black). */}
               <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[linear-gradient(180deg,transparent,var(--team-primary),transparent)] opacity-90" />
               <div className="relative h-full overflow-y-auto p-5 md:p-8">
                 <Routes>

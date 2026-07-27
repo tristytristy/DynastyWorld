@@ -1040,13 +1040,9 @@ export function PlayerProfileContent({
 
   return (
     <div className="space-y-5">
-      {/* Hero — unboxed portrait over a subtle team-color field; the player is the subject, not a card among cards. */}
+      {/* Hero — unboxed portrait over a neutral field (black base; team color stays in accents, not the ground). */}
       <div
-        className="corner-cut relative overflow-hidden border border-slate-200/70 dark:border-white/10"
-        style={{
-          background:
-            'linear-gradient(120deg, color-mix(in srgb, var(--team-primary) 14%, transparent), transparent 55%), linear-gradient(300deg, color-mix(in srgb, var(--team-primary) 7%, transparent), transparent 45%)',
-        }}
+        className="corner-cut relative overflow-hidden border border-slate-200/70 bg-slate-100/60 dark:border-white/10 dark:bg-white/[0.03]"
       >
         <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center md:p-6">
           <div className="flex shrink-0 justify-center sm:justify-start">

@@ -118,21 +118,10 @@
   }
 
   .dark body {
-    /* Near-black system base (was charcoal). A single, restrained accent glow
-       bleeds up from the bottom-right corner, tinted with the active theme's
-       primary (team color in Team Mode) — subtle, never overpowering. */
-    background-color: #0a0a0a;
-    background-image:
-      radial-gradient(
-        120% 130% at 100% 100%,
-        color-mix(in srgb, var(--team-primary) 14%, transparent) 0%,
-        transparent 52%
-      ),
-      linear-gradient(180deg, #0c0d10 0%, #0a0a0a 60%);
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-attachment: fixed;
-    background-position: center top;
+    /* Pure-black system base. No team-tinted glow — team color lives only in
+       accents (buttons, text, borders, the trading card), never in the ground. */
+    background-color: #000000;
+    background-image: none;
   }
 
   #root {
@@ -140,7 +129,7 @@
   }
 
   ::selection {
-    background: rgba(37, 99, 235, 0.22);
+    background: rgba(140, 140, 148, 0.35);
   }
 
   * {
