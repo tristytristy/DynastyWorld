@@ -97,6 +97,7 @@ const api: DynastyApi = {
   export: {
     historyToHtml: (dynastyId) => ipcRenderer.invoke(IPC.export.historyToHtml, dynastyId),
     seasonYearbookToHtml: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.export.seasonYearbookToHtml, dynastyId, seasonId),
+    playerCardToPng: (fileName, rect) => ipcRenderer.invoke(IPC.export.playerCardToPng, fileName, rect),
   },
   editor: {
     backupSaveFile: (dynastyId) => ipcRenderer.invoke(IPC.editor.backupSaveFile, dynastyId),

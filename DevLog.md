@@ -2050,3 +2050,15 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 **UI:** a premium **Coaching Tree** section on Coach Hub — a stat strip (coaches produced / now head coaches), a root node (you + your team), and branch rows: portrait + "Your {role} · {years}" → arrow → destination team logo + role, HC promotions with a gold left-accent + "HEAD COACH" badge, opponent/destination names as TeamLinks. Empty-state until an assistant actually leaves.
 
 **Verified:** typecheck/lint/build clean; empty-state renders on the single-season EVANZSYNC; populated design confirmed via a standalone mock render (root + 4 branches, 2 HC promotions gold-flagged). Needs 2+ synced seasons with a departing coach to populate live. NOT released.
+
+## Phase — Player Trading Card (2026-07-27)
+
+**Built the card the mockups designed.** A premium, shareable player card as a new **"Card" tab** on the player modal.
+
+**Component:** `PlayerCard.tsx` renders the v5 design — photo hero (real `PlayerPortrait` + team jersey), the name vertical up the left (first smaller beside the larger last, 16px gap), position chip + gold OVR top corners, a jersey-number watermark, foil sheen, and a season stat strip (the same position-appropriate `seasonTiles` the overview uses) along the bottom. Auto-themed via the `--team-*` vars. `PlayerCardTab` wraps it with a **Download card (PNG)** action.
+
+**Theme fix:** the player modal is portaled to `<body>`, outside the dynasty container that sets `--team-*`, so the card first rendered in the default blue. Fixed by resolving the dynasty's colors in `PlayerCardTab` (fetch `getDynastyTheme` + `useTheme().resolveColorVars`, React context flows through the portal) and applying them to the card wrapper — now correctly team-colored.
+
+**Download:** new `export.playerCardToPng(fileName, rect)` IPC — the renderer sends the card element's bounding rect, main `capturePage(clip)`s that region and saves a PNG via a save dialog (pixel-perfect, includes the rendered portrait/jersey).
+
+**Verified:** typecheck/lint/build clean; in-app on EVANZSYNC the Card tab renders Carson Conklin's card in Sac State green + gold with the real portrait/jersey, vertical names, gold OVR, and the Download button. Stat strip appears once the player has season stats. (Phase 2, not built: drop-your-own-photo pan/zoom editor.) NOT released.

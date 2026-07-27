@@ -1,4 +1,4 @@
-import { dialog, ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 import fs from 'fs/promises';
 import { IPC } from '../../shared/ipcChannels';
 import type { ExportResult } from '../../shared/types';
@@ -75,6 +75,39 @@ export function registerExportHandlers(): void {
 
       await fs.writeFile(result.filePath, html, 'utf-8');
       return { success: true, message: `${overview.seasonYear} season yearbook exported.`, filePath: result.filePath };
+    },
+  );
+
+  ipcMain.handle(
+    IPC.export.playerCardToPng,
+    async (
+      event,
+      fileName: string,
+      rect: { x: number; y: number; width: number; height: number },
+    ): Promise<ExportResult> => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) return { success: false, message: 'Could not find the window to capture.' };
+
+      // Round to whole device-independent pixels — capturePage rejects fractions.
+      const clip = {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+      const image = await win.webContents.capturePage(clip);
+
+      const result = await dialog.showSaveDialog({
+        title: 'Save Player Card',
+        defaultPath: `${sanitizeFilename(fileName)} Card.png`,
+        filters: [{ name: 'PNG Image', extensions: ['png'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { success: false, message: 'Export canceled.' };
+      }
+
+      await fs.writeFile(result.filePath, image.toPNG());
+      return { success: true, message: 'Card saved.', filePath: result.filePath };
     },
   );
 }

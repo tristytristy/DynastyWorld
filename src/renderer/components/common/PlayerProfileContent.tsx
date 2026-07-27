@@ -14,6 +14,7 @@ import { EditButton } from './CoachCard';
 import { MediaGallery } from './MediaGallery';
 import { PlayerNotesTab } from './PlayerNotesTab';
 import { TrendLineChart, type ChartSeries } from '../charts/TrendCharts';
+import { PlayerCardTab } from './PlayerCard';
 import type {
   AwardsOverview,
   SeasonSummary,
@@ -539,10 +540,11 @@ function buildPlayerHonorSeasons(awardHistory: AwardsBySeason[], playerId: numbe
  * existing editor IPC (read-only reuse — current season only, since the save
  * has long since moved past any historical season's state).
  */
-type ProfileTab = 'overview' | 'stats' | 'career' | 'awards' | 'media' | 'notes' | 'attributes' | 'gamelog' | 'history';
+type ProfileTab = 'overview' | 'card' | 'stats' | 'career' | 'awards' | 'media' | 'notes' | 'attributes' | 'gamelog' | 'history';
 
 const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'card', label: 'Card' },
   { key: 'stats', label: 'Stats' },
   { key: 'career', label: 'Career' },
   { key: 'awards', label: 'Awards' },
@@ -1231,6 +1233,16 @@ export function PlayerProfileContent({
                 );
               })()}
           </>
+        )}
+
+        {tab === 'card' && (
+          <PlayerCardTab
+            player={player}
+            teamName={heroTeamName}
+            stats={seasonTiles.map((t) => ({ label: t.label, value: String(t.value) }))}
+            playerName={`${player.firstName} ${player.lastName}`}
+            dynastyId={dynastyId}
+          />
         )}
 
         {tab === 'stats' && (

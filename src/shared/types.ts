@@ -1894,6 +1894,8 @@ export interface DynastyApi {
   export: {
     historyToHtml: (dynastyId: string) => Promise<ExportResult>;
     seasonYearbookToHtml: (dynastyId: string, seasonId: number) => Promise<ExportResult>;
+    /** Capture a rectangle of the window (the rendered card) and save it as a PNG. */
+    playerCardToPng: (fileName: string, rect: { x: number; y: number; width: number; height: number }) => Promise<ExportResult>;
   };
   editor: {
     backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;

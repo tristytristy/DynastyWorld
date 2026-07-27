@@ -73,6 +73,7 @@ export const IPC = {
   export: {
     historyToHtml: 'export:historyToHtml',
     seasonYearbookToHtml: 'export:seasonYearbookToHtml',
+    playerCardToPng: 'export:playerCardToPng',
   },
   editor: {
     backupSaveFile: 'editor:backupSaveFile',
