@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import { Markdown } from '../ui/Markdown';
 import { getCheckUpdatesOnStartup } from '../../lib/updatePrefs';
 import type { UpdateCheckResult } from '../../../shared/types';
 
@@ -67,8 +68,12 @@ export function UpdateNotice() {
           You&apos;re on v{result.current}. A newer version is available — download it and run the installer to update.
         </p>
         {result.notes ? (
-          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap border border-slate-200/70 bg-slate-50/70 p-3 text-xs leading-5 text-slate-500 dark:border-white/5 dark:bg-white/5 dark:text-slate-400">
-            {result.notes.slice(0, 800)}
+          // Rendered as Markdown rather than raw text — GitHub release bodies are
+          // written in it, and the hashes and asterisks read as noise otherwise.
+          // The cap is a sanity bound on remote input, not a display choice; it's
+          // generous enough that real notes are never cut.
+          <div className="max-h-56 overflow-y-auto border border-slate-200/70 bg-slate-50/70 p-3 text-xs leading-5 text-slate-500 dark:border-white/5 dark:bg-white/5 dark:text-slate-400">
+            <Markdown source={result.notes.slice(0, 20000)} />
           </div>
         ) : null}
         <div className="flex items-center justify-end gap-2">
