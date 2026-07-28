@@ -29,6 +29,14 @@ if (!makensis) {
   process.exit(1);
 }
 
-const script = path.join(__dirname, 'assets-installer.nsi');
-console.log(`Compiling asset installer with ${makensis}`);
+// Which .nsi to build: defaults to the full image pack, or pass a script name
+// (e.g. `node build/compile-assets-installer.js polos-installer.nsi`) for the
+// smaller add-ons.
+const scriptName = process.argv[2] || 'assets-installer.nsi';
+const script = path.join(__dirname, scriptName);
+if (!fs.existsSync(script)) {
+  console.error(`No such installer script: ${script}`);
+  process.exit(1);
+}
+console.log(`Compiling ${scriptName} with ${makensis}`);
 execFileSync(makensis, [script], { stdio: 'inherit' });

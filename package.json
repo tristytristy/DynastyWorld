@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "manual": "electron docs/manual/make-manual-pdf.js"
+    "manual": "electron docs/manual/make-manual-pdf.js",
+    "package:polos": "node build/compile-assets-installer.js polos-installer.nsi"
   },
   "dependencies": {
     "archiver": "^5.3.2",

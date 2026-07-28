@@ -38,7 +38,8 @@ BrandingText "${APPNAME} ${VERSION}"
 DirText "Choose where to install the DynastyOS image data. $\r$\nIf you already have an image folder, this box is pre-filled with it — installing there simply adds the new artwork to what you have." "Image data folder"
 
 ; Components first, so the folder page can be skipped past quickly by someone
-; who only needs the new art. The full library is ~1 GB; coach polos are ~15 MB.
+; who only needs the new art. The full library is ~928 MB; the coach polos are
+; 1.5 MB — which is why they also ship standalone (build/polos-installer.nsi).
 Page components
 Page directory
 Page instfiles
