@@ -1,4 +1,4 @@
-' Internal helper for "Launch CFB Dynasty Hub.bat" — not meant to be run directly.
+' Internal helper for "Launch DynastyOS.bat" — not meant to be run directly.
 ' A .bat file can never hide its own console window; the only reliable way on
 ' Windows is to have a windowed script host (wscript.exe, unlike cscript.exe,
 ' has no console of its own) re-launch the .bat with a hidden window style.
@@ -13,7 +13,7 @@ projectRoot = fso.GetParentFolderName(targetPath)
 ' flag from last time and close itself instantly. (The .bat also does this
 ' later, but by then this script may have already launched the HTA.)
 On Error Resume Next
-fso.DeleteFile shell.ExpandEnvironmentStrings("%TEMP%") & "\cfb-dynasty-hub-splash-ready.flag", True
+fso.DeleteFile shell.ExpandEnvironmentStrings("%TEMP%") & "\dynastyos-splash-ready.flag", True
 On Error Goto 0
 
 ' Fire the instant pre-splash (scripts\pre-splash.hta) right here, in parallel

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { InfoHint } from '../components/ui/InfoHint';
 import type { SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
@@ -27,7 +28,8 @@ function ScheduleHero({
 }: {
   teamAssetName: string;
   teamLabel: string;
-  description: string;
+  /** Optional context worth surfacing; UI narration belongs nowhere, not behind a hint. */
+  description?: string;
   stats: { label: string; value: string }[];
 }) {
   return (
@@ -49,8 +51,10 @@ function ScheduleHero({
         />
         <div className="min-w-0 flex-1">
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Schedule</p>
-          <h2 className="type-page-title mt-1.5 text-slate-950 dark:text-white">{teamLabel}</h2>
-          <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400 sm:mx-0">{description}</p>
+          <h2 className="type-page-title mt-1.5 flex items-center justify-center gap-2 text-slate-950 dark:text-white sm:justify-start">
+            <span>{teamLabel}</span>
+            {description ? <InfoHint label="About this schedule">{description}</InfoHint> : null}
+          </h2>
           {stats.length > 0 && (
             <div className="mt-4 flex flex-wrap justify-center gap-2.5 sm:justify-start">
               {stats.map((stat) => (
@@ -118,18 +122,22 @@ function TypeCell({ game }: { game: ScheduleGame }) {
   );
 }
 
-function RankBadge({ rank }: { rank: number | null }) {
+function RankBadge({ rank, captured }: { rank: number | null; captured?: boolean }) {
+  // A captured rank is the opponent's rank AT KICKOFF; an uncaptured one is
+  // their rank today. Only the tooltip distinguishes them — the number itself
+  // shouldn't shout about its own provenance.
+  const title = captured ? 'Rank when this game was played' : "Opponent's current rank — this game predates rank tracking";
   if (!rank) {
-    return <span className="text-base text-slate-400 dark:text-slate-500">NR</span>;
+    return <span className="text-base text-slate-400 dark:text-slate-500" title={title}>NR</span>;
   }
   if (rank <= 25) {
     return (
-      <span className="proportional-nums inline-flex h-8 min-w-[2.2rem] items-center justify-center bg-amber-100 px-2 text-sm font-bold text-amber-900 dark:bg-amber-400/20 dark:text-amber-300">
+      <span title={title} className="proportional-nums inline-flex h-8 min-w-[2.2rem] items-center justify-center bg-amber-100 px-2 text-sm font-bold text-amber-900 dark:bg-amber-400/20 dark:text-amber-300">
         #{rank}
       </span>
     );
   }
-  return <span className="proportional-nums text-base text-slate-500 dark:text-slate-400">#{rank}</span>;
+  return <span title={title} className="proportional-nums text-base text-slate-500 dark:text-slate-400">#{rank}</span>;
 }
 
 function LocationCell({ game }: { game: ScheduleGame }) {
@@ -181,7 +189,7 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
       <td className="px-5 py-4 font-medium text-slate-900 dark:text-white">{game.week}</td>
       <td className="px-5 py-4 text-slate-500 dark:text-slate-400">{game.date}</td>
       <td className="px-5 py-4">
-        <RankBadge rank={game.opponentCurrentRank} />
+        <RankBadge rank={game.opponentCurrentRank} captured={game.opponentContextCaptured} />
       </td>
       <td className="px-5 py-4 proportional-nums text-slate-500 dark:text-slate-400">
         {game.opponentRecord ? `${game.opponentRecord.wins}-${game.opponentRecord.losses}` : '-'}
@@ -269,10 +277,15 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
         )}
         {games && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
                 <tr>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Wk</th>
+                  {/* Mirrors the user's own schedule: the opponent's rank and
+                      record AS THEY STOOD at kickoff, so browsing another
+                      program shows their season as it actually unfolded. */}
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Rank</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Record</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opponent</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-[0.2em]">Result</th>
@@ -294,6 +307,12 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                       className={`group cursor-pointer border-b border-slate-200/60 transition last:border-b-0 hover:brightness-[0.98] dark:border-white/5 ${tint}`}
                     >
                       <td className="tnum px-5 py-3.5 font-medium text-slate-500 dark:text-slate-400" style={{ boxShadow: `inset 3px 0 0 ${accent}` }}>{g.week}</td>
+                      <td className="px-5 py-3.5">
+                        <RankBadge rank={g.opponentRank} captured={g.opponentRank !== null} />
+                      </td>
+                      <td className="tnum px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                        {g.opponentRecord ? `${g.opponentRecord.wins}-${g.opponentRecord.losses}` : '—'}
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
                           <span className="text-slate-400 dark:text-slate-500">{g.isHome ? 'vs' : '@'}</span>
@@ -367,7 +386,6 @@ export function Schedule() {
       <ScheduleHero
         teamAssetName={userTeamName ?? 'Team'}
         teamLabel={userTeamName ?? 'Schedule'}
-        description="Review the full season board, move into game detail from any row, and keep key context visible while navigating between years."
         stats={[
           { label: 'Record', value: `${overview.record.wins}-${overview.record.losses}` },
           { label: 'Conference', value: `${overview.conferenceRecord.wins}-${overview.conferenceRecord.losses}` },

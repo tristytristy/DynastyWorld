@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
+import { InnerActivityMark } from './InnerActivityMark';
 import type { UpdateCheckResult } from '../../../shared/types';
 
 const PRIMARY_BTN =
@@ -9,10 +10,9 @@ const SECONDARY_BTN =
 
 const CREDITS: { role: string; value: string }[] = [
   { role: 'Developer & Design', value: 'Mat Evanz' },
-  { role: 'Built with', value: 'Claude (Anthropic)' },
+  { role: 'Built with', value: 'Google Antigravity' },
   { role: 'Save decoding', value: 'madden-franchise by bep713' },
   { role: 'Foundation', value: 'Electron · React · TypeScript · sql.js' },
-  { role: 'Typeface', value: 'Inter (SIL Open Font License)' },
 ];
 
 /**
@@ -62,7 +62,7 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
         onClose={() => setIsOpen(false)}
         widthRem={28}
         eyebrow="About"
-        title="College Football 27 Dynasty Hub"
+        title="DynastyOS"
       >
         <div className="space-y-5">
           <div className="flex items-center gap-3">
@@ -74,7 +74,6 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
                 {__BUILD_LABEL__}
               </span>
             ) : null}
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">by Evanzport Interactive</span>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-y border-slate-200/70 py-4 dark:border-white/5">
@@ -118,6 +117,15 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
             Unofficial, fan-made companion — not affiliated with, endorsed by, or sponsored by Electronic Arts or EA
             Sports. All game names and trademarks belong to their respective owners.
           </p>
+
+          {/* Signs off the panel rather than competing with the version badge,
+              where it was too small to read. Full black/white as the brand art
+              intends — the mark is fine strokes at this size, and dimming it on
+              top of that pushed it past legible. Restraint comes from its size
+              and placement, not from washing it out. */}
+          <div className="flex justify-center pt-1">
+            <InnerActivityMark className="h-6 w-auto text-black dark:text-white" />
+          </div>
         </div>
       </CenteredModalPanel>
     </div>

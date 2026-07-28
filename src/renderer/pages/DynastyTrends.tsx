@@ -5,6 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { TrendLineChart, WinLossBars, ChartLegend, type ChartSeries } from '../components/charts/TrendCharts';
+import { InfoHint } from '../components/ui/InfoHint';
 
 function ChartCard({
   title,
@@ -21,8 +22,10 @@ function ChartCard({
     <SurfaceCard>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">{title}</h3>
-          {subtitle && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
+          <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+            <span>{title}</span>
+            {subtitle && <InfoHint label={`About ${title}`}>{subtitle}</InfoHint>}
+          </h3>
         </div>
         {legend}
       </div>

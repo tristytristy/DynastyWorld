@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { InfoHint } from '../components/ui/InfoHint';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
@@ -17,6 +18,24 @@ import type {
 
 function formatRank(rank: number | null): string {
   return rank ? `#${rank}` : 'NR';
+}
+
+/**
+ * The surname to name this stretch of history after — "The Fox era".
+ *
+ * Generational suffixes are dropped before taking the last token, or "Hayden
+ * Fox Jr." would come out as the "Jr. era". Returns null for an unknown coach
+ * so callers can fall back to neutral wording rather than printing "The  era".
+ */
+const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v']);
+
+function coachEraName(fullName: string | null): string | null {
+  if (!fullName) return null;
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.length > 0 && !NAME_SUFFIXES.has(part.toLowerCase()));
+  return parts.length > 0 ? parts[parts.length - 1] : null;
 }
 
 function formatRecord(wins: number, losses: number): string {
@@ -201,6 +220,10 @@ export function History() {
     );
   }
 
+  // Named after the user's coach, not the school: this section spans their
+  // whole career in this save, including any schools they've since left.
+  const eraName = coachEraName(history.headCoachName);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -252,21 +275,17 @@ export function History() {
         </SurfaceCard>
       )}
 
-      <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-5 py-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-        This page separates two timelines: <strong>History During This Save</strong> (everything below, accumulated
-        across the seasons you&apos;ve played/imported) and the <strong>Program Records</strong> book (the save&apos;s own
-        all-time team records, which persist across coaches). The program&apos;s all-time win/title <em>totals</em>
-        (e.g. the in-game 999-319 career records) live in a separate save history structure that isn&apos;t surfaced here
-        yet, so the totals below are dynasty-era only.
-      </div>
-
       <div>
         <p className="type-eyebrow text-[var(--team-accent-text)]">History During This Save</p>
         <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-          Dynasty-era summary — {history.teamName} since your archive began.
+          {eraName ? `The ${eraName} era` : 'Dynasty era'} — every season on record
+          {history.schoolsCoached.length > 1 ? `, across ${history.schoolsCoached.length} schools.` : ` at ${history.teamName}.`}
         </h3>
         <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatTile label="Dynasty-era Record" value={formatRecord(history.dynastyWins, history.dynastyLosses)} />
+          <StatTile
+            label={eraName ? `${eraName} Era Record` : 'Dynasty-era Record'}
+            value={formatRecord(history.dynastyWins, history.dynastyLosses)}
+          />
           <StatTile
             label="Schools Coached"
             value={String(history.schoolsCoached.length)}
@@ -288,13 +307,13 @@ export function History() {
 
       <div>
         <p className="type-eyebrow text-[var(--team-accent-text)]">Program Records · all-time</p>
-        <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-          The school record book from the save itself — persists across coaches.
+        <h3 className="mt-1 flex items-center gap-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+          <span>The school record book from the save itself — persists across coaches.</span>
+          <InfoHint label="About the record book">
+            The game&apos;s own single-game record book tracks the player, position, year, and value only — it
+            doesn&apos;t carry opponent, week, or final-score context, so game records here can&apos;t show a matchup.
+          </InfoHint>
         </h3>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          The game&apos;s own single-game record book tracks the player, position, year, and value only — it doesn&apos;t
-          carry opponent, week, or final-score context, so game records below can&apos;t show a matchup.
-        </p>
         <div className="mt-4 space-y-4">
           {history.records.map((category) => (
             <RecordBookRow key={category.key} category={category} />
@@ -401,13 +420,13 @@ export function History() {
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">
           League History
         </p>
-        <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-          National and conference champions, every year the save remembers.
+        <h3 className="mt-2 flex items-center gap-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+          <span>National and conference champions, every year the save remembers.</span>
+          <InfoHint label="About league history">
+            Sourced from the save&apos;s own league-wide history — available even for seasons never individually synced
+            (marked &quot;History Only&quot; above).
+          </InfoHint>
         </h3>
-        <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          Sourced from the save&apos;s own league-wide history — available even for seasons never individually synced
-          (marked &quot;History Only&quot; above).
-        </p>
         {history.leagueHistory.length === 0 ? (
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No league history available yet.</p>
         ) : (

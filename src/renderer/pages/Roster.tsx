@@ -141,7 +141,7 @@ function PlayerCard({ player, onOpen, onEdit, teamAssetName, nameHoverProps }: {
         <div className="flex items-center gap-4">
           <div className="relative">
             <PlayerPortrait player={player} size="md" teamAssetName={teamAssetName} />
-            <span className="absolute -bottom-2 -right-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--team-primary)] text-sm font-bold text-[var(--team-on-primary)] shadow-[0_18px_40px_-24px_rgba(37,99,235,0.9)]">
+            <span className="absolute -bottom-2 -right-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--team-primary)] text-sm font-bold text-[var(--team-on-primary)] shadow-[0_18px_40px_-24px_rgba(0,0,0,0.95)]">
               {player.jerseyNumber}
             </span>
           </div>
@@ -342,7 +342,6 @@ export function Roster() {
       <PageHeader
         eyebrow="Roster"
         title={viewedTeamName ? `${viewedTeamName} roster.` : 'Search, compare, and review every player in one pass.'}
-        description="Use filters to narrow the board, switch between list and gallery views, and jump straight into individual player detail."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

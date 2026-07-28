@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { availablePositionGroups, matchesPositionFilter } from '../lib/positionGroups';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -442,7 +443,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
   const options = useMemo(() => {
     const list = recruits ?? [];
     return {
-      positions: distinct(list.map((r) => r.position)),
+      ...availablePositionGroups(list.map((r) => r.position)),
       classes: distinct(list.map((r) => r.classYear)),
       states: distinct(list.map((r) => r.homeState)),
       stages: distinct(list.map((r) => r.recruitStage)),
@@ -454,7 +455,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     const q = search.trim().toLowerCase();
     const result = list.filter((r) => {
       if (watchlistOnly && !watchedIds.has(r.playerId)) return false;
-      if (position && r.position !== position) return false;
+      if (!matchesPositionFilter(position, r.position)) return false;
       if (stars && r.stars !== Number(stars)) return false;
       if (classYear && r.classYear !== classYear) return false;
       if (homeState && r.homeState !== homeState) return false;
@@ -617,7 +618,22 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
           <div className="flex flex-wrap items-center gap-2">
             <select value={position} onChange={(e) => setPosition(e.target.value)} aria-label="Filter by position" className={FILTER_SELECT}>
               <option value="">All positions</option>
-              {options.positions.map((p) => <option key={p} value={p}>{p}</option>)}
+              {options.groups.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
+                </option>
+              ))}
+              {/* Wider groupings are kept in their own section: they overlap the
+                  list above on purpose, and inline they'd look like duplicates. */}
+              {options.superGroups.length > 0 && (
+                <optgroup label="Groups">
+                  {options.superGroups.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <select value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Filter by stars" className={FILTER_SELECT}>
               <option value="">All stars</option>
@@ -687,7 +703,16 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
                         onClick={() => setSelectedId(r.playerId)}
                         className={`cursor-pointer border-b border-slate-200/60 transition dark:border-white/5 ${isSel ? 'bg-[color:color-mix(in_srgb,var(--team-primary)_28%,transparent)]' : 'hover:bg-slate-50/80 dark:hover:bg-white/5'}`}
                       >
-                        <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'border-l-[3px] border-l-[var(--team-primary)] bg-[color:color-mix(in_srgb,var(--team-primary)_28%,var(--surface-card,#fff))]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
+                        {/* This column is sticky, so it can't inherit the row's
+                            translucent wash — it needs its own OPAQUE fill or
+                            the scrolling columns show through it. That fill has
+                            to be mixed against the real surface behind it: it
+                            previously mixed against #fff in both themes, which
+                            on dark painted a pale block under white text and
+                            made the selected prospect the least readable row on
+                            screen. Same 28% team mix as the rest of the row,
+                            now over near-black in dark. */}
+                        <td className={`sticky left-0 z-10 px-3 py-2 ${isSel ? 'border-l-[3px] border-l-[var(--team-primary)] bg-[color:color-mix(in_srgb,var(--team-primary)_28%,#fff)] dark:bg-[color:color-mix(in_srgb,var(--team-primary)_28%,#0a0a0b)]' : 'bg-[var(--surface-card,#fff)] dark:bg-slate-950'}`}>
                           <div className="flex items-center gap-2.5">
                             <WatchStar watched={watchedIds.has(r.playerId)} onToggle={() => watchlist.toggle(r.playerId)} />
                             <span className="tnum w-6 shrink-0 text-right text-xs font-bold text-slate-400 dark:text-slate-500">{r.nationalRank || '—'}</span>

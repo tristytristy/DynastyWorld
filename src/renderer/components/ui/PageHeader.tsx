@@ -1,3 +1,4 @@
+import { InfoHint } from './InfoHint';
 import type { ReactNode } from 'react';
 import { SurfaceCard } from './SurfaceCard';
 
@@ -33,10 +34,15 @@ export function PageHeader({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">{eyebrow}</p>
-          <h2 className="type-page-title mt-2 text-slate-950 dark:text-white">{title}</h2>
-          {description ? (
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
-          ) : null}
+          {/* The description now lives behind the hint icon beside the title
+              rather than as a paragraph under it. Most of these explained
+              something a returning player already knows, and printed in full on
+              every visit they pushed the actual content down the page. The words
+              are unchanged — just on demand. */}
+          <h2 className="type-page-title mt-2 flex items-center gap-2 text-slate-950 dark:text-white">
+            <span>{title}</span>
+            {description ? <InfoHint label="About this page">{description}</InfoHint> : null}
+          </h2>
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>

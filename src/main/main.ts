@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { getAssetsRoot } from './assetRoot';
+import { migrateLegacyUserData } from './userDataMigration';
 import { registerFilesystemHandlers } from './ipc/filesystem';
 import { registerAssetHandlers } from './ipc/assets';
 import { registerDatabaseHandlers } from './ipc/database';
@@ -45,6 +46,19 @@ import { getSchedule } from '../database/getSchedule';
 if (process.env.CFB_USER_DATA_DIR) {
   app.setPath('userData', process.env.CFB_USER_DATA_DIR);
 }
+
+// The rename to DynastyOS changes the folder Electron derives from the app
+// name, so a user's entire archive would otherwise be stranded under the old
+// one while the app reported an empty workspace. Runs here, before the single
+// instance lock — that lock is taken against userData itself, so anything after
+// it is already too late. See userDataMigration.ts.
+const userDataMigration = migrateLegacyUserData();
+if (userDataMigration.migrated) {
+  console.log(`[startup] moved existing data from ${userDataMigration.from} (${userDataMigration.method})`);
+} else if (userDataMigration.error) {
+  console.error('[startup] could not move existing data:', userDataMigration.error);
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -223,14 +237,23 @@ function createWindow(): BrowserWindow {
 
   // Dev-only (unpackaged) developer shortcuts, wired straight onto the
   // webContents so they work even if the application menu / its accelerators
-  // aren't present: F12 or Ctrl+Shift+I toggles DevTools. Packaged releases
-  // skip this entirely.
+  // aren't present:
+  //   F12 / Ctrl+Shift+I  — toggle DevTools
+  //   Ctrl+Shift+R        — hard reload, bypassing the cache, so a rebuild can
+  //                         be picked up without restarting the app
+  // Packaged releases skip this entirely: it's a build-loop convenience, and in
+  // a release a reload can't pick up new code anyway.
   if (!app.isPackaged) {
     win.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return;
       const key = input.key.toLowerCase();
       if (key === 'f12' || (input.control && input.shift && key === 'i')) {
         win.webContents.toggleDevTools();
+        event.preventDefault();
+        return;
+      }
+      if (input.control && input.shift && key === 'r') {
+        win.webContents.reloadIgnoringCache();
         event.preventDefault();
       }
     });
@@ -265,7 +288,7 @@ const SPLASH_HEIGHT = 420;
 const MIN_SPLASH_DISPLAY_MS = 1200;
 
 /**
- * "Launch CFB Dynasty Hub.bat" shows an instant, non-Electron pre-splash
+ * "Launch DynastyOS.bat" shows an instant, non-Electron pre-splash
  * (scripts/pre-splash.hta, launched before npm/webpack/electron even start —
  * that pre-Electron stretch is otherwise a silent gap with nothing on
  * screen) using the exact same splash image, and polls for this file to know
@@ -275,7 +298,7 @@ const MIN_SPLASH_DISPLAY_MS = 1200;
  * launched directly (`npx electron .`, diagnostic runs) — harmless, since
  * nothing is polling for it in that case.
  */
-const PRE_SPLASH_READY_FLAG = path.join(os.tmpdir(), 'cfb-dynasty-hub-splash-ready.flag');
+const PRE_SPLASH_READY_FLAG = path.join(os.tmpdir(), 'dynastyos-splash-ready.flag');
 
 function signalPreSplashReady(): void {
   try {
@@ -393,14 +416,18 @@ async function initDatabaseWithRecovery(): Promise<void> {
 
   // Reaching here means the database is open and readable — whether that's
   // the normal case, a fresh database, or one just restored from backup.
-  // Checkpoint a new backup now so there's always a recent recovery point,
-  // and cap how many accumulate on disk.
-  try {
-    backupDatabase();
-    pruneOldBackups();
-  } catch {
-    // Non-fatal — a missed backup checkpoint doesn't block the app from opening.
-  }
+  // Checkpoint a new backup so there's always a recent recovery point, and cap
+  // how many accumulate on disk. Deliberately NOT awaited: the checkpoint is a
+  // recovery point for NEXT time, so nothing about this launch depends on it,
+  // and compressing a large archive (~1.5s on a real 170 MB one) would
+  // otherwise be dead time the user spends staring at a splash screen. Streamed
+  // + unawaited, it runs while they're already using the app. It also no-ops
+  // entirely when the database hasn't changed since the last one.
+  void backupDatabase()
+    .then(() => pruneOldBackups())
+    .catch(() => {
+      // Non-fatal — a missed backup checkpoint doesn't block the app from opening.
+    });
 
   // One-time backfill for seasons imported before user_team_id existed (see
   // schema_v3_season_team.sql) — cheap no-op once every row already has a value.

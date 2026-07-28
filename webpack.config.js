@@ -199,7 +199,8 @@ const rendererConfig = {
               .replace(/__INTER500__/g, 'assets/fonts/inter-latin-500-normal.woff2')
               .replace(/__INTER600__/g, 'assets/fonts/inter-latin-600-normal.woff2')
               .replace(/__INTER700__/g, 'assets/fonts/inter-latin-700-normal.woff2')
-              .replace(/__LOGO_MARK__/g, 'assets/Logo/Logo-mark.png')
+              // The DynastyOS wordmark (light variant — the manual's paper is cream).
+              .replace(/__LOGO_MARK__/g, 'assets/Logo/DynastyOS-Wordmark.svg')
               .replace(/__SPLASH__/g, 'assets/splash/spshscr.png')
               .replace(/__VERSION__/g, APP_VERSION)
               .replace(/__BUILD_LABEL__/g, BUILD_LABEL);

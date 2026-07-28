@@ -4,8 +4,14 @@ import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
+import { GlobalSearch } from './GlobalSearch';
 import { TeamProfileModal } from './TeamProfileModal';
 import type { DynastyTheme } from '../../../shared/types';
+
+// Search sits inside the section bar's own inset rail, so it's styled to read
+// as part of that rail rather than as a floating control dropped on top of it.
+const NAV_SEARCH_TRIGGER_CLASS =
+  'w-full border border-slate-200/80 bg-white/80 px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10';
 
 // Hard-edged tabs in the display face; the active tab carries the signature
 // cut corner (shape language — see feedback_shape_language memory / DevLog).
@@ -96,7 +102,7 @@ function DynastyNav({ id }: { id: string }) {
           : 'coach';
 
   return (
-    <nav className="border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-md dark:border-white/10 dark:bg-[#181b1f]">
+    <nav className="border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-md dark:border-white/10 dark:bg-black">
       <div className="corner-cut flex flex-wrap items-center gap-2 border border-slate-200/80 bg-slate-100/80 p-1.5 dark:border-white/5 dark:bg-black/25">
         <Link to={`/dynasty/${id}`} className={sectionTabClass(section === 'coach')}>
           Coach Hub
@@ -114,6 +120,14 @@ function DynastyNav({ id }: { id: string }) {
           Media Hub
         </Link>
         <SeasonSwitcher />
+        {/* Search sits at the far right of the section bar — `ml-auto` pushes it
+            there so it stays pinned regardless of how many tabs precede it.
+            Moved out of the sidebar's Tools list: search spans the whole
+            archive, so it belongs with the top-level navigation rather than
+            filed under utilities. */}
+        <div className="ml-auto w-full min-w-[12rem] sm:w-auto sm:max-w-xs sm:flex-1">
+          <GlobalSearch triggerClassName={NAV_SEARCH_TRIGGER_CLASS} />
+        </div>
       </div>
     </nav>
   );

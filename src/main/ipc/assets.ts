@@ -15,7 +15,7 @@ export function registerAssetHandlers(): void {
 
   ipcMain.handle(IPC.assets.chooseFolder, async (): Promise<AssetChooseResult> => {
     const result = await dialog.showOpenDialog({
-      title: 'Select your CFB Dynasty Hub image-data folder',
+      title: 'Select your DynastyOS image-data folder',
       properties: ['openDirectory'],
     });
     if (result.canceled || result.filePaths.length === 0) {

@@ -1,18 +1,18 @@
 /**
  * Team colors come straight from the save file and are used as-is for solid
- * fills (that's the whole point — Oregon should look Oregon-green). But used
+ * fills (that's the whole point ï¿½ Oregon should look Oregon-green). But used
  * directly as text/link color, some team colors (bright yellows, light golds)
  * fail contrast against the page surface. Rather than fall back to a generic
  * blue and lose the team identity, this nudges the color toward black/white
- * in small steps — preserving hue — until it clears WCAG AA (4.5:1).
+ * in small steps ï¿½ preserving hue ï¿½ until it clears WCAG AA (4.5:1).
  */
 
 type Rgb = [number, number, number];
 
-const LIGHT_SURFACE_HEX = '#f8fafc'; // tailwind slate-50 — matches body bg-slate-50
-const DARK_SURFACE_HEX = '#020617'; // tailwind slate-950 — matches body dark:bg-slate-950
+const LIGHT_SURFACE_HEX = '#f8fafc'; // tailwind slate-50 ï¿½ matches body bg-slate-50
+const DARK_SURFACE_HEX = '#020617'; // tailwind slate-950 ï¿½ matches body dark:bg-slate-950
 const MIN_TEXT_CONTRAST = 4.5; // WCAG AA, normal text
-const FALLBACK_PRIMARY = '#2563eb'; // existing brand-600, used if no team color is set
+const FALLBACK_PRIMARY = '#9C9C9C'; // DynastyOS silver (brand-500), used if no team color is set
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 

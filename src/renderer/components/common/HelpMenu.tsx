@@ -25,9 +25,16 @@ const HELP_TOPICS: HelpTopic[] = [
     content: (
       <>
         <p>
-          Head to the Dashboard and click <strong>Import Dynasty</strong>, then pick your save file. Don&apos;t worry
-          about the file extension — EA&apos;s save files usually don&apos;t have one you&apos;ll recognize, so the
-          picker shows everything by default.
+          Head to the Dashboard and click <strong>Import</strong>. The app looks in the folder the game keeps
+          its saves in and lists what it finds by <strong>school and coach</strong> — &quot;Sac State — Patrick Evanz,
+          2026, Week 1&quot; — rather than making you guess from filenames like{' '}
+          <span className="font-mono text-xs">DYNASTY-EVANZSYNC</span>. Pick yours and it imports.
+        </p>
+        <p>
+          If your saves live somewhere unusual, <strong>Change folder…</strong> points the app at them and remembers it.
+          There&apos;s also <strong>Pick a file myself…</strong> for browsing directly. Autosaves and older backups of
+          the same dynasty are tucked behind <em>Show older versions</em> — there if you need to recover from a bad
+          save, out of the way if you don&apos;t.
         </p>
         <p>
           Importing reads your team, roster, coaching staff, schedule, stats, recruiting board, and more from that one
@@ -89,6 +96,129 @@ const HELP_TOPICS: HelpTopic[] = [
           For the fullest experience, start the app on a <strong>fresh dynasty</strong> and sync from season one. If
           you first import a save that&apos;s already several years deep, only the current season comes in with full
           detail — every year before it can be recovered as History Only at best.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'dynasty-backups',
+    title: 'Backing up a dynasty (and putting it back)',
+    content: (
+      <>
+        <p>
+          Every dynasty card has a <strong>Back up this dynasty</strong> button. It saves that one dynasty into a single{' '}
+          <strong>.zip</strong> file, wherever you choose — your Documents, a USB stick, a cloud folder. Keep that file
+          and you can bring the dynasty back on any computer, years later.
+        </p>
+        <p>You choose what goes in, and see what each part costs before you commit:</p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            <strong>The dynasty itself</strong> — always included. Every season of history: stats, awards, recruits,
+            notes and photo captions.
+          </li>
+          <li>
+            <strong>Photos and videos</strong> from the Media Hub.
+          </li>
+          <li>
+            <strong>Trading-card photos</strong>, with the framing you set.
+          </li>
+          <li>
+            <strong>Your latest game save</strong> (~10 MB) — so you can carry on <em>playing</em>, not just browsing.
+          </li>
+        </ul>
+        <p>
+          <strong>To put one back:</strong> <strong>Restore Backup</strong> on the Dashboard, next to Import. It reads
+          the file and tells you what&apos;s inside before changing anything. If that dynasty is already here,
+          it&apos;ll say so and ask before replacing it — and a safety copy of everything you currently have is taken
+          first, every time.
+        </p>
+        <p>
+          It&apos;s a normal zip file on purpose. Even with no app installed, you can open it and see your photos, and
+          read <span className="font-mono text-xs">README.txt</span> inside for what everything is. Your memories
+          shouldn&apos;t depend on a program still existing.
+        </p>
+        <p>
+          Not included: player faces, team logos and trophy art. That&apos;s shared artwork rather than your data, and
+          it reinstalls with the app — leaving it out keeps backups small.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'disk-space',
+    title: 'What the app is using on your disk',
+    content: (
+      <>
+        <p>
+          <strong>Preferences → Storage</strong> shows everything the app has written and where, in plain language:
+          your dynasty archive, your photos, trading-card images, automatic recovery copies, and copies of your game
+          saves. Nothing it stores is hidden from you.
+        </p>
+        <p>
+          Two buttons keep it tidy. <strong>Delete old copies</strong> keeps the most recent recovery copy of your
+          archive and of each game save, and clears the older spares. <strong>Clear cache</strong> reclaims space still
+          held inside the archive by dynasties you&apos;ve deleted. Neither touches your dynasties, photos or cards.
+        </p>
+        <p>
+          Deleting a dynasty removes it completely and gives the space straight back, so that cache figure should stay
+          at or near zero from now on.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'media-storage',
+    title: 'Where your photos are stored (and how to move them)',
+    content: (
+      <>
+        <p>
+          Anything you add in the Media Hub is <strong>copied</strong> into the app&apos;s own library — it never just
+          points at the file you picked. Delete, rename or move the original afterwards and the app is unaffected.
+        </p>
+        <p>
+          By default the library lives in <span className="font-mono text-xs">%APPDATA%\DynastyOS\media</span>,
+          one folder per dynasty, with each file keeping its original name behind a timestamp so nothing collides. That
+          works with zero setup, but it&apos;s buried where nobody browses — so you can put it anywhere you like under{' '}
+          <strong>Preferences → Storage → Media library folder</strong>: your Pictures folder, an external drive, or a
+          synced Dropbox/OneDrive folder if you want your screenshots backed up off the machine.
+        </p>
+        <p>
+          Changing the folder <strong>moves your existing library across</strong> — nothing is left behind. The move
+          copies everything first and only switches over once it&apos;s all landed, so if it fails part-way (drive full,
+          folder gone) nothing moves at all and your current folder keeps working. There&apos;s an <strong>Open
+          folder</strong> button there too, for when you just want the files.
+        </p>
+        <p>
+          One thing to know: the app&apos;s own backups cover the database — your captions, tags and game links — but
+          not the image files themselves. If you&apos;re moving to a new machine, copy the media folder as well.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'no-spoilers',
+    title: 'Why this week’s other scores are blank',
+    content: (
+      <>
+        <p>
+          The hub never shows you a result the game hasn&apos;t shown you yet. Sync in the middle of a week — before
+          you&apos;ve played your own game — and every <em>other</em> game that week reads as unplayed, with a note on
+          the Scores page saying so.
+        </p>
+        <p>
+          That&apos;s deliberate, not missing data. Your save actually resolves the entire week&apos;s slate the moment
+          you enter it; the game just keeps those scores hidden until your own game is done. Showing them would hand you
+          the whole weekend early, including your rivals&apos; upsets and the top-10 result you were about to watch.
+        </p>
+        <p>
+          <strong>How to get them back:</strong> play your game and sync again — the rest of the week unlocks
+          immediately, exactly as it does in-game. Advancing to the next week and syncing works too. On a bye week
+          there&apos;s no game to play, so that week stays held until you advance.
+        </p>
+        <p>
+          Everything else is unaffected: records, standings, polls, stat leaders and box scores never included the
+          hidden week in the first place — the game itself doesn&apos;t roll those forward until the week is complete.
+          Nothing is lost either way; the next sync fills in the real scores.
         </p>
       </>
     ),
@@ -158,10 +288,10 @@ const HELP_TOPICS: HelpTopic[] = [
           offers to link automatically instead of creating a duplicate.
         </p>
         <p>
-          <strong>Backup</strong> — makes a timestamped copy of your actual game save, stored safely outside your game
-          folder. Worth doing before an editing session (see below), just for peace of mind. If you ever need to roll
-          back, the backup sits in a known folder on your computer and can be copied back over your live save file
-          manually through File Explorer.
+          <strong>Back up this dynasty</strong> — saves the dynasty into one <strong>.zip</strong> file you choose the
+          location of, with your photos and your game save if you tick them (see <em>Backing up a dynasty</em>). Worth
+          doing before an editing session, and essential before moving to a new computer. Restoring is a button on the
+          Dashboard rather than a manual file-copy.
         </p>
         <p>
           <strong>Export</strong> — saves a self-contained HTML page of your dynasty&apos;s history (record book,

@@ -1,6 +1,16 @@
-import { ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
+import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
+import { createDynastyBackup, estimateDynastyBackup, suggestedBackupFileName } from '../dynastyBackup';
+import { inspectBackup, restoreDynastyBackup } from '../dynastyRestore';
+import { getScandalsData, saveScandals } from '../scandalsWrite';
 import type {
+  BackupInspection,
+  ScandalsEdit,
+  DynastyBackupContents,
+  DynastyBackupEstimate,
+  DynastyBackupResult,
+  DynastyRestoreResult,
   CoachEditData,
   CoachEditFields,
   PlayerEditData,
@@ -34,6 +44,68 @@ export function registerEditorHandlers(): void {
   ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
     return backupSaveFile(dynastyId);
   });
+
+  ipcMain.handle(
+    IPC.editor.estimateDynastyBackup,
+    async (_event, dynastyId: string): Promise<DynastyBackupEstimate | null> => {
+      return estimateDynastyBackup(dynastyId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.createDynastyBackup,
+    async (event, dynastyId: string, contents: DynastyBackupContents): Promise<DynastyBackupResult> => {
+      const estimate = await estimateDynastyBackup(dynastyId);
+      if (!estimate) return { success: false, message: 'That dynasty no longer exists.' };
+
+      const result = await dialog.showSaveDialog({
+        title: 'Save dynasty backup',
+        defaultPath: path.join(app.getPath('documents'), suggestedBackupFileName(estimate.teamName)),
+        filters: [{ name: 'Dynasty backup (zip)', extensions: ['zip'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { success: false, message: '' }; // Cancelled — the caller stays silent.
+      }
+
+      return createDynastyBackup(dynastyId, contents, result.filePath, (progress) => {
+        event.sender.send(IPC.editor.backupProgress, progress);
+      });
+    },
+  );
+
+  // Split from the restore itself so the user sees what a file contains — and
+  // whether it would replace a dynasty already here — BEFORE committing.
+  ipcMain.handle(
+    IPC.editor.chooseBackupToRestore,
+    async (): Promise<(BackupInspection & { filePath: string }) | null> => {
+      const result = await dialog.showOpenDialog({
+        title: 'Choose a dynasty backup',
+        properties: ['openFile'],
+        filters: [{ name: 'Dynasty backup (zip)', extensions: ['zip'] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const filePath = result.filePaths[0];
+      return { ...(await inspectBackup(filePath)), filePath };
+    },
+  );
+
+  ipcMain.handle(
+    IPC.editor.restoreDynastyBackup,
+    async (_event, filePath: string): Promise<DynastyRestoreResult> => {
+      return restoreDynastyBackup(filePath);
+    },
+  );
+
+  // Scandals — the user coach's cheat panel. Every field here was proven to
+  // round-trip on a disposable save before being exposed; see scandalsWrite.ts.
+  ipcMain.handle(IPC.editor.getScandals, async (_event, dynastyId: string) => getScandalsData(dynastyId));
+
+  ipcMain.handle(
+    IPC.editor.saveScandals,
+    async (_event, dynastyId: string, edit: ScandalsEdit): Promise<SaveEditResult> => {
+      return saveScandals(dynastyId, edit);
+    },
+  );
 
   ipcMain.handle(
     IPC.editor.getPlayer,

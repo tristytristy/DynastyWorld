@@ -42,7 +42,7 @@ function fetchLatestRelease(): Promise<GitHubRelease | null> {
   return new Promise((resolve, reject) => {
     const request = net.request({ url: RELEASES_API, method: 'GET' });
     // GitHub rejects requests without a User-Agent; the Accept header pins the API version.
-    request.setHeader('User-Agent', 'CFB-Dynasty-Hub');
+    request.setHeader('User-Agent', 'DynastyOS');
     request.setHeader('Accept', 'application/vnd.github+json');
     const timer = setTimeout(() => {
       request.abort();

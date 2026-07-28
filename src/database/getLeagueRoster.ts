@@ -1,4 +1,5 @@
 import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot, resolveSeasonHeadCoach } from './helpers';
+import { getSeasonGameContext } from './gameContext';
 import { getTeamGameStats } from './getTeamGameStats';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
@@ -203,6 +204,7 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
   // game is 'conference' only when both teams share a conference.
   const teams = getSnapshot<TeamsSnapshotEntry[]>(resolved, 'teams') ?? [];
   const conferenceByTeamIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
+  const gameContext = getSeasonGameContext(resolved);
 
   return games
     .filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex)
@@ -230,6 +232,13 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
             ? 'conference'
             : 'non-conference';
 
+      // What the opponent WAS around kickoff, so browsing another program's
+      // season shows the matchups as they stood at the time rather than as
+      // today's standings would rewrite them.
+      const ctx = gameContext.get(g.gameId);
+      const oppRank = isHome ? ctx?.awayMediaRank : ctx?.homeMediaRank;
+      const oppRecord = isHome ? ctx?.awayRecord : ctx?.homeRecord;
+
       return {
         gameId: g.gameId,
         week: g.week,
@@ -243,6 +252,8 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         result,
         gameType,
         conferenceName: gameType === 'conference' ? ownConf : null,
+        opponentRank: oppRank ?? null,
+        opponentRecord: oppRecord ?? null,
       };
     });
 }

@@ -88,12 +88,12 @@
    * the border + the retuned ground beneath.
    */
   .dark {
-    --surface-primary: rgba(23, 26, 30, 0.9);
+    --surface-primary: rgba(10, 10, 11, 0.92);
     --surface-primary-border: rgba(255, 255, 255, 0.09);
-    --surface-raised: rgba(28, 31, 36, 0.97);
+    --surface-raised: rgba(15, 15, 17, 0.97);
     --surface-raised-border: rgba(255, 255, 255, 0.12);
-    --surface-interactive-hover: rgba(38, 42, 48, 0.85);
-    --surface-overlay: #15181c;
+    --surface-interactive-hover: rgba(24, 24, 27, 0.9);
+    --surface-overlay: #0d0d0f;
     --surface-overlay-border: rgba(255, 255, 255, 0.12);
     /* Lighten the team color toward white so team-tinted TEXT stays legible on the dark graphite ground. */
     --team-accent-text: color-mix(in srgb, var(--team-primary) 60%, #ffffff);

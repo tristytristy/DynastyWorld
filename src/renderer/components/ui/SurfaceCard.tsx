@@ -1,3 +1,4 @@
+import { GRADIENT_SURFACE } from '../../lib/gradients';
 import type { ReactNode } from 'react';
 
 /**
@@ -35,8 +36,15 @@ export function SurfaceCard({
   surface?: SurfaceLevel;
 }) {
   return (
-    <section className={`corner-cut border p-5 backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${className}`}>
-      {children}
+    <section
+      className={`corner-cut relative border p-5 backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${className}`}
+    >
+      {/* The gradient rides on its own layer rather than replacing the surface
+          colour: SURFACE_CLASSES still defines what this panel IS, and this only
+          adds the fall-off. Layering also means a caller passing their own `bg-`
+          in className keeps winning, which several pages rely on. */}
+      <span aria-hidden className={`pointer-events-none absolute inset-0 ${GRADIENT_SURFACE}`} />
+      <div className="relative">{children}</div>
     </section>
   );
 }

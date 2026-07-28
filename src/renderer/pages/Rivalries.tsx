@@ -166,10 +166,14 @@ export function Rivalries() {
                       return (
                         <tr key={o.opponentTeamIndex ?? o.opponentName} className="border-b border-slate-200/60 dark:border-white/5">
                           <td className="px-3 py-2">
-                            <span className="flex items-center gap-2">
-                              <TeamLogo team={{ assetName: o.opponentName, label: o.opponentName }} size="sm" className="!h-5 !w-5 shrink-0" />
-                              <TeamLink teamIndex={o.opponentTeamIndex ?? undefined} teamName={o.opponentName} nameClassName="truncate" />
-                            </span>
+                            {/* TeamLink draws its own logo, so the standalone one
+                                that used to sit here rendered the same mark twice
+                                at two sizes. */}
+                            <TeamLink
+                              teamIndex={o.opponentTeamIndex ?? undefined}
+                              teamName={o.opponentName}
+                              nameClassName="truncate"
+                            />
                           </td>
                           <td className={`tnum px-3 py-2 text-right font-semibold ${seriesTone(o)}`}>{seriesLine(o)}</td>
                           <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">

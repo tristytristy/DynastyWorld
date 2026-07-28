@@ -25,5 +25,10 @@ Dynasty Save Test/
 .claude/settings.local.json
 
 # Generated user manual (regenerate with `npm run manual` from docs/manual/)
-docs/manual/Dynasty Hub - User Manual.pdf
+# Globbed rather than named: the file is titled after the app, which the
+# DynastyOS rename changed once already.
+docs/manual/*.pdf
 docs/manual/manual.rendered.html
+
+# Throwaway HTML used to eyeball a component in a browser mid-build.
+.*-preview.html

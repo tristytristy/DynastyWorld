@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { BindParams, SqlValue } from 'sql.js';
-import { getDb, persist } from './init';
+import { compactDatabase, getDatabaseFileBytes, getDb, getReusableSpaceBytes, persist } from './init';
 import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { SeasonOverviewCoach } from '../shared/types';
@@ -163,8 +163,87 @@ export function updateDynasty(id: string, patch: UpdateDynastyInput): void {
   ]);
 }
 
+/**
+ * Deletes a dynasty and everything under it, and gives the disk space back.
+ *
+ * The row delete alone already cascades correctly to seasons, snapshots,
+ * players, notes, media rows and the rest (foreign keys are enabled at open —
+ * verified). What it does NOT do is shrink the file: SQLite keeps the emptied
+ * pages for reuse, so before this, deleting a dynasty freed exactly zero bytes
+ * as far as the user could tell. `sweepOrphanedData` is belt-and-braces for
+ * anything a past build (or an out-of-app edit) left stranded, and
+ * `compactDatabase` is what actually returns the space.
+ */
 export function deleteDynasty(id: string): void {
+  // Belt-and-braces: persist() already leaves enforcement on, but a cascade
+  // that silently no-ops is exactly the failure that stranded 137 MB before,
+  // so the one operation that depends on it asserts for itself.
+  getDb().run('PRAGMA foreign_keys = ON;');
   run('DELETE FROM dynasties WHERE id = ?', [id]);
+  sweepOrphanedData();
+  compactDatabase();
+}
+
+/** Rows whose owning dynasty no longer exists. Returns how many were removed. */
+function sweepOrphanedData(): number {
+  const db = getDb();
+  let removed = 0;
+  // Seasons first: their own cascade clears snapshots, games, awards, rankings
+  // and the rest, so the per-dynasty tables below are all that's left.
+  const orphanTables: [string, string][] = [
+    ['seasons', 'dynasty_id'],
+    ['players', 'dynasty_id'],
+    ['coaches', 'dynasty_id'],
+    ['recruits', 'dynasty_id'],
+    ['championships', 'dynasty_id'],
+    ['program_milestones', 'dynasty_id'],
+    ['player_career_stats', 'dynasty_id'],
+    ['player_notes', 'dynasty_id'],
+    ['media_items', 'dynasty_id'],
+    ['team_award_results', 'dynasty_id'],
+    ['team_award_settings', 'dynasty_id'],
+  ];
+  for (const [table, column] of orphanTables) {
+    try {
+      db.run(`DELETE FROM ${table} WHERE ${column} NOT IN (SELECT id FROM dynasties)`);
+      removed += db.getRowsModified();
+    } catch {
+      // A table that doesn't exist in this schema version is not an error here.
+    }
+  }
+  if (removed > 0) persist();
+  return removed;
+}
+
+/**
+ * What "Clear cache" would reclaim: snapshot payloads stranded by dynasties
+ * that no longer exist, plus pages SQLite has already freed but not returned.
+ *
+ * Both terms are measured exactly, and both UNDER-state the real total (they
+ * ignore per-row overhead outside the payload text), so the number shown to the
+ * user is never a promise the cleanup fails to keep.
+ */
+export function getDeletedDynastyCacheBytes(): number {
+  let orphanPayload = 0;
+  try {
+    orphanPayload = Number(
+      get<{ b: number }>(
+        `SELECT COALESCE(SUM(LENGTH(payload)), 0) AS b FROM season_snapshots
+          WHERE season_id IN (SELECT id FROM seasons WHERE dynasty_id NOT IN (SELECT id FROM dynasties))`,
+      )?.b ?? 0,
+    );
+  } catch {
+    orphanPayload = 0;
+  }
+  return orphanPayload + getReusableSpaceBytes();
+}
+
+/** Removes stranded data and compacts the file. Returns bytes actually freed. */
+export function clearDeletedDynastyCache(): number {
+  const before = getDatabaseFileBytes();
+  sweepOrphanedData();
+  compactDatabase();
+  return Math.max(0, before - getDatabaseFileBytes());
 }
 
 // ---- Seasons ------------------------------------------------------------

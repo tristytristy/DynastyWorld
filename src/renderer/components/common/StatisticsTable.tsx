@@ -1,3 +1,4 @@
+import { GRADIENT_TEAM_BLOCK } from '../../lib/gradients';
 import { useMemo, useState } from 'react';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
@@ -101,7 +102,7 @@ export function StatisticsTable<TLine>({
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
       <table className="w-full min-w-[720px] text-sm">
-        <thead className="sticky top-0 z-10 bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
+        <thead className={`sticky top-0 z-10 ${GRADIENT_TEAM_BLOCK} font-display text-[var(--team-on-primary)]`}>
           <tr>
             <th className="whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em]">No.</th>
             <SortHeader label="Player" sortKey="name" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="left" />

@@ -785,6 +785,7 @@ export function NcaaHub() {
                     lastName: hub.coachSpotlight.coachName.split(' ').slice(1).join(' ') || hub.coachSpotlight.coachName,
                     portraitAssetName: hub.coachSpotlight.coachPortraitAssetName,
                   }}
+                  teamAssetName={hub.coachSpotlight.teamName}
                   size="sm"
                 />
                 <div>

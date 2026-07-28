@@ -129,6 +129,7 @@ export function registerDatabaseHandlers(): void {
         coachPosition: userCoach?.position ?? null,
         coachPortraitAssetName: userCoach?.portraitAssetName ?? null,
         savePhaseLabel,
+        savePath: dynasty.savePath,
       };
     });
   });

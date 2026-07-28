@@ -10,6 +10,7 @@ import {
   resolveReferenceWithTable,
   type FranchiseRecord,
 } from '../extractors/lib/franchise';
+import { getAssetsRoot } from './assetRoot';
 import { getDynastyById } from '../database/helpers';
 import { extractAll } from '../extractors/extract-all';
 import { persistExtraction } from '../database/importExtraction';
@@ -497,21 +498,106 @@ export async function saveTeamBudget(
   }
 }
 
+/** Where pre-edit copies of the user's actual game saves are kept. */
+export function saveBackupDir(): string {
+  return path.join(app.getPath('userData'), 'save-backups');
+}
+
+/**
+ * How many copies to keep PER SAVE FILE. This folder previously grew forever —
+ * every backup, every edit session, never pruned — and had reached ~250 MB of
+ * 9 MB saves on a real machine. Pruning per save file (rather than globally)
+ * means a dynasty you rarely touch never has its only backup evicted by a
+ * dynasty you edit constantly.
+ */
+const MAX_SAVE_BACKUPS_PER_FILE = 5;
+
+function pruneSaveBackupsFor(backupDir: string, originalName: string): void {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(backupDir);
+  } catch {
+    return;
+  }
+  const mine = entries.filter((n) => n.startsWith(`${originalName}-`)).sort().reverse();
+  for (const stale of mine.slice(MAX_SAVE_BACKUPS_PER_FILE)) {
+    try {
+      fs.unlinkSync(path.join(backupDir, stale));
+    } catch {
+      // Non-fatal: a leftover old backup costs disk space, nothing more.
+    }
+  }
+}
+
 export function backupSaveFile(dynastyId: string): SaveFileBackupResult {
   const dynasty = getDynastyById(dynastyId);
   if (!dynasty) return { success: false, message: 'Dynasty not found.' };
 
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupDir = path.join(app.getPath('userData'), 'save-backups');
+    const backupDir = saveBackupDir();
     fs.mkdirSync(backupDir, { recursive: true });
     const originalName = path.basename(dynasty.savePath);
     const backupPath = path.join(backupDir, `${originalName}-${timestamp}`);
     fs.copyFileSync(dynasty.savePath, backupPath);
+    pruneSaveBackupsFor(backupDir, originalName);
     return { success: true, message: `Save file backed up to ${backupPath}`, filePath: backupPath };
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : 'Backup failed unexpectedly.' };
   }
+}
+
+/** Folder path + how much it's actually using, for the Preferences storage panel. */
+export function getSaveBackupsFolderInfo(): { path: string; fileCount: number; totalBytes: number } {
+  const dir = saveBackupDir();
+  let fileCount = 0;
+  let totalBytes = 0;
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      try {
+        const s = fs.statSync(path.join(dir, name));
+        if (!s.isFile()) continue;
+        fileCount++;
+        totalBytes += s.size;
+      } catch {
+        // Vanished mid-scan — skip it.
+      }
+    }
+  } catch {
+    // No folder yet: zeroes are the honest answer.
+  }
+  return { path: dir, fileCount, totalBytes };
+}
+
+/** Deletes every save backup except the newest `keep` per save file. Returns how many were removed. */
+export function pruneAllSaveBackups(keep: number = MAX_SAVE_BACKUPS_PER_FILE): number {
+  const dir = saveBackupDir();
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  // Group by the save-file name that precedes the appended `-<timestamp>`.
+  const groups = new Map<string, string[]>();
+  for (const name of entries) {
+    const base = name.replace(/-\d{4}-\d{2}-\d{2}T[\d-]+Z?$/, '');
+    const list = groups.get(base) ?? [];
+    list.push(name);
+    groups.set(base, list);
+  }
+  let removed = 0;
+  for (const list of groups.values()) {
+    for (const stale of list.sort().reverse().slice(keep)) {
+      try {
+        fs.unlinkSync(path.join(dir, stale));
+        removed++;
+      } catch {
+        // Non-fatal.
+      }
+    }
+  }
+  return removed;
 }
 
 const PORTRAIT_DIRS: Record<'player' | 'coach', { dir: string; prefix: string }> = {
@@ -540,11 +626,19 @@ export function searchPortraits(
   page: number,
 ): PortraitSearchResponse {
   const { dir, prefix } = PORTRAIT_DIRS[kind];
-  const assetDir = path.join(__dirname, '../renderer/assets', dir);
+
+  // Must go through getAssetsRoot(), NOT a path relative to __dirname. Portrait
+  // art hasn't lived inside the app since the two-installer split — it's an
+  // external, user-placed image-data folder (see assetRoot.ts). This function
+  // kept reading `dist/renderer/assets`, which still exists in development but
+  // not in a packaged build, so the picker silently returned zero results for
+  // every real user while working perfectly on a dev machine.
+  const root = getAssetsRoot();
+  if (!root) return { results: [], totalCount: 0 };
 
   let files: string[];
   try {
-    files = fs.readdirSync(assetDir);
+    files = fs.readdirSync(path.join(root, dir));
   } catch {
     return { results: [], totalCount: 0 };
   }
@@ -562,7 +656,16 @@ export function searchPortraits(
     if (filters.build !== 'all' && meta.build !== filters.build) continue;
     if (filters.skinTone !== 'all' && meta.skinTone !== filters.skinTone) continue;
 
-    allMatches.push({ assetName, path: `assets/${dir}/${file}`, type: meta.type, build: meta.build, skinTone: meta.skinTone });
+    // A cfbmedia:// URL, the one scheme that resolves against the real asset
+    // folder wherever the user installed it — a plain relative path only ever
+    // worked when the art happened to sit inside the app.
+    allMatches.push({
+      assetName,
+      path: `cfbmedia://media/${dir}/${file}`,
+      type: meta.type,
+      build: meta.build,
+      skinTone: meta.skinTone,
+    });
   }
 
   const start = Math.max(0, page) * PORTRAITS_PER_PAGE;

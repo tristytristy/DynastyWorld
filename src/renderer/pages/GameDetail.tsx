@@ -176,7 +176,9 @@ function hasMeaningfulStats(entry: GameLogEntry): boolean {
  * season Statistics page's category structure (explicit user direction —
  * uniformity across the app), rather than one wide combined Offense table.
  * Columns match the Statistics page's per-category sets except stats that
- * genuinely don't exist on per-game lines (GP, Int, Lng).
+ * genuinely don't exist on per-game lines (GP, Lng). Interceptions DO exist
+ * per game and are now shown — an earlier version of this note listed Int as
+ * unavailable, which was simply wrong.
  */
 const gamePct = (num: number, den: number): number | null => (den > 0 ? (100 * num) / den : null);
 const gamePctFormat = (v: number): string => `${v.toFixed(1)}%`;
@@ -189,6 +191,10 @@ const PASSING_GAME_COLUMNS: ColumnDef<OffensiveGameLine>[] = [
   { key: 'passYards', label: 'Yds', raw: (l) => l.passYards },
   { key: 'passYardsPerAttempt', label: 'Y/A', raw: (l) => (l.passAttempts > 0 ? l.passYards / l.passAttempts : null), format: gameOneDecimal },
   { key: 'passTDs', label: 'TD', raw: (l) => l.passTDs },
+  // Interceptions were captured per game all along (extract-gamelog's passInts)
+  // but never shown — a box score that reports touchdowns and hides picks only
+  // tells half of how the quarterback played.
+  { key: 'passInts', label: 'INT', raw: (l) => l.passInts },
 ];
 
 const RUSHING_GAME_COLUMNS: ColumnDef<OffensiveGameLine>[] = [
@@ -420,6 +426,9 @@ export function GameDetailContent({
     opponentScore: played ? secondary.score : null,
     result,
     opponentCurrentRank: secondary.currentRank,
+    // getGameDetail already resolved this side's rank through the captured
+    // context where one exists, so the value above is historical when it can be.
+    opponentContextCaptured: true,
     teamQuarterScores: primary.quarterScores,
     opponentQuarterScores: secondary.quarterScores,
     teamStats: primary.stats,
@@ -732,6 +741,7 @@ export function GameDetailContent({
                   defaultSortKey="passYards"
                   leaders={PASSING_GAME_LEADERS}
                   emptyStateMessage="No passing stats recorded."
+                  collapsible
                 />
               )}
               {rushingRows.length > 0 && (
@@ -746,6 +756,7 @@ export function GameDetailContent({
                   defaultSortKey="rushYards"
                   leaders={RUSHING_GAME_LEADERS}
                   emptyStateMessage="No rushing stats recorded."
+                  collapsible
                 />
               )}
               {receivingRows.length > 0 && (
@@ -760,6 +771,7 @@ export function GameDetailContent({
                   defaultSortKey="receivingYards"
                   leaders={RECEIVING_GAME_LEADERS}
                   emptyStateMessage="No receiving stats recorded."
+                  collapsible
                 />
               )}
               {defenseRows.length > 0 && (
@@ -774,6 +786,7 @@ export function GameDetailContent({
                   defaultSortKey="tackles"
                   leaders={DEFENSE_GAME_LEADERS}
                   emptyStateMessage="No defensive stats recorded."
+                  collapsible
                 />
               )}
             </>

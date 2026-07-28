@@ -4,6 +4,21 @@ export interface SaveFileInfo {
   path: string;
   name: string;
   modifiedAt: string;
+  bytes: number;
+  /** The dynasty this file belongs to (`DYNASTY-EVANZSYNC-AUTOSAVE` → `EVANZSYNC`), so its variants group under one row. */
+  slug: string;
+  /** `main` is the save itself; `autosave` and `backup` are the game's other copies of the same dynasty. */
+  kind: 'main' | 'autosave' | 'backup';
+}
+
+/** The identity read from inside a save file, so the picker can show a school and coach rather than a filename. */
+export interface SavePeek {
+  teamName: string | null;
+  coachName: string | null;
+  coachPosition: string | null;
+  seasonYear: number;
+  /** "Preseason", "Week 7", "End of Season Recap" — see formatSaveWeek. */
+  weekLabel: string;
 }
 
 export interface DynastySummary {
@@ -21,6 +36,8 @@ export interface DynastySummary {
   coachPortraitAssetName: string | null;
   /** Where in the in-game calendar the last synced save sits — e.g. "Preseason", "Week 7", "End of Season Recap". Null on history-only seasons. */
   savePhaseLabel: string | null;
+  /** The save file this dynasty tracks — lets the Import picker mark saves that are already on the dashboard. */
+  savePath: string;
 }
 
 export interface DynastyTheme {
@@ -750,6 +767,27 @@ export interface DefensiveGameLine {
   passDeflections: number;
 }
 
+/**
+ * What a game's two teams looked like around the time it was played — captured
+ * at sync time, because the save only ever holds current values (see
+ * schema_v11_game_context.sql). Absent for games that were already finished
+ * before this tracking existed.
+ */
+export interface GameContext {
+  homeMediaRank: number | null;
+  homeCfpRank: number | null;
+  homeRecord: { wins: number; losses: number } | null;
+  awayMediaRank: number | null;
+  awayCfpRank: number | null;
+  awayRecord: { wins: number; losses: number } | null;
+  /** SeasonInfo.CurrentWeek at capture — how close to kickoff this actually is. */
+  capturedWeek: number | null;
+  /** True once the game was seen played; the row never changes again. */
+  locked: boolean;
+  /** True when the game was already over when tracking began — "when we started watching", NOT "at kickoff". */
+  approximate: boolean;
+}
+
 /** One league game for the national Scores page — from the leaguewide schedule snapshot; click-through opens the full Game Info modal. */
 export interface LeagueScoreGame {
   gameId: number;
@@ -762,6 +800,23 @@ export interface LeagueScoreGame {
   homeScore: number | null;
   awayScore: number | null;
   bowlName: string | null;
+}
+
+/**
+ * The week whose non-user results this season's snapshot is deliberately
+ * withholding (null = nothing held), recorded at sync time. See
+ * shared/resultsHold.ts — the save pre-simulates the current week's other
+ * games before the game itself reveals them.
+ */
+export interface ResultsHold {
+  week: number | null;
+}
+
+/** The national Scores page payload — every league game, plus which week (if any) is being withheld. */
+export interface LeagueScoresView {
+  games: LeagueScoreGame[];
+  /** Non-user results for this week (and later) are hidden until the user's own game is played. Null when nothing is held. */
+  heldWeek: number | null;
 }
 
 /** One side of a game, in neutral home/away terms — powers the universal Game Info modal for ANY league game. */
@@ -974,6 +1029,13 @@ export interface ScheduleGame {
   result: 'W' | 'L' | 'T' | null;
   /** The opponent's current poll rank, not their rank at the time this game was/will be played — no weekly poll history exists in the save. */
   opponentCurrentRank: number | null;
+  /**
+   * True when the rank/record above were CAPTURED around this game's kickoff
+   * rather than read live. False means no capture exists (the game predates
+   * context tracking), so they're today's values — the UI must not present
+   * those as historical. See schema_v11_game_context.sql.
+   */
+  opponentContextCaptured: boolean;
   teamQuarterScores: number[];
   opponentQuarterScores: number[];
   /** null until played. */
@@ -1273,6 +1335,10 @@ export interface LeagueTeamGame {
   result: 'W' | 'L' | 'T' | null;
   /** Same classification the user's own schedule uses — bowl/playoff, or conference vs non-conference by comparing both teams' conference membership (from the teams snapshot). */
   gameType: 'conference' | 'non-conference' | 'bowl';
+  /** The opponent's poll rank captured around kickoff, not their rank today. Null when this game predates context tracking. See schema_v11_game_context.sql. */
+  opponentRank: number | null;
+  /** The opponent's record as it stood around kickoff. Null when uncaptured. */
+  opponentRecord: { wins: number; losses: number } | null;
   /** The conference name when gameType is 'conference' (for an in-conference badge); null otherwise. */
   conferenceName: string | null;
 }
@@ -1810,11 +1876,196 @@ export interface AssetChooseResult extends AssetStatus {
   invalid?: boolean;
 }
 
+/**
+ * Where the user's OWN uploaded media (Media Hub photos/videos) is stored.
+ * Distinct from AssetStatus, which locates the shipped portrait/logo library:
+ * that's app content, this is the user's irreplaceable screenshots. See
+ * main/mediaRoot.ts.
+ */
+export interface MediaLibraryStatus {
+  /** The folder currently in use — always a real answer, never null. */
+  path: string;
+  /** True when no custom folder is set (i.e. the AppData default). */
+  isDefault: boolean;
+  /** False when a custom folder was set but has since gone missing (unplugged drive, deleted folder). */
+  exists: boolean;
+  /** The built-in default, so the UI can offer "reset" without guessing it. */
+  defaultPath: string;
+}
+
+/** One on-disk folder the app manages, for the Preferences storage panel — so nothing it writes stays invisible to the user. */
+export interface StorageFolderUsage {
+  path: string;
+  fileCount: number;
+  totalBytes: number;
+}
+
+/** Everything the app is using on disk, broken down by what it's for. */
+export interface StorageUsage {
+  /** The dynasty archive itself — every dynasty, season and note. */
+  database: StorageFolderUsage;
+  /** Media Hub photos/videos (wherever the user has pointed them). */
+  media: StorageFolderUsage;
+  /** Trading-card photos. */
+  cardPhotos: StorageFolderUsage;
+  /** Automatic crash-recovery checkpoints of the database. */
+  databaseBackups: StorageFolderUsage;
+  /** Pre-edit copies of the user's actual game saves. */
+  saveBackups: StorageFolderUsage;
+  /**
+   * Space inside the archive still held by dynasties the user deleted — called
+   * "cache" in the UI because that's the word people understand, though it's
+   * really stranded rows plus pages SQLite freed without shrinking the file.
+   */
+  deletedDynastyCacheBytes: number;
+}
+
+/** Which optional parts the user ticked for a dynasty backup. The archive itself is always included — it IS the backup. */
+export interface DynastyBackupContents {
+  media: boolean;
+  cardPhotos: boolean;
+  saveGame: boolean;
+}
+
+/** What each part of a dynasty backup would cost, so the picker can show real sizes as boxes are ticked. */
+export interface DynastyBackupEstimate {
+  dynastyId: string;
+  label: string;
+  teamName: string;
+  seasonCount: number;
+  archiveBytes: number;
+  mediaFiles: number;
+  mediaBytes: number;
+  cardPhotoFiles: number;
+  cardPhotoBytes: number;
+  saveGameBytes: number;
+  saveGameName: string | null;
+  /** False when the save file has moved or been deleted — the option is offered as unavailable rather than silently skipped. */
+  saveGameAvailable: boolean;
+}
+
+/** What a backup file says it contains, read before anything is changed. */
+export interface BackupInspection {
+  valid: boolean;
+  /** Why it can't be used, when `valid` is false. */
+  message: string;
+  dynastyId?: string;
+  teamName?: string;
+  seasonCount?: number;
+  createdAt?: string | null;
+  appVersion?: string | null;
+  mediaFiles?: number;
+  cardPhotoFiles?: number;
+  saveGameName?: string | null;
+  /** True when this dynasty is already here and restoring would replace it. */
+  alreadyPresent?: boolean;
+}
+
+export interface DynastyRestoreResult {
+  success: boolean;
+  message: string;
+  dynastyId?: string;
+  rowsRestored?: number;
+}
+
+export interface DynastyBackupResult {
+  success: boolean;
+  message: string;
+  filePath?: string;
+  bytes?: number;
+}
+
+/** Result of moving the media library. `error` means nothing moved — the old folder is still live and untouched. */
+export interface MediaLibraryMoveResult {
+  status: MediaLibraryStatus;
+  movedFiles: number;
+  error?: string;
+}
+
+/** Current state of everything the Scandals panel can edit. */
+export interface ScandalsData {
+  coachName: string;
+  recruitingHours: number;
+  experiencePoints: number;
+  level: number;
+  coachPoints: number;
+  prestigeScore: number;
+  jobSecurity: number;
+  contractPoints: number;
+  coachXpSpeed: string;
+  talentProgressSpeed: string;
+  /** Per-position progression multiplier; 100 is the game's normal. */
+  positionXp: Record<string, number>;
+  talentNodesTotal: number;
+  talentNodesOwned: number;
+  /** The coach's talent trees, so they can be unlocked one at a time. */
+  talentTrees: ScandalsTree[];
+  /** Real ceilings from each field's bit width — over these, the save wraps silently. */
+  limits: Record<string, number>;
+}
+
+/**
+ * One named coach talent tree. The save stores trees as anonymous numbered
+ * subtree slots with no name field anywhere in the chain, so the slot→name map
+ * is derived rather than read — see TALENT_TREES in scandalsWrite.ts.
+ */
+export interface ScandalsTree {
+  key: string;
+  name: string;
+  total: number;
+  owned: number;
+  /** Coach points the coach has already sunk into this tree. */
+  spent: number;
+  /** False where the slot→name mapping is inferred but not yet proven in-game. */
+  confirmed: boolean;
+  /** Base tier, then the Elite tier gated behind it. */
+  tiers: ScandalsTreeTier[];
+}
+
+/**
+ * One tier of a tree — a subtree slot, drawn as a set of talent blocks plus a
+ * header node that gates the tier. Shapes differ per tree: most are 8 blocks of
+ * 4 levels, but CEO is 9 blocks of 1 and Program Builder is 7 of 3.
+ */
+export interface ScandalsTreeTier {
+  slot: number;
+  /** The tier's in-game name, e.g. "Recruiter" then "Elite Recruiter". */
+  label: string;
+  levelsPerBlock: number;
+  blocks: { name: string; owned: number }[];
+  /** True when the tier's header node is still Locked (the in-game padlock). */
+  locked: boolean;
+}
+
+/** Only the fields actually supplied are written. */
+export interface ScandalsEdit {
+  recruitingHours?: number;
+  experiencePoints?: number;
+  level?: number;
+  coachPoints?: number;
+  prestigeScore?: number;
+  jobSecurity?: number;
+  contractPoints?: number;
+  coachXpSpeed?: string;
+  talentProgressSpeed?: string;
+  positionXp?: Record<string, number>;
+  /**
+   * Talent levels to own, keyed by subtree slot: 8 entries per slot, each 0-4,
+   * meaning "own levels 1..n of this block". Levels above n are left alone
+   * rather than revoked. Absent or empty changes no talents.
+   */
+  talentUnlocks?: Record<string, number[]>;
+}
+
 export interface DynastyApi {
   fs: {
     selectFile: () => Promise<string | null>;
     getDefaultSavesDir: () => Promise<string>;
     scanForSaves: (dirPath: string) => Promise<SaveFileInfo[]>;
+    /** Reads a save's school/coach/year for the Import picker. Null if it isn't a readable dynasty save. */
+    peekSave: (filePath: string) => Promise<SavePeek | null>;
+    /** Folder picker for the saves location, remembered for next time. Null if cancelled. */
+    chooseSavesFolder: () => Promise<string | null>;
   };
   assets: {
     getStatus: () => Promise<AssetStatus>;
@@ -1851,7 +2102,7 @@ export interface DynastyApi {
     getRankings: (dynastyId: string, seasonId?: number) => Promise<RankingsOverview | null>;
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
-    getLeagueScores: (dynastyId: string, seasonId?: number) => Promise<LeagueScoreGame[] | null>;
+    getLeagueScores: (dynastyId: string, seasonId?: number) => Promise<LeagueScoresView | null>;
     getLeagueTeamOverview: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<SeasonOverview | null>;
     getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
     getAllLeaguePlayers: (dynastyId: string, seasonId?: number) => Promise<NationalPlayer[] | null>;
@@ -1907,6 +2158,20 @@ export interface DynastyApi {
   };
   editor: {
     backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;
+    /** Reads the user coach's current Scandals values straight from the save. */
+    getScandals: (dynastyId: string) => Promise<ScandalsData | null>;
+    /** Writes Scandals edits to the save (backs up first). */
+    saveScandals: (dynastyId: string, edit: ScandalsEdit) => Promise<SaveEditResult>;
+    /** Sizes for each part of this dynasty's backup, for the picker's running total. */
+    estimateDynastyBackup: (dynastyId: string) => Promise<DynastyBackupEstimate | null>;
+    /** Opens a save dialog, then writes the backup zip. A cancelled dialog returns success:false with an empty message. */
+    createDynastyBackup: (dynastyId: string, contents: DynastyBackupContents) => Promise<DynastyBackupResult>;
+    /** Opens a file picker and reports what the chosen backup contains, WITHOUT changing anything. Null if cancelled. */
+    chooseBackupToRestore: () => Promise<(BackupInspection & { filePath: string }) | null>;
+    /** Restores a backup, after checkpointing whatever is already here. */
+    restoreDynastyBackup: (filePath: string) => Promise<DynastyRestoreResult>;
+    /** Subscribes to write progress; returns an unsubscribe function. */
+    onBackupProgress: (callback: (progress: { percent: number; step: string }) => void) => () => void;
     getPlayer: (dynastyId: string, playerId: number) => Promise<PlayerEditData | null>;
     savePlayer: (dynastyId: string, playerId: number, fields: PlayerEditFields) => Promise<SaveEditResult>;
     getCoach: (dynastyId: string, teamIndex: number, position: string) => Promise<CoachEditData | null>;
@@ -1954,6 +2219,20 @@ export interface DynastyApi {
     /** Persist a drag-chosen order: `orderedIds` is the season's item ids in display order. */
     reorder: (dynastyId: string, seasonId: number, orderedIds: number[]) => Promise<void>;
     remove: (id: number) => Promise<void>;
+    /** Everything the app is using on disk, so no folder it writes to stays invisible. */
+    getStorageUsage: () => Promise<StorageUsage>;
+    /** Deletes all but the newest few database checkpoints and game-save backups. Returns how many files went. */
+    cleanUpBackups: () => Promise<{ removed: number; freedBytes: number }>;
+    /** Clears space still held by deleted dynasties and compacts the archive. Returns bytes actually freed. */
+    clearDeletedDynastyCache: () => Promise<{ freedBytes: number }>;
+    /** Where uploaded photos/videos are stored — the AppData default unless the user moved it. */
+    getLibraryStatus: () => Promise<MediaLibraryStatus>;
+    /** Folder picker + move. `picked` is false if the dialog was cancelled; `error` means nothing moved and the old folder is still live. */
+    chooseLibraryFolder: () => Promise<MediaLibraryMoveResult & { picked: boolean }>;
+    /** Moves the library back to the built-in AppData folder. */
+    resetLibraryFolder: () => Promise<MediaLibraryMoveResult>;
+    /** Reveals the library in Explorer/Finder. */
+    openLibraryFolder: () => Promise<void>;
   };
   notes: {
     /** All of a player's notes, most-recently-updated first. Scoped to (dynasty, player). */

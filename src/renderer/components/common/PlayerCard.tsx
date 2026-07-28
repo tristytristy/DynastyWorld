@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { PlayerPortrait } from './PlayerPortrait';
 import { TeamLogo } from './TeamLogo';
+import { mediaFileUrl } from './MediaGallery';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { MediaItemResolved, RosterPlayer, TeamTheme } from '../../../shared/types';
 
@@ -223,10 +224,8 @@ interface PhotoTransform {
 }
 const DEFAULT_TRANSFORM: PhotoTransform = { x: 0, y: 0, scale: 1 };
 
-/** A local file path as a renderer-loadable file:// URL (same scheme the media gallery uses). */
-function fileUrl(absolutePath: string): string {
-  return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
-}
+/** A local file path as a renderer-loadable file:// URL — one shared implementation, so UNC paths work here too. */
+const fileUrl = mediaFileUrl;
 
 const BTN =
   'border border-slate-300/80 bg-white/85 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white';

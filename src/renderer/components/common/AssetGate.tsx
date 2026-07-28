@@ -51,7 +51,7 @@ export function AssetGate({ children }: { children: React.ReactNode }) {
         <p className="text-xs font-semibold uppercase tracking-[0.26em] text-amber-400">Setup</p>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-white">Image data not found</h1>
         <p className="mt-4 text-sm leading-relaxed text-slate-300">
-          Dynasty Hub&apos;s player faces, team logos, and trophies live in a separate <strong>image-data folder</strong>{' '}
+          DynastyOS&apos;s player faces, team logos, and trophies live in a separate <strong>image-data folder</strong>{' '}
           that installs once and stays put across app updates. The app couldn&apos;t find it — if you haven&apos;t
           installed it yet, run the <strong>Asset Installer</strong> first. If you already have the folder (for example
           after moving to a new PC), just point the app to it below.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
+import { SELECTION_ACTIVE, SELECTION_BASE, SELECTION_IDLE } from '../../lib/selectionClass';
 import { NavLink, useLocation } from 'react-router-dom';
 import { TeamLogo } from './TeamLogo';
-import { GlobalSearch } from './GlobalSearch';
 import { PreferencesMenu } from './PreferencesMenu';
 import { HelpMenu } from './HelpMenu';
 import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
@@ -18,12 +18,13 @@ const UTILITY_TRIGGER_CLASS =
 
 function navClass(isActive: boolean): string {
   return [
-    'group relative flex items-center justify-between border px-4 py-3 text-sm font-medium transition-all duration-base ease-standard',
+    'group relative flex items-center justify-between px-4 py-3 text-sm font-medium',
+    SELECTION_BASE,
     isActive
-      // Active = the program is "seated": a tactile team-colored edge indicator
-      // + a faint team wash, no blue glow (restraint over glow, per the design).
-      ? 'border-[color:color-mix(in_srgb,var(--team-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--team-primary)_10%,transparent)] text-slate-950 before:absolute before:-left-px before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:bg-[var(--team-primary)] dark:text-white'
-      : 'border-transparent text-slate-700 hover:border-slate-200 hover:bg-black/[0.03] hover:text-slate-950 dark:text-slate-300 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white',
+      // The left edge-rail is a LIGHT-mode device: on dark the gold border
+      // already marks the row, and a second indicator just adds noise.
+      ? `${SELECTION_ACTIVE} before:absolute before:-left-px before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:bg-[var(--team-primary)] dark:before:hidden`
+      : SELECTION_IDLE,
   ].join(' ');
 }
 
@@ -63,7 +64,7 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-[290px] shrink-0 overflow-y-auto lg:block">
-      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-[#0e0f12]">
+      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-black">
         <div className="space-y-1">
           <div className="flex items-center gap-1">
             <NavLink to="/" end className={({ isActive }) => `flex-1 ${navClass(isActive)}`}>
@@ -111,9 +112,11 @@ export function Sidebar() {
         <div className="mt-6 border-t border-slate-200/70 pt-4 dark:border-white/10">
           <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
           <div className="space-y-2">
-            <GlobalSearch triggerClassName={UTILITY_TRIGGER_CLASS} />
             <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
+            {/* Stadium database hidden pending a decision on whether it earns
+                its place in Tools. The component and its data are untouched —
+                restore by putting this line back. */}
+            {false && <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />}
             <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <UserManualMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
             <AboutMenu triggerClassName={UTILITY_TRIGGER_CLASS} />

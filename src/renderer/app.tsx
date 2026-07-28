@@ -57,7 +57,7 @@ export function App() {
               style={ANGLED_PANEL}
               className="relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-black"
             >
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-none" />
               {/* Signature left edge — the selected team's color, a thin accent so the program is present in the chrome (accent only — the ground stays black). */}
               <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[linear-gradient(180deg,transparent,var(--team-primary),transparent)] opacity-90" />
               <div className="relative h-full overflow-y-auto p-5 md:p-8">
@@ -89,10 +89,19 @@ export function App() {
                       <Route path="history" element={<History />} />
                     </Route>
                     {/* NCAA Hub section — the nation. */}
+                    {/* All three render the SAME component with different props,
+                        so React reconciles them as one element and PRESERVES its
+                        state across the tabs — which meant walking from My Board
+                        to National Recruits carried the board filter with it, and
+                        the national page opened showing "0 of 4,100" with My Board
+                        silently ticked. Its filter state is seeded from `boardOnly`
+                        at mount, and without distinct keys that mount never
+                        happens again. The keys force a real remount per tab, so
+                        each page starts with its own filters. */}
                     <Route element={<RecruitHubLayout />}>
-                      <Route path="recruiting" element={<NationalRecruits boardOnly />} />
-                      <Route path="recruits" element={<NationalRecruits />} />
-                      <Route path="watchlist" element={<NationalRecruits watchlistOnly />} />
+                      <Route path="recruiting" element={<NationalRecruits key="my-board" boardOnly />} />
+                      <Route path="recruits" element={<NationalRecruits key="national" />} />
+                      <Route path="watchlist" element={<NationalRecruits key="watchlist" watchlistOnly />} />
                     </Route>
 
                     <Route element={<NcaaHubLayout />}>

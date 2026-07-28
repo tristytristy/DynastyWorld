@@ -5,9 +5,18 @@ import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useGameModal } from '../../data/GameModalProvider';
 
-/** Absolute on-disk path → a URL the (file://-origin) renderer can load. Shared with the Media page. */
+/**
+ * Absolute on-disk path → a URL the (file://-origin) renderer can load. Shared
+ * with the Media page and the player card.
+ *
+ * Handles UNC paths (`\\NAS\share\shot.png` → `file://NAS/share/shot.png`)
+ * separately from local ones: the library folder is user-chosen now, so a
+ * network share is a real possibility, and the plain `file:///` + slash-swap
+ * would turn one into `file://///NAS/...`, which doesn't resolve.
+ */
 export function mediaFileUrl(absolutePath: string): string {
-  return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
+  const slashed = absolutePath.replace(/\\/g, '/');
+  return encodeURI(slashed.startsWith('//') ? `file:${slashed}` : `file:///${slashed}`);
 }
 
 /**

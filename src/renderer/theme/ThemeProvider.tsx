@@ -14,6 +14,7 @@ import {
 export type Appearance = 'light' | 'dark';
 
 /** Preserved from the pre–Phase-B Navbar so an existing dark-mode choice isn't lost. */
+/** Storage key kept on the pre-DynastyOS prefix ON PURPOSE: it is invisible to users, and renaming it would silently discard the setting for everyone who already has one. */
 const APPEARANCE_STORAGE_KEY = 'cfb-dynasty-hub:theme';
 
 function loadInitialAppearance(): Appearance {
@@ -83,6 +84,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => setAppearanceState((prev) => (prev === 'dark' ? 'light' : 'dark')),
     [],
   );
+
+  // Ctrl+Shift+Z flips light/dark from anywhere. Bound here rather than on a
+  // page so it works whatever is on screen, and skipped while a text field has
+  // focus so it can't hijack a real undo/redo in the notes or search boxes.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!event.ctrlKey || !event.shiftKey || event.key.toLowerCase() !== 'z') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || /^(input|textarea|select)$/i.test(target?.tagName ?? '')) return;
+      event.preventDefault();
+      setAppearanceState((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const resolveColorVars = useCallback(
     (team?: ActiveTeamColors | null) => resolveThemeColors(preference, team),

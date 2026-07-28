@@ -1,8 +1,19 @@
-import { app, dialog, ipcMain } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
-import type { MediaItemPatch, MediaItemWithPath } from '../../shared/types';
+import { getMediaLibraryStatus, getMediaRoot, moveMediaLibrary, resetMediaLibrary } from '../mediaRoot';
+import { getBackupsFolderInfo, getDatabaseFileBytes, pruneOldBackups } from '../../database/init';
+import { clearDeletedDynastyCache, getDeletedDynastyCacheBytes } from '../../database/helpers';
+import { getSaveBackupsFolderInfo, pruneAllSaveBackups } from '../editorWrite';
+import type {
+  MediaItemPatch,
+  MediaItemWithPath,
+  MediaLibraryMoveResult,
+  MediaLibraryStatus,
+  StorageFolderUsage,
+  StorageUsage,
+} from '../../shared/types';
 import {
   addMediaItem,
   deleteMediaItem,
@@ -24,9 +35,12 @@ function mediaTypeForFile(filePath: string): 'image' | 'video' | null {
   return null;
 }
 
-/** All of a dynasty's media files live here; the DB stores only file names. */
+/**
+ * All of a dynasty's media files live here; the DB stores only file names, so
+ * the library root can move (see mediaRoot.ts) without rewriting a single row.
+ */
 export function mediaDirFor(dynastyId: string): string {
-  return path.join(app.getPath('userData'), 'media', dynastyId);
+  return path.join(getMediaRoot(), dynastyId);
 }
 
 /**
@@ -40,6 +54,35 @@ function libraryFileName(originalPath: string): string {
     .replace(/[^a-zA-Z0-9._ -]/g, '')
     .slice(-80);
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${base}`;
+}
+
+/** Recursive size of a folder — used only by the storage panel, never per request. */
+async function folderUsage(dir: string): Promise<StorageFolderUsage> {
+  let fileCount = 0;
+  let totalBytes = 0;
+  async function walk(current: string): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      return; // Folder doesn't exist (or an unplugged drive) — report what we have.
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.isFile()) {
+        try {
+          totalBytes += (await fs.stat(full)).size;
+          fileCount++;
+        } catch {
+          // Vanished mid-scan — skip it.
+        }
+      }
+    }
+  }
+  await walk(dir);
+  return { path: dir, fileCount, totalBytes };
 }
 
 function withPath<T extends Omit<MediaItemWithPath, 'absolutePath'>>(
@@ -128,5 +171,63 @@ export function registerMediaHandlers(): void {
     if (removed) {
       await fs.unlink(path.join(mediaDirFor(removed.dynastyId), removed.fileName)).catch(() => {});
     }
+  });
+
+  // ---- Storage transparency -------------------------------------------------
+
+  ipcMain.handle(IPC.media.getStorageUsage, async (): Promise<StorageUsage> => {
+    const dbPath = path.join(app.getPath('userData'), 'dynasty-archive.sqlite');
+    const dbBytes = getDatabaseFileBytes();
+    return {
+      database: { path: dbPath, fileCount: dbBytes ? 1 : 0, totalBytes: dbBytes },
+      media: await folderUsage(getMediaRoot()),
+      cardPhotos: await folderUsage(path.join(app.getPath('userData'), 'card-photos')),
+      databaseBackups: getBackupsFolderInfo(),
+      saveBackups: getSaveBackupsFolderInfo(),
+      deletedDynastyCacheBytes: getDeletedDynastyCacheBytes(),
+    };
+  });
+
+  ipcMain.handle(IPC.media.clearDeletedDynastyCache, async (): Promise<{ freedBytes: number }> => {
+    return { freedBytes: clearDeletedDynastyCache() };
+  });
+
+  ipcMain.handle(IPC.media.cleanUpBackups, async (): Promise<{ removed: number; freedBytes: number }> => {
+    const before = getBackupsFolderInfo().totalBytes + getSaveBackupsFolderInfo().totalBytes;
+    // Keep 1 of each: the user asked to reclaim space, so leave the single most
+    // recent recovery point rather than none at all.
+    const removed = pruneOldBackups(1) + pruneAllSaveBackups(1);
+    const after = getBackupsFolderInfo().totalBytes + getSaveBackupsFolderInfo().totalBytes;
+    return { removed, freedBytes: Math.max(0, before - after) };
+  });
+
+  // ---- Library location -----------------------------------------------------
+
+  ipcMain.handle(IPC.media.getLibraryStatus, async (): Promise<MediaLibraryStatus> => getMediaLibraryStatus());
+
+  ipcMain.handle(
+    IPC.media.chooseLibraryFolder,
+    async (): Promise<MediaLibraryMoveResult & { picked: boolean }> => {
+      const result = await dialog.showOpenDialog({
+        title: 'Choose where your photos and videos are stored',
+        buttonLabel: 'Use this folder',
+        defaultPath: getMediaRoot(),
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { picked: false, status: getMediaLibraryStatus(), movedFiles: 0 };
+      }
+      return { picked: true, ...moveMediaLibrary(result.filePaths[0]) };
+    },
+  );
+
+  ipcMain.handle(IPC.media.resetLibraryFolder, async (): Promise<MediaLibraryMoveResult> => resetMediaLibrary());
+
+  // Opens the library in Explorer/Finder — the whole point of letting people
+  // choose a real folder is being able to get at the files.
+  ipcMain.handle(IPC.media.openLibraryFolder, async (): Promise<void> => {
+    const root = getMediaRoot();
+    await fs.mkdir(root, { recursive: true }).catch(() => {});
+    await shell.openPath(root);
   });
 }

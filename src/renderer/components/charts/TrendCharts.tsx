@@ -28,15 +28,38 @@ export interface ChartSeries {
 
 const VB_W = 720;
 const VB_H = 260;
-const M = { top: 18, right: 96, bottom: 34, left: 44 };
+// The 96px right gutter existed only to park the old "For"/"Against" end-labels
+// outside the plot. Values are centred on their own points now, so that space
+// goes back to the data — just enough margin left for the final point's label
+// and x-tick to sit centred without clipping.
+const M = { top: 18, right: 26, bottom: 34, left: 44 };
 const PLOT_W = VB_W - M.left - M.right;
 const PLOT_H = VB_H - M.top - M.bottom;
 
 /**
+ * How many points a series can have before labelling every one of them turns
+ * into a wall of overlapping numbers. Past this, only the first and last are
+ * labelled — the shape carries the story and the hover gives any exact value.
+ * A dynasty runs long, so this ceiling will be reached eventually.
+ */
+const MAX_LABELLED_POINTS = 10;
+
+/** The points that get a printed value: all of them while sparse, otherwise just the endpoints. */
+function labelledPoints<T extends { x: number; y: number }>(pts: T[]): T[] {
+  if (pts.length <= MAX_LABELLED_POINTS) return pts;
+  return [pts[0], pts[pts.length - 1]];
+}
+
+/**
  * Theme-aware multi-series line chart (SVG). Recessive grid, 2px lines,
- * markers, a legend + direct end-labels for identity (never color-alone), and
- * a crosshair+tooltip hover layer. `yInverted` puts 1 at the top for poll
- * ranks. Callers handle the empty state; this assumes at least one real point.
+ * markers, printed values on the points themselves, and a crosshair+tooltip
+ * hover layer. `yInverted` puts 1 at the top for poll ranks. Callers handle the
+ * empty state; this assumes at least one real point.
+ *
+ * Identity comes from the legend (multi-series) or the card title (single
+ * series) plus the coloured marker — NOT from a name printed on the plot. The
+ * one on-plot label slot goes to the value, which is what the reader actually
+ * came for.
  */
 export function TrendLineChart({
   series,
@@ -159,7 +182,6 @@ export function TrendLineChart({
           const pts = s.points.filter((p) => p.y !== null) as { x: number; y: number }[];
           if (pts.length === 0) return null;
           const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(' ');
-          const last = pts[pts.length - 1];
           return (
             <g key={s.key}>
               {pts.length > 1 && (
@@ -176,10 +198,34 @@ export function TrendLineChart({
                   strokeWidth={1.5}
                 />
               ))}
-              {/* Direct end-label so identity never relies on color alone. */}
-              <text x={sx(last.x) + 7} y={sy(last.y) + 3.5} fontSize={10} fontWeight={600} fill={colorOf(s.color)}>
-                {s.label}
-              </text>
+              {/* Value labels, not series names. The legend (or the card title,
+                  for a single series) already carries identity, so repeating
+                  "For"/"Against" on the plot spent the one label slot on
+                  something the reader already knew — while the actual numbers,
+                  the thing the chart exists to show, were only reachable by
+                  hovering.
+
+                  Drawn in text ink rather than the series colour: the mark
+                  beside the number carries identity, text stays text. The
+                  surface-coloured stroke under each label (paint-order) knocks
+                  out the gridline behind it so small numbers stay legible. */}
+              {labelledPoints(pts).map((p) => (
+                <text
+                  key={`v-${p.x}`}
+                  x={sx(p.x)}
+                  y={sy(p.y) - 9}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontWeight={600}
+                  fill={ink}
+                  stroke={surface}
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  className="tnum"
+                >
+                  {fmtY(p.y)}
+                </text>
+              ))}
             </g>
           );
         })}

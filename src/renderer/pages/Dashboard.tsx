@@ -9,11 +9,18 @@ import { angledClip } from '../components/ui/angledClip';
 import { EXTRACTION_STEPS } from '../../shared/types';
 import type { DynastySummary, ExtractionStep, ExtractionStepStatus } from '../../shared/types';
 import { useConfirm } from '../data/ConfirmDialogProvider';
+import { DynastyBackupModal } from '../components/common/DynastyBackupModal';
+import { ImportDynastyModal } from '../components/common/ImportDynastyModal';
 
 const ANGLED_PANEL = angledClip('1.1rem');
 
+// The one primary action on the dashboard, so it carries the brand gold rather
+// than the team colour: it belongs to the APP, not to whichever program you
+// happen to be looking at. The gradient darkens downward so the fill has weight
+// instead of reading as a flat swatch, and the label is near-black because gold
+// can't carry white legibly.
 const IMPORT_BUTTON_CLASS =
-  'inline-flex items-center justify-center bg-[var(--team-primary)] px-5 py-3 text-sm font-medium text-[var(--team-on-primary)] shadow-[0_20px_45px_-24px_rgba(37,99,235,0.9)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex items-center justify-center bg-gradient-to-b from-gold-100 via-gold-300 to-gold-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-[0_20px_45px_-24px_rgba(0,0,0,0.95)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60';
 
 const STEP_LABELS: Record<ExtractionStep, string> = {
   league: 'League',
@@ -104,9 +111,11 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const [backingUpId, setBackingUpId] = useState<string | null>(null);
+  const [backupTarget, setBackupTarget] = useState<{ id: string; teamName: string } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [progress, setProgress] = useState<Record<ExtractionStep, StepState>>(initialProgress);
   const [statusMessage, setStatusMessage] = useState<{ text: string; success: boolean } | null>(null);
 
@@ -184,32 +193,83 @@ export function Dashboard() {
     setExportingId(null);
   }
 
-  async function handleBackup(event: MouseEvent, dynastyId: string) {
+  /**
+   * Opens the backup picker for one dynasty. This replaced a one-click "copy
+   * the game save" action: a button labelled "Backup" that backed up the EA
+   * save but NOT the dynasty archive was genuinely misleading, so the save file
+   * is now one checkbox inside a modal that backs up the whole thing.
+   */
+  function handleBackup(event: MouseEvent, dynastyId: string, teamName: string) {
     event.preventDefault();
     event.stopPropagation();
-    setBackingUpId(dynastyId);
+    setBackupTarget({ id: dynastyId, teamName });
+  }
+
+  /**
+   * Restore: inspect the chosen file first and tell the user exactly what's in
+   * it — and, crucially, whether it would replace a dynasty already here —
+   * before anything is written. Replacing is the one action on this page that
+   * can lose real work in a single click.
+   */
+  async function handleRestoreClick() {
+    if (restoring) return;
     setStatusMessage(null);
-    const result = await window.api.editor.backupSaveFile(dynastyId);
-    setStatusMessage({ text: result.message, success: result.success });
-    setBackingUpId(null);
+
+    const chosen = await window.api.editor.chooseBackupToRestore();
+    if (!chosen) return; // cancelled
+
+    if (!chosen.valid) {
+      setStatusMessage({ text: chosen.message, success: false });
+      return;
+    }
+
+    const summary = [
+      `${chosen.teamName} — ${chosen.seasonCount} season${chosen.seasonCount === 1 ? '' : 's'}`,
+      chosen.mediaFiles ? `${chosen.mediaFiles} photo${chosen.mediaFiles === 1 ? '' : 's'}` : null,
+      chosen.saveGameName ? 'game save included' : null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const confirmed = await confirm({
+      title: chosen.alreadyPresent ? 'Replace this dynasty?' : 'Restore this dynasty?',
+      message: chosen.alreadyPresent
+        ? `${summary}.\n\nYou already have this dynasty. Restoring replaces your current copy with the backed-up one. A safety copy of everything you have now is taken first.`
+        : `${summary}.\n\nThis adds the dynasty to your dashboard. Nothing you already have is changed.`,
+      eyebrow: 'Restore backup',
+      confirmLabel: chosen.alreadyPresent ? 'Replace it' : 'Restore',
+      ...(chosen.alreadyPresent ? { tone: 'danger' as const } : {}),
+    });
+    if (!confirmed) return;
+
+    setRestoring(true);
+    try {
+      const result = await window.api.editor.restoreDynastyBackup(chosen.filePath);
+      setStatusMessage({ text: result.message, success: result.success });
+      // A restore can add OR replace a dynasty, so re-fetch rather than patching
+      // local state the way delete does.
+      if (result.success) setDynasties(await window.api.db.getDynasties());
+    } finally {
+      setRestoring(false);
+    }
   }
 
   /**
    * Import now happens entirely on this page — no separate "setup" page to
-   * navigate to first. Opens the native file picker directly; a canceled
-   * pick (`filePath === null`) is a silent no-op, not an error.
+   * navigate to first. Opens the dynasty picker, which lists the saves it finds
+   * by school and coach rather than dropping the user into a folder of
+   * indistinguishable filenames; the picker still offers a raw file browser for
+   * saves kept somewhere unusual.
    */
-  async function handleImportClick() {
+  function handleImportClick() {
     if (importing) return;
+    setStatusMessage(null);
+    setPickerOpen(true);
+  }
 
-    let filePath: string | null;
-    try {
-      filePath = await window.api.fs.selectFile();
-    } catch {
-      setStatusMessage({ text: 'Could not open the file browser. Please try again.', success: false });
-      return;
-    }
-    if (!filePath) return;
+  async function handleImportPath(filePath: string) {
+    setPickerOpen(false);
+    if (importing) return;
 
     setImporting(true);
     setProgress(initialProgress());
@@ -285,11 +345,11 @@ export function Dashboard() {
             <button
               type="button"
               onClick={handleImportClick}
-              disabled={importing}
+              disabled={importing || restoring}
               style={ANGLED_PANEL}
               className={IMPORT_BUTTON_CLASS}
             >
-              {importing ? 'Importing...' : 'Import Dynasty'}
+              {importing ? 'Importing...' : restoring ? 'Restoring…' : 'Import'}
             </button>
           )}
         </div>
@@ -364,8 +424,16 @@ export function Dashboard() {
               Choose a save file to create the first workspace entry.
             </p>
           </div>
-          <button type="button" onClick={handleImportClick} disabled={importing} style={ANGLED_PANEL} className={IMPORT_BUTTON_CLASS}>
-            {importing ? 'Importing...' : 'Import Dynasty'}
+          {/* Restoring a backup lives inside this modal too, so someone setting
+              up a new machine still reaches it from here. */}
+          <button
+            type="button"
+            onClick={handleImportClick}
+            disabled={importing || restoring}
+            style={ANGLED_PANEL}
+            className={IMPORT_BUTTON_CLASS}
+          >
+            {importing ? 'Importing...' : restoring ? 'Restoring…' : 'Import'}
           </button>
         </section>
       ) : (
@@ -446,10 +514,9 @@ export function Dashboard() {
                         </button>
                         <button
                           type="button"
-                          onClick={(event) => handleBackup(event, dynasty.id)}
-                          disabled={backingUpId === dynasty.id}
-                          aria-label={`Backup ${dynasty.teamName} save file`}
-                          title="Backup"
+                          onClick={(event) => handleBackup(event, dynasty.id, dynasty.teamName)}
+                          aria-label={`Back up the ${dynasty.teamName} dynasty`}
+                          title="Back up this dynasty"
                           className={CARD_ICON_BUTTON_CLASS}
                         >
                           <BackupIcon />
@@ -481,6 +548,7 @@ export function Dashboard() {
                         />
                         <CoachPortrait
                           coach={coachPortraitIdentity(dynasty.coachName, dynasty.coachPortraitAssetName)}
+                          teamAssetName={dynasty.teamName}
                           size="lg"
                           className="relative z-[1] h-[13.5rem] w-[10.5rem] drop-shadow-[0_20px_44px_rgba(15,23,42,0.3)] transition duration-300 group-hover:scale-[1.03]"
                         />
@@ -498,6 +566,28 @@ export function Dashboard() {
             );
           })}
         </section>
+      )}
+
+      <ImportDynastyModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={handleImportPath}
+        onRestore={() => {
+          // Close first: restore opens its own native file dialog and a
+          // confirmation, and stacking those over the picker reads as clutter.
+          setPickerOpen(false);
+          void handleRestoreClick();
+        }}
+        importedPaths={dynasties.map((d) => d.savePath)}
+      />
+
+      {backupTarget && (
+        <DynastyBackupModal
+          open
+          onClose={() => setBackupTarget(null)}
+          dynastyId={backupTarget.id}
+          teamName={backupTarget.teamName}
+        />
       )}
     </div>
   );

@@ -1,8 +1,9 @@
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
+import { getSeasonGameContext } from './gameContext';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { RivalryData } from '../extractors/extract-rivalries';
-import type { ScheduleGame, ScheduleOverview } from '../shared/types';
+import type { GameContext, ScheduleGame, ScheduleOverview } from '../shared/types';
 
 export function formatKickoff(minutes: number): string {
   if (minutes <= 0) return 'TBD';
@@ -49,6 +50,7 @@ function toScheduleGame(
   conferenceByTeamIndex: Map<number, string | null>,
   rivalryByOpponent: Map<number, string | null>,
   recordByTeam: Map<number, { wins: number; losses: number }>,
+  context: GameContext | undefined,
 ): ScheduleGame {
   const isHome = game.homeTeamIndex === userTeamIndex;
   const opponentIndex = isHome ? game.awayTeamIndex : game.homeTeamIndex;
@@ -64,7 +66,12 @@ function toScheduleGame(
     else result = 'T';
   }
 
-  const opponentRank = opponentIndex !== null ? rankByTeam.get(opponentIndex) : undefined;
+  // Prefer the rank CAPTURED around kickoff over the opponent's rank today —
+  // otherwise beating a #7 in September reads as beating a #40 by December.
+  // Falls back to live when this game predates context tracking.
+  const capturedRank = isHome ? context?.awayMediaRank : context?.homeMediaRank;
+  const opponentRank = capturedRank ?? (opponentIndex !== null ? rankByTeam.get(opponentIndex) : undefined);
+  const capturedRecord = isHome ? context?.awayRecord : context?.homeRecord;
   const teamQuarterScores = isHome ? game.homeQuarterScores : game.awayQuarterScores;
   const opponentQuarterScores = isHome ? game.awayQuarterScores : game.homeQuarterScores;
   const teamStats = isHome ? game.homeTeamStats : game.awayTeamStats;
@@ -73,7 +80,7 @@ function toScheduleGame(
   const conferenceName = gameType === 'conference' ? conferenceByTeamIndex.get(userTeamIndex) ?? null : null;
   const isRivalryGame = opponentIndex !== null && rivalryByOpponent.has(opponentIndex);
   const rivalryName = opponentIndex !== null ? rivalryByOpponent.get(opponentIndex) ?? null : null;
-  const opponentRecord = opponentIndex !== null ? recordByTeam.get(opponentIndex) ?? null : null;
+  const opponentRecord = capturedRecord ?? (opponentIndex !== null ? recordByTeam.get(opponentIndex) ?? null : null);
 
   return {
     gameId: game.gameId,
@@ -91,6 +98,9 @@ function toScheduleGame(
     opponentScore: played ? opponentScore : null,
     result,
     opponentCurrentRank: opponentRank && opponentRank > 0 ? opponentRank : null,
+    // true  = captured around kickoff (historical)
+    // false = no capture for this game, so these are today's values
+    opponentContextCaptured: !!context && !context.approximate && (capturedRank !== undefined || !!capturedRecord),
     teamQuarterScores,
     opponentQuarterScores,
     teamStats,
@@ -168,13 +178,14 @@ export function getSchedule(dynastyId: string, seasonId?: number): ScheduleOverv
     teams.map((t) => [t.teamIndex, { wins: t.confWins + t.nonConfWins, losses: t.confLosses + t.nonConfLosses }]),
   );
 
+  const gameContext = getSeasonGameContext(season.id);
   const allGames = getSnapshot<GameData[]>(season.id, 'schedule') ?? [];
   const teamGames = allGames
     .filter((g) => g.homeTeamIndex === userTeamIndex || g.awayTeamIndex === userTeamIndex)
     .sort((a, b) => a.week - b.week);
 
   const games = teamGames.map((g) =>
-    toScheduleGame(g, userTeamIndex, userTeam.displayName, rankByTeam, conferenceByTeamIndex, rivalryByOpponent, recordByTeam),
+    toScheduleGame(g, userTeamIndex, userTeam.displayName, rankByTeam, conferenceByTeamIndex, rivalryByOpponent, recordByTeam, gameContext.get(g.gameId)),
   );
   applyRunningRecords(games);
   const playedNewestFirst = [...games].filter((g) => g.result !== null).reverse();

@@ -7,6 +7,8 @@ const api: DynastyApi = {
     selectFile: () => ipcRenderer.invoke(IPC.fs.selectFile),
     getDefaultSavesDir: () => ipcRenderer.invoke(IPC.fs.getDefaultSavesDir),
     scanForSaves: (dirPath) => ipcRenderer.invoke(IPC.fs.scanForSaves, dirPath),
+    peekSave: (filePath) => ipcRenderer.invoke(IPC.fs.peekSave, filePath),
+    chooseSavesFolder: () => ipcRenderer.invoke(IPC.fs.chooseSavesFolder),
   },
   assets: {
     getStatus: () => ipcRenderer.invoke(IPC.assets.getStatus),
@@ -102,6 +104,18 @@ const api: DynastyApi = {
   },
   editor: {
     backupSaveFile: (dynastyId) => ipcRenderer.invoke(IPC.editor.backupSaveFile, dynastyId),
+    getScandals: (dynastyId) => ipcRenderer.invoke(IPC.editor.getScandals, dynastyId),
+    saveScandals: (dynastyId, edit) => ipcRenderer.invoke(IPC.editor.saveScandals, dynastyId, edit),
+    estimateDynastyBackup: (dynastyId) => ipcRenderer.invoke(IPC.editor.estimateDynastyBackup, dynastyId),
+    createDynastyBackup: (dynastyId, contents) =>
+      ipcRenderer.invoke(IPC.editor.createDynastyBackup, dynastyId, contents),
+    chooseBackupToRestore: () => ipcRenderer.invoke(IPC.editor.chooseBackupToRestore),
+    restoreDynastyBackup: (filePath) => ipcRenderer.invoke(IPC.editor.restoreDynastyBackup, filePath),
+    onBackupProgress: (callback) => {
+      const listener = (_event: unknown, progress: { percent: number; step: string }) => callback(progress);
+      ipcRenderer.on(IPC.editor.backupProgress, listener);
+      return () => ipcRenderer.removeListener(IPC.editor.backupProgress, listener);
+    },
     getPlayer: (dynastyId, playerId) => ipcRenderer.invoke(IPC.editor.getPlayer, dynastyId, playerId),
     savePlayer: (dynastyId, playerId, fields) =>
       ipcRenderer.invoke(IPC.editor.savePlayer, dynastyId, playerId, fields),
@@ -138,6 +152,13 @@ const api: DynastyApi = {
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
     reorder: (dynastyId, seasonId, orderedIds) => ipcRenderer.invoke(IPC.media.reorder, dynastyId, seasonId, orderedIds),
     remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
+    getStorageUsage: () => ipcRenderer.invoke(IPC.media.getStorageUsage),
+    cleanUpBackups: () => ipcRenderer.invoke(IPC.media.cleanUpBackups),
+    clearDeletedDynastyCache: () => ipcRenderer.invoke(IPC.media.clearDeletedDynastyCache),
+    getLibraryStatus: () => ipcRenderer.invoke(IPC.media.getLibraryStatus),
+    chooseLibraryFolder: () => ipcRenderer.invoke(IPC.media.chooseLibraryFolder),
+    resetLibraryFolder: () => ipcRenderer.invoke(IPC.media.resetLibraryFolder),
+    openLibraryFolder: () => ipcRenderer.invoke(IPC.media.openLibraryFolder),
   },
   notes: {
     list: (dynastyId, playerId) => ipcRenderer.invoke(IPC.notes.list, dynastyId, playerId),

@@ -1,3 +1,4 @@
+import { getSeasonGameContext } from './gameContext';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { formatGameDate, formatKickoff } from './getSchedule';
 import type { GameData } from '../extractors/extract-schedule';
@@ -29,7 +30,14 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
   const userTeamIndex = season.userTeamId;
 
   const confOf = (idx: number | null): string | null => (idx !== null ? teamByIndex.get(idx)?.conferenceName ?? null : null);
-  const rankOf = (idx: number | null): number | null => {
+  // The rank captured around THIS game's kickoff, falling back to the team's
+  // rank today when the game predates context tracking. A box score billing a
+  // matchup should mean they held those ranks that day, not that they hold them
+  // now — see schema_v11_game_context.sql.
+  const context = getSeasonGameContext(season.id).get(gameId);
+  const rankOf = (idx: number | null, side: 'home' | 'away'): number | null => {
+    const captured = side === 'home' ? context?.homeMediaRank : context?.awayMediaRank;
+    if (captured != null) return captured;
     const r = idx !== null ? teamByIndex.get(idx)?.mediaPollRank ?? 0 : 0;
     return r > 0 ? r : null;
   };
@@ -56,6 +64,7 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     score: number,
     quarterScores: number[],
     stats: GameDetailTeamSide['stats'],
+    which: 'home' | 'away',
   ): GameDetailTeamSide => {
     const colors = colorOf(teamIndex);
     return {
@@ -64,7 +73,7 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
       score,
       quarterScores,
       stats,
-      currentRank: rankOf(teamIndex),
+      currentRank: rankOf(teamIndex, which),
       primaryColor: colors.primary,
       secondaryColor: colors.secondary,
       isUser: teamIndex !== null && teamIndex === userTeamIndex,
@@ -86,8 +95,8 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     isNeutralSite: game.isNeutralSite,
     gameType,
     conferenceName,
-    home: side(game.homeTeamIndex, game.homeTeamName, game.homeScore, game.homeQuarterScores, game.homeTeamStats),
-    away: side(game.awayTeamIndex, game.awayTeamName, game.awayScore, game.awayQuarterScores, game.awayTeamStats),
+    home: side(game.homeTeamIndex, game.homeTeamName, game.homeScore, game.homeQuarterScores, game.homeTeamStats, 'home'),
+    away: side(game.awayTeamIndex, game.awayTeamName, game.awayScore, game.awayQuarterScores, game.awayTeamStats, 'away'),
     hasUser:
       userTeamIndex !== null &&
       (game.homeTeamIndex === userTeamIndex || game.awayTeamIndex === userTeamIndex),

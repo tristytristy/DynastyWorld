@@ -546,9 +546,7 @@ function TeamAwardsSettingsPanel({
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">
             Team Awards Settings
           </p>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Coaching-philosophy preferences — carry across every season of this dynasty, not just this one.
-          </p>
+          
         </div>
         {saving && <span className="text-xs text-slate-400 dark:text-slate-500">Saving...</span>}
       </div>

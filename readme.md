@@ -1,4 +1,4 @@
-# College Football 27 Dynasty Hub
+# DynastyOS
 
 A desktop app for tracking an EA Sports College Football 27 dynasty save across seasons — rosters, schedules, statistics, awards, recruiting, coach careers, and program history, all read directly from your `.DYNASTY` save file and archived locally so your dynasty's story survives roster turnover, coaching changes, and re-syncs.
 
@@ -9,7 +9,7 @@ A desktop app for tracking an EA Sports College Football 27 dynasty save across 
 ```
 npm install
 npm run build     # webpack (main + preload + renderer), cached after first run
-npx electron .    # or double-click "Launch CFB Dynasty Hub.bat"
+npx electron .    # or double-click "Launch DynastyOS.bat"
 ```
 
 Common scripts: `typecheck` · `lint` · `format` · `clean` / `build:clean` (purges `dist/`) · `build:prod` + `package` (electron-builder installer into `release/`).

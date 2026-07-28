@@ -3,9 +3,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import type { ColorMode } from '../../theme/themePreference';
-import type { AssetStatus } from '../../../shared/types';
+import type {
+  AssetStatus,
+  MediaLibraryMoveResult,
+  MediaLibraryStatus,
+  StorageFolderUsage,
+  StorageUsage,
+} from '../../../shared/types';
 import { CenteredModalPanel } from './CenteredModalPanel';
 import { getCheckUpdatesOnStartup, setCheckUpdatesOnStartup } from '../../lib/updatePrefs';
+import { formatBytes } from '../../lib/formatBytes';
 import {
   HOVER_DELAY_MAX,
   HOVER_DELAY_MIN,
@@ -32,7 +39,7 @@ function SegmentButton({
       onClick={onClick}
       className={`px-3 py-2 text-sm font-medium transition ${
         active
-          ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)] shadow-[0_16px_32px_-24px_rgba(37,99,235,0.9)]'
+          ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)] shadow-[0_16px_32px_-24px_rgba(0,0,0,0.95)]'
           : isDark
             ? 'text-slate-300 hover:bg-white/5 hover:text-white'
             : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
@@ -65,8 +72,8 @@ function ThemeModeButton({
       className={`w-full rounded-xl border p-4 text-left transition-all ${
         active
           ? isDark
-            ? 'border-[var(--team-primary)] bg-slate-950/96 shadow-[0_22px_50px_-36px_rgba(37,99,235,0.45)]'
-            : 'border-[var(--team-primary)] bg-white/88 shadow-[0_22px_50px_-36px_rgba(37,99,235,0.7)]'
+            ? 'border-[var(--team-primary)] bg-slate-950/96 shadow-[0_22px_50px_-36px_rgba(0,0,0,0.50)]'
+            : 'border-[var(--team-primary)] bg-white/88 shadow-[0_22px_50px_-36px_rgba(0,0,0,0.75)]'
           : isDark
             ? 'border-slate-800/85 bg-slate-950/82 hover:bg-slate-900/92'
             : 'border-slate-200/90 bg-white/72 hover:bg-white/88'
@@ -175,6 +182,82 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
       window.location.reload();
     } else {
       setAssetStatus(res);
+    }
+  };
+
+  const [storage, setStorage] = useState<StorageUsage | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
+  const refreshStorage = () => {
+    window.api.media
+      .getStorageUsage()
+      .then(setStorage)
+      .catch(() => setStorage(null));
+  };
+  useEffect(refreshStorage, []);
+  const cleanUpBackups = async () => {
+    setCleaning(true);
+    setCleanupMessage(null);
+    try {
+      const res = await window.api.media.cleanUpBackups();
+      setCleanupMessage(
+        res.removed === 0
+          ? 'Nothing to clean up — no spare copies were sitting around.'
+          : `Deleted ${res.removed} old ${res.removed === 1 ? 'copy' : 'copies'}, freeing ${formatBytes(res.freedBytes)}.`,
+      );
+      refreshStorage();
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const clearCache = async () => {
+    setCleaning(true);
+    setCleanupMessage(null);
+    try {
+      const res = await window.api.media.clearDeletedDynastyCache();
+      setCleanupMessage(
+        res.freedBytes > 0
+          ? `Cleared ${formatBytes(res.freedBytes)} left behind by deleted dynasties.`
+          : 'Nothing left to clear.',
+      );
+      refreshStorage();
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(null);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaMessage, setMediaMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  useEffect(() => {
+    window.api.media
+      .getLibraryStatus()
+      .then(setMediaStatus)
+      .catch(() => setMediaStatus(null));
+  }, []);
+  // Moving copies every file before committing, so it can take a moment on a
+  // big library — hence the busy state rather than an optimistic swap.
+  const applyMediaMove = async (run: () => Promise<MediaLibraryMoveResult & { picked?: boolean }>) => {
+    setMediaBusy(true);
+    setMediaMessage(null);
+    try {
+      const res = await run();
+      if (res.picked === false) return; // cancelled — say nothing
+      setMediaStatus(res.status);
+      setMediaMessage(
+        res.error
+          ? { text: res.error, isError: true }
+          : {
+              text:
+                res.movedFiles > 0
+                  ? `Moved ${res.movedFiles} file${res.movedFiles === 1 ? '' : 's'} to the new folder.`
+                  : 'Folder updated.',
+              isError: false,
+            },
+      );
+    } finally {
+      setMediaBusy(false);
     }
   };
 
@@ -365,6 +448,102 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
 
           <div className="space-y-4">
             <p className={`type-eyebrow ${subtleTextClass}`}>Storage</p>
+
+            <CollapsibleSection title="What the app is using on your disk" isDark={isDark} outerClass={sectionClass}>
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                Everything the app writes, and where. Nothing here is hidden from you.
+              </p>
+              {storage ? (
+                <>
+                  <div className="mt-3 space-y-1.5">
+                    {(
+                      [
+                        ['Your dynasty archive', storage.database, 'Every dynasty, season, note and tag.'],
+                        ['Media photos & videos', storage.media, 'What you add in the Media Hub.'],
+                        ['Trading-card photos', storage.cardPhotos, 'Photos you dropped onto player cards.'],
+                        [
+                          'Automatic recovery copies',
+                          storage.databaseBackups,
+                          'Safety copies of the archive, in case it ever gets damaged.',
+                        ],
+                        [
+                          'Game-save copies',
+                          storage.saveBackups,
+                          'Copies of your EA save taken before edits, and by the Backup button.',
+                        ],
+                        [
+                          'Cache from deleted dynasties',
+                          { path: '', fileCount: 0, totalBytes: storage.deletedDynastyCacheBytes },
+                          'Space still held inside the archive by dynasties you removed.',
+                        ],
+                      ] as [string, StorageFolderUsage, string][]
+                    ).map(([label, usage, blurb]) => (
+                      <div
+                        key={label}
+                        className={`flex items-baseline justify-between gap-4 border-b py-1.5 ${
+                          isDark ? 'border-slate-800/70' : 'border-slate-200/70'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{label}</p>
+                          <p className={`text-[11px] leading-4 ${subtleTextClass}`}>{blurb}</p>
+                        </div>
+                        <span className={`tnum shrink-0 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                          {formatBytes(usage.totalBytes)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className={`mt-2 flex items-baseline justify-between gap-4 text-xs font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                    <span>Total</span>
+                    <span className="tnum">
+                      {formatBytes(
+                        storage.database.totalBytes +
+                          storage.media.totalBytes +
+                          storage.cardPhotos.totalBytes +
+                          storage.databaseBackups.totalBytes +
+                          storage.saveBackups.totalBytes,
+                      )}
+                    </span>
+                  </p>
+                  {cleanupMessage && <p className={`mt-2 text-xs ${subtleTextClass}`}>{cleanupMessage}</p>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={cleaning}
+                      onClick={cleanUpBackups}
+                      className={`border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                        isDark
+                          ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                          : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {cleaning ? 'Cleaning up…' : 'Delete old copies'}
+                    </button>
+                    {storage.deletedDynastyCacheBytes > 0 && (
+                      <button
+                        type="button"
+                        disabled={cleaning}
+                        onClick={clearCache}
+                        className={`border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                          isDark
+                            ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                            : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {cleaning ? 'Clearing…' : 'Clear cache'}
+                      </button>
+                    )}
+                  </div>
+                  <p className={`mt-2 text-xs leading-5 ${subtleTextClass}`}>
+                    Keeps the most recent recovery copy of your archive and of each game save, and deletes the older
+                    spares. Your dynasties, photos and cards are never touched.
+                  </p>
+                </>
+              ) : (
+                <p className={`mt-3 text-xs ${subtleTextClass}`}>Measuring…</p>
+              )}
+            </CollapsibleSection>
             <CollapsibleSection title="Image data folder" isDark={isDark} outerClass={sectionClass}>
               <p className={`text-xs leading-5 ${subtleTextClass}`}>
                 Player faces, team logos, and trophies load from a separate image-data folder installed once by the
@@ -390,6 +569,72 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
               >
                 Change folder…
               </button>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Media library folder" isDark={isDark} outerClass={sectionClass}>
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                Photos and videos you add in the Media Hub are <strong>copied</strong> into this folder — deleting the
+                original afterwards is safe. Put it somewhere you can actually reach (Pictures, a synced Dropbox or
+                OneDrive folder, an external drive) instead of the default buried in AppData.
+              </p>
+              <p className={`mt-2 break-all text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                Current: <span className="font-mono">{mediaStatus?.path ?? '…'}</span>
+                {mediaStatus?.isDefault && <span className={subtleTextClass}> (default)</span>}
+              </p>
+              {mediaStatus && !mediaStatus.exists && (
+                <p className="mt-2 text-xs text-amber-500">
+                  This folder isn&apos;t there right now — if it&apos;s on a drive that isn&apos;t plugged in, your
+                  photos will look missing until it&apos;s back.
+                </p>
+              )}
+              {mediaMessage && (
+                <p className={`mt-2 text-xs ${mediaMessage.isError ? 'text-amber-500' : subtleTextClass}`}>
+                  {mediaMessage.text}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={mediaBusy}
+                  onClick={() => applyMediaMove(() => window.api.media.chooseLibraryFolder())}
+                  className={`border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                      : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {mediaBusy ? 'Moving…' : 'Change folder…'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.api.media.openLibraryFolder()}
+                  className={`border px-4 py-2 text-xs font-semibold transition ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                      : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Open folder
+                </button>
+                {mediaStatus && !mediaStatus.isDefault && (
+                  <button
+                    type="button"
+                    disabled={mediaBusy}
+                    onClick={() => applyMediaMove(() => window.api.media.resetLibraryFolder())}
+                    className={`border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+                      isDark
+                        ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800'
+                        : 'border-slate-300/80 bg-white/85 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
+              <p className={`mt-2 text-xs leading-5 ${subtleTextClass}`}>
+                Changing the folder moves your existing library across — nothing is left behind, and if the copy fails
+                part-way nothing is moved at all.
+              </p>
             </CollapsibleSection>
           </div>
 

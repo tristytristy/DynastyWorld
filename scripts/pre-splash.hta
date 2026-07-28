@@ -7,10 +7,11 @@
   is one of the few things Windows can render close to instantly without a
   compiled native binary.
 
-  Sized to spshscr.png's exact native resolution (868x420 — see main.ts's
-  SPLASH_WIDTH/SPLASH_HEIGHT, which use the same numbers) so neither this nor
-  the real Electron splash ever scales or crops the image, and the handoff
-  between the two is a pixel-identical swap. The WIDTH/HEIGHT attributes
+  Sized to 868x420 — see main.ts's SPLASH_WIDTH/SPLASH_HEIGHT, which use the
+  same numbers — so this and the real Electron splash present the image at an
+  identical size and the handoff between the two is a seamless swap. (The
+  artwork itself is now supplied at 2x, 1736x839, so it stays sharp on scaled
+  displays; both surfaces draw it into this same 868x420 box.) The WIDTH/HEIGHT attributes
   below are kept as a first attempt, but neither they nor a script-based
   window.resizeTo actually took effect reliably when tested — the HTA host
   opened some other, much larger default size regardless, with the image
@@ -26,15 +27,15 @@
 <html>
 <head>
 <!--
-  Deliberately NOT "CFB Dynasty Hub" — the real Electron splash and main
+  Deliberately NOT "DynastyOS" — the real Electron splash and main
   window both use that exact title, and scripts\force-resize-pre-splash.ps1
   finds this window by title match. A shared title would risk it grabbing
   (and resizing) one of Electron's own windows instead in a race.
 -->
-<title>CFB Dynasty Hub Pre-Splash</title>
+<title>DynastyOS Pre-Splash</title>
 <HTA:APPLICATION
   ID="cfbDynastyHubPreSplash"
-  APPLICATIONNAME="CFB Dynasty Hub"
+  APPLICATIONNAME="DynastyOS"
   BORDER="none"
   CAPTION="no"
   ICON=""
@@ -137,7 +138,7 @@ End Sub
 Sub CheckReady
   Dim fso, flagPath
   Set fso = CreateObject("Scripting.FileSystemObject")
-  flagPath = fso.GetSpecialFolder(2) & "\cfb-dynasty-hub-splash-ready.flag"
+  flagPath = fso.GetSpecialFolder(2) & "\dynastyos-splash-ready.flag"
 
   If fso.FileExists(flagPath) Then
     On Error Resume Next

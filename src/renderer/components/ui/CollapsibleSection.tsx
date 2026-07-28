@@ -1,3 +1,4 @@
+import { GRADIENT_HEADER } from '../../lib/gradients';
 import { useState, type ReactNode } from 'react';
 
 /**
@@ -6,6 +7,10 @@ import { useState, type ReactNode } from 'react';
  * Keyboard-accessible (it's a <button> header with aria-expanded). Uncontrolled
  * by default via `defaultOpen`, or fully controlled via `open` + `onToggle` so a
  * parent can preserve section state across filter changes.
+ *
+ * Safe in any container: the header band is inset within the content box rather
+ * than bled to the panel edges, so it doesn't depend on the parent's padding
+ * and can't collide with content above it.
  */
 export function CollapsibleSection({
   title,
@@ -43,7 +48,15 @@ export function CollapsibleSection({
         type="button"
         onClick={toggle}
         aria-expanded={isOpen}
-        className="group flex w-full items-center justify-between gap-3 text-left"
+        // The header row gets its own fall-off so it reads as a distinct band
+        // above the content, without needing a hard rule under it.
+        //
+        // The band is INSET, not bled to the panel edges. An earlier version
+        // used negative margins to span the full card width, which silently
+        // assumed this section was the first child of a `p-5` card — and inside
+        // the Team Performance grid, where sections sit below a title and
+        // subtitle, the -mt yanked each band up into that text.
+        className={`group mb-3 flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${GRADIENT_HEADER}`}
       >
         <span className="flex items-center gap-2">
           <svg

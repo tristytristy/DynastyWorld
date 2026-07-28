@@ -15,8 +15,15 @@ import {
   type Season,
 } from './helpers';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
+import { captureGameContext } from './gameContext';
 import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
-import type { ImportResult } from '../shared/types';
+import {
+  holdGameResult,
+  holdLeagueGameResult,
+  isResultHeld,
+  resolveHeldWeek,
+} from '../shared/resultsHold';
+import type { ImportResult, ResultsHold } from '../shared/types';
 
 /**
  * The save's own week counter (SeasonInfo.CurrentWeek) reads 0 once the
@@ -135,6 +142,30 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
   const finalizing = isSeasonFinalizing(phase);
   const blockWrite = finalizedElsewhere || isSeasonLocked(phase) || (!!existing?.finalized && !finalizing);
 
+  // Results hold (see shared/resultsHold.ts): the save pre-simulates the whole
+  // current week the moment you enter it, but the game keeps those scores
+  // hidden until you've played your own game. Strip them here — at the single
+  // ingest choke point — so no page can spoil a weekend the user hasn't seen.
+  // Nothing is lost: the next sync writes the real results back in.
+  const heldWeek = resolveHeldWeek({
+    currentWeek: league.currentWeek,
+    currentWeekType: league.currentWeekType,
+    currentOffseasonStage: league.currentOffseasonStage,
+    userTeamIndex: userTeam.teamIndex,
+    games: extraction.schedule,
+  });
+  const heldGameIds = new Set(
+    extraction.schedule.filter((g) => isResultHeld(g, heldWeek, userTeam.teamIndex)).map((g) => g.gameId),
+  );
+  const schedule = extraction.schedule.map((g) => (heldGameIds.has(g.gameId) ? holdGameResult(g) : g));
+  const leagueSchedule = extraction.leagueSchedule.map((g) =>
+    heldGameIds.has(g.gameId) ? holdLeagueGameResult(g) : g,
+  );
+  // Per-game player lines don't exist for the current week in any save checked
+  // (see resultsHold.ts), so this normally drops nothing — it's here so the
+  // hold still holds if a future title writes them earlier.
+  const gamelog = extraction.gamelog.filter((entry) => !heldGameIds.has(entry.gameId));
+
   if (!blockWrite) {
     saveSnapshot(season.id, 'league', extraction.league);
     saveSnapshot(season.id, 'teams', extraction.teams);
@@ -145,9 +176,13 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     // Schedules are user-editable in the preseason (the game count settles once
     // the season starts — 934→944), so only capture them once out of preseason.
     if (isScheduleFinal(phase)) {
-      saveSnapshotCompressed(season.id, 'leagueSchedule', extraction.leagueSchedule);
-      saveSnapshot(season.id, 'schedule', extraction.schedule);
+      saveSnapshotCompressed(season.id, 'leagueSchedule', leagueSchedule);
+      saveSnapshot(season.id, 'schedule', schedule);
     }
+    // Always written (even when nothing is held) so a previous sync's hold is
+    // cleared the moment the week is revealed. Read by getLeagueScores so the
+    // Scores page can say why a week reads empty instead of looking broken.
+    saveSnapshot(season.id, 'resultsHold', { week: heldWeek } satisfies ResultsHold);
     saveSnapshot(season.id, 'recruits', extraction.recruits);
     // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
     saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
@@ -157,7 +192,7 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
     saveSnapshot(season.id, 'kicking', extraction.kicking);
     // Leaguewide box scores — every team's per-game lines — so compressed like
     // the other leaguewide snapshots (roster/schedule).
-    saveSnapshotCompressed(season.id, 'gamelog', extraction.gamelog);
+    saveSnapshotCompressed(season.id, 'gamelog', gamelog);
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
     saveSnapshot(season.id, 'rivalries', extraction.rivalries);
     saveSnapshot(season.id, 'awards', extraction.awards);
@@ -169,6 +204,38 @@ export function persistExtraction(savePath: string, extraction: ExtractionData):
 
     const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);
     if (currentYearSummary) saveSnapshot(season.id, 'yearSummary', currentYearSummary);
+
+    // Point-in-time opponent context. Must use the UNREDACTED schedule: the
+    // results hold rewrites held games to look unplayed, and feeding that in
+    // would leave those games unlocked and let a later sync overwrite their
+    // pre-game state with post-game numbers — destroying the exact thing this
+    // captures. `played` therefore comes from what the SAVE says, not from what
+    // we chose to show the user.
+    const teamStateByIndex = new Map(
+      extraction.teams.map((t) => [
+        t.teamIndex,
+        {
+          mediaPollRank: t.mediaPollRank,
+          cfpRank: t.cfpRank,
+          wins: t.confWins + t.nonConfWins,
+          losses: t.confLosses + t.nonConfLosses,
+        },
+      ]),
+    );
+    captureGameContext(
+      season.id,
+      extraction.schedule.map((g) => ({
+        gameId: g.gameId,
+        week: g.week,
+        played: g.status !== 'Unplayed',
+        home: g.homeTeamIndex !== null ? teamStateByIndex.get(g.homeTeamIndex) ?? null : null,
+        away: g.awayTeamIndex !== null ? teamStateByIndex.get(g.awayTeamIndex) ?? null : null,
+      })),
+      league.currentWeek,
+      // CurrentWeek reads 0 in preseason AND offseason, so the "this week's
+      // games" rule only applies while a season is actually being played.
+      phase.kind === 'regular' || phase.kind === 'postseason',
+    );
 
     recordRankingSnapshot(season.id, {
       week: computeLastPlayedWeek(extraction.schedule, userTeam.teamIndex),

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { InfoHint } from '../components/ui/InfoHint';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLink } from '../components/common/TeamLink';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useGameModal } from '../data/GameModalProvider';
-import type { LeagueScoreGame } from '../../shared/types';
+import type { LeagueScoresView } from '../../shared/types';
 
 function ScoreLine({ name, teamIndex, score, won, played }: { name: string; teamIndex: number; score: number | null; won: boolean; played: boolean }) {
   return (
@@ -19,22 +20,23 @@ export function Scores() {
   const { id } = useParams<{ id: string }>();
   const { selectedSeasonId: seasonId } = useSelectedSeason();
   const { openGameModal } = useGameModal();
-  const [games, setGames] = useState<LeagueScoreGame[] | null | undefined>(undefined);
+  const [view, setView] = useState<LeagueScoresView | null | undefined>(undefined);
   const [pickedWeek, setPickedWeek] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setGames(undefined);
+    setView(undefined);
     setPickedWeek(null);
     window.api.db.getLeagueScores(id, seasonId).then((result) => {
-      if (!cancelled) setGames(result);
+      if (!cancelled) setView(result);
     });
     return () => {
       cancelled = true;
     };
   }, [id, seasonId]);
 
+  const games = view?.games;
   const weeks = useMemo(() => [...new Set((games ?? []).map((g) => g.week))].sort((a, b) => a - b), [games]);
   // Default to the latest week that actually has a played game (most recent
   // action), falling back to the first week if nothing's been played.
@@ -46,8 +48,8 @@ export function Scores() {
   const activeWeek = pickedWeek ?? defaultWeek;
 
   if (!id) return null;
-  if (games === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading scores...</p>;
-  if (games === null) {
+  if (view === undefined) return <p className="text-slate-500 dark:text-slate-400">Loading scores...</p>;
+  if (view === null || !games) {
     return (
       <SurfaceCard className="text-center text-sm text-slate-400 dark:text-slate-500">
         No league schedule for this season — re-sync this dynasty to capture it.
@@ -56,15 +58,16 @@ export function Scores() {
   }
 
   const weekGames = games.filter((g) => g.week === activeWeek);
+  const heldWeek = view.heldWeek;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Scores</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Every game in the country — click any for the full box score.
-          </p>
+          <h3 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            <span>Scores</span>
+            <InfoHint label="About scores">Every game in the country — click any for the full box score.</InfoHint>
+          </h3>
         </div>
         <select
           value={activeWeek ?? ''}
@@ -78,6 +81,14 @@ export function Scores() {
           ))}
         </select>
       </div>
+
+      {heldWeek !== null && activeWeek !== null && activeWeek >= heldWeek && (
+        <div className="corner-cut-sm border border-slate-200/80 bg-slate-100/70 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">Week {heldWeek} results are on hold.</span>{' '}
+          The save already has the rest of the country&rsquo;s scores, but the game keeps them hidden until you play your
+          own game — so the hub does too. Play it, then sync again.
+        </div>
+      )}
 
       {weekGames.length === 0 ? (
         <SurfaceCard className="text-center text-sm text-slate-400 dark:text-slate-500">No games this week.</SurfaceCard>

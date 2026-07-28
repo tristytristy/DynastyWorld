@@ -15,10 +15,10 @@ rem hidden-relaunch.vbs already launched the pre-splash before this hidden
 rem batch process even started. Clear any stale ready-flag from a previous
 rem run first so this run's pre-splash doesn't close itself instantly;
 rem main.ts writes it fresh once the real app window is ready.
-set "READY_FLAG=%TEMP%\cfb-dynasty-hub-splash-ready.flag"
+set "READY_FLAG=%TEMP%\dynastyos-splash-ready.flag"
 del "%READY_FLAG%" >nul 2>&1
 
-set "LOGFILE=%TEMP%\cfb-dynasty-hub-launch.log"
+set "LOGFILE=%TEMP%\dynastyos-launch.log"
 del "%LOGFILE%" >nul 2>&1
 
 if not exist "node_modules" (
@@ -55,6 +55,6 @@ rem A failure here means main.ts's own signalPreSplashReady() never ran (it
 rem never got the chance to start) — close the pre-splash ourselves instead
 rem of leaving it on screen for its full 30s safety timeout.
 echo failed>"%READY_FLAG%"
-powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('CFB Dynasty Hub failed to start. Opening the log file for details.', 'Launch Failed', 'OK', 'Error') | Out-Null"
+powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('DynastyOS failed to start. Opening the log file for details.', 'Launch Failed', 'OK', 'Error') | Out-Null"
 start "" notepad "%LOGFILE%"
 exit /b 1

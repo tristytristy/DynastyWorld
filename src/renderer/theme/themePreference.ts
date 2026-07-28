@@ -27,8 +27,8 @@ export interface ActiveTeamColors {
   secondary: string | null;
 }
 
-const BRAND_PRIMARY = '#2563eb'; // brand-600
-const BRAND_SECONDARY = '#1d4ed8'; // brand-700
+const BRAND_PRIMARY = '#9C9C9C'; // brand-500, DynastyOS silver
+const BRAND_SECONDARY = '#6E6E6E'; // brand-700, DynastyOS silver (deep)
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
 export const DEFAULT_THEME_PREFERENCE: ThemePreference = {
@@ -37,6 +37,7 @@ export const DEFAULT_THEME_PREFERENCE: ThemePreference = {
   customSecondary: BRAND_SECONDARY,
 };
 
+/** Storage key kept on the pre-DynastyOS prefix ON PURPOSE: it is invisible to users, and renaming it would silently discard the setting for everyone who already has one. */
 const PREFERENCE_STORAGE_KEY = 'cfb-dynasty-hub:color-theme';
 
 function isColorMode(value: unknown): value is ColorMode {

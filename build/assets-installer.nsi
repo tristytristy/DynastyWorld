@@ -1,5 +1,5 @@
 ; =========================================================================
-;  CFB Dynasty Hub - Image Data installer
+;  DynastyOS - Image Data installer
 ;
 ;  A standalone, one-time installer for the heavy image assets (player &
 ;  coach portraits, team logos, trophies). Kept SEPARATE from the app so the
@@ -17,28 +17,39 @@
 Unicode true
 SetCompress off            ; the payload is WebP/PNG (already compressed) — skip the wasted CPU
 
-!define APPNAME "CFB Dynasty Hub Image Data"
-!define VERSION "0.6.1"
+!define APPNAME "DynastyOS Image Data"
+!define VERSION "2.0.0"
 !define REGKEY  "Software\CFB Dynasty Hub"
 ; File paths resolve relative to THIS script's folder (build\), so go up one
 ; level to the project root's public\assets.
 !define SRC     "..\public\assets"
 
 Name "${APPNAME} ${VERSION}"
-OutFile "..\release\CFB Dynasty Hub Image Data ${VERSION}.exe"
-InstallDir "$DOCUMENTS\CFB Dynasty Hub Assets"
+OutFile "..\release\DynastyOS Image Data ${VERSION}.exe"
+InstallDir "$DOCUMENTS\DynastyOS Assets"
+; If the app already knows an assets folder, default to THAT — so someone who
+; only wants the new coach polos drops them straight into the library they
+; already have instead of re-pointing the app at a second folder.
+InstallDirRegKey HKCU "${REGKEY}" "AssetsPath"
 RequestExecutionLevel user
 ShowInstDetails show
 BrandingText "${APPNAME} ${VERSION}"
 
-DirText "Choose where to install the CFB Dynasty Hub image data. Pick any folder you like $\r$\n(you can move it later and re-point the app to it). About 1 GB of free space is needed." "Image data folder"
+DirText "Choose where to install the DynastyOS image data. $\r$\nIf you already have an image folder, this box is pre-filled with it — installing there simply adds the new artwork to what you have." "Image data folder"
 
+; Components first, so the folder page can be skipped past quickly by someone
+; who only needs the new art. The full library is ~1 GB; coach polos are ~15 MB.
+Page components
 Page directory
 Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
-Section "Image Data"
+; -------------------------------------------------------------------------
+; Existing users only need the polos, so the big library is its own section
+; they can untick — re-extracting a gigabyte to add one folder is a bad trade.
+; -------------------------------------------------------------------------
+Section "Full image library (portraits, logos, trophies, helmets, jerseys)" SEC_FULL
   SetOutPath "$INSTDIR"
   ; Each folder is recreated under the chosen root, e.g. <root>\playerportrait\...
   File /r "${SRC}\playerportrait"
@@ -51,7 +62,15 @@ Section "Image Data"
   File /r "${SRC}\icons"
   File /r "${SRC}\helmet"
   File /r "${SRC}\jersey"
+SectionEnd
 
+Section "Coach polos (new in 2.0)" SEC_POLOS
+  SetOutPath "$INSTDIR"
+  File /r "${SRC}\coachpolos"
+SectionEnd
+
+Section "-Finish" ; leading '-' = hidden and always run
+  SetOutPath "$INSTDIR"
   ; Pointer the app reads to auto-detect this folder.
   WriteRegStr HKCU "${REGKEY}" "AssetsPath" "$INSTDIR"
   WriteRegStr HKCU "${REGKEY}" "AssetsVersion" "${VERSION}"
@@ -70,6 +89,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\icons"
   RMDir /r "$INSTDIR\helmet"
   RMDir /r "$INSTDIR\jersey"
+  RMDir /r "$INSTDIR\coachpolos"
   Delete "$INSTDIR\Uninstall Image Data.exe"
   RMDir "$INSTDIR"
   ; Only clears the pointer if it still points here (avoids nuking a re-install elsewhere).

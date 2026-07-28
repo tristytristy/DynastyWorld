@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GRADIENT_TEAM_BLOCK } from '../lib/gradients';
 import type { SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -185,7 +186,7 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
           <BudgetButton onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })} />
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(37,99,235,0.85)]">
+        <div className={`mt-6 overflow-hidden rounded-xl ${GRADIENT_TEAM_BLOCK} p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(0,0,0,0.90)]`}>
           <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
           <div className="mt-3 flex flex-wrap items-end gap-4">
             <p className="proportional-nums text-5xl font-semibold tracking-tight">
@@ -369,28 +370,19 @@ export function DynastyOverview() {
 
           </div>
 
+          {/* Season Yearbook moved to the foot of the page — see the export row
+              at the bottom. It's an end-of-visit action, not part of the team's
+              identity header, and stacked up here it crowded the masthead. */}
           <div className="flex shrink-0 flex-col items-end gap-2">
-            {id && seasonId !== undefined && (
-              <button
-                type="button"
-                onClick={exportYearbook}
-                disabled={yearbookBusy}
-                title={`Export a shareable ${overview.seasonYear} Season in Review page`}
-                className="inline-flex items-center gap-2 border border-slate-300/80 bg-white/85 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
-              >
-                {yearbookBusy ? 'Exporting…' : 'Season Yearbook ↗'}
-              </button>
-            )}
             {userTeamIndex !== null && id && (
               <BudgetButton
                 onClick={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
               />
             )}
-            {yearbookMsg && <p className="max-w-[16rem] text-right text-xs text-slate-400 dark:text-slate-500">{yearbookMsg}</p>}
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(37,99,235,0.85)]">
+        <div className={`mt-6 overflow-hidden rounded-xl ${GRADIENT_TEAM_BLOCK} p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(0,0,0,0.90)]`}>
           <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <div className="flex flex-wrap items-end gap-4">
@@ -495,6 +487,23 @@ export function DynastyOverview() {
             )
           }
         />
+      )}
+
+      {/* Export row — the last thing on the page, where "I'm done reading this
+          season, now save it" naturally belongs. */}
+      {id && seasonId !== undefined && (
+        <div className="flex flex-wrap items-center justify-center gap-3 border-t border-slate-200/70 pt-6 dark:border-white/10">
+          <button
+            type="button"
+            onClick={exportYearbook}
+            disabled={yearbookBusy}
+            title={`Export a shareable ${overview.seasonYear} Season in Review page`}
+            className="inline-flex items-center gap-2 border border-slate-300/80 bg-white/85 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
+          >
+            {yearbookBusy ? 'Exporting…' : `Export ${overview.seasonYear} Season Yearbook ↗`}
+          </button>
+          {yearbookMsg && <p className="text-xs text-slate-400 dark:text-slate-500">{yearbookMsg}</p>}
+        </div>
       )}
     </div>
   );

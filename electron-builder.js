@@ -18,13 +18,27 @@ const MEDIA_GLOBS = [
   'dist/renderer/assets/icons/**',
   'dist/renderer/assets/helmet/**',
   'dist/renderer/assets/jersey/**',
+  // Coach polos — the staff counterpart to the player jerseys, so they belong
+  // in the same image-data bucket rather than being the one team-art folder
+  // that stays baked into a slim app build.
+  'dist/renderer/assets/coachpolos/**',
 ];
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
+  // Deliberately UNCHANGED across the DynastyOS rename: Windows identifies an
+  // installed app by this id, so changing it would make the next installer look
+  // like a different program — users would end up with two entries in Add/Remove
+  // Programs and two Start Menu shortcuts rather than an update. Invisible to
+  // users either way.
   appId: 'com.antigracity.cfb-dynasty-hub',
-  productName: 'CFB Dynasty Hub',
-  files: ['dist/**/*', ...(SLIM ? MEDIA_GLOBS.map((g) => `!${g}`) : []), 'package.json'],
+  productName: 'DynastyOS',
+  // '!**/*.map' keeps sourcemaps OUT of what ships. webpack emits them in every
+  // mode, and a source-map carries `sourcesContent` — the original TypeScript,
+  // comments and all — so shipping them put the whole renderer source inside the
+  // installer (2+ MB of it). They're still written to dist/ for local debugging;
+  // they just don't leave this machine.
+  files: ['dist/**/*', '!**/*.map', ...(SLIM ? MEDIA_GLOBS.map((g) => `!${g}`) : []), 'package.json'],
   // In the COMPLETE build the media is bundled — unpack it from the asar so the
   // cfbmedia:// handler (fs.readFile in the main process) serves real files, and
   // getAssetsRoot's bundled-fallback sentinel check resolves. No-op in a slim

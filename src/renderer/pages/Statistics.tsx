@@ -1025,7 +1025,10 @@ function TeamStatsView({
           {perGame ? 'Per-game averages' : 'Season totals'} over {games} game{games === 1 ? '' : 's'}
           {splitActive ? ' matching the current filter' : ''}.
         </p>
-        <div className="mt-4 grid gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Generous top gap: the caption above is small, low-contrast type and
+            the section bands are heavy, so a tight margin read as the two
+            touching. */}
+        <div className="mt-7 grid gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
           <CollapsibleSection title="Offense">
             <dl className="space-y-2 text-sm">
               <StatRow label={`Points${sfx}`} value={points(agg.points)} />

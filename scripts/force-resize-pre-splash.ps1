@@ -66,7 +66,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 $width = 868
 $height = 420
-$windowTitle = "CFB Dynasty Hub Pre-Splash"
+$windowTitle = "DynastyOS Pre-Splash"
 
 # mshta.exe's own startup is itself not instant — poll briefly rather than
 # assuming the window already exists.

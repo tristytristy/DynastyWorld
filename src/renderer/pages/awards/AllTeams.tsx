@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { InfoHint } from '../../components/ui/InfoHint';
 import { ConferenceMark } from '../../components/common/ConferenceMark';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { StatTile } from '../../components/ui/StatTile';
@@ -86,10 +87,10 @@ function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; s
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">All-America &amp; All-Conference Teams</h3>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Honor teams selected leaguewide — not a directory of every school.
-        </p>
+        <h3 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          <span>All-America &amp; All-Conference Teams</span>
+          <InfoHint label="About honor teams">Honor teams selected leaguewide — not a directory of every school.</InfoHint>
+        </h3>
         <div className="mt-4">
           <TeamHonorSummary items={summaryItems} />
         </div>

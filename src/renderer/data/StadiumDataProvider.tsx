@@ -11,6 +11,7 @@ import { DEFAULT_TEAM_STADIUMS, getDefaultStadiumInfo, type StadiumInfo } from '
  * not per-dynasty (a stadium correction should apply no matter which save is
  * open) — it doesn't belong in the SQLite dynasty database.
  */
+/** Storage key kept on the pre-DynastyOS prefix ON PURPOSE: it is invisible to users, and renaming it would silently discard the setting for everyone who already has one. */
 const STORAGE_KEY = 'cfb-dynasty-hub:stadium-overrides';
 
 function isStadiumInfo(value: unknown): value is StadiumInfo {

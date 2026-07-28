@@ -53,25 +53,35 @@ export function setAssetsPath(p: string | null): void {
 }
 
 /**
- * The path the Asset Installer records under HKCU\Software\CFB Dynasty Hub so
- * the app auto-detects a user-chosen folder with no browsing. Read once per
- * session (behind the cache) — never per image request.
+ * The path the Asset Installer records so the app auto-detects a user-chosen
+ * folder with no browsing. Read once per session (behind the cache) — never per
+ * image request.
+ *
+ * BOTH the DynastyOS key and the old CFB Dynasty Hub one are checked: anyone
+ * who ran the Asset Installer before the rename has their ~1 GB library
+ * registered under the old name, and dropping that lookup would leave them with
+ * an app that suddenly can't find any artwork.
  */
+const ASSET_REGISTRY_KEYS = ['HKCU\\Software\\DynastyOS', 'HKCU\\Software\\CFB Dynasty Hub'];
+
 function readRegistryAssetsPath(): string | null {
   if (process.platform !== 'win32') return null;
-  try {
-    const out = execFileSync('reg', ['query', 'HKCU\\Software\\CFB Dynasty Hub', '/v', 'AssetsPath'], {
-      encoding: 'utf8',
-      windowsHide: true,
-      // Ignore stderr so a missing key doesn't spam the log with reg.exe's
-      // "unable to find the specified registry key" message (we handle absence).
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const m = out.match(/AssetsPath\s+REG_SZ\s+(.+)/);
-    return m ? m[1].trim() : null;
-  } catch {
-    return null;
+  for (const key of ASSET_REGISTRY_KEYS) {
+    try {
+      const out = execFileSync('reg', ['query', key, '/v', 'AssetsPath'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        // Ignore stderr so a missing key doesn't spam the log with reg.exe's
+        // "unable to find the specified registry key" message (we handle absence).
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      const m = out.match(/AssetsPath\s+REG_SZ\s+(.+)/);
+      if (m) return m[1].trim();
+    } catch {
+      // Key absent — try the next one.
+    }
   }
+  return null;
 }
 
 /** True only if `dir` looks like a real image-data root (has the sentinel folder). */
@@ -88,6 +98,10 @@ function candidateRoots(): string[] {
   try {
     const exeDir = path.dirname(app.getPath('exe'));
     roots.push(path.join(exeDir, 'assets'));
+    // Both names: a library installed beside the app before the rename still
+    // sits in a "CFB Dynasty Hub Assets" folder.
+    roots.push(path.join(exeDir, 'DynastyOS Assets'));
+    roots.push(path.join(exeDir, '..', 'DynastyOS Assets'));
     roots.push(path.join(exeDir, 'CFB Dynasty Hub Assets'));
     roots.push(path.join(exeDir, '..', 'CFB Dynasty Hub Assets'));
   } catch {

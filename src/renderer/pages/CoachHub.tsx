@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ScandalsModal } from '../components/common/ScandalsModal';
 import { Link, useParams } from 'react-router-dom';
 import { CoachCard, EditButton, coachKey, spaceCamelCase, type CoachResume } from '../components/common/CoachCard';
 import { CoachPortrait } from '../components/common/CoachPortrait';
@@ -193,6 +194,7 @@ function jobSecurityEvaluation(status: string): { label: string; tone: 'good' | 
 export function CoachHub() {
   const { id } = useParams<{ id: string }>();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
+  const [scandalsOpen, setScandalsOpen] = useState(false);
   const [overview, setOverview] = useState<SeasonOverview | null | undefined>(undefined);
   const [coaches, setCoaches] = useState<CoachOverview | null | undefined>(undefined);
   const [history, setHistory] = useState<ProgramHistoryOverview | null | undefined>(undefined);
@@ -307,11 +309,13 @@ export function CoachHub() {
   return (
     <div className="space-y-6">
       <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        {/* Stretch rather than center, so the Scandals button can sit on the
+            masthead's bottom edge instead of floating beside the name. */}
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-5">
             <div className="flex items-center gap-5">
               {userCoach ? (
-                <CoachPortrait coach={userCoach} size="xl" />
+                <CoachPortrait coach={userCoach} teamAssetName={overview.teamName} size="xl" />
               ) : (
                 <TeamLogo team={{ assetName: overview.teamName, label: overview.teamName }} size="lg" />
               )}
@@ -343,8 +347,25 @@ export function CoachHub() {
               </div>
             </div>
           </div>
+
+          {/* User coaches only — Scandals writes to the save, and there's
+              nothing to cheat on behalf of a CPU staff. */}
+          {userCoach && id && (
+            <div className="flex shrink-0 items-end">
+              <button
+                type="button"
+                onClick={() => setScandalsOpen(true)}
+                title="Off-the-books adjustments — writes to your save"
+                className="corner-cut-sm border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/20 dark:border-red-500/40 dark:text-red-300"
+              >
+                Scandals
+              </button>
+            </div>
+          )}
         </div>
       </SurfaceCard>
+
+      {id && <ScandalsModal open={scandalsOpen} onClose={() => setScandalsOpen(false)} dynastyId={id} />}
 
       {userCoach && (
         <SurfaceCard>
@@ -421,9 +442,7 @@ export function CoachHub() {
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">
             Career Record
           </p>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            This coach&apos;s lifetime record, tracked by the save itself — may predate this dynasty.
-          </p>
+          
           {career ? (
             <>
               <div className="mt-4 overflow-hidden rounded-xl bg-[var(--team-primary)] p-5 text-[var(--team-on-primary)]">

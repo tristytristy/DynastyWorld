@@ -27,7 +27,7 @@ export function UserManualMenu({ triggerClassName }: { triggerClassName?: string
       <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={64} eyebrow="Guide" title="User Manual">
         <iframe
           src="manual.html"
-          title="Dynasty Hub User Manual"
+          title="DynastyOS User Manual"
           className="h-[82vh] w-full border-0 bg-[#FBF9F4]"
         />
       </CenteredModalPanel>

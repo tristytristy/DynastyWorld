@@ -12,17 +12,32 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // DynastyOS brand: black + SILVER, with gold reserved for accents —
+        // sampled from the logo art. This replaced a blue ramp, and the reason
+        // is functional rather than cosmetic: every dynasty page is themed with
+        // the user's real team colors, and a saturated blue chrome competed with
+        // them (a maroon program sat inside a blue frame). A neutral silver
+        // recedes behind whatever colors the team brings.
         brand: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          50: '#F5F5F5',
+          100: '#E8E8E8',
+          200: '#D6D6D6',
+          300: '#C5C5C5',
+          400: '#ABABAB',
+          500: '#9C9C9C',
+          600: '#787878',
+          700: '#6E6E6E',
+          800: '#555555',
+          900: '#3A3A3A',
+        },
+        // The logo's gold. Accent only — small highlights, never a large fill,
+        // or it starts competing exactly like the blue did.
+        gold: {
+          100: '#FEEA9D',
+          200: '#E9D28C',
+          300: '#D8B67C',
+          400: '#B99A63',
+          500: '#77674B',
         },
         // The UI gray. Default Tailwind `slate` is blue-tinted, which read as a
         // navy cast on every dark surface. Remapped to a true-neutral ramp (with

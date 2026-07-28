@@ -7,14 +7,14 @@
 // the PDF is fully self-contained (fonts + logo embedded as data URIs) and the
 // version always matches package.json:
 //   __INTER400/500/600/700__  -> public/assets/fonts/inter-latin-*.woff2
-//   __LOGO_MARK__             -> public/assets/Logo/Logo-mark.png
+//   __LOGO_MARK__             -> public/assets/Logo/DynastyOS-Wordmark.svg
 //   __SPLASH__                -> public/assets/splash/spshscr.png
 //   __VERSION__               -> package.json version
 // All assets are baked in as data URIs so the PDF is a portable standalone file.
 // (The in-app manual.html instead references these assets from the app bundle —
 //  see the CopyWebpackPlugin transform in webpack.config.js.)
 //
-// Output: "Dynasty Hub - User Manual.pdf" in docs/manual/ (beside this script).
+// Output: "DynastyOS - User Manual.pdf" in docs/manual/ (beside this script).
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -22,9 +22,12 @@ const path = require('path');
 const HERE = __dirname; // docs/manual
 const ROOT = path.resolve(HERE, '..', '..'); // repo root
 const FONTS = path.join(ROOT, 'public/assets/fonts');
-const LOGO = path.join(ROOT, 'public/assets/Logo/Logo-mark.png');
+// The DynastyOS wordmark, LIGHT variant — the manual's paper is cream
+// (#FBF9F4), so it needs the dark-artwork version, not the one built for dark
+// backgrounds. SVG rather than the old raster mark, so it stays sharp in print.
+const LOGO = path.join(ROOT, 'public/assets/Logo/DynastyOS-Wordmark.svg');
 const SPLASH = path.join(ROOT, 'public/assets/splash/spshscr.png');
-const OUT_PDF = path.join(HERE, 'Dynasty Hub - User Manual.pdf');
+const OUT_PDF = path.join(HERE, 'DynastyOS - User Manual.pdf');
 
 function dataUri(file, mime) {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
@@ -38,7 +41,7 @@ html = html
   .replace(/__INTER500__/g, dataUri(path.join(FONTS, 'inter-latin-500-normal.woff2'), 'font/woff2'))
   .replace(/__INTER600__/g, dataUri(path.join(FONTS, 'inter-latin-600-normal.woff2'), 'font/woff2'))
   .replace(/__INTER700__/g, dataUri(path.join(FONTS, 'inter-latin-700-normal.woff2'), 'font/woff2'))
-  .replace(/__LOGO_MARK__/g, dataUri(LOGO, 'image/png'))
+  .replace(/__LOGO_MARK__/g, dataUri(LOGO, 'image/svg+xml'))
   .replace(/__SPLASH__/g, dataUri(SPLASH, 'image/png'))
   .replace(/__VERSION__/g, version)
   // The standalone PDF is a shipped artifact — always clean, no dev build stamp.

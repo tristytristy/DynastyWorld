@@ -2113,3 +2113,122 @@ Version checkpoint rolling up this session's work. `package.json` 0.6.2 → 0.6.
 - **Docs organized:** filed loose root docs into `docs/` subfolders (nothing deleted) — `MASTER_ROADMAP_v2.md`→`docs/planning/`, `RELEASE_NOTES`→`docs/releases/`, the duplicate `DEVELOPER_ONBOARDING.md`→`docs/archive/`, the generated manual PDF→`docs/manual/` (generator + `.gitignore` + readme link repointed), `player-card.svg`→`References/`. `DevLog.md` + `readme.md` stay at root.
 - **Manual updated** to match everything above (five hubs incl. Media Hub; Team Hub's 6 merged tabs; Media Hub section reworked; new Player Trading Cards + hover-preview; Preferences card-preview toggle + black theme + collapsed sections) and PDF regenerated.
 - **Release: v1.5.0** — an *update to 1.0* (not a v2), kept **COMPLETE** (graphics bundled) so an app update carries the files; users don't manage a separate image pack. Bumped `package.json`, wrote consumer release notes, built the installer + portable into `release/`. (An earlier 2.0.0-beta build was reframed to 1.5.0 at the user's request.)
+
+## Phase — No-spoiler results hold (2026-07-27)
+
+**User report from playtesting:** finish a game, advance a week, sync — and the hub is already showing the rest of the country's scores for a week the game still has hidden.
+
+**Confirmed the mechanism** against the week-by-week Auburn captures (`Dynasty Save Test/Full Season Saves`, W0→W31): the save **pre-simulates the entire current week the moment you enter it**. At `SeasonInfo.CurrentWeek = W`, every week-W game except the user's own is already final in `SeasonGame` — score, quarter-by-quarter lines, both teams' stat caches. `CurrentWeek=2` → wk2 played 85/86 (the 1 unplayed = Auburn's); `CurrentWeek=4` → 70/71; `CurrentWeek=17` (bowl round 1) → 27/28.
+
+**Scoped the leak — measured, not assumed.** Only `SeasonGame`'s result fields leak:
+- **team W-L records:** 127 of 128 current-week teams matched games played *before* the current week ⇒ standings, rankings and polls are already gated by the game itself.
+- **per-game player stat lines:** **zero** exist for the current week (wks 0–3 had 847/5103/5183/5022 lines; wk 4 had none) ⇒ season stat totals, national leaders and box scores can't leak either.
+
+**Fix — new `shared/resultsHold.ts`, applied at ingest** (`persistExtraction`), one choke point every page inherits:
+- `resolveHeldWeek()` — held week = `CurrentWeek`, unless the user's **own** game that week is already played (the game's real reveal trigger — "hidden until after you play your game"), and never in preseason/offseason (`CurrentWeek` reads 0 at both, which would otherwise hold the whole season).
+- Held non-user games are rewritten to look exactly unplayed (`status='Unplayed'`, scores/quarters 0, stat caches null; `null` scores in the compact `leagueSchedule`), so every downstream `!== 'Unplayed'` check just works — no per-page changes. Game-log rows for held games are dropped defensively (currently a no-op).
+- Nothing is lost: the save always carries the full season, so the next sync writes the real results back in.
+- A `resultsHold` snapshot records the held week each sync (always written, so a hold clears the moment it's revealed); `getLeagueScores` now returns `{ games, heldWeek }` and the Scores page explains the held week instead of reading as a bug. New Help topic *"Why this week's other scores are blank."*
+
+**Verified end-to-end** by running the real extractors + the exact hold logic over the captures: preseason → nothing held; Week Zero (`CurrentWeek=0`, user bye) → its 11 games held; `CurrentWeek=4` → wk4 70/71 → 0/71 stored, wks 0–3 untouched, user's own 3 games intact, 0 leaked scores in `leagueSchedule`; conf-champ week (user bye) → 10 games held; bowl round 1 → 27 held; End of Season Recap → nothing held. Reveal path checked by replaying with the user's own current-week game marked played: `heldWeek` → null (bye weeks correctly stay held). typecheck/lint/build clean.
+
+**Deferred:** no user toggle to switch the hold off — it's the default and only behavior for now. Worth adding to Preferences if anyone wants the raw save view.
+
+## Phase — User-settable media library folder (2026-07-27)
+
+**User ask:** `%APPDATA%\cfb-dynasty-hub\media\<dynastyId>` is a fine fallback, but people want their screenshots somewhere they can reach.
+
+**Confirmed first** that uploads are already copy-in (`fs.copyFile`), with no source path stored anywhere — deleting the original never affects the app. The only real gap was that the destination wasn't choosable.
+
+**New `main/mediaRoot.ts`** — mirrors `assetRoot.ts`'s shape (JSON config in userData, cached resolve, status getter) but deliberately separate: assetRoot locates *app content* (portraits/logos), this is the user's *irreplaceable* screenshots. Setting persists in `media-config.json`; default stays `userData/media`. `mediaDirFor()` in `ipc/media.ts` was already the single choke point for reads, writes and deletes, so pointing it at `getMediaRoot()` moved the whole feature — the DB stores only file names, so **not one row changes** when the root moves.
+
+**Move semantics — copy-everything-then-commit.** The config only flips after every file lands; a mid-way failure removes the copies it made and leaves the old folder live. A half-moved library the app has already started writing into would be genuinely hard to unpick, so it's all-or-nothing. Destination files that already exist are treated as already-moved and skipped, never overwritten (names carry timestamp+random, so a collision *is* the same file). Only `<dynastyId>/<file>` entries are touched — anything else in the user's folder is left alone. Nesting either way (new root inside old or vice versa) is rejected up front rather than walking a tree while writing into it.
+
+**IPC/UI:** four new `media:*` channels (`getLibraryStatus`, `chooseLibraryFolder`, `resetLibraryFolder`, `openLibraryFolder`); Preferences → Storage gains a "Media library folder" section — current path, Change folder…, **Open folder** (the point of choosing a real folder is getting at the files), Reset to default when custom, a moved-file count, and an amber warning when a configured folder has gone missing (unplugged drive).
+
+**Also fixed:** `mediaFileUrl` produced `file://///NAS/share/...` for UNC paths — broken, and a NAS is a plausible target now that the folder is user-chosen. Now emits `file://NAS/share/...`; PlayerCard's duplicate copy of the helper was deleted in favour of the shared one.
+
+**Verified** with a scripted harness against a stubbed Electron `app` (22 assertions, all passing): happy-path move (3 files, content intact, old folder emptied, config persisted); re-picking the same folder is a no-op; nesting rejected; merging onto a folder holding a pre-existing copy (2 of 3 copied, pre-existing file NOT overwritten, user's unrelated file untouched); **rollback** on a broken destination (0 moved, source intact, still on the old folder, partial copies cleaned up); reset-to-default (files come home, config cleared). typecheck/lint/build clean.
+
+**Known gap (unchanged, now documented in Help):** `backupDatabase()` copies only `dynasty-archive.sqlite` — media files aren't in the backup. Restoring is harmless day to day (the media folder sits untouched next to it), but backups alone don't carry the images. Folding the media folder into the backup is the obvious follow-up.
+
+## Phase — Storage honesty, per-dynasty backup/restore, Import picker (2026-07-27)
+
+Four connected pieces, prompted by the user asking where Media Hub photos live and where an individual dynasty's data goes. Vocabulary settled this session: the tile on the Dashboard is a **dynasty card**, the data behind it is that dynasty's **archive** (matching `dynasty-archive.sqlite`), and the file you save is a **dynasty backup**.
+
+### 1. Auto-backup bloat (~1.7 GB of waste on a real machine)
+
+`backupDatabase()` ran on EVERY launch regardless of change, so ten launches left ten near-identical copies of a 170 MB file. Now: **only when the archive actually changed** (size+mtime fingerprint in `backups/.checkpoint.json` — `persist()` rewrites on every write, so an untouched archive keeps an untouched mtime and a read-only session produces nothing); **gzipped, streamed, level 1** (measured on the real archive: 170.1 → 57.6 MB in 1.54 s; level 6 saved only 4 MB more for +55% time); **unawaited** in `main.ts` so startup never pays for it; retention **10 → 5** (each is now a distinct state, not a duplicate). Legacy uncompressed `.sqlite` backups stay listed and restorable — a recovery path that can't read a user's existing backups is worse than useless. `save-backups` was growing **forever** with no prune at all (248 MB) — now capped at 5 per save file. Both folders surfaced in Preferences → Storage with sizes and a cleanup button.
+
+### 2. Delete now actually deletes — a real bug, found by testing on real data
+
+**`db.export()` silently resets `PRAGMA foreign_keys` to 0**, and `persist()` (which calls export) runs after every write. So enforcement survived only until the first save of a session; after that `ON DELETE CASCADE` quietly stopped firing and deleting a dynasty removed its name row while stranding every season/snapshot/note underneath. That is where **137.5 MB of a 170 MB archive** came from — 27 test dynasties deleted over two weeks of development. Verified directly: pragma reads 1 before `export()` and 0 after. Fix: re-assert in `persist()`, plus `deleteDynasty` asserts for itself. Second, independent gap: SQLite never returns freed pages, so even correct deletes freed nothing visible — `deleteDynasty` now `VACUUM`s. Plus a defensive orphan sweep. Surfaced as **"Cache from deleted dynasties" + Clear cache** (the user's wording: not literally a cache, but the word people know). Measured on a copy of the real archive: clear cache 170.1 → 20.6 MB, then deleting Sac State 20.59 → 16.15 MB with full cascade and no violations.
+
+**Two wrong diagnoses were stated to the user before this** (first "the pragma is never set" — it is, line 256, since the initial commit; then "cascades therefore work" — they don't, per the above). The synthetic test passed because it never saved between operations; only running against the real archive reproduced it.
+
+### 3. Per-dynasty backup + restore
+
+New `main/dynastyBackup.ts` / `main/dynastyRestore.ts`, `archiver`+`yauzl` promoted to real dependencies (already present transitively via electron-builder; types pinned to v5 to match the runtime). Plain **`.zip`**, deliberately: the point is a file that still means something on a machine that may not run this app, so a `README.txt` and readable folders beat a bespoke container. Layout: `dynastyos-backup.json`, `README.txt`, `archive/dynasty-archive.sqlite`, `media/`, `card-photos/`, `save/`. Media/saves are **stored** (already-compressed), the archive **deflated**.
+
+Single-dynasty extraction works by opening a throwaway copy and deleting the OTHER dynasties — inheriting the schema's cascade correctness instead of re-implementing a dozen table relationships by hand — then VACUUM. Verified: Sac State out of a 3-dynasty 170 MB archive → **4.71 MB**, nothing of Miami or Texas State in it.
+
+Restore's hard part is the merge: backups carry their own autoincrement numbering that collides with dynasties already present. Every incoming id is shifted clear of the live max via a **declared** table/reference map (introspection would silently mis-link on a missed reference). **A first round-trip run failed here**: renumbering a parent and its references can't be atomic, and the scratch copy's own FK enforcement rejected the intermediate state. Fixed by shifting with enforcement off on the throwaway copy, then `PRAGMA foreign_key_check` before a single row reaches the user's archive. It failed *safely* — bystander dynasties untouched, no orphans. A full checkpoint is taken before any restore, non-optionally.
+
+### 4. Import Dynasty picker
+
+`scanForSaves` existed, was **never called by anything**, and was broken: it matched a `.DYNASTY` extension while a comment in the same file correctly said real saves have none. Now matches the `DYNASTY-` prefix and groups `-AUTOSAVE` / `.backup-<ts>` variants under the dynasty they belong to. New `extractors/peek-save.ts` reads SeasonInfo+Coach+Team only (~500 ms/save) so the list shows **"Sac State — Patrick Evanz, 2026, Week 1"** instead of `DYNASTY-EVANZSYNC`; the modal lists filenames instantly and fills identities in behind. Saves folder is user-settable and remembered (`saves-config.json`). Verified on the real folder: 7 files → 3 dynasty files → 1 row + 2 variants, with PROFILE/ROSTER/TEAMBUILDER correctly excluded.
+
+**Verification totals:** 15 checks (backup checkpoint), 12 (delete/cascade), 10 (extraction), 23 (backup zip round-trip), 25 (restore round-trip incl. replace-in-place and bystander integrity), plus the real-folder scan. typecheck/lint/build clean throughout.
+
+**Deferred:** the dynasty-card backup button replaced the old one-click game-save backup (that save is now a checkbox in the modal) — a button labelled "Backup" that didn't back up the dynasty was the exact confusion that started this thread. Per-dynasty size is deliberately NOT shown on the card or on hover: sizes appear only in the backup picker and the storage panel, where the user is already thinking about disk space.
+
+**Coming next (user flagged, not started):** rebrand to **DynastyOS** — new name, logo, splash. NB: `userData` resolves from the app name, so a rename points Electron at an empty folder and every user's data "vanishes". Needs a migration step; the backup/restore work above is a usable safety net for it.
+
+## Phase — Scandals: coach save editor + talent trees decoded (2026-07-28)
+
+A "Scandals" panel on the Coach Hub masthead for the **user's** coach only, themed as the ways a program gets caught: **Tampering** (recruiting hours), **Sign Stealing** (coach XP speed, experience, level, coach points, prestige, job security, contract points), **Performance Enhancing Drugs** (talent progress speed + the 18 positional XP sliders) and **Embezzlement** (coach talent unlocks).
+
+Pointed at PocketScout-Utilities first, per the user, which unstuck two dead ends: `CoachXPSpeedSetting` / `TalentProgressSpeed` live on **LeagueSetting**, not Coach — which is why a field scan of the coach record found nothing — and the talent tree is a four-hop chain, `Coach.ActiveTalentTree → TalentSubTreeStatusList → TalentSubTreeStatus[] → TalentStatus0..32`, where the middle hop is an intermediate array table (a naive deref fails there).
+
+**The finding that mattered:** a write spike on a disposable copy wrote 5,000 recruiting hours and read back **904** — 5000 − 4096. The field is 12-bit and **wraps silently**: no error, save still loads, value quietly wrong. Every field is now clamped to its real bit width taken from the save's own offset table (hours 4095, XP 1048575, level 127, coach points 4095, prestige 16383, contract 1023, position XP 511; job security capped at 100 rather than 127 because it's a percentage). `saveScandals` backs the save up first and **aborts if the backup fails**.
+
+### Talent trees have no names in the save
+
+Nothing anywhere names a tree: the subtree record carries only `Version` and `CoachPointsSpent`, `ActiveTalentTree` has a single pointer field, and `CoachTalentEffects` turned out to be 158 columns of *per-coach effect values*, not a talent catalog. The names live in the game's data files.
+
+So the map was **derived from the league** — 414 coaches with points spent:
+
+- `Coach.DominantArchetype` names the archetype a coach invested in, cross-tabbed against their top-spend slot (Architect → slot 4 for 25 head coaches, Strategist → 6 for 24, and so on).
+- Slots 3/5/7 are **strictly nested** inside 0/1/2 — across 414 coaches, not one had spent in 3 without 0, 5 without 1, or 7 without 2. Those are the **Elite tiers** (Elite Recruiter, Scheme Guru, Master Motivator), gated on "Spend 200 In ‹tree›", which is why 13 subtree slots render as the 10 trees the game shows.
+- Slots 9–12 are head-coach only; 0–8 are shared with coordinators. The picker is therefore built from the slots a given coach actually has, not a fixed list.
+
+### Shapes, and an assumption that was wrong
+
+First pass assumed every tree was 8 talents × 4 levels (1 header + 8×4 = 33). **User screenshots of the remaining trees disproved it**: CEO is 9 talents × 1 level, Program Builder 7 × 3. Re-derived the shapes from the save instead of assuming — per slot, the highest node index any league coach has ever had `Owned`/`Purchasable` gives the live-node count:
+
+| Slots | Shape | Live nodes |
+|---|---|---|
+| 0–8 | 8 × 4 | 32 |
+| 11 | 7 × 3 | 21 → **Program Builder** |
+| 12 | 9 × 1 | 9 → **CEO** |
+| 9, 10 | 4 × 1 | 4 → Rainmaker / Visionary |
+
+That **independently confirmed slots 11 and 12 by shape** rather than by the thin spending evidence they'd had, and revealed that the earlier "361 sequential violations" were just the unused tail of the short trees. Node index is `1 + block*levelsPerBlock + level`, so the old 4-stride would have scattered CEO and Program Builder writes across the wrong talents entirely — silently, since every index is a valid node. Node 0 is a **header that gates the tier** (only ever Purchasable/Owned/Locked, never NotOwned), so opening any tier means writing its header too.
+
+Talent *names* come from the game's tree screens and are hardcoded in `SLOT_LAYOUTS`; their **order is assumed row-major and is NOT verified** — the shapes and counts are.
+
+**Verified on copies:** single-tree isolation (Architect alone → 33 nodes to slot 4, twelve other slots byte-identical); partial levels (Recruiter blocks 1–2 from level 1→3, Architect at 1,1,1,1,2,2,2,2 → 17 nodes, exact, nothing revoked); and all three shapes (CEO talents 3+5, Program Builder talent 2 at level 3, Rainmaker talent 1 → 9 nodes, every one on the right index, unused tails untouched).
+
+**Hidden:** Rainmaker and Visionary are not shown. Both sit behind a real-money gate (MVP+ membership; a Madden 27 coach), their two slots are identically shaped, and no save will ever show spend in either — so the labels are a coin flip. An undocumented key chord in `ScandalsModal.tsx` toggles them back, persisted in localStorage; hiding also clears any staged edits for them so a hidden tree can't be written unseen.
+
+**Still true:** none of this has been exercised through the app's own IPC path — every result above came from standalone spikes against disposable copies.
+
+## Phase — v2.0 release: sourcemaps sealed, rename shipped (2026-07-28)
+
+**A real leak, found while checking whether the Scandals key chord could stay private.** The shipped `app.asar` contained `dist/renderer/renderer.js.map` — 2.2 MB, with `sourcesContent` embedded. `webpack.config.js` sets `devtool: 'source-map'` unconditionally on all four configs, and electron-builder's default `files` packaged them, so **every installer carried the original TypeScript source of the renderer, comments and all**. Fixed by adding `'!**/*.map'` to `files` in `electron-builder.js`: maps are still written to `dist/` for local debugging, they just don't ship.
+
+Version → **2.0.0**. Release notes at `docs/releases/RELEASE_NOTES_v2.0.md`.
+
+**Coach polos** added to the Image Data installer (150 files, the staff counterpart to player jerseys). Built for the real case rather than just appending a folder: a **components page** splits the ~1 GB full library from the small polos pack, so an existing user unticks the library and takes only the new art; and `InstallDirRegKey` pre-fills the folder box from `HKCU\Software\CFB Dynasty Hub\AssetsPath`, so the polos land in the library they already have instead of creating a second copy. Compile-verified only — the components page hasn't been exercised by running the installer.
+
+**A packaging error, caught by the output size.** The first v2.0 build was made COMPLETE (media bundled) on the stated rationale of "continuity with 1.5.0". That was **wrong**: 1.5.0 and 1.6.0 are ~142 MB, with the artwork shipping separately as `Image Data 0.6.1.exe` (971 MB) — i.e. the current model is **SLIM**, per the two-installer split from 0.5.0. COMPLETE produced a **1.12 GB** installer and would have pushed a gigabyte download onto users who already have the library. The user's own polos request was the tell — asking the *Image Data* installer to add art to an existing assets folder only makes sense on the slim model — and it was read past. Rebuilt with `SLIM_INSTALLER=1`; the wrong artifact was deleted rather than left in `release/` to be picked up by mistake.

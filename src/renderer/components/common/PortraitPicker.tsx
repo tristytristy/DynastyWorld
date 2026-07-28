@@ -2,27 +2,45 @@ import { useEffect, useState } from 'react';
 import { BUILD_LABELS, SKIN_TONE_LABELS } from '../../../shared/portraitTaxonomy';
 import type { PortraitBuild, PortraitSkinTone, PortraitType } from '../../../shared/portraitTaxonomy';
 import type { PortraitFilters, PortraitSearchResult } from '../../../shared/types';
+import { getPlayerPortraitCandidates } from '../../lib/playerAssetMapping';
+import { getCoachPortraitPath } from '../../lib/coachAssetMapping';
 
 const PAGE_SIZE = 60;
 const SELECT_CLASS =
   'rounded-md border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-xs text-slate-800 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
-/** The WebP library has fully normalized names (one file per asset, no legacy suffix variants — see scripts/convert-portraits.js), so paths reconstruct directly from the asset name. */
-function portraitPath(kind: 'player' | 'coach', assetName: string): string {
-  const dir = kind === 'player' ? 'playerportrait' : 'coaches';
-  const prefix = kind === 'player' ? 'nilpp' : 'nilcp';
-  return `assets/${dir}/${prefix}_${assetName}.webp`;
+/**
+ * Resolves a portrait through the SAME `cfbmedia://` scheme every other
+ * portrait in the app uses (see playerAssetMapping / coachAssetMapping), which
+ * serves from the real image-data folder wherever it's installed.
+ *
+ * This used to build a plain relative `assets/...` path, which only resolves
+ * when the art sits inside the app itself. That stopped being true at the
+ * two-installer split, so on a packaged build every image here was a broken
+ * icon — while the identical portraits rendered fine everywhere else in the
+ * app, because everywhere else already used cfbmedia://.
+ *
+ * Going through the shared helpers also brings the de-dash fallback along: a
+ * small number of players carry a truncation dash in their asset name that the
+ * exported files don't have.
+ */
+function portraitPath(kind: 'player' | 'coach', assetName: string): string | null {
+  if (kind === 'coach') return getCoachPortraitPath(assetName);
+  return getPlayerPortraitCandidates(assetName)[0] ?? null;
 }
 
 function CurrentPortraitImage({ kind, assetName }: { kind: 'player' | 'coach'; assetName: string }) {
-  return (
-    <img
-      src={portraitPath(kind, assetName)}
-      alt=""
-      className="h-16 w-16 rounded-lg object-cover object-top"
-      draggable={false}
-    />
-  );
+  const src = portraitPath(kind, assetName);
+  // An unresolvable name shows the neutral placeholder rather than a broken
+  // image icon — the same thing the user was staring at when this was reported.
+  if (!src) {
+    return (
+      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-200 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        None
+      </div>
+    );
+  }
+  return <img src={src} alt="" className="h-16 w-16 rounded-lg object-cover object-top" draggable={false} />;
 }
 
 function Lightbox({
