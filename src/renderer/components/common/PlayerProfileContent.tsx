@@ -1972,11 +1972,23 @@ export function PlayerProfileContent({
           showcase step; the portrait is still the first thing you see, it just
           stops being the only thing.
         */}
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center md:p-5">
+        {/*
+          TIGHTER AGAIN (user direction). Even at 282px the hero was mostly
+          void: one line of name against a 240px portrait, with the OVR flung to
+          the far edge and ~600px of nothing between them. The house style is
+          tight and snug — bold where boldness earns it (the portrait, the OVR),
+          not padding stretched to fill a container.
+
+          Three changes: padding down a step, the portrait to 11rem, and the
+          identity column no longer `flex-1`. That last one is what closes the
+          horizontal gap — stretching it pushed the OVR to the far wall, so the
+          number and the name it belongs to had a screen between them.
+        */}
+        <div className="flex flex-col gap-4 p-3 sm:flex-row sm:items-center sm:gap-6 md:p-4">
           <div className="flex shrink-0 justify-center sm:justify-start">
-            <PlayerPortrait player={player} large largeMaxHeight="max-h-[15rem]" teamAssetName={heroTeamName} />
+            <PlayerPortrait player={player} large largeMaxHeight="max-h-[11rem]" teamAssetName={heroTeamName} />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="flex items-center gap-3">
               <span className="corner-cut-sm inline-flex h-10 min-w-[2.6rem] items-center justify-center bg-[var(--team-primary)] px-3 font-display text-lg font-bold text-[var(--team-on-primary)]">
                 {player.jerseyNumber}
@@ -2019,7 +2031,11 @@ export function PlayerProfileContent({
               owns the supporting bio.
             */}
           </div>
-          <div className="shrink-0 text-center sm:pr-4">
+          {/* Snug against the name, NOT pinned to the far edge: the number and
+              the player it belongs to read as one unit. Trailing space at the
+              right of a wide bar is quieter than a void between two things that
+              belong together. */}
+          <div className="shrink-0 sm:pl-2 sm:text-left">
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Overall</p>
             <p className="type-stat-xl mt-1 text-slate-950 dark:text-white">{player.overallRating}</p>
           </div>

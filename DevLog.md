@@ -4510,3 +4510,38 @@ team, so each school's own record book is sitting in the snapshot unused.
 Teaching `getHistory` to take a team index and read from there makes the section
 real for any school, at which point the gate comes out. Wrong data stated as
 fact is worse than missing data — that's the only reason to ship the gate first.
+
+### Hero tightened again, and a conflict it exposed (2026-07-31)
+
+**Hero 282px → 210px**, and the nav row now sits 322px from the dialog top. Three
+changes: padding down a step, portrait 15rem → 11rem, and the identity column is
+no longer `flex-1`. That last one is what closed the horizontal void — stretching
+it pushed the OVR to the far wall, so on a 1,100px hero the number and the name
+it belongs to had ~600px of nothing between them. The OVR now sits 32px from the
+name and reads as one unit with it. Trailing space at the right of a wide bar is
+quieter than a gap between two things that belong together.
+
+House style, stated by the user and worth holding to: **tight and snug, bold
+where boldness earns it** (the portrait, the OVR) — not padding stretched to fill
+a container.
+
+**REGRESSION FOUND, NOT FIXED — Overview's "Latest journey event" is now empty on
+first open.** It reads "Nothing recorded yet" for a player who has a Week 2
+National Offensive Player of the Week, and only fills in after Journey has been
+visited.
+
+Cause is two of this refactor's own phases meeting: Phase 2 put a latest-event
+module on Overview, and Phase 7 deferred BOTH of that module's sources — honors
+come from the all-seasons aggregate and milestones from career games, and neither
+loads until Performance or Journey is opened. So the module promises a career
+event and shows an empty state on the one destination that opens by default.
+
+Three ways out, none of them large:
+- give the module a CHEAP source — the current season's awards alone (one
+  `getAwards`, ~130 KB) rather than every season's;
+- let Overview trigger the aggregate after an idle callback, accepting the cost
+  where it isn't blocking anything;
+- or drop the module, which the layout would survive.
+
+The first is the most honest — it shows what it can prove cheaply and stops
+claiming nothing happened when something did.
