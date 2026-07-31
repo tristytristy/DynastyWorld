@@ -309,7 +309,11 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    // `pt` is the Dashboard's own now: the shell's scroller gives up its top
+    // padding so a pinned section nav can sit flush against the panel edge (see
+    // App.tsx). This route has no pinned row, so it just restores the gap for
+    // itself, matching the scroller's old `p-5 md:p-8` step for step.
+    <div className="space-y-6 pt-5 md:pt-8">
       <section
         style={ANGLED_PANEL}
         className="border border-white/65 bg-white/76 p-6 shadow-[0_28px_90px_-44px_rgba(15,23,42,0.4)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76"

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeProvider';
 import { GliderNav, gliderItemClass } from '../ui/GliderNav';
@@ -116,6 +116,29 @@ function DynastyNav({ id }: { id: string }) {
   // the same order they're rendered in below.
   const activeIndex = ['coach', 'team', 'league', 'recruit', 'media'].indexOf(section);
 
+  /*
+    Publishes this row's real height as `--section-nav-h` so the rows that pin
+    beneath it (Team Hub's sub-nav) can offset by what it ACTUALLY measures.
+    It used to be a hard-coded `4rem` guess, which was 7px short — the sub-nav
+    pinned underneath this row and lost its top edge behind it.
+
+    Measured rather than constant because this row's height is not fixed: the
+    tabs, the season switcher and search share one `flex-wrap` row, so at a
+    narrow width it wraps to two lines and grows. A literal would be wrong again
+    the moment that happens; an observer just follows it.
+  */
+  const navRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty('--section-nav-h', `${el.getBoundingClientRect().height}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     /*
       No box. The section bar was a bordered, filled card with its own padding —
@@ -123,29 +146,39 @@ function DynastyNav({ id }: { id: string }) {
       now, closed off by a single divider-weight rule, the same hairline used
       between sections.
 
-      The `-mt-5` lifts the tabs onto the sidebar's first row. They sat ~20px
-      low, and the reason is structural rather than anything in this component:
-      the shell gives <main>'s scroller `p-8` while the sidebar's own nav uses
-      `p-4` (app.tsx), and the sidebar row is taller (py-3 against py-2). This
-      cancels that difference HERE rather than reducing the shell's padding,
-      which would move every page's content, not just this bar.
-    */
-    /*
-      STICKY (user direction). The scroll container is <main> in app.tsx, and
-      these rows lived inside it — so on a long page (History, Statistics) the
-      section nav and the season switcher scrolled away and changing either
-      meant scrolling all the way back up.
+      THIS ROW OWNS THE TOP EDGE. It is the first thing in the panel and
+      everything else scrolls underneath it, so it pins flush at `top-0` with no
+      negative margin: <main>'s scroller no longer has top padding (App.tsx), and
+      that is what makes `top-0` mean the top of the panel rather than the top of
+      the padding box.
 
-      `-mt-5` cancels main's `p-5` above it, so `top-0` alone would leave the row
-      floating with the padding still showing through beneath it. The negative
-      margin is kept and the background is opaque, so content passes UNDER the
-      row rather than beside it. The background matches the panel it sits on
-      (`bg-black` in dark is the panel's own value; white in light is a hair
+      That padding is exactly what broke this before. A sticky row pins to its
+      scroll container's CONTENT box, so while the scroller had `p-5 md:p-8` the
+      row sat 20–32px down with a live band of scrolling page above it — on Coach
+      Hub the masthead portrait showed over the tabs and the polo below them,
+      with the row floating mid-page. The old `-mt-5` was an attempt to claw that
+      back and never could: it is a single value against a padding step that
+      changes at `md`, and a margin doesn't move the sticky offset anyway.
+
+      `pt-3.5` is the alignment, and it is measured, not guessed: the sidebar's
+      "Dynasty" label centres on y=79 and the tab row carries 6px of its own lead
+      above the text, so 14px of padding from a flush top edge lands the tabs on
+      that same line. Snug against the panel, level with the sidebar.
+
+      The background is opaque so content passes UNDER the row rather than beside
+      it (`bg-black` in dark is the panel's own value; white in light is a hair
       brighter than its `white/82` but doesn't ghost the text scrolling beneath,
       which a translucent row would). z-30 clears page content without reaching
       the modal layers, which live in their own stacking context at <body>.
+
+      The Team Hub sub-nav pins directly beneath this row and measures its own
+      `top` from the same origin — change this row's height and that one has to
+      follow, or a band of page opens up between them.
     */
-    <nav className="sticky top-0 z-30 -mt-5 border-b border-[color:var(--section-divider)] bg-white dark:bg-black pb-2 pt-5">
+    <nav
+      ref={navRef}
+      className="sticky top-0 z-30 border-b border-[color:var(--section-divider)] bg-white pb-2 pt-3.5 dark:bg-black"
+    >
       <div className="flex flex-wrap items-center gap-1.5">
         {/* The glider spans the TABS only — the season switcher and search that
             follow are controls, not destinations, so the rail must not run under

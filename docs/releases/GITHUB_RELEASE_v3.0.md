@@ -97,6 +97,7 @@ Your files are copied into the app's own storage, so moving or deleting the orig
 ## 📌 Navigation
 
 - **The menus stay put.** Section tabs, team tabs and the season switcher pin to the top, so a long page no longer means scrolling back up to change year or tab.
+- **The section bar sits at the very top**, level with the sidebar, and everything else scrolls cleanly beneath it. It used to pin a little way down the page with a live strip of the page still showing above it — on Coach Hub the portrait appeared over the tabs and the polo below them. The team tabs now measure their position from the real section bar, so the two rows stay locked together instead of drifting apart.
 
 ## 🐛 Fixes
 

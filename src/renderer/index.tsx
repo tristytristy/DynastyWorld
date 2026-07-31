@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
-import { App } from './app';
+import { App } from './App';
 import { AssetGate } from './components/common/AssetGate';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { StadiumDataProvider } from './data/StadiumDataProvider';

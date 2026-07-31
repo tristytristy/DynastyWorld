@@ -114,8 +114,25 @@ export function App() {
                   means the layout never changes width, at the cost of that strip
                   always being spoken for.
                 */
+                /*
+                  NO TOP PADDING, on purpose. A `position: sticky` row pins to
+                  its scroll container's CONTENT box — below this padding, not at
+                  the top of the scrollport. While the container had `p-8`, the
+                  pinned section nav sat 32px down with a live 32px band of
+                  scrolling page above it: on Coach Hub the masthead portrait
+                  showed over the tabs and the polo below them.
+                  DynastyLayout's own `-mt-5` was an attempt to claw that back
+                  and never fully could, because the padding step changes at `md`
+                  and the sticky offset doesn't move with it.
+
+                  Owning the top edge here removes the band itself rather than
+                  masking it, and lets the section nav pin flush to the panel top
+                  and align with the sidebar's "Dynasty" row. The two routed
+                  trees supply their own top spacing instead: DynastyLayout via
+                  the nav's padding, Dashboard via its own (it has no pinned row).
+                */
                 style={{ scrollbarGutter: 'stable' }}
-                className="relative h-full overflow-y-auto p-5 md:p-8"
+                className="relative h-full overflow-y-auto px-5 pb-5 md:px-8 md:pb-8"
               >
                 <Routes>
                   <Route path="/" element={<Dashboard />} />

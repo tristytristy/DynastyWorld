@@ -39,13 +39,18 @@ export function TeamHubLayout() {
     <div className="space-y-5">
       {/* Sub-nav + team selector on one row — the selector carries team identity across every tab. */}
       {/*
-        STICKY, BELOW the section nav. The section row above pins at top-0 and is
-        ~64px tall, so this offsets by that much and the two stack instead of
-        overlapping. Without it the History and Statistics pages scrolled the
-        team tabs and the team switcher out of reach — which is where the user
-        actually needs them on a long page.
+        STICKY, BELOW the section nav. Without it the History and Statistics
+        pages scrolled the team tabs and the team switcher out of reach — which
+        is where the user actually needs them on a long page.
+
+        The offset is `--section-nav-h`, which DynastyLayout measures off the
+        real section row and republishes whenever it resizes. This was a
+        hard-coded `4rem`, which under-measured the row by 7px and tucked this
+        row's top edge behind it; a literal also can't survive that row wrapping
+        to two lines at a narrow width. The fallback matches the row's current
+        height and only applies if this ever renders outside DynastyLayout.
       */}
-      <div className="sticky top-[4rem] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between">
+      <div className="sticky top-[var(--section-nav-h,4.4375rem)] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between">
         {/*
           The bordered, filled strip is gone: the glider's own rail is what
           groups these tabs now, and a box around them as well read as two
