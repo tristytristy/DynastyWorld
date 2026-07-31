@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollLock } from '../../lib/useScrollLock';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 /**
  * The one standard modal shell for the app (Phase 1 + Phase 8 standardization,
@@ -58,21 +60,14 @@ export function CenteredModalPanel({
       aria-modal="true"
       aria-label={title}
       style={{ maxWidth: `${widthRem}rem` }}
-      className="content-enter relative flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-[0_60px_160px_-40px_rgba(2,6,23,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+      className="relative flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden modal-panel corner-cut md:max-h-[calc(100vh-4rem)]"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
         <div className="min-w-0">
           {eyebrow && <p className="type-eyebrow text-slate-400 dark:text-slate-500">{eyebrow}</p>}
           <h3 className="truncate text-lg font-semibold text-slate-950 dark:text-white">{title}</h3>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={`Close ${title}`}
-          className="shrink-0 border border-slate-300/80 bg-white/85 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-        >
-          Close
-        </button>
+        <ModalCloseButton label={title} onClick={onClose} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">{children}</div>
     </div>
@@ -83,15 +78,15 @@ export function CenteredModalPanel({
   );
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       {panel}
-    </div>,
+    </ModalOverlay>,
     document.body,
   );
 }

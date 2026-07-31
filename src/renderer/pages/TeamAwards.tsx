@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
@@ -262,8 +263,12 @@ function AwardCard({
     result.recommendedWinnerId !== null &&
     result.recommendedWinnerId !== result.selectedWinnerId;
 
+  // The hero award used a team-coloured BORDER to stand out; sections carry no
+  // border now, so the emphasis moved to a faint team wash — same signal, no frame.
   return (
-    <SurfaceCard className={hero ? 'border-[var(--team-primary)]/40' : ''}>
+    <SurfaceCard
+      className={hero ? 'bg-[color-mix(in_srgb,var(--team-primary)_8%,var(--surface-primary))]' : ''}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={`font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500 ${hero ? 'text-xs' : 'text-[11px]'}`}>
@@ -781,22 +786,12 @@ export function TeamAwards() {
 
   return (
     <div className="space-y-6">
-      <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <TeamLogo team={{ assetName: overview.teamName, label: overview.teamName }} size="lg" />
-            <div>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                Team Awards
-              </p>
-              <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">{overview.teamName}</h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Season {overview.seasonYear}
-                {headCoachName ? ` — ${headCoachName}` : ''} — {overview.record.wins}-{overview.record.losses} (
-                {overview.conferenceRecord.wins}-{overview.conferenceRecord.losses} conf.)
-              </p>
-            </div>
-          </div>
+      <PageMasthead
+        eyebrow="Team Awards"
+        title={overview.teamName}
+        subtitle={`Season ${overview.seasonYear}${headCoachName ? ` — ${headCoachName}` : ''} — ${overview.record.wins}-${overview.record.losses} (${overview.conferenceRecord.wins}-${overview.conferenceRecord.losses} conf.)`}
+        mark={{ kind: 'helmet', teamAssetName: overview.teamName }}
+        actions={
           <div className="flex flex-col items-start gap-2 lg:items-end">
             <span className="border border-slate-200/80 bg-slate-50/90 px-4 py-1.5 text-sm font-medium text-slate-600 dark:border-slate-800 dark:bg-white/5 dark:text-slate-300">
               {seasonStatus}
@@ -827,8 +822,8 @@ export function TeamAwards() {
               {showSettings ? 'Hide Settings' : '⚙ Settings'}
             </button>
           </div>
-        </div>
-      </SurfaceCard>
+        }
+      />
 
       {showSettings && (
         <TeamAwardsSettingsPanel dynastyId={id} definitions={definitions} settings={settings} onSaved={setSettings} />

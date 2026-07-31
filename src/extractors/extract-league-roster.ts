@@ -1,4 +1,5 @@
 import { getLargestTable, nonEmpty, preloadAllInstances, resolveReferenceWithTable, type OpenFranchise } from './lib/franchise';
+import { PLAYER_FIELDS } from './lib/playerFields';
 import { mapPlayer, type RosterPlayerData } from './extract-roster';
 import { categoryFromTableName, mapLineForCategory, type PlayerStatsData } from './extract-stats';
 
@@ -36,7 +37,9 @@ export async function extractLeagueRoster(
   expectedRelativeYear: number,
 ): Promise<LeagueRosterData> {
   const playerTable = getLargestTable(franchise, 'Player');
-  await playerTable.readRecords();
+  // The shared subset, not every attribute — see lib/playerFields.ts. This call
+  // was the one that pulled the whole 16,500-row Player table (767 ms → 82 ms).
+  await playerTable.readRecords(PLAYER_FIELDS);
 
   await Promise.all(
     [

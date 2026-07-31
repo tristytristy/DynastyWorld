@@ -21,7 +21,7 @@ const CREDITS: { role: string; value: string }[] = [
  * Tools menus (a full-width trigger button that opens a CenteredModalPanel).
  * Version comes from __APP_VERSION__ (injected from package.json at build).
  */
-export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
+export function AboutMenu({ triggerClassName, icon }: { triggerClassName?: string; icon?: React.ReactNode } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [check, setCheck] = useState<UpdateCheckResult | null>(null);
@@ -53,8 +53,10 @@ export function AboutMenu({ triggerClassName }: { triggerClassName?: string } = 
         className={triggerClassName ?? 'border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800'}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
+        aria-label={icon ? 'About' : undefined}
+        title={icon ? 'About' : undefined}
       >
-        About
+        {icon ?? 'About'}
       </button>
 
       <CenteredModalPanel

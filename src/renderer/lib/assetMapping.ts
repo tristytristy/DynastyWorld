@@ -1,3 +1,4 @@
+import { programArtFor } from './programArt';
 /**
  * NCAA logo asset mapping — generated from assets/icons/NCAA Logos/*.webp
  * Maps a normalized team key (lowercase, alphanumeric-only) to its logo filename.
@@ -522,6 +523,12 @@ export function canonicalKey(teamAssetName: string): string {
  */
 export function getLogoPath(teamAssetName: string, background: 'light' | 'dark' | 'gold' = 'light'): string {
   const key = canonicalKey(teamAssetName);
+  // An upload wins over the shipped library, and one file serves all three
+  // variants: an arbitrary image has no on-dark or gold counterpart to pick,
+  // so TeamLogo tints the gold case rather than this returning a file that
+  // doesn't exist. See programArt.ts.
+  const uploaded = programArtFor(key, 'logo');
+  if (uploaded) return uploaded;
   const filename = TEAM_3D_LOGOS[key];
   if (filename) {
     if (background === 'gold') {

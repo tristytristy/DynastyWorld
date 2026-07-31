@@ -1,32 +1,10 @@
 import { useEffect, useState } from 'react';
-import { SELECTION_ACTIVE, SELECTION_BASE, SELECTION_IDLE } from '../../lib/selectionClass';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { GliderNav, gliderItemClass } from '../ui/GliderNav';
 import { TeamLogo } from './TeamLogo';
-import { PreferencesMenu } from './PreferencesMenu';
-import { HelpMenu } from './HelpMenu';
-import { StadiumDatabaseMenu } from './StadiumDatabaseMenu';
-import { UserManualMenu } from './UserManualMenu';
-import { AboutMenu } from './AboutMenu';
 import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
-
-// Shared full-width trigger styling for the utility controls now docked at the
-// bottom of the sidebar (theme toggle + the three menus).
-const UTILITY_TRIGGER_CLASS =
-  'w-full border border-slate-200/80 bg-white/80 px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-white/10';
-
-function navClass(isActive: boolean): string {
-  return [
-    'group relative flex items-center justify-between px-4 py-3 text-sm font-medium',
-    SELECTION_BASE,
-    isActive
-      // The left edge-rail is a LIGHT-mode device: on dark the gold border
-      // already marks the row, and a second indicator just adds noise.
-      ? `${SELECTION_ACTIVE} before:absolute before:-left-px before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:bg-[var(--team-primary)] dark:before:hidden`
-      : SELECTION_IDLE,
-  ].join(' ');
-}
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
@@ -62,14 +40,38 @@ export function Sidebar() {
     // importing then immediately opening the new dynasty.
   }, [location.pathname]);
 
+  /*
+    The glider is positional, so the rows are ONE flat list: the "Dynasty" index
+    row at 0, then each dynasty. That's why the dynasty rows carry their own
+    indent (pl-10) instead of sitting in a nested wrapper — a wrapper would be a
+    single child holding many rows, and the indicator could no longer find them.
+    Its own left border is gone too: the glider's rail is that vertical line now.
+  */
+  const activeDynastyId = location.pathname.startsWith('/dynasty/')
+    ? location.pathname.split('/')[2]
+    : undefined;
+  const rows = expanded ? dynasties : [];
+  // -1 (no glider) when the active dynasty's row is collapsed out of view — the
+  // alternative is parking the indicator on a row that isn't where you are.
+  const activeIndex = activeDynastyId
+    ? rows.findIndex((dynasty) => dynasty.id === activeDynastyId) + 1 || -1
+    : location.pathname === '/'
+      ? 0
+      : -1;
+
   return (
     <aside className="hidden w-[290px] shrink-0 overflow-y-auto lg:block">
       <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-black">
-        <div className="space-y-1">
+        <GliderNav
+          activeIndex={activeIndex}
+          orientation="vertical"
+          ariaLabel="Dynasties"
+          itemsClassName="gap-1"
+        >
           <div className="flex items-center gap-1">
-            <NavLink to="/" end className={({ isActive }) => `flex-1 ${navClass(isActive)}`}>
-              <span>Dynasty</span>
-            </NavLink>
+            <Link to="/" className={`flex-1 ${gliderItemClass(activeIndex === 0, 'px-4 py-3')}`}>
+              Dynasty
+            </Link>
             {dynasties.length > 0 && (
               <button
                 type="button"
@@ -83,45 +85,30 @@ export function Sidebar() {
             )}
           </div>
 
-          {expanded && dynasties.length > 0 && (
-            <div className="ml-3 space-y-1 border-l border-slate-200/80 pl-3 dark:border-slate-800">
-              {dynasties.map((dynasty) => (
-                <NavLink
-                  key={dynasty.id}
-                  to={`/dynasty/${dynasty.id}`}
-                  className={({ isActive }) => navClass(isActive)}
-                >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <TeamLogo
-                      team={{ assetName: dynasty.teamName, label: dynasty.teamName }}
-                      size="sm"
-                      className="shrink-0"
-                    />
-                    <span className="truncate">{dynasty.coachName ?? dynasty.teamName}</span>
-                  </span>
-                </NavLink>
-              ))}
-            </div>
-          )}
-        </div>
+          {rows.map((dynasty, index) => (
+            <Link
+              key={dynasty.id}
+              to={`/dynasty/${dynasty.id}`}
+              className={`block ${gliderItemClass(activeIndex === index + 1, 'pl-10 pr-4 py-3')}`}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <TeamLogo
+                  team={{ assetName: dynasty.teamName, label: dynasty.teamName }}
+                  size="sm"
+                  className="shrink-0"
+                />
+                <span className="truncate">{dynasty.coachName ?? dynasty.teamName}</span>
+              </span>
+            </Link>
+          ))}
+        </GliderNav>
 
-        {/* Tools — workspace utilities, kept directly under the dynasty menu so
-            they're always reachable without scrolling a long page to the bottom.
-            Recruiting/immersion + theme settings live inside Preferences (single
-            settings hub), so the sidebar itself no longer carries a theme toggle. */}
-        <div className="mt-6 border-t border-slate-200/70 pt-4 dark:border-white/10">
-          <p className="px-1 pb-1.5 type-eyebrow text-slate-400 dark:text-slate-500">Tools</p>
-          <div className="space-y-2">
-            <PreferencesMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            {/* Stadium database hidden pending a decision on whether it earns
-                its place in Tools. The component and its data are untouched —
-                restore by putting this line back. */}
-            {false && <StadiumDatabaseMenu triggerClassName={UTILITY_TRIGGER_CLASS} />}
-            <HelpMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            <UserManualMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-            <AboutMenu triggerClassName={UTILITY_TRIGGER_CLASS} />
-          </div>
-        </div>
+        {/* The Tools group (Preferences / Quick Help / User Manual / About)
+            moved into the title bar as icons — the pattern every browser uses,
+            and it hands the sidebar its full height back for the dynasty list.
+            Quick Help was retired at the same time: the manual covers it, and
+            two doors to the same room is one too many. HelpMenu itself is left
+            in the tree, unreferenced, so restoring it is a one-line change. */}
 
         {UPCOMING_LINKS.length > 0 && (
           <div className="mt-6 border border-slate-200/80 bg-slate-50/85 p-4 dark:border-white/5 dark:bg-white/5">

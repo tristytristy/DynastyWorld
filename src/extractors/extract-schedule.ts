@@ -101,6 +101,20 @@ export interface GameData {
    * only the neutral/home/away distinction can be shown, never a venue name.
    */
   isNeutralSite: boolean;
+  /**
+   * The save's `SeasonGame.Stadium` reference as a raw `tableId:rowNumber`
+   * string, and ONLY when it differs from the home team's own stadium — i.e.
+   * when this game is at a specific venue that isn't anybody's home field.
+   *
+   * The reference itself points outside the save (tables 16433+, the same
+   * catalogue as the AD goals and rivalry trophies), so the venue's NAME can't
+   * be read here. The id is stable across saves though — verified identical in
+   * three unrelated files — so the renderer resolves it against a bundled
+   * lookup (lib/neutralVenues.ts).
+   *
+   * Absent on seasons synced before this shipped.
+   */
+  neutralVenueId?: string | null;
 }
 
 const FIELDS = [
@@ -201,11 +215,33 @@ async function buildNeutralSitePairs(franchise: OpenFranchise): Promise<Set<stri
  * nothing generated) correctly comes back empty rather than borrowing the
  * prior season's leftovers.
  */
+/** A reference field as a stable `tableId:rowNumber` string, or null when unset. */
+function refString(record: FranchiseRecord, key: string): string | null {
+  const ref = record.getReferenceDataByKey(key);
+  if (!ref || (ref.tableId === 0 && ref.rowNumber === 0)) return null;
+  return `${ref.tableId}:${ref.rowNumber}`;
+}
+
 export async function extractSchedule(franchise: OpenFranchise, expectedRelativeYear: number): Promise<GameData[]> {
   // HomeTeam/AwayTeam are references into the Team table — its records must be
   // loaded first, since reference resolution looks up targetTable.records[row].
   const teamTable = getLargestTable(franchise, 'Team');
-  await teamTable.readRecords(['DisplayName', 'TeamIndex']);
+  await teamTable.readRecords(['DisplayName', 'TeamIndex', 'Stadium']);
+
+  /*
+    Each team's OWN stadium reference, so a game's Stadium can be compared
+    against it. Measured on a full-season save: 46 games leaguewide carry a
+    Stadium reference and every one of them differs from the home team's —
+    neutral-site kickoff games, Army-Navy, bowls, and the five conference
+    championships played at a fixed venue. Comparing rather than just checking
+    for presence costs nothing and keeps the signal honest if EA ever starts
+    stamping the home stadium on ordinary games.
+  */
+  const stadiumRefOfTeam = new Map<number, string | null>();
+  for (const rec of teamTable.records) {
+    if (rec.isEmpty) continue;
+    stadiumRefOfTeam.set(Number(rec.TeamIndex), refString(rec, 'Stadium'));
+  }
 
   const gameTable = getLargestTable(franchise, 'SeasonGame');
   await gameTable.readRecords(FIELDS);
@@ -232,8 +268,33 @@ export async function extractSchedule(franchise: OpenFranchise, expectedRelative
 
     const pairKey =
       home && away ? [Number(home.TeamIndex), Number(away.TeamIndex)].sort((a, b) => a - b).join('-') : null;
+
+    // A venue that isn't the home team's own field. This is what finally makes
+    // conference championships honest: five of the ten are at a fixed neutral
+    // site and five are hosted by a qualifying team, and the save says which is
+    // which per game — previously every one of them claimed the home stadium.
+    const gameStadium = refString(r, 'Stadium');
+    const homeStadium = home ? stadiumRefOfTeam.get(Number(home.TeamIndex)) ?? null : null;
+    const neutralVenueId = gameStadium && gameStadium !== homeStadium ? gameStadium : null;
+
+    /*
+      Postseason games are neutral-site by default, with one real exception: a
+      CFP FIRST-ROUND game is played on the higher seed's campus, and the save
+      says so by giving it no Stadium reference at all while every other bowl
+      gets one. Without this the app labelled those "Neutral Site" and refused
+      to name the host's stadium — the same class of error as the conference
+      championships, pointing the other way.
+
+      Scoped to the first round specifically rather than "any bowl missing a
+      venue", because a bowl whose matchup isn't set yet also has no reference
+      and must not be reported as a home game for whoever is penciled in.
+    */
+    const isCfpFirstRound = bowlName === 'CFP First Round';
     const isNeutralSite =
-      isBowlGame || String(r.IsKickoffGame) === 'true' || (pairKey !== null && neutralSitePairs.has(pairKey));
+      (isBowlGame && !(isCfpFirstRound && neutralVenueId === null)) ||
+      String(r.IsKickoffGame) === 'true' ||
+      neutralVenueId !== null ||
+      (pairKey !== null && neutralSitePairs.has(pairKey));
 
     games.push({
       gameId,
@@ -266,6 +327,7 @@ export async function extractSchedule(franchise: OpenFranchise, expectedRelative
       awayTeamStats: resolveTeamStats(franchise, r, 'AwayTeamStatCache'),
       isBowlGame,
       isNationalChampionship,
+      neutralVenueId,
       bowlName,
       bowlAssetName,
       isNeutralSite,

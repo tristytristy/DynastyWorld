@@ -3,6 +3,7 @@ import { availablePositionGroups, matchesPositionFilter } from '../lib/positionG
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
 import { StatTile } from '../components/ui/StatTile';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { TeamLogo } from '../components/common/TeamLogo';
@@ -15,6 +16,7 @@ import { resolveTeamIndex } from '../components/common/TeamLink';
 import { useWatchlist } from '../data/useWatchlist';
 import { formatClassYearShort } from '../lib/recruitFormat';
 import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
+import { ModalCloseButton } from '../components/common/ModalCloseButton';
 
 /** A star toggle for the watchlist — filled when watching, hollow otherwise. */
 function WatchStar({ watched, onToggle, className = '' }: { watched: boolean; onToggle: () => void; className?: string }) {
@@ -616,41 +618,55 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
             className={`${FILTER_SELECT} w-full`}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <select value={position} onChange={(e) => setPosition(e.target.value)} aria-label="Filter by position" className={FILTER_SELECT}>
-              <option value="">All positions</option>
-              {options.groups.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-              {/* Wider groupings are kept in their own section: they overlap the
-                  list above on purpose, and inline they'd look like duplicates. */}
-              {options.superGroups.length > 0 && (
-                <optgroup label="Groups">
-                  {options.superGroups.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {g.label}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <select value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Filter by stars" className={FILTER_SELECT}>
-              <option value="">All stars</option>
-              {[5, 4, 3, 2, 1].map((s) => <option key={s} value={s}>{s}★</option>)}
-            </select>
-            <select value={homeState} onChange={(e) => setHomeState(e.target.value)} aria-label="Filter by state" className={FILTER_SELECT}>
-              <option value="">All states</option>
-              {options.states.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={classYear} onChange={(e) => setClassYear(e.target.value)} aria-label="Filter by class" className={FILTER_SELECT}>
-              <option value="">All classes</option>
-              {options.classes.map((c) => <option key={c} value={c}>{c.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ')}</option>)}
-            </select>
-            <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Filter by stage" className={FILTER_SELECT}>
-              <option value="">All stages</option>
-              {options.stages.map((s) => <option key={s} value={s}>{STAGE_STYLE[s]?.label ?? s}</option>)}
-            </select>
+            {/* The wider groupings used to be an <optgroup>; they're appended
+                with a separating em-dash label instead, since they overlap the
+                list above on purpose and would read as duplicates inline. */}
+            <Select
+              value={position}
+              onChange={setPosition}
+              ariaLabel="Filter by position"
+              options={[
+                { value: '', label: 'All positions' },
+                ...options.groups.map((g) => ({ value: g.value, label: g.label })),
+                ...options.superGroups.map((g) => ({ value: g.value, label: `${g.label} (group)` })),
+              ]}
+            />
+            <Select
+              value={stars}
+              onChange={setStars}
+              ariaLabel="Filter by stars"
+              options={[
+                { value: '', label: 'All stars' },
+                ...[5, 4, 3, 2, 1].map((s) => ({ value: String(s), label: `${s}★` })),
+              ]}
+            />
+            <Select
+              value={homeState}
+              onChange={setHomeState}
+              ariaLabel="Filter by state"
+              options={[{ value: '', label: 'All states' }, ...options.states.map((s) => ({ value: s, label: s }))]}
+            />
+            <Select
+              value={classYear}
+              onChange={setClassYear}
+              ariaLabel="Filter by class"
+              options={[
+                { value: '', label: 'All classes' },
+                ...options.classes.map((c) => ({
+                  value: c,
+                  label: c.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+                })),
+              ]}
+            />
+            <Select
+              value={stage}
+              onChange={setStage}
+              ariaLabel="Filter by stage"
+              options={[
+                { value: '', label: 'All stages' },
+                ...options.stages.map((s) => ({ value: s, label: STAGE_STYLE[s]?.label ?? s })),
+              ]}
+            />
             {!boardOnly && (
               <FilterCheck label="My Board" checked={board === 'on'} onChange={(c) => setBoard(c ? 'on' : '')} />
             )}
@@ -910,7 +926,7 @@ function RecruitInfluenceModal({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => !saving && onClose()} aria-hidden="true" />
+      <div className="modal-scrim absolute inset-0" onClick={() => !saving && onClose()} aria-hidden="true" />
       <div className="corner-cut relative flex max-h-[88vh] w-full max-w-lg flex-col border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 p-5 dark:border-white/10">
           <div className="flex items-center gap-3">
@@ -920,7 +936,7 @@ function RecruitInfluenceModal({
               <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{recruit.firstName} {recruit.lastName}</h3>
             </div>
           </div>
-          <button type="button" onClick={() => !saving && onClose()} className="border border-slate-300/85 bg-white/92 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900">Close</button>
+          <ModalCloseButton label="recruiting editor" onClick={onClose} disabled={saving} />
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
@@ -930,10 +946,18 @@ function RecruitInfluenceModal({
             <div className="mt-2 grid grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="mb-1 block text-xs text-slate-400 dark:text-slate-500">Stage</span>
-                <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${FILTER_SELECT} w-full`}>
-                  {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  {!STAGE_OPTIONS.some((o) => o.value === stage) && <option value={stage}>{stage}</option>}
-                </select>
+                <Select
+                  value={stage}
+                  onChange={setStage}
+                  ariaLabel="Commitment stage"
+                  className="w-full"
+                  options={[
+                    ...STAGE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+                    // A stage the option list doesn't know stays selectable, so
+                    // opening the editor can never silently rewrite it.
+                    ...(STAGE_OPTIONS.some((o) => o.value === stage) ? [] : [{ value: stage, label: stage }]),
+                  ]}
+                />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-xs text-slate-400 dark:text-slate-500">Commit score</span>
@@ -957,20 +981,21 @@ function RecruitInfluenceModal({
                 {slots.map((slot) => (
                   <div key={slot.originalTeamIndex} className="flex items-center gap-2">
                     <TeamLogo team={{ assetName: teamName(slot.teamIndex), label: teamName(slot.teamIndex) }} size="sm" className="!h-5 !w-5 shrink-0" />
-                    <select
-                      value={slot.teamIndex}
-                      onChange={(e) => updateSlot(slot.originalTeamIndex, { teamIndex: Number(e.target.value) })}
-                      className="min-w-0 flex-1 border border-slate-200/80 bg-white/80 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-white"
-                      aria-label={`Top school (was ${teamName(slot.originalTeamIndex)})`}
-                    >
-                      {/* keep the current team selectable even if the league list hasn't loaded */}
-                      {!teams.some((t) => t.teamIndex === slot.teamIndex) && (
-                        <option value={slot.teamIndex}>{teamName(slot.teamIndex)}</option>
-                      )}
-                      {teams.map((t) => (
-                        <option key={t.teamIndex} value={t.teamIndex}>{t.displayName}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={String(slot.teamIndex)}
+                      onChange={(next) => updateSlot(slot.originalTeamIndex, { teamIndex: Number(next) })}
+                      ariaLabel={`Top school (was ${teamName(slot.originalTeamIndex)})`}
+                      className="min-w-0 flex-1"
+                      searchable
+                      searchPlaceholder="Find a school…"
+                      options={[
+                        // keep the current team selectable even if the league list hasn't loaded
+                        ...(teams.some((t) => t.teamIndex === slot.teamIndex)
+                          ? []
+                          : [{ value: String(slot.teamIndex), label: teamName(slot.teamIndex) }]),
+                        ...teams.map((t) => ({ value: String(t.teamIndex), label: t.displayName })),
+                      ]}
+                    />
                     <input
                       type="number"
                       min={0}
@@ -1027,8 +1052,8 @@ function StatUnlockModal({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
-      <div className="corner-cut relative w-full max-w-md border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+      <div className="modal-scrim absolute inset-0" onClick={onCancel} aria-hidden="true" />
+      <div className="corner-cut relative w-full max-w-md modal-panel p-6">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center border border-amber-300/70 bg-amber-100/70 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
             <LockIcon locked />
@@ -1111,7 +1136,7 @@ function ForceCommitModal({
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => !busy && onClose()} aria-hidden="true" />
+      <div className="modal-scrim absolute inset-0" onClick={() => !busy && onClose()} aria-hidden="true" />
       <div className="corner-cut relative flex max-h-[88vh] w-full max-w-md flex-col border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 p-5 dark:border-white/10">
           <div className="flex items-center gap-3">

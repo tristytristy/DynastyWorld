@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { PlayerDeparture, TeamTransfers, TransferEntry } from '../../shared/types';
-import { PageHeader } from '../components/ui/PageHeader';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { TeamLink, resolveTeamIndex } from '../components/common/TeamLink';
@@ -218,10 +218,12 @@ export function Transfers() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageMasthead
         eyebrow="Transfer Portal"
-        title={`Who came and went${focusTeamName ? ` — ${focusTeamName}` : ''}.`}
+        title={focusTeamName ?? 'Transfer Portal'}
+        subtitle="Who came and went"
         description="Detected by comparing each season's full league roster to the last — players who changed schools between seasons. Only this app keeps the per-season league history that makes this possible."
+        mark={{ kind: 'logo', teamAssetName: focusTeamName ?? '' }}
       />
 
       {data === undefined ? (

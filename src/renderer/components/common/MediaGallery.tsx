@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { MediaItemResolved } from '../../../shared/types';
+import type { MediaFraming, MediaItemResolved } from '../../../shared/types';
 import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useGameModal } from '../../data/GameModalProvider';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
+import { ZoomableImage, framingTransform } from './ZoomableImage';
 
 /**
  * Absolute on-disk path → a URL the (file://-origin) renderer can load. Shared
@@ -26,6 +29,13 @@ export function mediaFileUrl(absolutePath: string): string {
  * fields (gameLabel, taggedPlayers) so items render correctly against their
  * OWN season, wherever they're shown. Managing items (game/tags/description,
  * delete) stays on the season's Media page.
+ *
+ * FRAMING IS THE EXCEPTION, and deliberately: how a photo is cropped is
+ * presentation, not metadata. Re-tagging which game a shot belongs to from a
+ * player's bio would be confusing — the item spans seasons and the bio isn't
+ * where it's managed — but "this photo should be cropped like THIS" is
+ * unambiguous wherever you're looking at it, and refusing it here would mean
+ * walking to the Media page to fix a crop you're staring at.
  */
 export function MediaGallery({
   dynastyId,
@@ -43,6 +53,18 @@ export function MediaGallery({
   const { openPlayerModal } = usePlayerModal();
   const { openGameModal } = useGameModal();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Framings saved from THIS gallery, overlaid on the fetched items. The parent
+  // owns `items` and doesn't refetch on a crop, so without this the tile behind
+  // the viewer would keep the old crop until the page was revisited.
+  const [framings, setFramings] = useState<Record<number, MediaFraming | null>>({});
+  const framingFor = (media: MediaItemResolved): MediaFraming | null =>
+    media.id in framings ? framings[media.id] : media.framing;
+
+  function saveFraming(id: number, framing: MediaFraming | null) {
+    void window.api.media.setFraming(id, framing);
+    setFramings((prev) => ({ ...prev, [id]: framing }));
+  }
+
   const item = lightboxIndex !== null ? items[lightboxIndex] : undefined;
 
   const canGoPrevious = lightboxIndex !== null && lightboxIndex > 0;
@@ -96,7 +118,12 @@ export function MediaGallery({
                   src={mediaFileUrl(mediaItem.absolutePath)}
                   alt={caption || 'Dynasty media'}
                   loading="lazy"
-                  className="h-full w-full object-cover transition duration-base ease-standard group-hover:scale-[1.03]"
+                  /* A framed photo shows its framing here too — a crop you saved
+                     and then didn't see anywhere would read as not having saved.
+                     Stays object-cover so nothing letterboxes and un-framed
+                     tiles look exactly as before. */
+                  className={`h-full w-full object-cover ${framingFor(mediaItem) ? '' : 'transition duration-base ease-standard group-hover:scale-[1.03]'}`}
+                  style={{ transform: framingTransform(framingFor(mediaItem)) }}
                   draggable={false}
                 />
               )}
@@ -112,8 +139,8 @@ export function MediaGallery({
 
       {/* Portaled to <body>: this gallery renders inside backdrop-blur surfaces (cards, the player modal), and backdrop-filter creates a containing block that would trap a fixed overlay inside the card instead of covering the viewport. */}
       {item && lightboxIndex !== null && createPortal(
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md md:p-8"
+        <ModalOverlay
+          className="modal-scrim modal-scrim-deep fixed inset-0 flex items-center justify-center p-4 md:p-8"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setLightboxIndex(null);
@@ -123,18 +150,20 @@ export function MediaGallery({
             role="dialog"
             aria-modal="true"
             aria-label="Media viewer"
-            className="corner-cut flex max-h-full w-full max-w-6xl flex-col overflow-hidden border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 lg:flex-row"
+            className="corner-cut flex max-h-full w-full max-w-6xl flex-col overflow-hidden modal-panel lg:flex-row"
           >
-            <div className="relative flex min-h-[16rem] flex-1 items-center justify-center bg-slate-950 lg:min-h-[28rem]">
+            {/* overflow-hidden because a zoomed photo has to be clipped by
+                something, and the stage is what it lives in. */}
+            <div className="relative flex min-h-[16rem] flex-1 items-center justify-center overflow-hidden bg-slate-950 lg:min-h-[28rem]">
               {item.mediaType === 'video' ? (
                 <video key={item.id} src={mediaFileUrl(item.absolutePath)} controls className="max-h-[70vh] max-w-full" />
               ) : (
-                <img
+                <ZoomableImage
                   key={item.id}
                   src={mediaFileUrl(item.absolutePath)}
                   alt={item.description || 'Dynasty media'}
-                  className="max-h-[70vh] max-w-full object-contain"
-                  draggable={false}
+                  saved={framingFor(item)}
+                  onSave={(framing) => saveFraming(item.id, framing)}
                 />
               )}
               <button
@@ -167,14 +196,7 @@ export function MediaGallery({
                 <p className="type-eyebrow text-slate-400 dark:text-slate-500">
                   {item.mediaType === 'video' ? 'Video' : 'Photo'} details
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setLightboxIndex(null)}
-                  aria-label="Close media viewer"
-                  className="border border-slate-300/80 bg-white/85 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-                >
-                  Close
-                </button>
+                <ModalCloseButton label="media viewer" onClick={() => setLightboxIndex(null)} />
               </div>
 
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -236,7 +258,7 @@ export function MediaGallery({
               </div>
             </div>
           </div>
-        </div>,
+        </ModalOverlay>,
         document.body,
       )}
     </>

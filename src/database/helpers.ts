@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { BindParams, SqlValue } from 'sql.js';
-import { compactDatabase, getDatabaseFileBytes, getDb, getReusableSpaceBytes, persist } from './init';
+import { compactDatabase, getDatabaseFileBytes, getDb, getDbEpoch, getReusableSpaceBytes, persist } from './init';
 import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { SeasonOverviewCoach } from '../shared/types';
@@ -180,6 +180,7 @@ export function deleteDynasty(id: string): void {
   // so the one operation that depends on it asserts for itself.
   getDb().run('PRAGMA foreign_keys = ON;');
   run('DELETE FROM dynasties WHERE id = ?', [id]);
+  invalidateSnapshotCache();
   sweepOrphanedData();
   compactDatabase();
 }
@@ -199,6 +200,7 @@ function sweepOrphanedData(): number {
     ['program_milestones', 'dynasty_id'],
     ['player_career_stats', 'dynasty_id'],
     ['player_notes', 'dynasty_id'],
+    ['player_cards', 'dynasty_id'],
     ['media_items', 'dynasty_id'],
     ['team_award_results', 'dynasty_id'],
     ['team_award_settings', 'dynasty_id'],
@@ -509,6 +511,7 @@ export function saveSnapshot(
        extraction_version = excluded.extraction_version`,
     [seasonId, name, JSON.stringify(payload), new Date().toISOString(), extractionVersion],
   );
+  invalidateSnapshotCache();
 }
 
 /**
@@ -540,20 +543,103 @@ export function saveSnapshotCompressed(
        extraction_version = excluded.extraction_version`,
     [seasonId, name, compressed, new Date().toISOString(), extractionVersion],
   );
+  invalidateSnapshotCache();
+}
+
+/**
+ * Parsed snapshots, kept between reads.
+ *
+ * WHY (measured 2026-07-30). Every `getSnapshot` was a fresh gunzip + JSON.parse
+ * of a whole league-scale blob, on the MAIN process's only thread — so a second
+ * read of the same snapshot cost exactly as much as the first, and blocked
+ * everything else while it ran. One played season's `gamelog` measures 16.5 MB
+ * parsed and 721 ms; the player modal read it twice per open, and `leagueRoster`
+ * is read once per season on top of that. Opening two players in a row paid the
+ * whole bill twice for bytes that had not changed.
+ *
+ * BOUNDED, because these are large. Least-recently-used eviction over a budget
+ * charged in DECOMPRESSED JSON length — the string actually handed to
+ * `JSON.parse`, not the `gz:` blob sitting in the row. That distinction is the
+ * whole safety of this: league snapshots are stored gzipped and expand by
+ * roughly an order of magnitude, so charging the stored size would let a
+ * nominally-8 MB cache pin hundreds of megabytes of live objects.
+ *
+ * THE BUDGET WAS SIZED BY MEASUREMENT, not taste. One season's working set for
+ * the player modal is the `gamelog` (16.5 MB of JSON) plus that season's
+ * `leagueRoster` and a handful of small snapshots. At 24 MB the two biggest
+ * evicted each other on every open and the second player cost as much as the
+ * first — 190 ms, with `getPlayerDevelopment` back at its full 64 ms. At 48 MB
+ * they coexist and the second player opens in 47 ms. Anything larger buys
+ * nothing for one season and only raises the ceiling on a dynasty with several.
+ *
+ * CORRECTNESS IS THE INVARIANT, not the hit rate. Every write path clears the
+ * whole cache (see `invalidateSnapshotCache`) — a re-sync, an import, a restore
+ * or a dynasty delete drops everything rather than trying to reason about which
+ * entries a mutation touched. Being wrong here means showing last week's roster,
+ * which is far worse than re-parsing a blob.
+ */
+const SNAPSHOT_CACHE_BUDGET_BYTES = 48 * 1024 * 1024;
+const snapshotCache = new Map<string, { payload: unknown; bytes: number }>();
+let snapshotCacheBytes = 0;
+let snapshotCacheEpoch = getDbEpoch();
+
+/**
+ * Drops every cached snapshot. Called from every path that writes one — deleting
+ * the lot is the only version of this that can't be subtly wrong, and the cost of
+ * being wrong (serving a stale roster after a sync) is much higher than the cost
+ * of re-parsing.
+ */
+export function invalidateSnapshotCache(): void {
+  snapshotCache.clear();
+  snapshotCacheBytes = 0;
 }
 
 export function getSnapshot<T = unknown>(seasonId: number, name: string): T | undefined {
+  // A new database handle (first open, restore from backup, archive swap) means
+  // every key now refers to a different file's rows.
+  const epoch = getDbEpoch();
+  if (epoch !== snapshotCacheEpoch) {
+    invalidateSnapshotCache();
+    snapshotCacheEpoch = epoch;
+  }
+
+  const key = `${seasonId}:${name}`;
+  const cached = snapshotCache.get(key);
+  if (cached) {
+    // Re-insert to mark as most-recently-used — Map keeps insertion order, which
+    // is what makes the first key the LRU victim below.
+    snapshotCache.delete(key);
+    snapshotCache.set(key, cached);
+    return cached.payload as T;
+  }
+
   const row = get<{ payload: string }>(
     'SELECT payload FROM season_snapshots WHERE season_id = ? AND name = ?',
     [seasonId, name],
   );
   if (!row) return undefined;
+
+  let json: string;
   if (row.payload.startsWith(GZIP_MARKER)) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const zlib = require('zlib') as typeof import('zlib');
-    return JSON.parse(zlib.gunzipSync(Buffer.from(row.payload.slice(GZIP_MARKER.length), 'base64')).toString('utf8')) as T;
+    json = zlib.gunzipSync(Buffer.from(row.payload.slice(GZIP_MARKER.length), 'base64')).toString('utf8');
+  } else {
+    json = row.payload;
   }
-  return JSON.parse(row.payload) as T;
+  const parsed = JSON.parse(json) as T;
+
+  const bytes = json.length;
+  if (bytes <= SNAPSHOT_CACHE_BUDGET_BYTES) {
+    snapshotCache.set(key, { payload: parsed, bytes });
+    snapshotCacheBytes += bytes;
+    while (snapshotCacheBytes > SNAPSHOT_CACHE_BUDGET_BYTES && snapshotCache.size > 1) {
+      const oldest = snapshotCache.keys().next().value as string;
+      snapshotCacheBytes -= snapshotCache.get(oldest)?.bytes ?? 0;
+      snapshotCache.delete(oldest);
+    }
+  }
+  return parsed;
 }
 
 // ---- Ranking history --------------------------------------------------------

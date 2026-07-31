@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card flip — prototype</title>
+<style>
+  /* ------------------------------------------------------------------
+     Standalone. No app assets, no build step, no network — open the file.
+     Tokens below mirror the app's so the prototype reads in the same
+     language, but nothing here imports from it.
+     ------------------------------------------------------------------ */
+  :root {
+    --ground: #050506;
+    --panel: #0d0d10;
+    --line: rgba(255,255,255,0.09);
+    --text: #f4f4f5;
+    --muted: #8a8f98;
+    --gold: #e9d28c;
+
+    /* Stands in for the app's per-team vars. */
+    --team-primary: #0b2341;
+    --team-secondary: #e87722;
+    --team-on-primary: #ffffff;
+
+    /* The app's real motion tokens. */
+    --duration-base: 180ms;
+    --duration-slow: 320ms;
+    --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --flip-duration: 520ms;
+    --perspective: 1400px;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 32px 36px 80px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); margin: 40px 0 14px; font-weight: 600; }
+  p.lede { color: var(--muted); margin: 0 0 28px; max-width: 70ch; }
+  code { background: #17171c; padding: 1px 5px; font-size: 12px; }
+
+  .row { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* ==================================================================
+     THE CARD
+     ------------------------------------------------------------------
+     Three levels, and which properties may live on each is the whole
+     point of this prototype:
+
+       .flip-card        perspective + filter        ← grouping props OK here
+       .flip-card-inner  transform-style: preserve-3d ← NOTHING may group here
+       .face             clip-path, overflow, etc.    ← grouping props OK here
+
+     A clip-path or overflow on .flip-card-inner silently collapses the 3D
+     context and the card renders its FRONT MIRRORED. `getComputedStyle`
+     still reports preserve-3d, so the CSS looks correct while being wrong.
+     Toggle "break it" below to see exactly that.
+     ================================================================== */
+  .flip-card {
+    width: 330px; height: 496px;
+    perspective: var(--perspective);
+    /* The app's real card shadow. Safe here — this element isn't the one
+       carrying preserve-3d. */
+    filter: drop-shadow(0 20px 34px rgba(0,0,0,0.55));
+    cursor: pointer;
+    background: transparent;
+  }
+  .flip-card-inner {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    transition: transform var(--flip-duration) var(--ease-enter);
+  }
+  .flip-card.is-flipped .flip-card-inner { transform: rotateY(180deg); }
+
+  /* The demonstration of the trap. */
+  .flip-card.is-broken .flip-card-inner {
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 1rem, 100% 100%, 0 100%);
+  }
+
+  .face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    overflow: hidden;
+    /* The app's signature: hard edges, one cut corner, no radius anywhere.
+       On the FACE, which is the safe place for it. */
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 1rem, 100% 100%, 0 100%);
+  }
+  .face--back { transform: rotateY(180deg); }
+
+  /* ---------- front ---------- */
+  .face--front { background: #14161c; color: #fff; }
+  .portrait {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 80% at 50% 18%, #2b3140 0%, #14161c 62%),
+      linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--team-primary) 55%, #000) 74%, color-mix(in srgb, var(--team-primary) 40%, #000) 100%);
+  }
+  /* A stand-in for the player photo — drawn, so the file needs nothing. */
+  .silhouette {
+    position: absolute; left: 50%; top: 84px; transform: translateX(-50%);
+    width: 190px; height: 250px;
+    background:
+      radial-gradient(50% 34% at 50% 20%, #3a4152 0 99%, transparent 100%),
+      radial-gradient(62% 44% at 50% 84%, #333a49 0 99%, transparent 100%);
+    filter: blur(0.3px);
+  }
+  .sheen {
+    position: absolute; inset: 0;
+    background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.12) 46%, rgba(255,255,255,0.02) 56%, transparent 72%);
+  }
+  .jersey {
+    position: absolute; top: 14px; left: 16px;
+    font: 800 44px/1 system-ui; color: var(--team-secondary);
+  }
+  .ovr {
+    position: absolute; top: 14px; right: 30px; text-align: right;
+  }
+  .ovr b { display: block; font: 800 34px/1 system-ui; }
+  .ovr span { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.65); }
+  .nameplate { position: absolute; left: 16px; right: 16px; bottom: 84px; }
+  .nameplate .first { font: 600 17px/1 system-ui; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.8); }
+  .nameplate .last { font: 800 40px/0.98 system-ui; letter-spacing: -0.01em; }
+  .nameplate .meta { margin-top: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--team-secondary); font-weight: 700; }
+  .statstrip {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 68px;
+    display: grid; grid-auto-flow: column; align-items: center;
+    background: color-mix(in srgb, var(--team-primary) 88%, #000);
+    border-top: 1px solid rgba(255,255,255,0.14);
+  }
+  .statstrip div { text-align: center; }
+  .statstrip b { display: block; font: 800 19px/1 system-ui; }
+  .statstrip span { font-size: 9px; letter-spacing: 0.16em; color: rgba(255,255,255,0.66); }
+
+  /* ---------- back ---------- */
+  .face--back {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--team-primary) 92%, #000) 0%, #0a0c11 58%);
+    padding: 20px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .back-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .back-head .nm { font: 800 22px/1 system-ui; }
+  .back-head .yr { font-size: 11px; letter-spacing: 0.18em; color: var(--team-secondary); font-weight: 700; }
+  .rule { height: 1px; background: rgba(255,255,255,0.14); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; font-size: 12px; }
+  .kv dt { color: rgba(255,255,255,0.55); letter-spacing: 0.08em; text-transform: uppercase; font-size: 10px; align-self: center; }
+  .kv dd { margin: 0; font-weight: 600; }
+  .sect { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--team-secondary); font-weight: 700; }
+  .lines { display: flex; flex-direction: column; gap: 4px; }
+  .line { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .line span:first-child { color: rgba(255,255,255,0.6); }
+  .line span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .back-foot { margin-top: auto; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.4); display: flex; justify-content: space-between; }
+
+  /* ---------- controls ---------- */
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px; min-width: 300px; }
+  .panel h3 { margin: 0 0 14px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .ctl { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .ctl:last-child { border-bottom: 0; }
+  .ctl label { font-size: 13px; }
+  .ctl input[type=range] { width: 130px; accent-color: var(--gold); }
+  .ctl output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 56px; text-align: right; }
+  button.t {
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+    padding: 5px 11px; font: 600 12px system-ui; cursor: pointer;
+    transition: border-color var(--duration-base) var(--ease-enter), color var(--duration-base) var(--ease-enter);
+  }
+  button.t[aria-pressed=true] { border-color: var(--gold); color: var(--gold); }
+  .note { color: var(--muted); font-size: 12px; margin: 10px 0 0; max-width: 44ch; }
+  .warn { color: #ffb4a2; }
+
+  /* Hover mode, off by default — see the note in the panel. */
+  .flip-card.hover-mode:hover .flip-card-inner { transform: rotateY(180deg); }
+
+  /* The app clamps animation globally; mirrored here so the prototype is
+     honest about how it behaves for someone who asks for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    .flip-card-inner { transition-duration: 0.01ms !important; }
+  }
+
+  .ab { display: flex; gap: 28px; flex-wrap: wrap; }
+  .ab figure { margin: 0; }
+  .ab figcaption { font-size: 12px; color: var(--muted); margin-top: 10px; max-width: 240px; }
+  .ab .mini { width: 210px; height: 316px; }
+  .ab .mini .nameplate .last { font-size: 26px; }
+  .ab .mini .jersey { font-size: 30px; }
+  .ab .mini .statstrip { height: 50px; }
+  .ok { color: #8fd7a5; }
+</style>
+</head>
+<body>
+
+<h1>Card flip — working prototype</h1>
+<p class="lede">
+  Standalone: no app code, no assets, no network. Click the card to flip it.
+  The front is a stand-in for <code>PlayerCard</code> at its real 330&times;496;
+  the back shows only data <code>PlayerCardRecord</code> already stores, so a
+  real implementation needs no new queries.
+</p>
+
+<div class="row">
+  <div class="flip-card" id="card" role="button" tabindex="0" aria-label="Player card, click to flip">
+    <div class="flip-card-inner">
+
+      <!-- FRONT -->
+      <div class="face face--front" id="front">
+        <div class="portrait"></div>
+        <div class="silhouette"></div>
+        <div class="sheen"></div>
+        <div class="jersey">11</div>
+        <div class="ovr"><b>89</b><span>OVR</span></div>
+        <div class="nameplate">
+          <div class="first">Keshaun</div>
+          <div class="last">SINGLETON</div>
+          <div class="meta">WR &middot; Senior &middot; Auburn</div>
+        </div>
+        <div class="statstrip">
+          <div><b>54</b><span>REC</span></div>
+          <div><b>719</b><span>YDS</span></div>
+          <div><b>7</b><span>TD</span></div>
+        </div>
+      </div>
+
+      <!-- BACK -->
+      <div class="face face--back" id="back">
+        <div class="back-head">
+          <span class="nm">Keshaun Singleton</span>
+          <span class="yr">2026</span>
+        </div>
+        <div class="rule"></div>
+
+        <div class="sect">Profile</div>
+        <dl class="kv">
+          <dt>Pos</dt><dd>WR &middot; #11</dd>
+          <dt>Class</dt><dd>Senior</dd>
+          <dt>Size</dt><dd>6'3", 216 lb</dd>
+          <dt>Arch</dt><dd>Physical</dd>
+          <dt>Dev</dt><dd>Normal</dd>
+          <dt>Home</dt><dd>Mobile, AL</dd>
+        </dl>
+
+        <div class="sect">2026 season</div>
+        <div class="lines">
+          <div class="line"><span>Games</span><span>9</span></div>
+          <div class="line"><span>Receptions</span><span>54</span></div>
+          <div class="line"><span>Receiving yards</span><span>719</span></div>
+          <div class="line"><span>Touchdowns</span><span>7</span></div>
+          <div class="line"><span>Yards / catch</span><span>13.3</span></div>
+          <div class="line"><span>Longest</span><span>62</span></div>
+        </div>
+
+        <div class="back-foot"><span>Auburn</span><span>Card created 24 Dec</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Controls</h3>
+
+    <div class="ctl">
+      <label for="dur">Flip duration</label>
+      <input id="dur" type="range" min="120" max="900" step="20" value="520">
+      <output id="durOut">520ms</output>
+    </div>
+
+    <div class="ctl">
+      <label for="persp">Perspective</label>
+      <input id="persp" type="range" min="600" max="3000" step="50" value="1400">
+      <output id="perspOut">1400px</output>
+    </div>
+
+    <div class="ctl">
+      <label>Trigger</label>
+      <span>
+        <button class="t" id="modeClick" aria-pressed="true">Click</button>
+        <button class="t" id="modeHover" aria-pressed="false">Hover</button>
+      </span>
+    </div>
+
+    <div class="ctl">
+      <label>Team colours</label>
+      <span>
+        <button class="t" data-team="auburn" aria-pressed="true">Auburn</button>
+        <button class="t" data-team="uga" aria-pressed="false">Georgia</button>
+        <button class="t" data-team="mich" aria-pressed="false">Michigan</button>
+      </span>
+    </div>
+
+    <div class="ctl">
+      <label for="brk">Break it on purpose</label>
+      <button class="t" id="brk" aria-pressed="false">Off</button>
+    </div>
+
+    <p class="note" id="brkNote">
+      <b>Break it</b> moves the cut corner onto <code>.flip-card-inner</code> —
+      the element carrying <code>preserve-3d</code>. That silently flattens the
+      3D context: the card stops flipping and renders the <b>front, mirrored</b>.
+      <code>getComputedStyle</code> still reports <code>preserve-3d</code>, which
+      is what makes it expensive to debug.
+    </p>
+
+    <p class="note">
+      <b>Hover</b> is offered so it can be felt, not because it's advisable: in a
+      card grid the pointer crossing the page flips everything it passes, and it
+      does nothing at all on touch. The card book has click bound already
+      (expand, or pick in Select mode), so a real flip wants its own affordance.
+    </p>
+  </div>
+</div>
+
+<h2>The rule, side by side</h2>
+<div class="ab">
+  <figure>
+    <div class="flip-card mini is-flipped">
+      <div class="flip-card-inner">
+        <div class="face face--front"><div class="portrait"></div><div class="nameplate"><div class="last">FRONT</div></div></div>
+        <div class="face face--back"><div class="back-head"><span class="nm">BACK</span></div></div>
+      </div>
+    </div>
+    <figcaption><span class="ok">&#10003; Correct.</span> <code>clip-path</code> and <code>overflow</code> on the two <b>faces</b>; the inner is left alone. Back shows, cut corner intact.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="flip-card mini is-flipped is-broken">
+      <div class="flip-card-inner">
+        <div class="face face--front"><div class="portrait"></div><div class="nameplate"><div class="last">FRONT</div></div></div>
+        <div class="face face--back"><div class="back-head"><span class="nm">BACK</span></div></div>
+      </div>
+    </div>
+    <figcaption><span class="warn">&#10007; Broken.</span> Same markup, but the clip sits on <code>.flip-card-inner</code>. The 3D context collapses and you get the front, mirrored.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="flip-card mini">
+      <div class="flip-card-inner">
+        <div class="face face--front"><div class="portrait"></div><div class="nameplate"><div class="last">FRONT</div></div></div>
+        <div class="face face--back"><div class="back-head"><span class="nm">BACK</span></div></div>
+      </div>
+    </div>
+    <figcaption><span class="ok">&#10003;</span> Unflipped, for reference. The <code>filter: drop-shadow</code> on <code>.flip-card</code> is harmless — it isn't the element carrying <code>preserve-3d</code>.</figcaption>
+  </figure>
+</div>
+
+<script>
+  var card = document.getElementById('card');
+  var root = document.documentElement;
+
+  function toggle() { card.classList.toggle('is-flipped'); }
+  card.addEventListener('click', function () { if (!card.classList.contains('hover-mode')) toggle(); });
+  card.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!card.classList.contains('hover-mode')) toggle(); }
+  });
+
+  // The side facing away is hidden from assistive tech and taken out of the
+  // tab order — without this, focus lands on controls nobody can see.
+  function syncFaces() {
+    var flipped = card.classList.contains('is-flipped');
+    document.getElementById('front').setAttribute('aria-hidden', flipped ? 'true' : 'false');
+    document.getElementById('back').setAttribute('aria-hidden', flipped ? 'false' : 'true');
+  }
+  new MutationObserver(syncFaces).observe(card, { attributes: true, attributeFilter: ['class'] });
+  syncFaces();
+
+  function bindRange(id, outId, cssVar, unit) {
+    var el = document.getElementById(id), out = document.getElementById(outId);
+    function apply() { root.style.setProperty(cssVar, el.value + unit); out.textContent = el.value + unit; }
+    el.addEventListener('input', apply); apply();
+  }
+  bindRange('dur', 'durOut', '--flip-duration', 'ms');
+  bindRange('persp', 'perspOut', '--perspective', 'px');
+
+  var mc = document.getElementById('modeClick'), mh = document.getElementById('modeHover');
+  function setMode(hover) {
+    card.classList.toggle('hover-mode', hover);
+    card.classList.remove('is-flipped');
+    mc.setAttribute('aria-pressed', String(!hover));
+    mh.setAttribute('aria-pressed', String(hover));
+  }
+  mc.addEventListener('click', function () { setMode(false); });
+  mh.addEventListener('click', function () { setMode(true); });
+
+  var TEAMS = {
+    auburn: ['#0b2341', '#e87722'],
+    uga:    ['#ba0c2f', '#000000'],
+    mich:   ['#00274c', '#ffcb05']
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-team]'), function (b) {
+    b.addEventListener('click', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-team]'), function (o) { o.setAttribute('aria-pressed', 'false'); });
+      b.setAttribute('aria-pressed', 'true');
+      var t = TEAMS[b.dataset.team];
+      root.style.setProperty('--team-primary', t[0]);
+      root.style.setProperty('--team-secondary', t[1]);
+    });
+  });
+
+  var brk = document.getElementById('brk');
+  brk.addEventListener('click', function () {
+    var on = card.classList.toggle('is-broken');
+    brk.setAttribute('aria-pressed', String(on));
+    brk.textContent = on ? 'On' : 'Off';
+  });
+</script>
+</body>
+</html>

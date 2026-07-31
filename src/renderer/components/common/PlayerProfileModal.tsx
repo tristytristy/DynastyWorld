@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useScrollLock } from '../../lib/useScrollLock';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
-import { PlayerProfileContent } from './PlayerProfileContent';
+import { PlayerProfileContent, type ProfileTab } from './PlayerProfileContent';
 import { PlayerPortrait } from './PlayerPortrait';
 import { positionSortIndex, unitForPosition } from '../../lib/rosterOrder';
 import type { RosterPlayer } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -155,9 +157,16 @@ function RailRow({ player, active, onPick }: { player: RosterPlayer; active: boo
 export function PlayerProfileModal() {
   const { state, closePlayerModal, goToPlayer } = usePlayerModal();
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
-  const [railOpen, setRailOpen] = useState(true);
+  // Closed by default: the rail is a jump-to-teammate convenience, not part of
+  // reading a player, and opening every profile with it already out pushed the
+  // actual content sideways before you'd asked for anything.
+  const [railOpen, setRailOpen] = useState(false);
+  // Held HERE, not inside PlayerProfileContent, because the content is keyed on
+  // the player id to animate the swap — that remount would reset an internal
+  // tab to Overview every time you stepped to the next player. Reading a card
+  // and pressing → should give you the next player's card.
+  const [tab, setTab] = useState<ProfileTab>('overview');
 
   const isOpen = state !== null;
   const playerIdForEffect = state?.playerId;
@@ -167,13 +176,28 @@ export function PlayerProfileModal() {
     if (dynastyIdForEffect && playerIdForEffect !== undefined) pushRecent(dynastyIdForEffect, playerIdForEffect);
   }, [dynastyIdForEffect, playerIdForEffect]);
 
+  // Back to Overview when the modal is OPENED, but not when stepping between
+  // players inside it — opening a fresh profile shouldn't inherit whatever tab
+  // was left showing in a previous session.
+  useEffect(() => {
+    if (isOpen) setTab('overview');
+  }, [isOpen]);
+
   useScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
+    /*
+      Focus the PANEL, not the close button. Those are both valid trap entries,
+      but focusing a control means it lands in its focused state on every single
+      open — and with a bare glyph the browser's ring reads as a box drawn
+      around the X, which is the bordered look this stopped being. Focusing the
+      dialog itself also announces its own label rather than "Close …, button".
+      Needs tabIndex={-1} to be programmatically focusable.
+    */
+    panelRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -214,6 +238,10 @@ export function PlayerProfileModal() {
     if (!isOpen || !navigationIds || playerId === undefined) return;
     function handleArrows(event: KeyboardEvent) {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      // Shift+Arrow belongs to the team switcher (see TeamSwitcher). Without
+      // this guard the same keystroke stepped a player here AND a team on the
+      // page behind, since neither handler knew about the other.
+      if (event.shiftKey) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) return;
       const index = navigationIds!.indexOf(playerId!);
@@ -240,8 +268,8 @@ export function PlayerProfileModal() {
     'border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closePlayerModal();
@@ -252,7 +280,8 @@ export function PlayerProfileModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Player profile"
-        className="corner-cut relative flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        tabIndex={-1}
+        className="corner-cut relative flex outline-none max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden modal-panel md:max-h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3.5 dark:border-white/10">
           <div className="flex items-center gap-2">
@@ -289,15 +318,7 @@ export function PlayerProfileModal() {
               </>
             )}
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={closePlayerModal}
-            aria-label="Close player profile"
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Close
-          </button>
+          <ModalCloseButton label="player profile" onClick={closePlayerModal} />
         </div>
         <div className="flex min-h-0 flex-1">
           {railOpen && (
@@ -314,6 +335,8 @@ export function PlayerProfileModal() {
           <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
             <div key={activePlayerId} className="content-enter">
               <PlayerProfileContent
+                tab={tab}
+                onTabChange={setTab}
                 dynastyId={dynastyId}
                 playerId={activePlayerId}
                 seasonId={seasonId}
@@ -324,6 +347,6 @@ export function PlayerProfileModal() {
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

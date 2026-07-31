@@ -1,3 +1,4 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getDynastyById, getSeasonsByDynasty, getSnapshot } from './helpers';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { TeamTransfers, TransferEntry } from '../shared/types';
@@ -8,18 +9,6 @@ interface TeamsEntry {
   conferenceName: string | null;
 }
 
-/**
- * EA parks every player who isn't on a real, uniquely-indexed FBS/FCS roster
- * into a generic "FCS" pool at teamIndex 255 (0xFF = "none"). It's five buckets
- * (FCS West/East/Midwest/Northwest/Southeast), ALL sharing index 255, all with a
- * null conferenceName, holding thousands of players — including incoming recruits,
- * who live there as "Freshman" until they sign. A move OUT of the pool onto a real
- * team is a recruit/newcomer arriving; a move INTO it is a player leaving FBS.
- * Neither is a school-to-school transfer, so both are excluded (this is what made
- * signed recruits show up as "transferred in from FCS West" with an FCS logo).
- * Keyed on the raw INDEX, never the name — all five buckets collapse to one name.
- */
-const FCS_POOL_TEAM_INDEX = 255;
 
 /**
  * Detects school-to-school transfers by diffing consecutive per-season

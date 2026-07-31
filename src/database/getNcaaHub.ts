@@ -1,3 +1,4 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { AwardsData } from '../extractors/extract-awards';
 import type { CoachData } from '../extractors/extract-coaches';
@@ -17,14 +18,6 @@ import type {
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/**
- * The catch-all teamIndex the game parks every non-FBS placeholder under
- * (Practice + the five "FCS East/West/…" buckets all share 255). They carry
- * sentinel rank values (e.g. cfpRank 255) that would otherwise leak into the
- * NCAA hub's rankings/playoff picture, so they're filtered out everywhere here —
- * the NCAA hub is an FBS view.
- */
-const FCS_POOL_TEAM_INDEX = 255;
 
 function normalizeRank(rank: number): number | null {
   return rank > 0 ? rank : null;

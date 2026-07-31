@@ -1,5 +1,6 @@
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
+import type { GameData } from '../extractors/extract-schedule';
 import type { LeagueScoresView, ResultsHold } from '../shared/types';
 
 /**
@@ -26,6 +27,14 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
 
   const heldWeek = getSnapshot<ResultsHold>(season.id, 'resultsHold')?.week ?? null;
 
+  // Bowl names come from the leaguewide `schedule` snapshot for the same reason
+  // getLeagueTeamSchedule reads across: the leagueSchedule copy resolved null
+  // for every postseason game, so the Scores page simply never showed a bowl
+  // name at all. Fixes existing dynasties without a re-sync.
+  const bowlNameByGameId = new Map(
+    (getSnapshot<GameData[]>(season.id, 'schedule') ?? []).map((g) => [g.gameId, g.bowlName]),
+  );
+
   const rows = games
     .filter((g) => !!g.homeTeamName && !!g.awayTeamName)
     .map((g) => ({
@@ -38,7 +47,7 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
       awayTeamIndex: g.awayTeamIndex,
       homeScore: g.homeScore,
       awayScore: g.awayScore,
-      bowlName: g.bowlName,
+      bowlName: bowlNameByGameId.get(g.gameId) ?? g.bowlName,
     }))
     .sort((a, b) => a.week - b.week || a.homeTeamName.localeCompare(b.homeTeamName));
 

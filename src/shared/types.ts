@@ -465,6 +465,20 @@ export interface CareerCoachStats {
   numPrestigeIncreases: number;
 }
 
+/**
+ * One AD goal slot as the save stores it. The goal's WORDING and its
+ * coach-point reward are not in the save — the slot references a catalogue that
+ * ships with the game (see extract-coaches.ts) — so this is status and progress
+ * only.
+ */
+export interface ContractGoalSlot {
+  goalId: number | null;
+  status: string;
+  progress: number;
+  isHotSeat: boolean;
+  jobSecurity: number;
+}
+
 export interface Coach {
   /**
    * The coach's stable per-entity id (Coach.PresentationId). Stable across school
@@ -492,6 +506,18 @@ export interface Coach {
   seasonsWithTeam: number;
   /** JobSecurityStatus enum: "Safe" | "SafeForNow" | "Low" | "HotSeat" | "Invalid". */
   currentJobSecurityStatus: string;
+  /**
+   * The AD-expectations block (see extract-coaches.ts for what the save does and
+   * does NOT carry). Null on any season synced before these were extracted.
+   */
+  currentJobSecurityPercentage: number | null;
+  seasonStartJobSecurityStatus: string | null;
+  /** The AD's headline expectation as an enum, e.g. "Win8Games". */
+  currentContractExpectation: string | null;
+  earnedContractPointsThisYear: number | null;
+  coachPoints: number | null;
+  /** The AD's goal slots — user coach only, null for everyone else and for seasons synced before this shipped. */
+  contractGoals: ContractGoalSlot[] | null;
   /** Contract terms off the Coach record (same fields the coach editor writes). */
   contractSalary: number;
   contractLength: number;
@@ -828,8 +854,15 @@ export interface GameDetailTeamSide {
   quarterScores: number[];
   /** null until the game is played. */
   stats: TeamStatLine | null;
-  /** Current media-poll rank (approx, not point-in-time), or null if unranked. */
+  /** Media-poll rank AT KICKOFF where game_context captured one, falling back to the team's current rank. */
   currentRank: number | null;
+  /**
+   * W-L as it stood going into this game, from the same captured game_context
+   * the schedule page uses. Null when the game predates context capture — the
+   * save itself only ever exposes a team's CURRENT record, so there is no way
+   * to reconstruct a point-in-time one after the fact.
+   */
+  recordAtGame: { wins: number; losses: number } | null;
   /** Team primary/secondary colors (hex) from the save, or null for placeholder/FCS teams. Drives per-side theming on the Game Info page. */
   primaryColor: string | null;
   secondaryColor: string | null;
@@ -858,6 +891,10 @@ export interface GameDetailData {
   bowlAssetName: string | null;
   isNeutralSite: boolean;
   gameType: 'conference' | 'non-conference' | 'bowl';
+  /** This conference's championship game — see shared/championshipWeek.ts. */
+  isConferenceChampionship: boolean;
+  /** Stable venue reference for a game not at a home field — see lib/neutralVenues.ts. */
+  neutralVenueId: string | null;
   conferenceName: string | null;
   home: GameDetailTeamSide;
   away: GameDetailTeamSide;
@@ -1060,8 +1097,12 @@ export interface ScheduleGame {
   isRivalryGame: boolean;
   /** The save's own named rivalry ("I-35 Rivalry", etc.) when one resolved for this matchup; null if isRivalryGame but no named record was found. */
   rivalryName: string | null;
+  /** This conference's championship game — the last regular-season week (see shared/championshipWeek.ts), between two teams from the same conference. */
+  isConferenceChampionship: boolean;
   /** Venue name isn't available anywhere in the save (see extract-schedule.ts) — only this three-way classification; a real-world stadium/city is resolved client-side from stadiumData.ts where known. */
   siteType: 'home' | 'away' | 'neutral';
+  /** The save's stable venue reference for a game NOT at a home field — resolved to a real stadium by lib/neutralVenues.ts. Null for a normal home/away game, and on seasons synced before this shipped. */
+  neutralVenueId: string | null;
   /** The opponent's overall win-loss record — the save only ever exposes a team's CURRENT/final record, not a point-in-time snapshot from the week this game was actually played, so this is the same "final" caveat as opponentCurrentRank. Null if the opponent couldn't be resolved. */
   opponentRecord: { wins: number; losses: number } | null;
   /** The user's own overall/conference record after this game specifically — computed by accumulating games in week order up through this row, not copied from the season's final totals. Null for a game that hasn't been played yet (nothing to accumulate through). */
@@ -1123,13 +1164,15 @@ export interface StandingsOverview {
   groups: ConferenceStandingsGroup[];
 }
 
-export type TrophyKind = 'national-championship' | 'conference-championship' | 'bowl-win';
+export type TrophyKind = 'national-championship' | 'conference-championship' | 'bowl-win' | 'rivalry-win';
 
 export interface Trophy {
   kind: TrophyKind;
   label: string;
-  /** Renderer-side asset lookup key — conference name for conference-championship, bowl asset name for bowl-win, null for national-championship (fixed asset). */
+  /** Renderer-side asset lookup key — conference name for conference-championship, bowl asset name for bowl-win, the trophy file stem for rivalry-win, null for national-championship (fixed asset). */
   assetKey: string | null;
+  /** Distinguishes multiple trophies of the same kind — a season can carry several rivalry wins. */
+  id?: string;
 }
 
 export type PostseasonKind = 'bowl' | 'cfp-round' | 'national-championship';
@@ -1325,7 +1368,18 @@ export interface LeagueTeamGame {
   gameId: number;
   week: number;
   weekType: string;
+  /**
+   * Read from the leaguewide `schedule` snapshot rather than the league one —
+   * see getLeagueTeamSchedule. Null when the save's BowlGame reference didn't
+   * resolve; never substitute the week bucket ("BowlSeason3"), which is not a
+   * round name.
+   */
   bowlName: string | null;
+  /** Stable bowl identity for logo matching; blank for CFP bracket placeholders. */
+  bowlAssetName: string | null;
+  isNationalChampionship: boolean;
+  /** This conference's championship game — see shared/championshipWeek.ts. */
+  isConferenceChampionship: boolean;
   isHome: boolean;
   opponent: string;
   /** The opponent's league team index — opens the Team modal. */
@@ -1519,11 +1573,185 @@ export interface PlayerNote {
   updatedAt: string;
 }
 
+/** The pan/zoom framing of a custom card photo, in the card's own pixel space. */
+export interface CardPhotoTransform {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/**
+ * Where a card's stat line came from (schema v13). The numbers themselves are
+ * frozen in `stats`; this is the provenance, and it exists so the editor can
+ * reopen on the right list — and so a card can celebrate ONE GAME rather than
+ * only a season total.
+ *
+ * `key` is the stable identity the picker matches on: `'season'`, or
+ * `'game:<gameId>'` for a single Saturday.
+ */
+export interface CardStatSource {
+  key: string;
+  kind: 'season' | 'game';
+  /** How it reads to a human — "2027 Season", "Wk 5 · vs Georgia". */
+  label: string;
+}
+
+/**
+ * A stat source WITH its numbers — what the card editor picks from. Built by
+ * whatever page is showing the player (it owns the season totals and the game
+ * log); only the `CardStatSource` half is ever stored.
+ */
+export interface CardStatSourceOption extends CardStatSource {
+  /** The season these numbers belong to, so a year-locked card can refuse a mismatched line. */
+  seasonYear: number | null;
+  tiles: { label: string; value: string }[];
+}
+
+/**
+ * A saved player trading card (schema v12, extended in v13). The display fields
+ * are FROZEN at the moment the card was last edited — see
+ * schema_v12_player_cards.sql for why the book cannot re-derive them.
+ * `photoFile` is a basename inside card-photos/<dynastyId>/; `photoPath` is that
+ * resolved to an absolute path by the main process, and is null when the file
+ * has gone missing.
+ */
+export interface PlayerCardRecord {
+  id: number;
+  playerId: number;
+  seasonYear: number | null;
+  teamName: string | null;
+  /** Everything PlayerCard needs to draw the player, as they were on this card. */
+  player: RosterPlayer;
+  stats: { label: string; value: string }[];
+  /** Which of this card's layers are drawn, wherever it is drawn. */
+  layers: CardLayers;
+  /** Where `stats` came from; null on cards made before v13 (a season line by construction). */
+  statSource: CardStatSource | null;
+  photoFile: string | null;
+  photoPath: string | null;
+  photoTransform: CardPhotoTransform;
+  favorite: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Which of a card's layers are drawn. Every one defaults to ON, so a card that
+ * has never been near the toggles looks exactly as it always did.
+ *
+ * Since v13 this is a property of the CARD, not of the export dialog: turning
+ * the stat row off makes a photo-and-name card that stays that way in the book,
+ * in the hover preview and in the PNG. The export dialog still edits the same
+ * shape, and what it saves is the card's own setting.
+ *
+ * The DynastyOS mark and the photo are deliberately NOT in here: the mark is the
+ * card's maker's mark, and a card with the photo off is a blank rectangle.
+ */
+export interface CardLayers {
+  ovr: boolean;
+  name: boolean;
+  /** Position · School · Class · Year. */
+  profile: boolean;
+  stats: boolean;
+  teamLogo: boolean;
+}
+
+export const ALL_CARD_LAYERS: CardLayers = {
+  ovr: true,
+  name: true,
+  profile: true,
+  stats: true,
+  teamLogo: true,
+};
+
+/**
+ * The writable half of a card — everything a save/create call sets.
+ *
+ * `seasonYear`, `teamName` and `player` are written at CREATE and then left
+ * alone: a card is a printed moment, so the year and the profile line it went to
+ * press with are the year and profile line it keeps (user direction, 2026-07-30).
+ * The editor passes the card's own values straight back on every update, which
+ * is what makes editing a 2026 card while the app is showing 2028 safe.
+ */
+export interface PlayerCardInput {
+  seasonYear: number | null;
+  teamName: string | null;
+  player: RosterPlayer;
+  stats: { label: string; value: string }[];
+  layers: CardLayers;
+  statSource: CardStatSource | null;
+  photoFile: string | null;
+  photoTransform: CardPhotoTransform;
+}
+
+/**
+ * A saved crop of a media photo (schema v14) — how the user wants that shot
+ * shown, without anything being done to the file.
+ *
+ * `x` and `y` are FRACTIONS of the photo's own displayed size, not pixels,
+ * because the same framing is drawn at wildly different sizes (a full-screen
+ * viewer, a grid thumbnail, a laptop, a 4K monitor) and pixels would mean
+ * something different in each. As fractions the pan limit is also a pure number:
+ * at scale `s` the photo overhangs its box by `(s-1)/2` each way, so both
+ * offsets are bounded to exactly that with nothing to measure.
+ *
+ * `null` anywhere this appears means "no saved framing" — show the whole photo.
+ */
+export interface MediaFraming {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/** One uploaded art file: the stored basename, plus the absolute path the main process resolves it to (null when the file has gone missing). */
+export interface ProgramArtFile {
+  file: string;
+  path: string | null;
+}
+
+/** The four pieces of team art a user can supply. Null = use the shipped default. */
+export interface ProgramArtSet {
+  logo: ProgramArtFile | null;
+  helmet: ProgramArtFile | null;
+  jersey: ProgramArtFile | null;
+  polo: ProgramArtFile | null;
+}
+
+export type ProgramArtSlot = 'logo' | 'helmet' | 'jersey' | 'polo';
+
+/** Stadium name and city, as the user wants them shown. */
+export interface ProgramOverrideIdentity {
+  stadiumName: string | null;
+  stadiumCity: string | null;
+}
+
+/**
+ * A program's user-supplied identity and artwork (schema v15), scoped to one
+ * dynasty and keyed by the save's own team slot.
+ *
+ * Exists because Teambuilder imports overwrite a real school's slot with a team
+ * the shipped asset library has never heard of — see
+ * schema_v15_program_overrides.sql for the measured evidence and for why this is
+ * keyed by `teamIndex` rather than by name.
+ */
+export interface ProgramOverride {
+  teamIndex: number;
+  /** canonicalKey() of the display name — how the renderer finds this row from a component that only knows a name. */
+  teamNameKey: string;
+  stadiumName: string | null;
+  stadiumCity: string | null;
+  art: ProgramArtSet;
+  updatedAt: string;
+}
+
 export interface MediaItem {
   id: number;
   seasonId: number;
   fileName: string;
   mediaType: 'image' | 'video';
+  /** The user's saved crop, or null for the whole photo. Never alters the file on disk. */
+  framing: MediaFraming | null;
   /** Save-native SeasonGame gameId — same id ScheduleGame and the /schedule/:gameId route use. Null = not linked to a game. */
   gameId: number | null;
   description: string;
@@ -1559,6 +1787,165 @@ export interface MediaItemResolved extends MediaItemWithPath {
 }
 
 /** One season's row in the Dynasty Trends dashboard — assembled server-side from that season's snapshots + ranking_history. */
+/**
+ * ── Season Lab ──────────────────────────────────────────────────────────────
+ * One season, explained. Everything below is either read straight from the
+ * save's snapshots or derived by arithmetic over them — see
+ * docs/planning/ANALYTICS_PHASE0_AUDIT.md for the field-by-field provenance.
+ * Nullable throughout on purpose: a preseason season legitimately has no
+ * per-game anything, and that has to survive into the UI rather than being
+ * flattened to zero.
+ */
+export interface SeasonGamePoint {
+  gameId: number;
+  week: number;
+  opponent: string;
+  opponentTeamIndex: number | null;
+  siteType: 'home' | 'away' | 'neutral';
+  gameType: 'conference' | 'non-conference' | 'bowl';
+  isRivalry: boolean;
+  teamScore: number;
+  opponentScore: number;
+  /** teamScore − opponentScore. */
+  margin: number;
+  result: 'W' | 'L' | 'T';
+  /** Regulation only, 4 entries. Null when the snapshot carries no quarter data. */
+  quarterDifferential: number[] | null;
+  /**
+   * True when the quarter scores don't reconcile with the final score. Verified
+   * across 944 league games: every such game was tied after regulation, i.e. it
+   * went to overtime, and OT points appear only in the final score.
+   */
+  wentToOvertime: boolean;
+}
+
+export interface SeasonIdentityMetric {
+  key: string;
+  label: string;
+  value: number;
+  format: 'perGame' | 'percent' | 'plusMinus';
+  /** Defence, yards allowed and penalties are better when lower. */
+  lowerIsBetter: boolean;
+  /** Null when a league-wide comparison isn't supportable for this metric. */
+  nationalPercentile: number | null;
+  nationalRank: number | null;
+  /** How many teams the percentile was computed across — never imply the basis. */
+  comparedTeams: number | null;
+}
+
+/** Deterministic and descriptive. Never causal — no "because". */
+export interface SeasonFinding {
+  id: string;
+  label: string;
+  statement: string;
+  /** The numbers behind the sentence, so the UI can show its working. */
+  support: { label: string; value: string }[];
+  sampleSize: number;
+}
+
+export interface SeasonAnalytics {
+  seasonId: number;
+  seasonYear: number;
+  teamName: string;
+  /**
+   * Four genuinely different situations, all of which occur in real archives:
+   *  • `history-only` — backfilled from league history; standings and champions
+   *    only, no roster/schedule/stats will ever exist for it.
+   *  • `preseason`  — a real season with no schedule snapshot yet.
+   *  • `partial`    — scheduled, some games played.
+   *  • `complete`   — every scheduled game played.
+   * Never inferred from has_full_data, which reads 1 even for a 0-game season.
+   */
+  state: 'history-only' | 'preseason' | 'partial' | 'complete';
+  gamesPlayed: number;
+  gamesScheduled: number;
+  summary: {
+    wins: number;
+    losses: number;
+    ties: number;
+    pointsPerGame: number | null;
+    pointsAllowedPerGame: number | null;
+    scoringMarginPerGame: number | null;
+    turnoverMarginPerGame: number | null;
+  };
+  journey: SeasonGamePoint[];
+  identity: SeasonIdentityMetric[];
+  findings: SeasonFinding[];
+  /** True when any played game reached overtime, so Quarter Pulse can say so. */
+  hasOvertimeGames: boolean;
+}
+
+/**
+ * ── Program Arc ─────────────────────────────────────────────────────────────
+ * The Yearly view's counterpart to Season Lab: the same season read across
+ * every year on record. Every module here is assembled from snapshots the app
+ * ALREADY archives (`teams`, `schedule`), so it fills in retroactively for
+ * seasons synced long before it existed — no re-sync, no extractor change.
+ *
+ * Every value carries its national rank because a raw number can't be judged:
+ * a 39% third-down rate is meaningless until you know it was 65th of 139.
+ */
+export interface ProgramArcRanked {
+  value: number;
+  /** 1-based, best first. Null when the season has no comparable population. */
+  nationalRank: number | null;
+  /** Percent of teams beaten, so a dot's position is readable without a legend. */
+  nationalPercentile: number | null;
+  /** How many teams the rank was measured against — never imply the basis. */
+  comparedTeams: number | null;
+}
+
+/** One position group's grade for one season (the game's own 0-99 Team Ratings numbers). */
+export interface ProgramUnitSeason extends ProgramArcRanked {
+  seasonId: number;
+  seasonYear: number;
+}
+
+export interface ProgramUnitRow {
+  key: string;
+  label: string;
+  /** True for the offense/defense/overall rollups, which read as a summary rather than a unit. */
+  isSummary: boolean;
+  seasons: ProgramUnitSeason[];
+}
+
+export interface ProgramEfficiencySeason extends ProgramArcRanked {
+  seasonId: number;
+  seasonYear: number;
+}
+
+export interface ProgramEfficiencyRow {
+  key: string;
+  label: string;
+  format: 'perGame' | 'percent' | 'plusMinus';
+  lowerIsBetter: boolean;
+  seasons: ProgramEfficiencySeason[];
+}
+
+export interface ProgramPrestigeSeason extends ProgramArcRanked {
+  seasonId: number;
+  seasonYear: number;
+  /** Rank within the team's own conference that season. */
+  conferenceRank: number | null;
+  conferenceName: string | null;
+  /** Change against the previous season on record; null for the first one. */
+  changeFromPrevious: number | null;
+}
+
+export interface ProgramArc {
+  teamName: string;
+  /** The game's own prestige scale, so the UI never hardcodes it. */
+  prestigeMax: number;
+  prestige: ProgramPrestigeSeason[];
+  units: ProgramUnitRow[];
+  efficiency: ProgramEfficiencyRow[];
+  /**
+   * Seasons that contributed, in year order — including which are still in
+   * progress, so a mid-sync year is marked rather than plotted as a collapse.
+   */
+  seasons: { seasonId: number; seasonYear: number; gamesPlayed: number; complete: boolean }[];
+}
+
 export interface DynastyTrendSeason {
   seasonId: number;
   seasonYear: number;
@@ -2093,6 +2480,8 @@ export interface DynastyApi {
     getNationalStatLeaders: (dynastyId: string, seasonId?: number) => Promise<NationalStatLeaders | null>;
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
+    /** One player's lines from a season's log, filtered in the main process. The leaguewide log is ~16 MB for a played season; every renderer caller only ever wants one player out of it. */
+    getPlayerGameLog: (dynastyId: string, playerId: number, seasonId?: number) => Promise<GameLogEntry[] | null>;
     getGameDetail: (dynastyId: string, gameId: number, seasonId?: number) => Promise<GameDetailData | null>;
     getTeamTrophies: (dynastyId: string, seasonId?: number) => Promise<TeamTrophies | null>;
     getSchedule: (dynastyId: string, seasonId?: number) => Promise<ScheduleOverview | null>;
@@ -2114,6 +2503,9 @@ export interface DynastyApi {
       seasonId?: number,
     ) => Promise<import('../extractors/extract-ncaa-records').NcaaRecordsData | null>;
     getDynastyTrends: (dynastyId: string) => Promise<DynastyTrends | null>;
+    /** Season Lab: one season's journey, identity and derived findings. */
+    getSeasonAnalytics: (dynastyId: string, seasonId?: number) => Promise<SeasonAnalytics | null>;
+    getProgramArc: (dynastyId: string) => Promise<ProgramArc | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
     getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
     globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
@@ -2155,6 +2547,14 @@ export interface DynastyApi {
     seasonYearbookToHtml: (dynastyId: string, seasonId: number) => Promise<ExportResult>;
     /** Capture a rectangle of the window (the rendered card) and save it as a PNG. */
     playerCardToPng: (fileName: string, rect: { x: number; y: number; width: number; height: number }) => Promise<ExportResult>;
+    /** Folder picker for a bulk card export — chosen once, then written to without further prompting. */
+    pickCardFolder: () => Promise<string | null>;
+    /** Capture one card straight into an already-chosen folder. No dialog, so a run of cards doesn't ask N times. */
+    playerCardToFolder: (
+      folderPath: string,
+      fileName: string,
+      rect: { x: number; y: number; width: number; height: number },
+    ) => Promise<ExportResult>;
   };
   editor: {
     backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;
@@ -2204,6 +2604,57 @@ export interface DynastyApi {
     getPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
     /** Remove the player's custom card photo. */
     removePhoto: (dynastyId: string, playerId: number) => Promise<void>;
+
+    /** Pick an image for ONE card. Returns the stored basename (what the card row keeps), or null if cancelled. */
+    pickPhotoForCard: (dynastyId: string, playerId: number, cardId: number) => Promise<string | null>;
+    /** Store an existing image (e.g. a tagged gallery photo) as this card's photo; returns the stored basename. */
+    setCardPhotoFromPath: (
+      dynastyId: string,
+      playerId: number,
+      cardId: number,
+      sourcePath: string,
+    ) => Promise<string | null>;
+    /** Delete a card photo file by its stored basename. */
+    removeCardPhoto: (dynastyId: string, photoFile: string) => Promise<void>;
+
+    /** Every saved card for a player, the default first. */
+    list: (dynastyId: string, playerId: number) => Promise<PlayerCardRecord[]>;
+    /** Every starred card in the dynasty, oldest season first — the card book. */
+    listFavorites: (dynastyId: string) => Promise<PlayerCardRecord[]>;
+    /** Player ids that have at least one saved card. */
+    listCardedPlayerIds: (dynastyId: string) => Promise<number[]>;
+    create: (dynastyId: string, playerId: number, input: PlayerCardInput) => Promise<PlayerCardRecord>;
+    update: (dynastyId: string, id: number, input: PlayerCardInput) => Promise<PlayerCardRecord | null>;
+    setFavorite: (dynastyId: string, id: number, favorite: boolean) => Promise<PlayerCardRecord | null>;
+    /** Promote a card to the player's default (what the hover preview shows); returns the player's cards after the change. */
+    setDefault: (dynastyId: string, playerId: number, id: number) => Promise<PlayerCardRecord[]>;
+    /** Deletes the card AND its photo file; returns the player's remaining cards. */
+    remove: (dynastyId: string, id: number) => Promise<PlayerCardRecord[]>;
+  };
+  program: {
+    /** Every override in the dynasty, art paths resolved. The renderer holds these for the session. */
+    list: (dynastyId: string) => Promise<ProgramOverride[]>;
+    /** Stadium name + city for one program. */
+    setIdentity: (
+      dynastyId: string,
+      teamIndex: number,
+      teamNameKey: string,
+      identity: ProgramOverrideIdentity,
+    ) => Promise<ProgramOverride | null>;
+    /** Native picker + copy-in for one art slot; returns the row with the new file resolved, or null if cancelled. */
+    pickArt: (
+      dynastyId: string,
+      teamIndex: number,
+      teamNameKey: string,
+      slot: ProgramArtSlot,
+    ) => Promise<ProgramOverride | null>;
+    /** Drops an uploaded file and goes back to the shipped default. */
+    clearArt: (
+      dynastyId: string,
+      teamIndex: number,
+      teamNameKey: string,
+      slot: ProgramArtSlot,
+    ) => Promise<ProgramOverride | null>;
   };
   media: {
     /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
@@ -2216,6 +2667,8 @@ export interface DynastyApi {
     /** Everything linked to one game — the media section on the Game info page. */
     listForGame: (dynastyId: string, seasonId: number | undefined, gameId: number) => Promise<MediaItemResolved[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
+    /** Save (or clear, with null) how this photo is framed. Metadata only — the file is never touched. */
+    setFraming: (id: number, framing: MediaFraming | null) => Promise<void>;
     /** Persist a drag-chosen order: `orderedIds` is the season's item ids in display order. */
     reorder: (dynastyId: string, seasonId: number, orderedIds: number[]) => Promise<void>;
     remove: (id: number) => Promise<void>;
@@ -2249,6 +2702,15 @@ export interface DynastyApi {
     check: () => Promise<UpdateCheckResult>;
     /** Opens a download URL in the user's default browser (http/https only). */
     openDownload: (url: string) => Promise<void>;
+  };
+  window: {
+    /**
+     * Repaints the Windows Control Overlay (the native minimise/maximise/close
+     * strip drawn over our page) to match the app's appearance. Without this the
+     * buttons keep the colours they were created with and a light-mode window
+     * shows a black band across its top-right corner.
+     */
+    setTitleBarTheme: (appearance: 'light' | 'dark') => Promise<void>;
   };
 }
 

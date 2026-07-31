@@ -1,9 +1,11 @@
+import { Select, type SelectOption } from '../ui/Select';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollLock } from '../../lib/useScrollLock';
 import { PlayerPortrait } from './PlayerPortrait';
-import { Button } from '../ui/Button';
 import type { DefensiveStatLine, KickingStatLine, OffensiveStatLine } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 /**
  * Side-by-side player comparison (Statistics Phase 3). Rendered through a
@@ -87,6 +89,18 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
     () => [...players].sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)),
     [players],
   );
+  // Both dropdowns show the same roster, so the option list is built once.
+  // `keywords` carries the jersey number so "#12" finds a player the way the
+  // Media tagger already lets you search.
+  const playerOptions = useMemo<SelectOption<string>[]>(
+    () =>
+      sorted.map((p) => ({
+        value: String(p.playerId),
+        label: `${p.lastName}, ${p.firstName} — ${p.position} #${p.jerseyNumber}`,
+        keywords: `${p.position} #${p.jerseyNumber}`,
+      })),
+    [sorted],
+  );
   const [leftId, setLeftId] = useState<number | ''>('');
   const [rightId, setRightId] = useState<number | ''>('');
   const left = sorted.find((p) => p.playerId === leftId) ?? null;
@@ -107,12 +121,9 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
   const visibleRows = ROWS.filter((row) => (left && row.get(left) !== null) || (right && row.get(right) !== null));
   const groups = [...new Set(visibleRows.map((r) => r.group))];
 
-  const selectClass =
-    'w-full border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
-
   return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -122,36 +133,37 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
         role="dialog"
         aria-modal="true"
         aria-label="Compare players"
-        className="corner-cut relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        className="corner-cut relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden modal-panel md:max-h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
           <div>
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Statistics</p>
             <h3 className="font-display text-section-title font-semibold text-slate-950 dark:text-white">Compare Players</h3>
           </div>
-          <Button variant="secondary" compact onClick={onClose} aria-label="Close comparison">
-            Close
-          </Button>
+          <ModalCloseButton label="comparison" onClick={onClose} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-4">
-            <select value={leftId} onChange={(e) => setLeftId(e.target.value ? Number(e.target.value) : '')} className={selectClass} aria-label="First player">
-              <option value="">Select player...</option>
-              {sorted.map((p) => (
-                <option key={p.playerId} value={p.playerId}>
-                  {p.lastName}, {p.firstName} — {p.position} #{p.jerseyNumber}
-                </option>
-              ))}
-            </select>
-            <select value={rightId} onChange={(e) => setRightId(e.target.value ? Number(e.target.value) : '')} className={selectClass} aria-label="Second player">
-              <option value="">Select player...</option>
-              {sorted.map((p) => (
-                <option key={p.playerId} value={p.playerId}>
-                  {p.lastName}, {p.firstName} — {p.position} #{p.jerseyNumber}
-                </option>
-              ))}
-            </select>
+            {/* A whole roster in each list, so both get search. */}
+            <Select
+              value={leftId === '' ? '' : String(leftId)}
+              onChange={(next) => setLeftId(next ? Number(next) : '')}
+              ariaLabel="First player"
+              className="w-full"
+              searchable
+              searchPlaceholder="Find a player…"
+              options={[{ value: '', label: 'Select player...' }, ...playerOptions]}
+            />
+            <Select
+              value={rightId === '' ? '' : String(rightId)}
+              onChange={(next) => setRightId(next ? Number(next) : '')}
+              ariaLabel="Second player"
+              className="w-full"
+              searchable
+              searchPlaceholder="Find a player…"
+              options={[{ value: '', label: 'Select player...' }, ...playerOptions]}
+            />
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-4">
@@ -201,7 +213,7 @@ export function PlayerComparison({ players, onClose }: { players: ComparablePlay
           )}
         </div>
       </div>
-    </div>,
+    </ModalOverlay>,
     document.body,
   );
 }

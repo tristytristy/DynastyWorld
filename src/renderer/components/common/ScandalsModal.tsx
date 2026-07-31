@@ -1,3 +1,4 @@
+import { Select } from '../ui/Select';
 import { useEffect, useState } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
 import { useConfirm } from '../../data/ConfirmDialogProvider';
@@ -384,17 +385,13 @@ export function ScandalsModal({
           <Scandal eyebrow="Sign Stealing" title="Coach XP boost" dirty={touched.signStealing}>
             <label className="block">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Coach XP speed</span>
-              <select
+              <Select
                 value={edit.coachXpSpeed ?? data.coachXpSpeed}
-                onChange={(e) => setEdit((prev) => ({ ...prev, coachXpSpeed: e.target.value }))}
-                className={`${INPUT} mt-1`}
-              >
-                {XP_SPEEDS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                onChange={(coachXpSpeed) => setEdit((prev) => ({ ...prev, coachXpSpeed }))}
+                ariaLabel="Coach XP speed"
+                className="mt-1 w-full"
+                options={XP_SPEEDS.map((s) => ({ value: s, label: s }))}
+              />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <NumberField label="Experience points" value={val('experiencePoints', 'experiencePoints')} max={limits.experiencePoints ?? 0} onChange={(experiencePoints) => setEdit((e) => ({ ...e, experiencePoints }))} />
@@ -413,17 +410,13 @@ export function ScandalsModal({
           >
             <label className="block">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Talent progress speed</span>
-              <select
+              <Select
                 value={edit.talentProgressSpeed ?? data.talentProgressSpeed}
-                onChange={(e) => setEdit((prev) => ({ ...prev, talentProgressSpeed: e.target.value }))}
-                className={`${INPUT} mt-1`}
-              >
-                {TALENT_SPEEDS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                onChange={(talentProgressSpeed) => setEdit((prev) => ({ ...prev, talentProgressSpeed }))}
+                ariaLabel="Talent progress speed"
+                className="mt-1 w-full"
+                options={TALENT_SPEEDS.map((s) => ({ value: s, label: s }))}
+              />
             </label>
             <div>
               <p className="text-xs font-medium text-slate-600 dark:text-slate-300">

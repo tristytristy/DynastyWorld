@@ -5,6 +5,7 @@ import {
   type FranchiseTable,
   type OpenFranchise,
 } from './lib/franchise';
+import { PLAYER_FIELDS } from './lib/playerFields';
 
 /**
  * Who left the league this offseason and why — the `LeavingPlayer` table, which
@@ -48,7 +49,7 @@ function humanizeTransferReason(leaveType: string): string {
 export async function extractDepartures(franchise: OpenFranchise): Promise<DepartureData[]> {
   // The Player refs on each LeavingPlayer row can point at any Player instance,
   // so load them all before resolving.
-  await preloadAllInstances(franchise, 'Player');
+  await preloadAllInstances(franchise, 'Player', PLAYER_FIELDS);
 
   const instances = franchise.getAllTablesByName('LeavingPlayer') as unknown as FranchiseTable[];
   let table: FranchiseTable | null = null;

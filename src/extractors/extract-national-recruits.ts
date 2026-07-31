@@ -6,6 +6,7 @@ import {
   type FranchiseRecord,
   type OpenFranchise,
 } from './lib/franchise';
+import { PLAYER_FIELDS } from './lib/playerFields';
 
 /**
  * One school pursuing a recruit, from the recruit's own top-schools list
@@ -176,7 +177,7 @@ export async function extractNationalRecruits(franchise: OpenFranchise): Promise
   // table instances preloaded before reference resolution works.
   await Promise.all([
     preloadAllInstances(franchise, 'Recruit'),
-    preloadAllInstances(franchise, 'Player'),
+    preloadAllInstances(franchise, 'Player', PLAYER_FIELDS),
     preloadAllInstances(franchise, 'ProspectTargetSchool[]'),
     preloadAllInstances(franchise, 'ProspectTargetSchool'),
   ]);

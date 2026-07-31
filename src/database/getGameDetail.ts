@@ -1,3 +1,4 @@
+import { conferenceChampionshipWeek } from '../shared/championshipWeek';
 import { getSeasonGameContext } from './gameContext';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { formatGameDate, formatKickoff } from './getSchedule';
@@ -41,6 +42,11 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     const r = idx !== null ? teamByIndex.get(idx)?.mediaPollRank ?? 0 : 0;
     return r > 0 ? r : null;
   };
+  // Record going INTO the game, same captured source as the rank above. The
+  // save only ever holds a team's current record, so anything not captured at
+  // the time is simply unknowable later — hence null rather than a guess.
+  const recordOf = (side: 'home' | 'away') =>
+    (side === 'home' ? context?.homeRecord : context?.awayRecord) ?? null;
   const colorOf = (idx: number | null): { primary: string | null; secondary: string | null } => {
     const t = idx !== null ? teamByIndex.get(idx) : undefined;
     return { primary: t?.primaryColorHex ?? null, secondary: t?.secondaryColorHex ?? null };
@@ -74,6 +80,7 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
       quarterScores,
       stats,
       currentRank: rankOf(teamIndex, which),
+      recordAtGame: recordOf(which),
       primaryColor: colors.primary,
       secondaryColor: colors.secondary,
       isUser: teamIndex !== null && teamIndex === userTeamIndex,
@@ -90,6 +97,9 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
     date: formatGameDate(game.gameMonth, game.gameDay),
     isBowlGame: game.isBowlGame,
     isNationalChampionship: game.isNationalChampionship,
+    isConferenceChampionship:
+      gameType === 'conference' && conferenceChampionshipWeek(games) === game.week,
+    neutralVenueId: game.neutralVenueId ?? null,
     bowlName: game.bowlName,
     bowlAssetName: game.bowlAssetName,
     isNeutralSite: game.isNeutralSite,

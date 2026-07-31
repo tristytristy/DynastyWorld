@@ -29,6 +29,8 @@ interface ThemeContextValue {
   appearance: Appearance;
   setColorMode: (mode: ColorMode) => void;
   setCustomColors: (primary: string, secondary: string) => void;
+  /** The page ground for one appearance. Stored per theme; only the active one is applied. */
+  setGround: (appearance: Appearance, color: string) => void;
   setAppearance: (appearance: Appearance) => void;
   toggleAppearance: () => void;
   /**
@@ -56,12 +58,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', appearance === 'dark');
+    /*
+      Only the ACTIVE appearance's ground is applied. Setting both and letting
+      CSS pick would need two variables and a rule per theme; one variable that
+      always means "the ground right now" keeps globals.css to a single
+      declaration and makes a theme flip a one-property change.
+    */
+    document.documentElement.style.setProperty(
+      '--ground',
+      appearance === 'dark' ? preference.groundDark : preference.groundLight,
+    );
     try {
       window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearance);
     } catch {
       // Non-fatal: appearance simply won't be restored next launch.
     }
-  }, [appearance]);
+    // The window's caption buttons are drawn by Windows OVER our page, so they
+    // don't inherit anything from CSS — without this, flipping to light mode
+    // leaves a black band across the top-right corner. Optional-chained because
+    // the renderer also runs under the screenshot harness and older preloads.
+    void window.api?.window?.setTitleBarTheme?.(appearance);
+  }, [appearance, preference.groundDark, preference.groundLight]);
 
   useEffect(() => {
     saveThemePreference(window.localStorage, preference);
@@ -77,6 +94,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setCustomColors = useCallback((customPrimary: string, customSecondary: string) => {
     setPreference((prev) => ({ ...prev, customPrimary, customSecondary }));
+  }, []);
+
+  /** Sets the ground for ONE appearance — light and dark are tuned separately. */
+  const setGround = useCallback((target: Appearance, color: string) => {
+    setPreference((prev) => (target === 'dark' ? { ...prev, groundDark: color } : { ...prev, groundLight: color }));
   }, []);
 
   const setAppearance = useCallback((next: Appearance) => setAppearanceState(next), []);
@@ -111,11 +133,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       appearance,
       setColorMode,
       setCustomColors,
+      setGround,
       setAppearance,
       toggleAppearance,
       resolveColorVars,
     }),
-    [preference, appearance, setColorMode, setCustomColors, setAppearance, toggleAppearance, resolveColorVars],
+    [preference, appearance, setColorMode, setCustomColors, setGround, setAppearance, toggleAppearance, resolveColorVars],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -2234,3 +2234,2224 @@ Version → **2.0.0**. Release notes at `docs/releases/RELEASE_NOTES_v2.0.md`.
 **The app icon was nearly missed.** v2.0 packaged with the OLD CFB Dynasty Hub mark — `build/icon.ico` hadn't been regenerated since 2026-07-19, so taskbar, Alt-Tab and Add/Remove Programs would all have shown the previous icon under the DynastyOS name. New art supplied (circular night-stadium with the gold OS, 512×512 with alpha). Filename normalised `Icon.png` → `ICON.png` to match what `scripts/make-icon.js` actually reads — it had only resolved by accident on case-insensitive Windows. Regenerated to 6 PNG-compressed entries (256→16) and verified by **parsing the ICO directory and re-rendering 48/32/16 from its own payloads**, rather than re-deriving from the source PNG: the stadium detail turns to dark texture at 16px, but the gold OS carries, which is the part that has to survive. Note for next time: `make-icon.js` resizes with `fit: 'cover'`, so a non-square source is centre-**cropped**, not letterboxed.
 
 **A packaging error, caught by the output size.** The first v2.0 build was made COMPLETE (media bundled) on the stated rationale of "continuity with 1.5.0". That was **wrong**: 1.5.0 and 1.6.0 are ~142 MB, with the artwork shipping separately as `Image Data 0.6.1.exe` (971 MB) — i.e. the current model is **SLIM**, per the two-installer split from 0.5.0. COMPLETE produced a **1.12 GB** installer and would have pushed a gigabyte download onto users who already have the library. The user's own polos request was the tell — asking the *Image Data* installer to add art to an existing assets folder only makes sense on the slim model — and it was read past. Rebuilt with `SLIM_INSTALLER=1`; the wrong artifact was deleted rather than left in `release/` to be picked up by mistake.
+
+## Phase — Analytics expansion: Phase 0 audit + Season Lab (2026-07-28)
+
+Brief: turn Statistics/Trends into two polished experiences — **Season Lab** (one season explained) and **Program Arc** (year over year) — phase by phase, with a data audit first and no fabricated statistics.
+
+### Phase 0 — audit
+
+Full report at `docs/planning/ANALYTICS_PHASE0_AUDIT.md`. Read-only against a copy of the live archive; no production code touched.
+
+**The good news:** the `schedule` snapshot is **league-wide** (944 games), and every game carries both `homeQuarterScores`/`awayQuarterScores` AND a per-game team stat block — 944/944 for both. So Quarter Pulse is real data, and national percentiles are *computed from 139 actual teams* rather than estimated.
+
+**Five limitations, each verified rather than assumed:**
+
+1. **Quarter scores are regulation only.** 47 of 944 games had quarter sums disagreeing with the final score. Tested the hypothesis: **47/47 were tied after regulation** — overtime, whose points land only in the final. Zero unexplained. So a quarter row will not sum to an OT game's margin, and the UI says so.
+2. **`has_full_data` is not a usable signal** — it reads 1 for a season with zero games and no schedule snapshot. State is derived from games played + schedule presence. It IS used for one thing: telling a backfilled history-only season (never gains a schedule) from a preseason one (will).
+3. **Weekly poll history is nearly empty** — `ranking_history` holds one row per season in five of six seasons.
+4. **No `departures` snapshot exists** anywhere in the archive, despite the brief listing it. Phase 3 churn must diff `leagueRoster` on playerId.
+5. **Snapshot payloads may be gzipped** behind a `gz:` marker.
+
+**A methodology mistake worth recording:** the first pass audited a *copy* taken at 07:22 and reported it as current. The user synced their own dynasty mid-session, so the live archive moved underneath the audit and a season I documented as "0-game preseason" was a finished 12-game season by the time I wrote it up. I also briefly flagged it as possible damage from my own ingest — it wasn't; the diff against a pre-ingest backup showed it was the user's sync. **Audit a copy for speed, but re-check anything time-sensitive against the live file before reporting it.**
+
+**Fixtures.** The archive had only one complete season, so Phase 2 wasn't verifiable. The user supplied a sequential save chain (DYNASTYBOWL 2026 → TESTER2 2027 → TESTER4 2028, all one dynasty) plus a preseason save (TULANEMASTER) that also backfilled three history-only seasons. Ingested through the app's own path (`extractAll` → `persistExtraction`, Electron stubbed only for path lookups). First attempt created three separate dynasties — they match on save path, not identity — so the strays were deleted and `relinkDynasty` used to sync one dynasty forward, which is the real upgrade path. Every state the brief names now exists as a real fixture.
+
+### Phase 1 — Season Lab
+
+`src/database/getSeasonAnalytics.ts` (+ types, IPC, preload, handler) and `src/renderer/components/charts/SeasonLab.tsx`. Reuses `getTeamGameStats` for classified games rather than re-implementing bowl/conference/site logic. Exhibits: summary strip, **Season Journey** (diverging bars, one per game), **Quarter Pulse** (heatmap + OT disclosure), **Team Identity** (percentile dots vs 139 teams), and a deterministic, descriptive **findings engine** (turnover battle, halves, home/away, conference split, one-score games, closing stretch — each with its own minimum sample, capped at four).
+
+**Verified against all nine seasons in the archive.** Numbers match the Phase 0 hand-calculations, and journey margins reconcile against the summary on every season. 2027 contains real overtime games, so that path is exercised rather than theoretical.
+
+**Structure, corrected mid-build.** First attempt put Season Lab on the Statistics page and made Statistics ⇄ Trends a toggle pair. Wrong: Statistics stays exactly as it was (Team/Players), **Trends is relabelled "Analytics"**, and a **Season ⇄ Yearly** toggle lives *inside* it. Poll Trajectory moved to the Season view, where a single-season week-by-week line belongs.
+
+**Three bugs found only by looking at it:**
+- Season Journey rendered at a hardcoded 320px SVG inside a ~1050px panel. Rebuilt in CSS so it fills its column.
+- Opponent labels floated beside each bar and collided with each other and the bars at 12 games. Moved to their own truncating row.
+- **The whole Analytics page bailed early** with "No trend data for this dynasty yet" for a dynasty with no trends, so the toggle never rendered and Season Lab's own empty states were unreachable. Guard split so only the Yearly view depends on trend data. **Partially fixed** — the Season view still falls through instead of showing Season Lab's preseason copy.
+
+**Toggle** (`components/ui/ToggleSwitch.tsx`, from `UI/toggle.md`): the spec's `#1d9bf0` is Twitter blue, so the track uses the masthead's `GRADIENT_SURFACE` instead; the spec's absolute `translate(-50%,-50%)` centres on a point and breaks in a header row, so it's inline. Knob is a **gold team logo**, 26px in a 24px track so it deliberately overhangs, centred with `top-1/2 / -translate-y-1/2` rather than a hardcoded offset. Generic and controlled — the app's toggle from here on.
+
+**Screenshot harness gotchas** (both cost real time): the capture branch requires **`USE_PRE_SPLASH_ONLY=1`**, and **a second instance quits silently** on `requestSingleInstanceLock()`, producing no file and no error — close the app before capturing. Theme can't be flipped by dispatching Ctrl+Shift+Z, since `.dark` is re-applied by an effect keyed on React state; write `cfb-dynasty-hub:color-theme` to localStorage and capture on a *second* run. Also: `CFB_USER_DATA_DIR` overrides userData — the Phase 0 doc wrongly said no override existed.
+
+**Verified:** dark + light themes, complete/partial seasons, typecheck/lint/build clean. **Not verified:** narrow layout, bar-click → game modal, and the preseason/history-only empty states (blocked on the half-fixed guard above).
+
+### Queued next (user request, not started)
+
+- **Poll Trajectory rework.** Gridlines to the subdued stroke grey. Dark: CFP **gold, evenly dashed**; Coaches = team primary; AP = team secondary — with CFP falling back to grey when the team's own palette contains gold. Light: white secondaries (Alabama) → graphite; gold team colours (Wake Forest) → grey. **Hide CFP until the first real CFP poll** — the flat `#0` line is unranked being plotted as rank zero. Unranked teams don't plot until they enter the top 25; a team that drops out stops recording and resumes only if it returns. Drop the printed numbers; hover carries it. *Open question: the save stores only TWO team colours, so "team colour #3" was read as the secondary — needs confirming.*
+- **Rivalries** — remove the duplicate leftmost logo in Your Rivals (same fix as All-Time Series).
+- **Archive cards** — enlarge coach portraits and mask them against the card's lower-right edge so they sit inside the box rather than floating on it; scale the team logo behind them to match.
+- **Yearly series colours** — still blue/green/pink. Deliberately deferred: `TrendCharts.tsx` avoids team colour so multiple series stay distinguishable, so this needs a real palette pass, not a find-replace.
+
+## Phase — Poll Trajectory rework, Analytics guard, rivals + archive cards (2026-07-28)
+
+The queued follow-ups from the Season Lab phase, all four shipped.
+
+### The open question, closed by probing
+
+The note asked whether "team colour #3" was really the secondary. It was: dumping every `COLOR` field on the `Team` table across three saves returns exactly **six** — `TEAM_BACKGROUNDCOLOR{R,G,B}` and the same three with a `2` suffix — plus a `TEAM_HAS_SECONDARY_COLOR` flag. There is no third colour, so CFP has to come from outside the palette.
+
+The same probe answered a question I hadn't thought to ask, and it's the reason the chart was wrong rather than merely ugly: **the save ranks all 138 FBS teams, 1-138, in every poll** (255 marks the five FCS placeholder rows). The in-game polls are 25 deep; everything past that is private ordering. This dynasty's own recorded week read media 102 / coaches 94 / cfp 110 — those were being drawn as poll positions. And **CFP reads 0 for every team until the first CFP poll is released** (confirmed: 0 across 138 teams on two in-season saves, real 1-138 values on a completed one), which is exactly the flat `#0` line that prompted the rework.
+
+### Poll Trajectory
+
+Anything outside the top 25 is now a genuine gap: the line starts the week a team breaks in, stops when it drops out, resumes if it returns. CFP is omitted entirely — series, legend and all — until that poll is first released. The y-axis is pinned to #1-#25 so a season spent at #23 can't stretch to fill the panel and read like a top-5 run. Printed values are gone; hover carries the number.
+
+**A real bug found on the way**: `ChartSeries` documented null as "never drawn or interpolated across", but `TrendLineChart` filtered the nulls out and drew ONE path — so a gap was silently bridged. Split into segments; the drop-out week now reads as a break rather than a straight line through it.
+
+**Colours** (`lib/pollSeriesColors.ts`): Coaches = team primary, AP = team secondary, CFP = the logo's gold, dashed. Three substitutions, each earning its place — near-white → graphite and gold → grey, both **light-mode only** (on black, a dark maroon just needs lifting and a team's gold reads beautifully; it's CFP that steps off gold when the team already owns it), plus a duplicate-secondary guard so a team with no real second colour doesn't draw AP and Coaches as one line.
+
+**Two attempts at "are these two colours too close":** plain RGB distance called Texas State's maroon and gold a collision at 58 units and pushed both lines to neutrals — a chart with no team colour in it at all. Replaced with a hue+lightness test: far-apart hues are always distinct however close their brightness, greys are distinguished by brightness alone. Maroon and gold survive; primary-twice still collapses.
+
+### The rest
+
+- **Analytics guard finished.** The Season view no longer falls through when a dynasty has no trend data — team name falls back to the season analytics, and each view owns its absence. The preseason and history-only empty states are now reachable, which is what the last phase left half-done.
+- **Rivalries** — the standalone logo in a rival card sat left of a `TeamLink` that draws its own, the same duplication already fixed in All-time series. Removed; `TeamLink` carries the mark at the size the standalone one was.
+- **Archive cards** — the coach portrait is anchored INTO the card's lower-right corner (negative margins cancelling the card padding, cropped by the card's own clip-path) at 16.25rem, which is the row's height plus the padding it bleeds through, so it grew ~20% without making the card taller. Team logo scaled h-16 → h-20 behind it. Right and bottom are card edges so those cuts are meant to be hard; the left one isn't an edge of anything — `object-cover` slices through the shoulder — so it fades out under a mask instead of ending in a seam. Hover scales from the bottom-right so it swells into its corner rather than lifting off the edge.
+
+**Verification.** Disposable scratch archives (`CFB_USER_DATA_DIR`), never the live one. DYNASTYBOWL imported, then a 14-week `ranking_history` seeded covering every case the chart handles: unranked start, break-in, drop-out, return, CFP from week 9. Confirmed in **both themes** by reading the rendered strokes, not just eyeballing — dark: maroon `#927579` / gold `#b4985a` / graphite dashed; light: `#572a31` / grey `#6c6c72` / graphite dashed — plus a #1-#25 axis, two segments per team series, and no value labels. Also verified live: the **preseason** empty state (Tulane 2029) and the **history-only** one (Tulane 2028) that were previously unreachable, the rival card's single logo (East Carolina, whose Charlotte rivalry is the only flagged one on hand), the dynasty card in both themes, and **bar-click → game box score modal** (also unverified last phase — opens the Wisconsin game correctly). typecheck/lint/build clean.
+
+**Still unverified:** narrow/responsive layout of the Season Lab exhibits.
+
+**Gotcha worth keeping:** `ELECTRON_RUN_AS_NODE=1` is set in this shell, and it makes `npx electron .` boot as bare Node — `app` comes back undefined and the crash points at `setPath`, which reads like a `CFB_USER_DATA_DIR` bug rather than what it is. `unset` it in the same command.
+
+### Correction, same day — the top-25 rule was wrong, and the user's own data proved it
+
+The user came back with "the AP and Coaches polls are there all season, the CFP poll isn't active until the poll week — unless you heard me right, the polls aren't showing anymore." Both halves were true at once.
+
+**Read their live archive (a copy, read-only) instead of guessing.** Auburn 2026 has nine recorded weeks: AP `30, 29, 27, 36, 31, 40, 30, 46, 69`, Coaches `32, 32, 29, 38, 31, 35, 25, 38, 63`, CFP `0` until week 9. Texas State's three seasons read 102/94, 74/74, 92/95; Sac State's reads 138/137.
+
+So the CFP gating was right, and the **top-25 truncation destroyed the chart**: Auburn touches #25 in exactly one week, so eight of nine data points were discarded and the panel went empty. Every dynasty that isn't a national power would have seen the same. The earlier instruction ("unranked teams don't plot until they enter the top 25") was reasoning about the flat `#0` CFP line — a different problem, already fixed on its own.
+
+**Reverted the truncation.** AP and Coaches plot every recorded week at their real national rank; `0` is still a genuine absence (an unreleased poll), so CFP still starts at its first week. The top 25 is now a **labelled dashed reference line** across the plot (new `yReference` prop on `TrendLineChart`, skipped when the season never goes near it) — so "in the published poll" stays readable without throwing the season away. The y-axis scales to the data again.
+
+**Also:** toggle knob 26 → **35px** (+35% as asked), the track widened 44 → 52 alongside it so the slide stayed as legible as before (travel 20 → 19px, symmetric 1px overhang at both ends), and the knob's centre sits **5px above** the track's — deliberate, because a mascot mark's ink sits low inside its own square and true geometric centring reads as sitting low. Verified by measuring the live DOM: knob 35×35, track 52×24, knob centre − track centre = exactly −5.
+
+**Lesson, and it's the second time this project has paid for it:** a display rule that sounds principled ("only show real poll positions") has to be checked against the archive it will run on before it ships. One query against the user's own `ranking_history` would have caught this before they had to look at an empty chart.
+
+## Phase — Program Arc: the Yearly view gets three real modules (2026-07-28)
+
+The Yearly view had three charts (record, class rank, points) and the user called it thin. **Audited the archive before proposing anything**, and the finding reframed the whole task: every season already stores **20 snapshots**, and the Yearly view was reading three numbers out of them. Nothing here needed a new extractor, a schema change or a re-sync — it all fills in retroactively for seasons synced months ago.
+
+**Shipped** (`getProgramArc.ts`, `charts/ProgramArc.tsx`, types + IPC):
+
+- **Program prestige** — `teams[].teamPrestige`, the game's own 0-10 program rating, with national and conference rank per season. Verified spread across the league (28 teams at 3, only 5 at 10), so a rank is meaningful rather than decorative.
+- **How the roster was built** — `teams[].positionGrades` (the numbers behind the in-game Team Ratings screen) as a units × seasons heat map.
+- **Program efficiency** — eight metrics per season, each with its national rank and how far that rank has moved since the first season.
+
+**National context everywhere**, at the user's request. The `teams` snapshot is league-wide, so prestige and unit grades rank against every real program for free; efficiency reuses Season Lab's league aggregation — `aggregateLeagueFromSchedule` / `derive` / `EFFICIENCY_DIMENSIONS` were **extracted and exported rather than copied**, so "Third down" cannot come to mean two different things in the two views.
+
+**Three judgement calls worth recording:**
+- **Shade the percentile, not the value.** Position grades cluster in the 60s and 70s nationwide; colouring cells by grade produced twelve rows of identical beige. Shading by national percentile is what makes a 72 in a weak year look different from a 72 in a strong one — which is the actual story.
+- **Prestige needed a track, not a bar.** A bar sized to the value can't show that 3 is 3-*out-of-10*; two seasons a point apart read as a rout. Each season is now a full-height track with the value filled from the bottom, so the ceiling is visible.
+- **Red-zone rate and time of possession were deliberately left out.** The season `teamStats` snapshot has them, but only for the user's team — they could never carry a national rank, and the whole point of this view is that every number is placed.
+
+**Verified against the user's own archive** (a copy, in a scratch `CFB_USER_DATA_DIR`), which holds a real three-season Texas State chain — and the data tells a story the app couldn't previously show: prestige 2 (#103) → 3 (#77), conference 8th → 5th; the RB room rebuilt from **#136 to #9 nationally** then back to #32; points allowed #51 → #116 → #22; third down #48 → #115. Ran the getter across all three dynasties in the archive including two single-season ones (sparklines correctly degrade to "—" under two points), captured both themes, and confirmed the mid-sync 2028 season is flagged as in-progress rather than plotted as a collapse. typecheck/lint/build clean.
+
+**Two layout bugs found only by looking at it:** the heat map at `w-full` stretched three seasons into ~350px blocks (fixed column widths now; more seasons scroll right, which is the correct direction for a timeline), and a half-width heat map left a hole in the grid — it now pairs with efficiency, prestige pairs with the record chart.
+
+**Proposed and not built, all verified present in the archive:** school record book chase (`teams[].schoolRecords` carries career/season/game records including pre-dynasty legends — e.g. Bradley George, 9,556 pass yards, 2009), résumé/quality wins (the `game_context` table already holds **3,627 rows** of opponent ranks and records at kickoff, entirely unused by analytics), the national picture per season (`yearSummary`), and the coach ladder (salary/contract/job security per season from `coaches`).
+
+## Phase — Schedule masthead helmet + placeholder bowls hidden until bowl week (2026-07-28)
+
+**The helmet.** The Schedule masthead helmet ran 13rem and read as an icon sitting politely inside the padding. Now 22rem, eating its own vertical padding and the card's left padding, so it leans out of the masthead and gets cropped by the card's clip-path — the same "sits IN the card, not on it" treatment as the dynasty cards. Checked the source art first: the helmets are 1024², so there's plenty of resolution to nearly double the render size without softening. Drop shadow is on the artwork, not the panel — SurfaceCard stays flat by design.
+
+**The bowl bug, confirmed in the user's own archive before touching anything.** The save carries bowl games from the start of the season with participants already filled in: an Auburn dynasty sitting at **4-4 in `RegularSeason`** already listed "Week 18 · Reliaquest Bowl · USC @ Auburn (Unplayed)". Those are the game's pre-assignments and get rewritten once bowls are genuinely set, so listing them is worse than listing nothing — it tells a user their bowl before it exists, and tells them the wrong one.
+
+**The gate lands exactly where the calendar does.** Bowls are assigned the week after conference championship week, and that's precisely where the save's own week type flips: conference championship week is still `RegularSeason`, the postseason is `NationalChampionship`. So "not PreSeason and not RegularSeason" *is* "bowl week has started" — new `isBowlSlateSet()` in `shared/syncPhase.ts`, no new data needed.
+
+Paired with "…or the game has been played", which is what makes it safe on legacy data: a season archived before phase tracking has no week type, and the gate can then only ever hide an UNPLAYED bowl, never a real result. Applied to `getSchedule` (your own), `getLeagueTeamSchedule` and `getLeagueTeamOverview` — that last one wasn't in the ask, but its "upcoming games" list is the same snapshot with the same defect, and it would have shown the phantom bowl as an upcoming fixture.
+
+**Verified both directions** on the real archive: Auburn's in-progress season 13 games → 12 with the phantom bowl gone and upcoming reading wk10/11/12; the finished 2026 Texas State season still shows "Alamo Bowl W"; 2027 (3-9, not bowl eligible) correctly shows none. Helmet checked in both themes. typecheck/lint/build clean.
+
+## Phase — Yearly view: efficiency chart, on-brand colours, and the ST label tested (2026-07-28)
+
+**`ST` is Special Teams, not Safeties — the one instruction not carried out, because it was testable and false.** Asked to relabel `ST` → `S`. Tested it across 143 teams instead of assuming either way: the grade correlates with the best K/P on the roster (r=0.36) and no better with safeties (0.22) than with corners (0.21). The bottom of the league settles it — Sac State ST 71 / kicker 71, Troy ST 72 / kicker 72 — while an FCS side carrying a 94 safety still grades ST 73. Meanwhile `db` correlates with safeties (0.48) and corners (0.52) alike, i.e. it already IS the whole secondary and the save has no separate safety grade. Relabelled **"Special teams"** rather than "ST", which fixes the real problem (two letters that invite exactly this misreading) without putting a wrong name on the data. Reasoning recorded at the constant so nobody re-derives it.
+
+**Program efficiency gained a chart.** The paragraph of narration under the rows is gone — that text belongs in the panel's info hint, which is where the rest of the app keeps its narration — and the dead space it left is now a **toggleable line chart**: chip per metric, click to add or drop it, seeded with Scoring + Points allowed. It plots **national rank, not raw values**, which is the only thing that works: scoring ~34, total offense ~555, third down ~37%, turnover margin ~1.4 — on one axis the yardage line flattens everything else onto the baseline. Rank puts all eight on one scale, inverted so up is better, and rank is what the reader is comparing anyway.
+
+**The blue is gone.** Every chart on this page is one program's story, so they're painted in that program's colours: wins bar, class rank and Points-For all take the team primary; Points-Against takes the secondary. New `teamSeriesPalette()` reuses the poll chart's normalisation, so the same rules apply — a near-white secondary becomes graphite, a gold one becomes grey on the light page, and a program with no real secondary doesn't draw two identical series. Past two series it falls back to the logo's gold then neutrals: the save only HAS two team colours, and inventing hues a program doesn't own is what made this look foreign in the first place.
+
+**Chased the tint into the chart internals too.** The bright blue wasn't only the series colour — `TrendCharts` was still full of stock Tailwind slate (`#475569` ink, `#cbd5e1` losses, `#334155` grid) and, worst of it, a `#0b1220` navy as the label knockout colour. All moved to the app's own true-neutral ramp. That's what made the page read blue even where nothing was explicitly coloured.
+
+**Also:** the white ring marking a top-25 unit in the heat map is gone (it belonged to no part of the brand) — those cells are called out by weight now, which still isn't colour-alone; and the toggle knob came back down 3px, since the earlier 5px lift was overdone.
+
+Verified in both themes against the real three-season archive. typecheck/lint/build clean.
+
+## Phase — Frameless window: the Windows title bar is gone (2026-07-28)
+
+The app wore the standard purple Windows title bar while Slack/Discord/Figma don't. Now it doesn't either.
+
+**Chose the Figma/VS Code route, not the Slack/Discord one.** `titleBarStyle: 'hidden'` + `titleBarOverlay` — the Windows Control Overlay. Windows still *draws* the minimise/maximise/close buttons, just as a transparent overlay on our own page, which keeps **Snap Layouts (hover-maximise), correct hit targets, tooltips and accessibility working for free**. Drawing our own buttons (`frame: false`) would have looked equally good and made every one of those our problem forever.
+
+**Two things made this cheap, both pre-existing:**
+- The masthead is a strip with **nothing interactive in it** (the utility controls moved to the sidebar back in July), so it could become the drag region as-is. A drag region swallows clicks from its children, so this mattered.
+- **Packaged builds already ship with no menu** (`Menu.setApplicationMenu(app.isPackaged ? null : buildAppMenu())`), and a hidden title bar has nowhere to draw one. So users lose nothing; dev keeps it behind Alt via `autoHideMenuBar`.
+
+**The parts that aren't obvious:**
+- The caption buttons are drawn by the OS *over* the page and inherit nothing from CSS — so flipping to light mode left a black band across the top-right corner until `setTitleBarOverlay` was wired to the appearance change (new `IPC.window.setTitleBarTheme`, handler registered per-window and torn down with it). Strip colour matches the page ground exactly in each theme so it disappears.
+- The masthead's top padding now clears `--titlebar-height`, so the buttons float over the page ground rather than landing on the card. That constant is duplicated in `main.ts` and `globals.css` and the comment in each points at the other.
+- Right-hand gutter uses Chromium's `env(titlebar-area-width)` where available — the real button width changes with DPI and Windows' own sizing — with a 140px fallback for first paint and non-Windows builds.
+
+**Verified with real desktop captures, not `capturePage`.** The screenshot harness renders web contents only and would have shown nothing about the frame; these were taken by grabbing the actual screen and cropping to the window rect via `GetWindowRect`. Both themes confirmed: no OS title bar, page content starts at the window's top edge, and the three buttons sit colour-matched at the top right (light strip + dark glyphs in light mode, black strip + light glyphs in dark). typecheck/lint/build clean.
+
+**Note for future screenshot runs:** page content now starts ~36px lower, so any hardcoded `SCREENSHOT_RECT` from before this change is off by that much.
+
+## Phase — Card line-up changes; card system scoped (2026-07-28)
+
+**Done:** jersey watermark hidden (left in the tree behind `SHOW_JERSEY_WATERMARK` — the `bottom-[62px]` and `z-2` values were both arrived at by measurement, and deleting them would mean re-deriving solved work), and the position folded into the profile line at the same type and weight: "Quarterback · Texas State · Freshman · 2026". Verified by capture.
+
+**Deliberately NOT started in the same pass** — the remaining five asks are a feature, not a batch of tweaks, and each needs its own foundation:
+
+1. **Favorite (star) on a card** — needs persistence. No table holds per-player card state today; `card-photos/<dynastyId>` is filesystem-only. Wants a `player_cards` table (schema migration), which is also the foundation for 2 and 4.
+2. **Multiple cards per player + a chosen default** — same table, plus a card id, plus "which one does hover use". Changes `PlayerCard`'s single-photo assumption and the hover provider.
+3. **Export dialog** (toggle OVR / Name / Profile / Stats / Team Logo) — the card renderer currently has no notion of optional layers; each becomes a prop, and the existing export path grows a pre-flight modal.
+4. **Coach Hub → "Coach", + a Cards entry above Scandals** — small on its own, but it's the entry point for 5.
+5. **The card book** — a new page: every favorited card, paginated by season year, select / select-all, and export through the same dialog as 3.
+
+Order that actually works: **(1) the table → (2) multi-card + default → (3) layer toggles + export dialog → (4) nav → (5) the book**, since 5 consumes all of 1-4 and 3's dialog is shared between the single-card export and the book's bulk export. Doing 5 first would mean building a book with nothing to put in it.
+
+### Handoff — what a fresh session needs
+
+Written down because these are the facts that cost real time to rediscover, not because they're hard.
+
+**Where things are.** Schema is at **version 11** (`src/database/migrations.ts` + `schema_v11_game_context.sql`) — v12 follows that pattern. Card photos are filesystem-only today: `<userData>/card-photos/<dynastyId>`, IPC `window.api.card.{pickPhoto,setPhotoFromPath,getPhoto,removePhoto}`. There is **no** per-player card row anywhere in the DB yet. The nav label lives in `components/common/DynastyLayout.tsx`; the Scandals trigger is in `pages/CoachHub.tsx` (~line 312, near `ScandalsModal`).
+
+**Card state as left.** The jersey watermark is hidden behind `SHOW_JERSEY_WATERMARK = false` in `PlayerCard.tsx` — kept rather than deleted because its `bottom-[62px]` / `z-2` values were measured against the art, not guessed. The profile line is now a single row: `Position · School · Class · Year`.
+
+**Traps, all of which have already bitten once in this codebase:**
+- Modals must use `ModalOverlay` — it portals to `<body>` and assigns z-order on open. `#root` carries `isolation: isolate`, so a non-portalled modal loses to a portalled one *regardless* of z-index.
+- `SurfaceCard`'s cut corner is a `clip-path`: no descendant can ever overflow it. Anything meant to break the card's edge has to be a sibling.
+- Screenshot harness: `unset ELECTRON_RUN_AS_NODE` first (it's set in this shell and makes Electron boot as bare Node), and a second instance quits **silently** on the single-instance lock — kill any running Electron before a capture run.
+- Verify against a COPY of the archive in a scratch `CFB_USER_DATA_DIR`, never the live one.
+
+**Sequencing note for whoever picks this up:** build the export dialog (3) as a standalone component even though the single-card export is the only caller at first — the book's bulk export needs the identical thing, and retrofitting it for multi-select afterwards is the more painful direction.
+
+## Phase — "Player not found" on opponent players in the box score (2026-07-28)
+
+Clicking a non-user player in the Game Info stat tables returned an empty "Player not found" modal.
+
+**Cause:** `buildGameRows` in GameDetail never put `teamIndex` on the row. `StatisticsTable` resolves a click as `rowTeamIndex ?? viewedTeamIndex`, so with no row index it fell back to the page's *viewed* team — which is `null` when the box score is open as an app-root modal. With no `leagueTeamIndex`, `PlayerProfileContent` searched the USER's roster, and an opponent is never in it.
+
+The data was there the whole time: the gamelog entries already carry `teamIndex`; the row builder just dropped it. One line to add it back, and it fixes the leader cards at the same time — they read `leader.teamIndex` and were getting `undefined` too.
+
+**A wrong first fix, worth recording.** I initially passed `leagueTeamIndex={activeTeamIndex}` to each `StatisticsCategorySection` — which doesn't accept that prop (it derives it per row), so it didn't compile. Fixing the row builder is both correct and narrower: per-row means a table containing both sides still resolves each player against their own team.
+
+TypeScript caught a second detail: `exactOptionalPropertyTypes` rejects `teamIndex: number | undefined` against `teamIndex?: number`, so the key is spread in only when the entry actually has one.
+
+**Proven at the data layer** rather than by driving the UI, after the click path proved fiddly to automate. On Texas State @ Wisconsin (user 124, opponent 112): opponent gamelog entries carry `teamIndex` ✓; sample opponent player 968 is **not** in the user's roster (exactly why the modal said "not found") and **is** in Wisconsin's league roster (what the modal now searches).
+
+## Phase — New splash + app icon (2026-07-28)
+
+Both supplied art assets installed. Neither was a straight copy.
+
+**Icon — would have been clipped.** The source is **528×512, not square**, and `make-icon.js` resizes with `fit: 'cover'`, which centre-CROPS a non-square source. Measured the alpha bounds: the art spans x 2-525 of 528, while a square crop removes everything outside x 8-519 — so roughly 6px of the mark on each side would have been shaved off. Padded the source to 528×528 with transparency instead, so the crop is a no-op and every pixel survives. `public/Icon/ICON.png` (that exact filename — the script only resolves by accident on case-insensitive Windows).
+
+Verified by **parsing the ICO and decoding its own payloads** rather than re-deriving from the PNG: 6 entries, 256→16, each decoding at its declared size, and the gold OS still reads at 16px.
+
+**Splash — a resolution drop worth knowing about.** The new `Splash.png` is 868×420, which matches `SPLASH_WIDTH`/`SPLASH_HEIGHT` and the pre-splash HTA exactly. But the file it replaced was **1736×839** — a 2× asset for HiDPI. Both render correctly at the window's 868×420; the previous one was simply sharper on a high-DPI screen. Flagged rather than silently swapped.
+
+That also corrected a comment in main.ts which claimed the constants "match spshscr.png's native resolution exactly (868×420)" — untrue of the old 2× file. They're a layout size, not the artwork's pixel size.
+
+Previous assets moved to `DynastyOS/logo/_previous/` — out of `public/`, so they don't get packaged, while staying available as a rollback.
+
+**Not verified:** the splash rendering on screen. It's shown for ~1.2s and two timed capture attempts missed the window. Placement and dimensions are confirmed; the visual is not.
+
+## Phase — The page ground is now a theme setting (2026-07-28)
+
+The ground was hardcoded in globals.css. It's now `--ground`, driven by the theme preference and editable in **Preferences → Background**, for both appearances.
+
+**Stored per appearance** (`groundDark` / `groundLight`), because one value can't serve both: a colour that reads behind light text is unreadable behind dark text. ThemeProvider applies only the ACTIVE one, so globals.css needs a single declaration and a theme flip is a one-property change.
+
+**Defaults reproduce exactly what was hardcoded** (#000000 / #e8eaed) and preferences saved before this existed fall back to them, so nothing moves until someone deliberately picks a colour. The CSS keeps those same values as `var()` fallbacks, covering the first paint before React runs.
+
+**One thing genuinely lost:** the light theme's three-stop gradient. A gradient can't honour a chosen ground without generating its stops from it, and a flat colour is the honest reading of "set the background to this." Light mode is now flat.
+
+**Verified end to end:** default reads `--ground: #000000` with body and html both `rgb(0,0,0)`; seeding `groundDark: '#dedede'` and relaunching gives `--ground: #dedede` with body `rgb(222,222,222)`.
+
+**Worth knowing before using it:** the ground is the only thing that moves. Panels stay black in dark mode (`--surface-*` and `dark:bg-black`), so a light ground under dark mode puts black panels on a pale page — and the title-bar wordmark, which is drawn light for a dark chrome, gets hard to read. That's a legitimate look if chosen deliberately, but it is not a full light/dark inversion.
+
+## Phase — The dark-mode grey was a class on <body> (2026-07-28)
+
+Asked for repeatedly, "fixed" twice, still grey. The reason every previous pass missed it: **the paint wasn't in the CSS at all.** `public/index.html` had `<body class="… dark:bg-slate-950 …">` — #0a0a0b — and a Tailwind utility outranks an `@layer base` rule, so the `.dark body { background-color: #000000 }` declaration in globals.css never won. Fixing surfaces, gradients and card fills couldn't reach it.
+
+**Found by sampling pixels, not by reading code.** `PrintWindow` + `GetPixel` down a column: the top 40px read exactly rgb(10,10,11) and stayed there through two rounds of CSS fixes. Then `elementFromPoint` walked the ancestor chain and named `<body>` with `rgb(10, 10, 11)` while `--surface-primary` and `html` both correctly reported black. That's the whole diagnosis in one call — worth remembering next time a colour "won't change".
+
+One wrong turn worth recording: two different off-blacks (rgb(10,10,11) top, rgb(13,13,13) bottom) looked exactly like Windows 11 compositing a system backdrop behind a frameless window, so the window got an explicit `backgroundColor: '#000000'` and `html` got the ground painted. Neither changed the pixel. Both are correct hardening and stayed — a frameless window with no opaque backing genuinely can leak the desktop — but they were not the bug.
+
+Confirmed by re-sampling the same column: **rgb(0,0,0) from y=0 to y=39**, with only the panel's intentional 1px border at y=40.
+
+## Phase — Dark mode is actually black now (2026-07-28)
+
+Asked for repeatedly and only half-done each time, because the grey came from FIVE separate layers and fixing any one of them left the rest. Found them by enumerating every painted surface in the live DOM instead of reasoning about the CSS:
+
+1. `--surface-primary: rgba(10,10,11,0.92)`
+2. `--surface-raised: rgba(15,15,17,0.97)`
+3. `--surface-overlay: #0d0d0f`
+4. **`GRADIENT_SURFACE`'s `dark:from-white/[0.055]`** — a 5.5% white wash on the top edge of *every* SurfaceCard. The biggest contributor by far, because it compounds across every panel at once.
+5. The dashboard card's own `inset-[1px]` 5% white sheen, plus its `dark:bg-slate-950/74` fill.
+
+All five are now pure black in dark mode (the sheen and wash are light-mode only). The near-blacks existed to separate panels from the page by value — but the page is `#000`, so instead of reading as depth they read as grey slabs floating on black. Separation comes from the borders alone now, which is enough on a black ground and matches how the rest of the shape language already works.
+
+**Verified by re-running the same enumeration**: exactly one painted layer survives, the dashboard cards' team-colour wash (`rgba(87,42,49,0.34)` for Texas State) — which is program identity, not chrome, and is meant to be there.
+
+The one deliberate exception is `--surface-interactive-hover`: hover has to register as a change, so it stays lifted.
+
+## Phase — Game header: rank above the rule, record at kickoff (2026-07-28)
+
+The team flanks on the game box score now read **#19 → colour rule → team name → 10-3**.
+
+**Rank moved up and grew.** It was sitting under the name in eyebrow grey — the loudest fact about a matchup ("#3 vs #7") rendered as the quietest thing on the card. Now it leads the stack above the rule, bold and a step larger than the name, and still only for a genuine top-25 position.
+
+**Record at kickoff took its place**, from the same `game_context` capture the schedule page reads — so it follows the schedule's rules exactly, including its limits: the record is null for games played before context capture existed, because the save only ever exposes a team's CURRENT record and a point-in-time one can't be reconstructed after the fact. On a season synced once at the end, every game therefore shows that season's final record; on one synced week by week it shows the record going in. Same data, same caveat, same behaviour as the schedule — which is what "following the same rules" has to mean.
+
+Verified on a played game: Wisconsin renders #19 above the rule with 10-3 beneath the name, and an unranked Texas State correctly shows no rank line at all.
+
+## Phase — Player modal navigation + trading-card layout (2026-07-28)
+
+**The open tab now survives Prev/Next.** Stepping to the next player always dropped you back to Overview — because `PlayerProfileContent` is keyed on the player id to animate the swap, and that remount destroyed its internally-held tab. The tab moved UP into `PlayerProfileModal`, outside the keyed subtree, so the remount can't touch it; `PlayerProfileContent` takes an optional controlled `tab`/`onTabChange` and still works uncontrolled for any other caller. It resets to Overview when the modal OPENS (a fresh profile shouldn't inherit a tab from a previous session) but not when stepping.
+
+Arrow navigation itself already existed; it now carries the tab with it. Verified end to end: opened on **Overview** → clicked **Card** → **ArrowRight** → next player, still on **Card**.
+
+**Trading card, four changes:**
+- Jersey number dropped to sit on the profile line's baseline (`bottom-[62px]`, clearing the stat row and the line's own margin) and its opacity went 10% → **50%**.
+- It also moved **above the bottom fade** (z-1 → z-2). At z-1 the fade painted over it and 50% still read as a faint smudge — the number was doing the work and the gradient was undoing it. Still under the name and the bottom band, so it stays a watermark.
+- **Position spelled out** above the profile line ("Tight End", not "TE") at one step up in size and weight — enough to lead the line, not enough to pull off the name. New `lib/positionNames.ts` maps the save's depth-chart codes; sides collapse deliberately (LOLB/ROLB → Outside Linebacker), and unknown codes fall through unchanged.
+- **DynastyOS mark in the top-left**, where the position chip was — the Topps/Fleer corner convention. Inlined as `DynastyOSMark` rather than referenced by path: its source lives in `/DynastyOS/logo`, which isn't part of the packaged assets, so an `<img>` would have resolved in dev and 404'd in a release — the same trap that broke the portrait picker. Its gradient ids are namespaced, since SVG ids are document-global.
+
+**Verified:** the tab/arrow behaviour by driving the real keystrokes, and the card's mark, spelled-out position and profile line by capture. The watermark's z-2 lift is the one thing not seen rendered — two capture runs lost the modal before the frame.
+
+## Phase — Modal stacking: last-opened wins (2026-07-28)
+
+Opening a player from the game box score put the player card BEHIND the game modal. Two causes, and **the obvious one was only half of it**.
+
+**Cause 1 — everyone claimed the same z-index.** Every modal hardcoded `z-[100]` or `z-[110]`, so with two open the tie fell through to DOM order, which is decided by where each provider happens to sit in `app.tsx`. New `lib/modalLayer.ts` hands out depth on OPEN instead: base 100, +10 per open modal, slot released on close so the numbers can't creep over a session. Whatever you opened last is on top, however the tree is arranged.
+
+**Cause 2 — and this is the one that would have made a z-index-only fix look like it worked.** After the depth fix the numbers were right (player 120 over game 110) and the bug was still there. `#root` carries `isolation: isolate` (globals.css), making it its own stacking context: the player modal rendered inside the tree, the game modal portalled to `<body>`. A portalled sibling of `#root` paints above the entire subtree no matter what z-index something inside claims. So `ModalOverlay` portals to `<body>` too — six of the eleven modals weren't.
+
+**Caught only because the check was a hit test, not a number.** Reading the computed z-indexes said 120 > 110 and looked like success; `document.elementFromPoint(centre)` still answered "Game box score". After portalling it answers "Player profile". A screenshot would have shown it too, but the run that was supposed to capture it lost the modals before the frame — the hit test is the reliable form of this check.
+
+All eleven overlays now share one `ModalOverlay`, so this can't drift back one component at a time.
+
+**Also:** the player modal's teammate rail now defaults CLOSED. It's a jump-to-teammate convenience, not part of reading a player, and opening every profile with it already out pushed the content sideways before you'd asked for anything. Verified via the trigger's own label reading "Show teammate list" on open.
+
+## Phase — Logos stay inside the card; helmets keep the overhang (2026-07-28)
+
+The pop-out works for helmets and doesn't for logos, so the two now differ on purpose rather than by accident: **helmets 250px (overhanging a ~194px card), logos 170px (inset ~12px inside it)**.
+
+Why the same treatment reads differently on the two: a helmet is one silhouette with a soft edge, so breaking the frame reads as depth. A logo is a dense, high-contrast shape with a hard outline — crossing the card edge reads as a clipping bug, not a flourish. Same geometry, opposite impression.
+
+Nothing else moved: the 300px width cap and the fixed slot still hold, so the headline starts on the same pixel and no wordmark runs away sideways. Verified both — Auburn's logo now clears the card edge top and bottom, and the Statistics helmet still breaks it.
+
+## Phase — Shift + arrows step through teams (2026-07-28)
+
+**Shift + ← / →** cycles the team switcher and wraps at both ends.
+
+Bound in `TeamSwitcher` rather than in the provider on purpose: the shortcut should only exist where a switcher is actually on screen, and the component's own mounting is the most honest signal for that — no list of "pages that have a switcher" to keep in sync as pages come and go.
+
+**It collided with something, and only a check caught it.** The player modal already binds bare ArrowLeft/ArrowRight and did NOT test `shiftKey`, so Shift+Arrow would have stepped a player *and* silently changed the team on the page behind it. The modal now ignores shifted arrows, and the switcher additionally stands down whenever anything with `role="dialog"` is open — the app's overlays all portal to `<body>`, so they aren't ancestors of the switcher and no focus/containment check would have seen them.
+
+Also skipped while a text field has focus, so it can't hijack shift-select in a search box.
+
+**Verified by driving the real keystrokes:** from Auburn, three Shift+→ gave Air Force → Akron → Alabama; four Shift+← walked back and then wrapped past the first option to **Wyoming**, the last of 138. Plain arrows changed nothing.
+
+Manual updated — the "Getting around" section also still described Tools as living in the sidebar with Quick Help, both of which changed earlier today.
+
+## Phase — The FCS pool crash (2026-07-28)
+
+**Found the mechanism before removing anything**, because hiding a link doesn't fix a getter that falls over.
+
+The save has no real FCS teams. It has ONE bucket at **teamIndex 255** (0xFF = "none") holding every non-FBS entity — the five "FCS East / West / Midwest / Northwest / Southeast" rows plus practice squads — and on a real archive **4,525 players sit on that single index**. `getLeagueTeams` counted players per index with no exclusion, so **the team switcher offered "FCS West"**, and picking it asked the app to render a 4,525-player roster with portraits. That's the crash.
+
+Closed at the data layer rather than per-surface, so a deep link or stale state can't reach it either: `getLeagueTeams` drops the pool, and `getLeagueTeamRoster` / `getTeamCard` / `getLeagueTeamOverview` / `getLeagueTeamSchedule` / `getLeagueTeamHonors` all return null for it at their entry.
+
+**Head-to-head had a second, quieter bug.** It buckets opponents by index, so games against FCS West, Southeast and Midwest all merged into ONE series row labelled after whichever was seen last — a won-loss record for a team that doesn't exist. Those now skip the series entirely.
+
+**Deliberately kept: your games against FCS opponents.** That result is real, it counts in your record, and dropping it would quietly corrupt the season — Auburn's week-12 FCS Southeast game still shows, the 4-4 record is unchanged. Those rows simply aren't clickable.
+
+**The constant lived in eight places.** `FCS_POOL_TEAM_INDEX = 255` was independently re-declared across seven getters plus TeamLink — which is precisely how one of them ends up forgetting the guard, as `getLeagueTeams` did. Now one `shared/fcsPool.ts` with the reasoning attached.
+
+**Verified through the real IPC:** switcher 139 → 138 teams with zero FCS entries; roster / card / schedule / honors for index 255 all return null; head-to-head has 8 real opponents and no FCS row; the week-12 game still renders; and of 11 clickable team links on the schedule page, **0** point at the pool.
+
+## Phase — Marks fit a BOX, not a height (2026-07-28)
+
+Normalising on height alone was half a solution, and JMU proved it. Every mark came out 210px tall — right for a round emblem, absurd for a wordmark: **JMU rendered 638px wide, UAB 689px**, against a 257px median. A 6.4× spread sideways, with the widest marks swallowing the card they sat on.
+
+`markGeometry` now fits each mark inside a **300 × 230 slot**, taking whichever limit binds first — `object-fit: contain` applied to the ARTWORK rather than to its mostly-empty canvas. Verified across all 144 logos: widths **117-300px** (was 107-689), heights 91-230, and **zero** exceeding the slot.
+
+The slot width is fixed and the art is centred inside it, so the headline starts on the same pixel for every team — a narrow mark leaves a gap rather than dragging the text left with it.
+
+The trade-off is worth stating plainly: a 3:1 wordmark constrained to a sane width **cannot** also be as tall as a round emblem, so JMU sits 99px tall against Auburn's 230 and doesn't overhang the card. That's not a compromise so much as the honest answer — those marks genuinely are wide and short, and the alternative is the 689px monster.
+
+## Phase — Nav alignment, and the bounds map was measuring the wrong folder (2026-07-28)
+
+**Ball State exposed a real bug, not a spacing problem.** The report was that big logos cover the toggle above them. The cause was the bounds map: it measured `PNG_OD` (69 files), but `getLogoPath` serves **`png_OL`** for most teams — the OD folder only holds the ~69 "genuine two-variant" teams. So **75 of 144 teams had no measurement and were silently falling back to the median**, and Ball State (74% fill vs the 61% median) rendered **22% larger than intended**: a 345px box where 283px was correct.
+
+Fixed by measuring all three logo folders — gold, on-dark, then on-light, with the complete set last so it wins. Coverage is now **144 of 144, zero fallbacks**. Every logo normalises to the same 210px, which means the overhang above the card is a constant 8px for every team rather than a per-team lottery. That's the part that actually prevents this recurring.
+
+Worth noting how it hid: a median fallback doesn't error, doesn't warn, and looks plausible for teams near the median. It only shows up at the extremes — which is why it surfaced as "Ball State looks wrong" rather than as a bug report about the map.
+
+**Three nav rows now start on the same pixel.** They were at x=38 (top nav), x=20 (sub-nav) and x=0 (pair toggle). The top nav's offset was structural: a `p-4` card wrapping a *second* bordered `p-1.5` strip, so the nesting itself was the misalignment. The inner strip's border and fill are gone and the outer card took over its padding, making the two nav rows structurally identical — they line up by construction now, not by a tuned number. Tab padding matched to `px-3.5`, and the toggle takes `pl-5`. Measured after: **360 / 360 / 359**.
+
+**Gap below the toggle doubled** (`space-y-5` → `space-y-10`), so an overhanging mark has room rather than reaching up into the switch.
+
+## Phase — Chrome: tools into the title bar, nav renamed, pair toggles (2026-07-28)
+
+**Tools moved out of the sidebar into the title bar**, as icons, hard against the Windows caption buttons with a rule between the two sets so it's clear which belong to the app and which to the OS. Preferences = gear, User Manual = book, About = the InnerActivity mark. Standalone marks, no chip or border. **Quick Help retired** — the manual covers it, and two doors to the same room is one too many; `HelpMenu` is left in the tree unreferenced so restoring it is a one-line change.
+
+**The move cost nothing because of an earlier decision.** All three menus already open a `CenteredModalPanel`, so relocating their triggers from the sidebar's bottom to the window's top needed no positioning work at all — nothing is anchored to them. Had they still used the old upward-opening anchored panel, every one would have opened off-screen.
+
+Two things the icons needed:
+- `app-no-drag`. The title bar is the window's drag region, which swallows clicks from its children — without it the buttons would have looked right and done nothing.
+- **The InnerActivity mark needed its strokes rebuilt.** Its art is drawn for a 1920px canvas; at 18px the ring is a 0.26px hairline. It now carries an explicit stroke over its fill to reach the same 1.7-on-24 weight as the gear and book, because a smudge next to two crisp icons doesn't read as a set.
+
+**Nav renamed** — Team Hub → **Program**, NCAA Hub → **NCAA**, Recruit Hub → **Recruiting**, Media Hub → **Media**; Coach Hub left as-is since it wasn't listed. The Team Hub sub-tab **Roster → Team**, which also fixes a small lie: that tab holds the Roster|Transfers pair, so naming it after one half read as a broken link to the other.
+
+**`PairLayout` now uses the app's ToggleSwitch** instead of its own pills, with the gold team logo as the knob. All four pairs get it, not just Roster|Transfers — the same interaction was wearing a segmented-button costume there and a switch costume inside Analytics, often on the same screen. Verified it actually navigates (`/roster` → `/transfers`, `aria-checked` true), since swapping a `NavLink` for a controlled switch moves routing from the browser to an onChange.
+
+Verified in both themes; typecheck/lint/build clean.
+
+## Phase — One masthead across every team page + the scroll jitter fixed (2026-07-28)
+
+**Measured before building, and the measurement changed the plan.** The ask was to give seven pages the Schedule's popped-out mark. Helmets were safe — sampled across 40 teams they fill 53.0-57.5% of their canvas, a **1.085× spread**, so one constant works. Logos were not: across all 69 3D logos the fill runs **25% (LSU) to 80% (Texas State) — a 3.19× spread**. In one fixed box LSU renders a third the height of Texas State's, so some teams' marks would bulge past the card and others wouldn't reach it. That is the precise opposite of the uniformity being asked for, so it went back to the user rather than shipping quietly.
+
+**The fix is a measured map, not magic numbers.** New re-runnable `scripts/measure-mark-bounds.js` reads the alpha bounding box of every mark (69 logos + 151 helmets, a few seconds at a 256px sample) and emits `lib/markBounds.generated.ts` — fill fraction and art centre per asset, ~19 KB. `lib/markBounds.ts` then solves the placement arithmetically: box size = target art height ÷ fill, with a negative left offset cancelling the baked-in margin. Every team's mark now presents at the same visible size — LSU gets an 840px box, Texas State 264px, Auburn 351px, all producing a 210px logo.
+
+Bounds are keyed off the **resolved asset path**, not the team name, deliberately: the app already resolves a team to a file through `getLogoPath`/`getHelmetPath` (alias table and all), so reusing that answer means the bounds can never describe a different file than the one being rendered.
+
+**`PageMasthead`** replaces eight hand-built headers (the seven asked for plus Schedule, whose one-off hero became the shared component). Same card height everywhere, mark as a sibling so it overhangs without growing the card, optional stat chips (Schedule) and right-side actions (Team Awards). Team Hub left alone as requested.
+
+Pages now read eyebrow → **team name** → context line, matching the two examples given; the explanatory sentences moved behind the info hint, which is where PageHeader already puts them. Rivalries had no team name in scope at all and now takes the user's team, which is correct for a page built entirely from their own schedules.
+
+**Scroll jitter: diagnosed, not guessed.** It wasn't jitter — arriving on a page long enough to scroll made the scrollbar appear, which stole ~15px of width and reflowed every panel; leaving for a shorter page handed it back. `scrollbar-gutter: stable` on the scroll container reserves the strip permanently so the layout never changes width. Confirmed no horizontal overflow followed (`scrollWidth === clientWidth`, 1150 = 1150) — worth checking, since the largest normalised box (LSU's 840px) is wider than the card it sits on.
+
+typecheck/lint/build clean. Verified live: Roster, Statistics, History (gold), Team Awards.
+
+**Follow-up — the schedule helmet, done properly this time.** The first attempt misread the ask: it made the helmet bigger *inside* the card, so the card grew to fit it. What was wanted was the helmet overhanging the card's top and bottom edges with the card's height unchanged.
+
+That was impossible as long as the helmet was a child, and the reason is worth recording: **`SurfaceCard`'s cut corner is a `clip-path`, which clips every descendant** — `overflow: visible` can't opt out of it. So the helmet is now a **sibling** layered over the card. Card height is driven by its text alone (`min-h` holds it where the helmet used to prop it open); the helmet is absolutely positioned and vertically centred, taking no part in layout, so resizing it moves nothing else on the page.
+
+**Then the art fought back.** Sized to the target directly, the rendered helmet came out ~40% too small. Measuring the alpha bounds explained it: every helmet is a 1024² canvas whose actual artwork occupies only the middle **578×588 — 56% each way, inset 222px** from every edge. So the box has to be ~1.8× the helmet you want to see, and its left edge has to start negative to cancel the baked-in margin. Those constants are documented at the element, since the numbers look arbitrary otherwise.
+
+Result, measured rather than eyeballed: card 194px (its original height), visible helmet 250px, overhanging **26px above and 30px below**. Verified in both themes.
+
+**Follow-up — the shell tightened onto one spacing value.** The chrome was three different gaps: 12px under the header, 16px between sidebar and main, widening to 24px at `md`. So the header looked welded to the body while the two panels drifted apart, and the difference read as dead space rather than rhythm. Now **8px everywhere**, at every breakpoint — window edge to panel, and panel to panel.
+
+The bigger win was structural: the identity strip moved ONTO the title-bar plane, left-justified against the caption buttons, so the bordered header card is gone entirely. The window used to stack two bands of chrome before any content (an empty 36px title-bar reserve, then the header card, then a gap under it); now the reserve IS the header.
+
+Also: the main panel's team-colour left edge went 3px → **1px, matching `SELECTION_BASE`**. Every other stroke in the app is a hairline, so a 3px bar was speaking a different design language than the thing right next to it.
+
+**Verified with `PrintWindow`, not a desktop grab.** A plain screen capture kept returning whatever window was on top (Photoshop, twice) and `SetForegroundWindow` is unreliable when called from a background process — `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)` renders the target window directly whether or not it's occluded. Worth remembering for any future frame-level check.
+
+**Follow-up — the wordmark halved.** 36px → 18px. At the old size it was the loudest thing on every screen, competing with the page title directly beneath it. Two knock-on adjustments came with it rather than being left to look wrong: the version stamp dropped 12px → 10px (against a 36px mark it read as a footnote; against an 18px one it started competing with what it annotates), and the bar's own padding tightened `py-3.5` → `py-2.5`, since a 48px band around an 18px mark is mostly air. Checked in both themes.
+
+## Phase — Trading cards, part 1: a card is a row now (schema v12) + the star (2026-07-29)
+
+**The foundation the other four parts stand on.** Before this, a card's state lived in three places and none of them could answer "which cards does this dynasty have?" — the photo was a file at `card-photos/<dynastyId>/<playerId>.<ext>`, the pan/zoom framing was a localStorage key, and the chosen stat labels were another. That is enough to redraw ONE card while you're looking at the player, and not enough for a star, a second card, or a book.
+
+**`player_cards` (migration 12, `schema_v12_player_cards.sql`).** Same family as `player_notes` (v7) and `media_items` (v6): user-authored data kept OUT of `season_snapshots`, so a re-sync never touches a card.
+
+**The one design decision worth arguing about: the display data is FROZEN on the row** (`player_json`, `stats_json`, `season_year`, `team_name`). A card is a printed moment. The book has to show a 2026 freshman card years after that player graduated and left the roster — there is no live `RosterPlayer` to re-render it from, and re-deriving one from the old snapshot would give the player as they *ended* that season, not as the card was made. It costs ~400 bytes a card and it's the difference between the book being possible and not. The modal card still renders live and rewrites those fields on every edit, so a card kept current stays current.
+
+**Given an `id` from the start**, even though part 1 only ever shows one card per player. Part 2 needs it, migrations are append-only, and `ALTER TABLE` on shipped rows to add a primary key is the expensive direction.
+
+**Two invariants live in the DAL, not the schema** (`database/playerCards.ts`): at most one default per (dynasty, player) — promoting demotes the siblings in the same call — and a player with any cards always HAS a default, so deleting the default promotes the next. A partial unique index would only have turned a mistake into a crash.
+
+**Rows are created lazily**, on the first thing the user actually does (a photo, a stat pick, a star) rather than on opening the Card tab, so browsing a roster doesn't quietly mint a card for every player looked at. Until then the tab renders a live draft.
+
+**Legacy state is adopted, not abandoned.** A player with a pre-v12 photo or saved stat picks gets a row built from them the first time the tab opens, and the photo file stays exactly where it already sits — `photo_file` stores whatever the file is actually *called* (a basename, not a path), so old `<playerId>.<ext>` files are adopted in place rather than renamed underneath the user. New photos are card-scoped (`<playerId>-<cardId>.<ext>`) via a new `*ForCard` IPC trio; the four legacy per-player photo channels stay for exactly that adoption path.
+
+**The star is outside the card, and that's load-bearing.** The PNG export clips to the card element's own bounding rect, so anything drawn *inside* has to be hidden for the capture (as the Edit/Export rollover already is). A control placed outside that rect is simply never in the picture — which is what lets it stay visible all the time, and a favourite you can't see isn't much of a favourite. It's a fixed gold rather than `var(--team-secondary)`: the star means the same thing on every card, and half the league's secondary colour is a near-white that reads as "off" even when it's on. Caught in the first capture, where Sac State's cream secondary made a starred card look unstarred.
+
+**Hover now reads the row too.** `PlayerHoverProvider` was pairing the photo file with a localStorage transform — two sources that can disagree. It reads the default card, which carries both, and falls back to the legacy file + localStorage only for a player who has no row yet.
+
+**Verified against a copy of the real archive** in a scratch `CFB_USER_DATA_DIR` (3 dynasties, 5 seasons, 1 media item, and a genuine pre-v12 card photo). Migration applied cleanly: ledger at 12, table and both indexes present, every pre-existing row count unchanged. Then the whole IPC surface exercised through the app's own preload: legacy photo adopted by basename and resolved to a live path; first card auto-defaults and the second doesn't; promoting the second demotes the first; `update` leaves `favorite` alone; deleting the default promotes the survivor; deleting the last card takes its photo file with it (`getPhoto` → null afterwards). Then driven in the real UI — Carson Conklin's Card tab, star clicked, `aria-pressed` false → true and the tooltip flips to "In your card book". typecheck/lint/build clean.
+
+**One thing found and deliberately not fixed** (pre-existing, outside this scope): `dynastyRestore.ts` lists `player_notes.player_id` under the `players` ID space, which re-maps it as if it were a relational `players.id`. It isn't — it's the opaque `PresentationId`, same as `RosterPlayer.id`. Restoring a backup would therefore point notes at the wrong player. `player_cards` is registered only in `STANDALONE_ID_TABLES` (its own `id` gets shifted, `player_id` left alone), which is correct; the notes case is worth a separate look.
+
+## Phase — Trading cards, part 2: more than one card per player (2026-07-29)
+
+**A player can keep several cards now, and one of them is *the* card.** No explainer anywhere, because the shape carries it: the tiles under the big card ARE the cards — real ones, rendered small — clicking one opens it, `+` makes another, and a radio dot marks the one that stands for the player everywhere else. A radio is the right control precisely because it already means "exactly one of these", which is the rule the DAL enforces underneath.
+
+**The thumbnails are scaled, not laid out small.** `PlayerCard`'s type sizes are fixed pixels (a 46px surname), so a 78px-wide container would have produced a full-size name on a postage stamp. `SavedPlayerCardThumb` renders the card at its real 330px width and applies `transform: scale()`, which is also what makes the strip honest — those are the actual cards, not icons standing in for them.
+
+**Strip order is creation order, deliberately not the DAL's.** `setDefault` returns the list re-sorted default-first (right for "which card opens"), and using that order in the strip made the tiles jump out from under the cursor at the exact moment you clicked one. The dot already says which is which without anything moving.
+
+**A file split, forced by the dependency graph.** The tab needs the strip, the strip renders saved cards, and a saved card renders a `PlayerCard` — with the tab living in `PlayerCard.tsx` that is a cycle. `PlayerCardTab` moved to its own module, leaving `PlayerCard.tsx` as the renderer plus `FavoriteStar`. New `SavedPlayerCard` (+ `Thumb`) draws a card from its ROW rather than from live data, which is the thing part 5 is made of.
+
+**One shared team-theme resolver.** `lib/cardTheme.ts` — three components were about to hold their own copy of "fetch the team's colours, cache them, turn them into `--team-*` vars". The hover provider's private cache is gone in favour of it.
+
+**The hover fix that mattered, and it wasn't the one I set out to make.** First pass had hover read the default card's *photo and framing* while still drawing the live player. Verified it and the number came back wrong: with the default card's OVR set to 99 and the other card's to 11, the preview read **73** — the live roster value. It was showing a card the user never made. So the preview now renders the saved default card outright (`SavedPlayerCard`), which is what "the default is what shows on hover" has to mean. Re-verified: **99**. Falls back to a live card only when the player has no saved card at all.
+
+Verified in the app on a copy of the real archive: starring creates card one and the strip appears; `+` makes a second (and opens the editor, since a blank card with no controls showing looks like nothing happened); the second is correctly not the default; promoting it flips both flags in the database, not just the DOM. typecheck/lint/build clean.
+
+## Phase — Trading cards, part 3: the export dialog — and a capture bug it exposed (2026-07-29)
+
+**Turn parts of the card off, then export.** Five toggles — Overall, Name, Profile, Stats, Team logo — over a live preview that IS the thing being saved.
+
+**Built standalone before either caller needed it to be**, because both do: the player modal exports one card, the book exports a selection, and the only difference is the length of the list. Retrofitting a single-card dialog for multi-select afterwards is the more painful direction. Both speak one `ExportableCard` shape, which is also what lets the modal export a card that isn't a saved row yet.
+
+**The dialog draws the card itself rather than photographing one already on the page.** It has to — the book's cards aren't all on screen at capture size, and the modal's card is behind this very dialog. The bonus is that the preview and the PNG are the same element, so what you see is exactly what lands, and the old "hide the rollover overlay for one frame so it doesn't get into the picture" dance is gone.
+
+**One card goes through the save dialog** so the user names the file; **several pick a folder once** and are written into it, never overwriting (a second card of the same player in the same season becomes `(2)`). Twenty cards through a save dialog would be twenty dialogs.
+
+**Layers are `Partial<CardLayers>` with everything defaulting ON**, so every existing call site renders the card exactly as before. The DynastyOS mark and the photo are deliberately not toggleable: the mark is the card's maker's mark, and a card with the photo off is a blank rectangle.
+
+**The name layer uses `display:none`, not a conditional render, and that's on purpose.** Its auto-fit is a `ResizeObserver` on the name box; unmounting the box would leave the observer with nothing to watch and the scale stuck at whatever it last computed. Kept mounted, the observer sees 0 → full height and recomputes. Verified across a round trip: `flex / 340px / scale(1)` → `none / 0` → `flex / 340px / scale(1)`.
+
+### The bug this uncovered, which had nothing to do with the dialog
+
+Exporting the same card twice with a layer flipped between produced **byte-identical PNGs**. Not similar — the same md5. Isolated it to three captures with one checkbox flipped between each, the page's own `textContent` confirming the change every time, and all three files identical to the first.
+
+**`capturePage` returns whatever the compositor last submitted, and a window Windows considers occluded stops submitting.** The page keeps running: React re-renders, rAF fires, the DOM is correct — and the pixels are frozen at the last frame produced while the window was visible. `webContents.invalidate()` did not help, which ruled out "needs a repaint hint" and pointed at the frames not being produced at all.
+
+Fixed with `--disable-features=CalculateNativeWinOcclusion` before app ready. This is **not** a test-harness accommodation: a user who alt-tabs during a twenty-card export would otherwise get twenty copies of card one, with every call reporting success and nothing to suggest anything was wrong. It also affects the single-card export that has been shipping since the card was built — a second export in the same session, after the window had been covered, would have re-saved the first card's image. The cost is a little idle GPU when the window is fully hidden.
+
+`captureRegion()` now wraps both export paths with the invalidate + settle, kept even though it wasn't the fix, since it costs milliseconds and makes the intent explicit at the call site.
+
+**Verified** by writing real PNGs to disk through the production handler: three captures, three distinct hashes matching three DOM states, and the exported image checked by eye — OVR present, stats gone, logo present, exactly as the toggles said. typecheck/lint/build clean.
+
+## Phase — Trading cards, parts 4 & 5: "Coach", and the card book (2026-07-29)
+
+**Nav: "Coach Hub" → "Coach".** One label in `DynastyLayout`. The page's own eyebrow still reads "Coach Hub", which matches what the earlier rename pass did to NCAA Hub — the tabs got short names, the pages kept theirs. Corrected the one sentence in the manual that listed the old tab names.
+
+**A Cards button above Scandals** on the Coach Hub masthead — the two now stack in the same right-hand column. Cards is deliberately NOT coach-gated the way Scandals is: Scandals writes to the save and there's nothing to cheat on behalf of a CPU staff, but a book of your own cards is yours whoever you happen to be coaching.
+
+### The book
+
+Every starred card, a page per season, oldest first. **A new year is a new page** — that's the whole pagination rule, which is why a page label can just be the year. Cards with no season get a `—` page at the end rather than being folded into a year they don't belong to.
+
+**Almost no text, on purpose.** The title, the year on each tab, and the count of what's selected. A book that explains itself in prose is a report about cards rather than a book of them.
+
+**Clicking a card selects it**, because there is nothing else a click could usefully mean here — the cards are already at a readable size and the only action the book offers is export. **Selection carries across pages** so a set can be built from several seasons; **Select all** applies to the page you're on, which is the only scope where "all" is unambiguous. Export hands the selection straight to part 3's dialog.
+
+**Theming, three times now.** The book, the export dialog and the card strip all portal to `<body>`, outside the dynasty container that defines `--team-*` — so every accent (season tabs, selection outline, Export button) came out grey until each got the vars applied explicitly. Worth stating as a rule: **anything portalled that uses a team colour has to carry its own vars.** The cards inside still resolve their own school's, so a card of a player's previous team stays that team's colour inside a book themed to the current one.
+
+### Two bugs found by looking at the output rather than the code
+
+**1. The exported PNGs were screenshots of the whole window.** Four files, four correct filenames, four "success" results — and every one of them was a picture of the app with the export dialog in it. The dialog was passing `getBoundingClientRect()`'s **DOMRect** across IPC. Its `x/y/width/height` are prototype getters, and structured clone carries own enumerable properties, so the main process received `{}`, `Math.round(undefined)` gave NaN, and `capturePage` silently ignored the clip. Now a plain object. Nothing about this was visible from the calling code — the types are satisfied, the call succeeds, and the file is written.
+
+**2.** The stale-frame bug from part 3, which this loop is exactly the shape to be ruined by (twenty cards, twenty copies of card one) — see that entry.
+
+**Verified by running the real export loop**, not a stand-in: four cards selected in the book, the Stats layer switched off in the dialog, and four **distinct**, correctly-cropped 330×496 cards written to disk under `<Player> <Year>.png` with the stat line gone and everything else intact. The loop swaps the preview to each card as it saves, which doubles as the progress indicator and is honest — the card on screen is the one being written.
+
+The folder picker is a native dialog and can't be driven from a verification run, so `pickCardFolder` honours `SCREENSHOT_EXPORT_DIR` when set — same family as the existing `SCREENSHOT_*` hooks in main.ts, and it makes the part most worth testing (the loop behind the picker) testable from here on.
+
+**Also verified:** the nav reads "Coach"; the Cards button sits above Scandals (measured, 371 vs 417); the book pages as 2026 / 2027 / 2028 with 4 / 2 / 1 cards; an unstarred card of a player on the 2027 page is correctly absent; Select all flips to "Clear page" and enables Export; selection survives a page change (4 → 5 after adding one from the next year); and the export dialog opens on top of the book (hit test, not a z-index read).
+
+## Phase — Import and sync: 8.6s → 3.0s, and why (2026-07-29)
+
+Asked to check that importing and syncing a dynasty are as fast as they can be. Profiled the real pipeline against a real save (`DYNASTY-TESTER4`, Texas State 2028) rather than reading the code, which was the right call — the three things that mattered were all invisible from the source.
+
+**Measured, on the user's own 30 MB archive:**
+
+| | before | after |
+|---|---|---|
+| Import | 8,595 ms | 3,043 ms |
+| Sync | 8,102 / 9,782 ms | 2,927 / 2,954 ms |
+| Extraction alone | 7,974 ms | 2,482 ms |
+
+### 1. `getTableById` was a linear scan over 2,400 tables, called 316,000 times
+
+The library's implementation is `this.tables.find(t => t.header && t.header.tableId === id)`. That would be unremarkable if it ran occasionally — but it is the innermost operation of the entire extraction. Every reference resolution goes through it (`resolveReferenceWithTable`, and the library's own `getReferencedRecord`), and one import performs **316,095** of them: a single player's per-game stats mean ~23 resolutions, times 16,500 players. A real save holds **2,400 tables**, so that's on the order of a hundred million comparisons per import.
+
+`openFranchiseFile` now wraps the instance with an indexed lookup built once, lazily. Wrapping the instance rather than our own helper is deliberate: it also fixes `getReferencedRecord`, which takes the same path, without reimplementing the library's reference decoding. Misses are memoised too — a null reference decodes to a table id that doesn't exist, and those are common enough that re-scanning for them would give most of the win straight back.
+
+Measured in isolation: the two heaviest traversals went **2,704 ms → 128 ms** and **2,009 ms → 129 ms**. The scan was ~95% of both.
+
+### 2. Five places pulled every attribute of the biggest table in the save
+
+`readRecords()` with no arguments loads every attribute of every row, and `Player` is ~16,500 rows with 100+ attributes: **767 ms**, against **82 ms** for the subset actually used. `extract-league-roster` called it directly, and `preloadAllInstances(franchise, 'Player')` in awards, recruits, national recruits and departures did the same — so the cost was paid by whichever ran first and the rest rode along on the cache. `extract-roster`'s careful 18-field read immediately beforehand was pure waste, superseded one step later.
+
+New `lib/playerFields.ts` holds **one** shared list of every Player attribute the pipeline reads, and `preloadAllInstances` takes an optional attribute list. One list rather than one per call site, because an attribute that isn't loaded doesn't throw — the field simply isn't there, so `Number(...)` yields NaN and `String(...)` yields `"undefined"`, and the wrong value goes into the archive silently.
+
+The write paths (`editorWrite.ts`, `recruitingWrite.ts`) deliberately keep the unrestricted read: they write arbitrary fields back.
+
+**Verified by diffing the whole extraction output** — 22.4 MB of JSON, before and after — which came back **byte-identical (same md5)**. That's the check this change needed: an unloaded attribute shows up as NaN or `"undefined"`, so an identical dump means every field survived.
+
+### 3. A sync rewrote the entire archive ~25 times
+
+`run()` in helpers.ts calls `persist()` after every statement, and `persist()` serialises and rewrites the **whole database file**. Right for a single edit; badly wrong for an import, where `persistExtraction` performs about 25 writes. On the 30 MB archive that was ~1.9 s of persist per sync — roughly 750 MB of file writes for one sync — and it gets worse every season, which is exactly the wrong direction.
+
+New `withBatchedPersist` in init.ts defers the flush and does it once at the end. Nested batches are safe, and the flush is in a `finally` so a bulk operation that throws part-way still writes what landed — the file can't silently drift from the in-memory database. `syncDynasty` wraps the extraction persist and the team-award recalculation in ONE batch, so the awards pass doesn't trigger a second full flush.
+
+**Checked the invariant this could have broken.** `persist()` re-asserts `PRAGMA foreign_keys = ON` because sql.js's `export()` silently resets it — the bug that once stranded 137 MB of orphans. Batching means `export()` runs once instead of 25 times, so enforcement is if anything harder to lose, but it was worth proving: imported, synced, then deleted the dynasty, and the cascade took everything with it — **0 orphans** across seasons, snapshots, cards, notes and media.
+
+**And that the same data still lands.** Ran the identical import+sync sequence on two copies of the real archive, one on each build: identical row counts in every table, and all **38 snapshot payloads for the imported season md5-identical**.
+
+### Not changed
+
+- **`openFranchiseFile` itself is ~450 ms** and is now the single largest item. That's the library parsing a 9.6 MB save; nothing to do about it short of caching parsed files across a session, which would risk serving stale data after the user plays a week.
+- **A small bug, found and left alone:** `syncDynasty(undefined)` throws a raw sql.js "tried to bind a value of an unknown type" through IPC as an unhandled rejection, rather than returning the usual `{ success: false }`. Only reachable from a malformed caller (I hit it with a broken test path), so it isn't affecting anyone — noting it rather than widening this pass into error handling.
+
+## Phase — The title bar scrolled away (2026-07-29)
+
+The whole page scrolled, so the title bar left the screen — taking the window's drag region and the Preferences / Manual / About buttons with it. You couldn't move the window or reach settings without scrolling back to the top first.
+
+**The panel was never scrolling.** Measured before touching anything, and the numbers named the bug outright: the document was **6,313px tall in a 900px window**, `document.scrollingElement` scrolled to 2000 happily, the header sat at **top: -2000px** — and there were **zero elements on the page with a scrollable overflow**. The `overflow-y-auto` container the app has always had (the one carrying `scrollbar-gutter: stable`) had `scrollTop` stuck at 0: setting it to 3000 did nothing, because its content had all the room it wanted.
+
+**Cause: `min-h-full` where the shell needed `h-full`.** Two wrappers in `app.tsx` used `min-height: 100%`, which is a floor, not a ceiling — they grew to fit their content. That growth passed straight down: the panel's `h-full` resolved against a parent that was itself 6,313px tall, so the panel was never smaller than its content and never had anything to scroll. The document scrolled instead, and the title bar is inside the document.
+
+Pinned both to `h-full`, plus **`min-h-0` on the two flex items between them** — a flex item defaults to `min-height: auto` and refuses to shrink below its content, which would have handed the panel an unbounded height again regardless of the `h-full` above it. That pair is the whole fix.
+
+**Verified with the same measurement that exposed it**, across six routes (Dashboard, Coach, Roster, Schedule, Statistics, History): header at **top: 0** on every one, document **not scrollable** on any, and exactly **one** vertical scroller per content page — the panel — which now actually scrolls. Confirmed by capture at 2,500px down: wordmark, version, build stamp and all three tool icons still there, sidebar still there.
+
+**Three things checked because this class of change breaks them:**
+- **The chrome still works while scrolled** — the gear button hit-tests to itself at its own coordinates, and the header still computes `-webkit-app-region: drag`, so dragging the window works at any scroll position.
+- **Modals** — the page behind no longer scrolls where `useScrollLock` expected the *body* to be the scroller. A wheel over the backdrop leaves the panel exactly where it was (1200 → 1200), because a portalled modal's ancestors are `body`/`html` and neither scrolls now. Position survives open and close, and the lock releases.
+- **Horizontal scrolling is untouched.** Roster / Schedule / History each still report their own horizontal scroll container — those tables scroll sideways by design, and the earlier `scrollbar-gutter` work's "no horizontal overflow on the panel" property still holds.
+
+## Phase — Card follow-ups: a team column, icon controls, and a browsable book (2026-07-29)
+
+Three changes off the back of using the card system for real.
+
+### Career: which school, that season
+
+Season-by-season now reads **Season · Team · Class · Pos · …**, the team as its own logo column. Players move, and a career table without it quietly implies one program for the whole run.
+
+**No new data needed.** `getPlayerDevelopment` already resolves each season from the LEAGUE-wide roster snapshot — which is exactly "whichever school they were actually at that year" — and the profile already had it loaded for the OVR chart. The table just takes a `seasonYear → teamName` map off it.
+
+The mark alone, with the school as the title: the row is already eleven columns wide, and a logo is the faster read at a glance, which is what a career snapshot is for.
+
+**Verified on the case that motivates the column** — the archive holds a real transfer, **Amarion Atwood: Texas State 2026 → UConn 2027**. Header order confirmed in the DOM (`Season, Team, Class, Pos, GP, …`) and the cell renders a real asset (`TexasState_OD.webp`).
+
+### The card's controls are icons now
+
+The centred **Edit | Export** pills are gone, replaced by the app's own pencil and export glyphs tucked into the card's bottom-right.
+
+Two reasons, and the second is the one that mattered: words in the middle of the artwork read as a dialog laid over the card rather than controls belonging to it — and the centred pills needed a **full-card scrim** to stay legible, which meant the one moment you're looking hardest at the art was the moment it was dimmed. The scrim is gone entirely.
+
+**They're the app's icons, made literally so.** The pencil, export and bin glyphs existed as four private copies across CoachCard, Dashboard and Media. New `ActionIcons.tsx` holds one of each and those three now import it — otherwise "the icon we use throughout the app" would have become a fourth lookalike.
+
+**Placement took a second pass.** At `p-3` the pill sat a few pixels inside the team logo and the gold mark poked out from behind it, which looked like a collision. `p-4` matches the bottom band's own padding so the pill's edges land on the logo's, and at 44px it covers the 48px mark almost exactly — it reads as replacing it while you hover instead of sitting on top of it. Caught by looking at the capture, not by reading the CSS.
+
+### The book is browsable, and selecting is a mode
+
+**A click opens the card.** It expands into its own portalled overlay at 380px (against 220px on the page), with **← / →** stepping through the page and Escape closing just the expanded card, not the book under it. Its own `ModalOverlay` rather than something drawn inside the book, because the book is a panel with a max width and its own scroll — a card blown up inside it would be constrained by both — and portalling also gets it the layer above the book for free.
+
+**One click can't mean two things**, so selecting is now a mode. **Select** switches clicks over to picking; **Export** and **Delete** appear only once at least one card is chosen, as icons where the old Export button sat, and are simply absent otherwise rather than sitting there greyed out. Leaving the mode drops the selection — a set you can no longer see isn't a set you meant to keep.
+
+Delete is new, and it confirms first (it destroys the card row and any photo on it, permanently) — the confirm says plainly that the players are untouched and only the cards go.
+
+`SavedPlayerCardThumb` → **`ScaledSavedPlayerCard`**: it now renders at 78px in the strip, 220px on a page and 380px expanded, and a component called "Thumb" driving a hero-sized card is exactly the kind of drift that misleads later.
+
+**Verified by driving it:** default toolbar is Select alone (no Export); a click expands to 380 vs 220 and selects nothing; arrows walk 1/4 → 2/4 → 1/4; Escape closes the expanded card and leaves the book open; Select flips the button to Done and makes clicks select; Export and Delete icons appear with a selection; Done clears it. Captures confirm both states. typecheck/lint/build clean.
+
+---
+
+## Phase — v2.2.0 packaged: slim app only (2026-07-29)
+
+Version checkpoint over this session's work (trading cards, the card book, the import/sync speed-up, the masthead + sticky title bar). `package.json` **2.0.0 → 2.2.0** at the user's call — 2.1 is skipped, which is fine: the version only has to move forward, and `app.getVersion()` plus the electron-builder exe names are the only things reading it.
+
+**The lockfile was stale at 1.6.0.** `package-lock.json` still carried `1.6.0` in both places it records the root package's own version — the 2.0.0 bump never reached it. Both are now 2.2.0. Nothing installs differently either way, but a lockfile that disagrees with the manifest is the kind of thing that gets believed later.
+
+**Slim app only, per the request and the shipping model.** `SLIM_INSTALLER=1 npm run package` — media excluded, served over `cfbmedia://` from the user's external folder. Nothing else was rebuilt: the **Image Data 2.0.0** pack (972 MB) and the standalone **Coach Polos 2.0.0** installer are unchanged because no bundled artwork changed this session, so existing users update the app and keep the library they already have.
+
+Artifacts in `release/`:
+- `DynastyOS Setup 2.2.0.exe` — 147.2 MB (NSIS installer)
+- `DynastyOS 2.2.0.exe` — 146.9 MB (portable)
+
+**Slim was verified from the output, not from the flag.** `release/win-unpacked/resources/` holds `app.asar` alone at 100.5 MB with **no `app.asar.unpacked/`** — which is the proof: in a COMPLETE build the media globs are `asarUnpack`ed, so that folder exists and carries all 25,527 portraits. This is the check the v2.0 mistake needed (COMPLETE produced a 1.12 GB installer before it was caught by the size).
+
+The in-app manual is version-stamped by webpack's `__VERSION__` transform, so it came out of this build reading v2.2.0 on its own. The standalone PDF is generated separately and was regenerated (`docs/manual/DynastyOS - User Manual.pdf`, 436 KB, v2.2.0) so the repo copy doesn't sit a release behind. **Gotcha for next time:** the agent shell has `ELECTRON_RUN_AS_NODE=1` set, which makes `npm run manual` fail with `Cannot read properties of undefined (reading 'whenReady')` — Electron starts in node mode and there is no `app`. `unset ELECTRON_RUN_AS_NODE` first; nothing is wrong with the script.
+
+`npm run typecheck` clean before packaging. Not committed or tagged — the session's feature work is still uncommitted on `feature/force-commit-and-hub-refactor`, and no consumer release notes were written for 2.2 yet.
+
+---
+
+## Phase — The glider: one nav indicator, and the filled tab is gone (2026-07-29)
+
+The user brought a menu style (`UI/RadioMenu.md`) and asked how realistic it was to adopt: a hairline rail with a lit segment that slides to the active item, the line along the **bottom** for the horizontal menus rather than the side, in our colour system, themed, and working in both light and dark. Answer: realistic, and now shipped across every nav row — but almost none of the reference's *mechanism* survived.
+
+### The reference is pure CSS. It couldn't be.
+
+That CSS drives everything off radio inputs (`input:nth-of-type(n):checked ~ .glider-container`), a hand-maintained `--total-radio`, and a glider sized `100% / --total-radio` moved by `translate(n * 100%)`. Three problems, and the third is fatal: our items are router anchors (they stay anchors — routing, keyboard, middle-click), the sidebar's list is data-driven, and **the fixed fraction assumes every item is the same size**. Our tabs are words of different lengths and the sidebar has two row heights, so a fractional glider could never sit under the active item.
+
+So the look stayed CSS and only the geometry moved into JS: `GliderNav` measures the active child and pushes `--glider-offset` / `--glider-size` / `--glider-cross`; the stylesheet does the rest. Variable-width items and dynamic lists come free, and `--glider-cross` means a *wrapped* tab bar underlines the active tab's own row instead of the last one.
+
+### Light and dark are different treatments, not one with a swapped colour
+
+Dark gets the reference's full read: gold segment, blurred bloom, wash rising into the tab. Gold rather than team colour because the ground is pure black — a navy or maroon segment sinks into it — and gold is already the dark-mode selection accent, so it doesn't fight the team colours the page is themed in. Light **drops the bloom entirely**: `filter: blur()` reads as light emission, which is meaningless on a white page and lands as a smudge. The label uses `--team-accent-text` (the contrast-corrected form) — a raw maize or navy is unreadable at this size.
+
+Two things only the captures could have told us:
+
+- **The segment needed a solid core.** The reference fades across its whole length, which works there because the bloom carries the brightness. With no bloom (light mode, and the quiet sub-nav in both), a fully-faded 1–2px line has almost no ink left in it and the active tab stopped reading as active. Now it fades only at its ends (`--glider-core: 22%`).
+- **Light keeps the quiet sub-nav at 2px**; only dark thins it to 1px. Gold on black carries at a hairline; a team colour on a light ground doesn't.
+
+### A 1px bloom overhang raised two scrollbars
+
+The sub-nav came out with **both** scrollbars on a six-tab row that fits its space with room to spare. Measured rather than guessed: `clientWidth 496 === scrollWidth 496` but `clientHeight 32` vs `scrollHeight 33`. The bloom was centred on the segment, so ~1px of its box sat below the nav row — and because `overflow-x: auto` forces the y axis to `auto` too, that 1px of scrollable overflow was enough to raise the vertical bar, which then narrowed the box and raised the horizontal one. Anchoring the bloom to the segment's bottom edge and growing it upward fixed it (`ch 32 === sh 32`), and spilling upward is the truer read for a bottom rail anyway. The vertical orientation had the mirror-image bug against the sidebar's own scroller.
+
+### What changed, and what deliberately didn't
+
+Converted: the section bar (`DynastyLayout`, bloomed), the Team Hub / NCAA Hub / Recruit Hub sub-navs (quiet), the player-profile modal's ten tabs, and the sidebar (vertical). The filled team-colour tab and its cut corner are gone from all of them; the cut corner still marks cards and panels, so the shape signature is intact.
+
+**Mode switches keep the fill** — `SegmentedControl` and PairLayout's toggle are untouched, at the user's call. They change a view, not a page, and the difference in treatment is what tells you which one you're touching. The hierarchy between the two stacked nav rows is the same reasoning: both bloomed would have put two competing light sources ~10px apart.
+
+Structural notes: the hub sub-navs lost their bordered, filled strip (the rail groups the tabs now; a box as well read as two frames), `overflow-x-auto` moved to a wrapper *around* GliderNav so the rail scrolls with the tabs, the sidebar's dynasty rows are a flat list carrying their own indent (a nested wrapper would be one child holding many rows, and the indicator could no longer find them), and their old `border-l` is gone because the glider's rail is that line. `matchTabIndex` reproduces NavLink's matching rule once, since a positional glider needs to know *which* link won — and returns -1 for no match, which hides the glider rather than parking it on tab 0. Same for a collapsed sidebar: the active dynasty's row isn't on screen, so nothing is marked.
+
+`lib/selectionClass.ts` is now unreferenced (the sidebar was its last consumer) and is kept, annotated, as the non-navigation selection contract.
+
+**Verified by capture in both themes** — section bar and sub-nav in dark (bloom + gold labels) and light (maroon core + wash), the glider tracking `roster` → **Team** and `statistics` → **Statistics** and `standings` → **Standings** (positional matching working off the real routes), the 8-tab NCAA row with no scrollbars, the modal's tab rail replacing its old `border-b`, and the sidebar spine on the active dynasty in both themes. Evidence in `Productivity/screenshots/glider-nav-{dark,light,modal-tabs}-2026-07-29.png`. Recruit Hub wasn't captured individually — it's the same component with the same props as the NCAA row. typecheck/lint/build clean. **Not released:** this is on top of the 2.2.0 build, which predates it.
+
+---
+
+## Phase — Sections aren't boxes any more (2026-07-29)
+
+User direction, straight after the glider: the page's main sections (Coach Profile, Contract, Career Record, Current Coaching Staff) each sat in a bordered box; drop the borders and put **a thin horizontal rule between sections instead**. Goal stated plainly — move away from a boxy look.
+
+**One component, ~240 call sites.** `SurfaceCard` is the section container across 29 files, so the border came off there rather than page by page. `overlay` keeps its border: it's the modal-grade panel, floating over a scrim rather than sitting in page flow, and without an edge it bleeds into whatever is behind it.
+
+### Why the divider selects on the PARENT's class
+
+The rule is `[class*='space-y-'] > .surface-card + .surface-card::before`. A plain `.surface-card + .surface-card` would have drawn a line above the right-hand card of every side-by-side pair — Recent Games | Upcoming Games, the awards pairs — because those are adjacent siblings too. In this codebase a vertical stack is always a `space-y-*` container and a row is always a `grid`/`flex` + `gap-*` one, so the parent's own class is the honest signal, and it needs no per-page opt-in across ~30 files. Verified on Team Hub: the Recent/Upcoming pair has no line between them, the stacked sections above and below do.
+
+The line sits **on** the lower section's top edge rather than floating in the gap, because `.corner-cut` is a clip-path and clip-path clips pseudo-elements too — anything drawn outside the card's own box is simply not painted.
+
+### Light mode had two more layers drawing the box
+
+Removing the border fixed dark immediately (its surface is `#000` on a `#000` ground, so the border *was* the box). Light still looked identical, and the captures showed why — two separate opaque layers underneath:
+
+1. `--surface-primary` was a near-white fill. A white block on the light grey ground reads as a framed card with no frame on it. Now `transparent`, so a section sits on the page the way it already did in dark.
+2. **`GRADIENT_SURFACE` was still painting the panel** — in light it's an opaque `white → slate-50` wash on its own layer inside every card (dark carries none, which is why dark looked right and light didn't). It's now skipped for `primary` and kept for `raised`/`overlay`, which are meant to read as lifted paper.
+
+That second one is worth remembering: the fill and the border were the obvious suspects, and neither was the whole answer — a third layer was doing the work, and only looking at the light capture after fixing the first two showed it.
+
+**One caller changed with it.** The hero award card used a team-coloured *border* to stand out (`TeamAwards`); it now uses a faint team wash instead — same signal, no frame.
+
+**Verified in both themes** on Coach Hub (all four sections the user named, hairlines between each) and Team Hub (the grid pair correctly untouched). Evidence in `Productivity/screenshots/sections-borderless-{dark,light}-2026-07-29.png`. typecheck/lint/build clean.
+
+**Still bordered, deliberately, and easy to take next if wanted:** the top nav card and the sidebar panel (app chrome, not sections), `StatTile` and the small in-card data tiles, table containers, and modal panels. The page mastheads (`raised`) lost their border but keep their paper fill in light mode.
+
+---
+
+## Phase — Program → Overview: everything lines up (2026-07-29)
+
+Seven asks off a screenshot of Team Hub → Overview, all of them alignment or hierarchy.
+
+**The record banner was inside the masthead card.** That's why it didn't line up with the stat tiles: it inherited the card's `p-5`, so it sat 20px inside them on both edges — the one block on the page that shared an edge with nothing. It's now a sibling of the masthead, spanning the same column as everything else. It also lost `rounded-xl` for the signature cut corner (it was the last rounded surface on the page, sitting directly above cut-corner tiles) and the drop-shadow with it, since clip-path clips box-shadow.
+
+**The deeper cause, though, was `SurfaceCard`'s side padding.** While sections were boxes, `p-5` was the inset from the box's edge. With the box gone (previous phase) it just pushed every section's content 20px right of every grid that ISN'T a section — the tile rows, the game pair — so nothing on any page shared a left edge. `primary` is now `py-5`: vertical padding is the section's rhythm, horizontal padding was its frame. `raised`/`overlay` keep theirs, since those still paint a panel and text shouldn't run to its edge. That one change is what makes the user's "every page should be aligned visually" true beyond this page.
+
+**The masthead mark now uses PageMasthead's own slot and geometry** rather than the plain 128px `TeamLogo` it had — visibly smaller than every other team page's mark. It borrows `MASTHEAD_ART_SLOT` + `markGeometry` instead of just picking a bigger number, because the art floats inside a much larger transparent canvas and fills a different fraction of it per school (a 3.19× spread): matching by raw box size would leave Auburn and Texas State at different heights. `slotLeft: 0`, since here the slot *is* the element rather than a position inside a wider card.
+
+**Program Budget** moved onto the coach line by making the header row `items-end` — it now aligns with the bottom of the identity block instead of floating at the centre of a header whose height is set by the mark.
+
+**The tile rows were two grids.** Six tiles in one, the three season-high tiles in another, so the gap above the third row was the page's 24px section spacing while the rows inside each grid were 12px apart — which is exactly the "further down" the user saw. One grid now, the season-high tiles as a conditional fragment inside it, so all nine rows share one gap.
+
+**Recent | Upcoming** are split by a real 1px grid column (`xl:grid-cols-[1fr_1px_1fr]`) rather than a border on either card, so the rule sits centred in the gap and spans the taller side — and it collapses with the columns at narrow widths, where the cards stack and a vertical rule would mean nothing. A `SectionRule` closes the pair off above Top Players, which is where the automatic card-to-card divider can't reach (a grid sits between them).
+
+**Top players is Offense | Defense**, not one top-ten wrapped into two columns. A straight top-10 is usually lopsided — a good team's ten best are often seven offensive players — so the reader can't see their defense at all. `limit` still means the total, so callers passing 10 get five a side. Special-teams players appear in neither column: a third unit with two spots would leave a column mostly empty.
+
+All of it landed in **both** views — the user's own hub and a browsed league team — because the header, banner and games pair were extracted into shared local components rather than edited twice in a file that already had them duplicated. **Verified by capture on both** (Texas State and Akron), which also confirmed the league branch still renders after the refactor. typecheck/lint/build clean. Evidence: `Productivity/screenshots/overview-alignment-pass-2026-07-29.png`, `overview-league-team-2026-07-29.png`.
+
+---
+
+## Phase — Coach tab rework, and the AD expectations that ARE in the save (2026-07-29)
+
+A batch of Coach Hub changes, plus one real research question: the page carried a note saying AD-goal expectations "aren't exposed as readable targets in the save data," and the user asked for three AD Expectation boxes anyway, pointing at the in-game screen. That note was **half wrong**, and finding out which half took the save apart.
+
+### What the save actually holds
+
+Searched a save's 1,368 table names for goal/expectation/objective, then chased the hits. `UserCoachSeasonalGoal`, `ObjectiveProgress`, `PersonaGoalTracker` are all EMPTY — including in **DYNASTY-JMUTESTER**, the save behind the screenshot the user supplied, which is the check that mattered (per the data-absence discipline: go to the save that actually has the feature on screen, not a convenient one).
+
+The data is in two places:
+
+- **The Coach record** carries `CurrentContractExpectation` (`Win8Games` — a readable AD expectation), `CurrentJobSecurityPercentage` (**98**, the exact number on the user's screenshot, which is what confirms these are the right fields), `SeasonStartJobSecurityStatus`, `EarnedContractPoints_ThisYear`, and `CoachPoints`.
+- **Three `CoachContractGoalSummaryEntry` tables** — one goal each, and note they're three separate single-row TABLES, not three rows in one, so the extractor reads every instance rather than the largest. Each holds `StatusGoal`, `ProgressGoal`, `IsHotSeat`, `JobSecurity`, and a reference to the goal itself.
+
+### What it does NOT hold, and how that was settled
+
+The goal wording and rewards ("Make a Bowl Game in the next 4 seasons", 100 coach points) are **not in the dynasty file**. Each slot's `CoachContractGoal` reference points at **table 16483**, and this save's tables run **4096–6385** — the catalogue ships with the game. A raw byte scan of the save for the goal text returns nothing either. Two saves agree on the shape, and one goal id (118389) appears in both, so the ids are stable catalogue rows rather than per-dynasty text.
+
+So a slot can honestly say it's live and how far along it is. It cannot say what it asks for. The three boxes are built on that: status per slot, with the readable pieces — the headline expectation and the job-security percentage — as chips beneath.
+
+### The rest of the batch
+
+**Masthead:** "Coach Hub" → "Coach", "Cards" → "Cardbook", and the standing job-security line is gone from the hero — it lives in the Contract section now, beside the AD's evaluation, which is the one place it means something. The "fired N times" note moved with it.
+
+**Contract:** the "School — Position" heading is gone (the masthead already says both), as are the Contract year, Contract length and Job security tiles and the explanatory paragraph. What's left is the 2×2 the user specified — Years remaining | AD expectation 1, AD expectation 2 | AD expectation 3 — with the evaluation chip joined by a status chip (`Safe · 98%`) and an expectation chip (`Win 8 games`).
+
+**Career record** lost Prestige gains. **Staff** is now "2026 Coaching Staff", and its grid takes its column count from the staff size — two coordinators in a three-column grid left a third of the row empty, which read as a missing card rather than a layout.
+
+**Coordinators are judged on their own unit now.** The card used to show the team's conference record and the imported-season range — the head coach's number, and an artefact of the app's sync history. An OC shows offensive yards and points per game; a DC shows yards and points allowed. Yardage comes off the team-stats snapshot, scoring off the schedule (the snapshot carries yards but not points), and the average divides by games actually played. Driven by POSITION rather than by whether the numbers exist yet, so a week-0 coordinator reads "Off. yards —" instead of falling back to the head coach's record. "2 imported seasons on staff" → "1st year with Texas State", and the "Imported Resume" label is gone.
+
+**Verified end to end on two dynasties.** The JMU save was re-imported through the new extractor and the real IPC returned `jsPct: 98`, `exp: Win8Games`, and three goal slots (ids 118389/118383/118379, all InProgress) — then rendered. Texas State (a full 13-game season) confirmed the coordinator numbers: 425.5 yds/g and 26.9 pts/g on offence, 378.7 and 24.1 allowed. typecheck/lint/build clean. **Existing seasons need a re-sync** for the new coach fields; they read "Not available" until then.
+
+---
+
+## Phase — The AD-goal text isn't reachable, and the tiles came back out (2026-07-29)
+
+Follow-up to the Coach tab rework. The user asked, fairly: *are you not able to find the text for the expectations?* — and sent a second in-game shot (Auburn, Alex Golesh: "Maintain National Powerhouse Facilities for the next 3 seasons" 1,000 · "Beat Alabama" 200, failed · "Have 15 or fewer Turnovers on Offense this season" 50, passed).
+
+**The answer is no, and it's now a finding rather than a shrug.** The save side was already settled: each goal slot references table 16483 while a dynasty file's tables run 4096–6385. This pass checked the other half — the game itself, at `D:\Arcade\EA SPORTS College Football 27` (found via the uninstall registry, not guessed). Scanned `CollegeFB27.exe` (238 MB) and 14 Frostbite `.cas` archives, the English localisation bundle included, for `Turnovers on Offense`, `Beat Alabama`, `Ring of Honor`, `Conference Competitor` and `School Demeanor`, in ASCII **and** UTF-16. Zero hits, and the exe was scanned twice by two different methods to be sure.
+
+That's the expected result once you look at what it is: Frostbite keeps those strings in Oodle-compressed chunks, so reading them means parsing the `.toc`/`.sb` layout and decompressing the EBX payloads — a Frosty-Toolsuite-class extractor, not a lookup. The only lighter route is a hand-built id→text catalogue seeded from screenshots; the two shots so far pin five ids (JMU 118389/118383/118379, Auburn 118390/118389/118453, with 118389 shared).
+
+**So the three AD tiles came back out, same day they went in** — the user's call and the right one. A tile reading "Passed" beside no question is a verdict on something the page can't show. Years remaining now sits next to **Coach points** (a real, readable number rather than a lone tile in an otherwise empty row), and the chips are the AD's evaluation plus the standing status: `Exceeding expectations` · `Safe · 98%`.
+
+**The "Expectation · Win 8 games" chip went too.** Worth its own line, because it was subtly wrong rather than merely redundant: `CurrentContractExpectation` is a WIN-COUNT enum, while the game's own AD screen states a TIER ("Conference Competitor", "Conference Contender"). The chip claimed to be the AD's expectation while saying something that screen never says.
+
+Everything stays extracted — the goal slots, the expectation enum, job-security percentage, coach points. If the catalogue ever becomes readable, the tiles are a render change and nothing else. typecheck/lint/build clean.
+
+---
+
+## Phase — "2nd year with Auburn" in both 2026 and 2027 (2026-07-29)
+
+The tenure line on the staff cards didn't advance between seasons. It was `seasonsWithTeam + 1`, straight off the save.
+
+**Measured rather than guessed, on a full Auburn cycle** (`DYNASTY-AUBURNW0` → `W22SEASONRECAP` → `W30ENDSEASON` → `W31SEASON2W0`):
+
+| save | Gordon | Durkin |
+|---|---|---|
+| 2026 PreSeason wk0 | 0 | 2 |
+| 2026 OffSeason wk0 | 1 | 3 |
+| 2027 PreSeason wk0 | **1** | **3** |
+
+So `SeasonsWithTeam` counts **completed** seasons, and it bumps during the OFFSEASON OF THE SEASON IT BELONGS TO — not at the next season's start. `+ 1` is therefore right for a season synced while it's being played, one too high for that same season synced after its offseason, and the next season repeats the number. Which is precisely what was reported.
+
+**Reproduced the user's case end to end** rather than reasoning about it: imported the post-offseason 2026 save, then copied the 2027 save over the same path and synced — the way a real dynasty advances. Both seasons came back carrying identical counters (`Gordon:1`, `Durkin:3`), so both rendered "2nd year" and "4th year".
+
+**The fix estimates the coach's FIRST year here instead of trusting the counter.** Each observation gives `year - seasonsWithTeam`, and the LATEST estimate wins: an in-season observation yields the true first year, a post-offseason one yields a year too early, and the maximum throws the too-early answer away as soon as any single in-season observation exists — which one more synced season almost always supplies. Tenure is then arithmetic against the season on screen, so it cannot fail to advance. With one season, synced post-offseason, and nothing to cross-check, it still reads one high — the same answer as before, never worse.
+
+**A first attempt was wrong and got replaced before it shipped.** It anchored on the EARLIEST observation's counter and counted observed seasons forward — which breaks in exactly the reported case, because the earliest observation is the post-offseason one carrying the inflated value. Writing out the arithmetic against the measured table is what caught it.
+
+**Verified on both seasons of the reproduced dynasty:** 2026 renders "1st year with Auburn" / "3rd year with Auburn", 2027 renders "2nd" / "4th" — counting up, and matching the ground truth in the saves (Gordon's first Auburn year is 2026, Durkin's 2024). The user coach's masthead line had the identical bug and got the same helper. typecheck/lint/build clean.
+
+**Addendum (same day):** the masthead's Cardbook / Scandals buttons were different widths — the column was `items-end`, so each sized to its own label. Now `items-stretch`, so both take the column's width (the wider label's) and stay matched if a label ever changes, rather than being pinned to a hardcoded width. Measured after: both 100×38.
+
+---
+
+## Research — Why a year-shifted mod save reads empty (DYNASTY-FL2007) (2026-07-29)
+
+No code changed. A user-supplied save from a 2007 conversion mod (rosters, coaches, recruits all replaced) imported with no games and no stats. This is the investigation, kept because the fix is a decision, not an obvious follow-up.
+
+### One number, and it isn't the mod's data
+
+```
+                     FL2007      normal save (AUBURNW10)
+CurrentSeasonYear    2007        2026
+BaseCalendarYear     2026        2026
+index the app computes  -19      0
+index the DATA uses      0       0
+```
+
+Every year-scoped extractor resolves its season as `CurrentSeasonYear − BaseCalendarYear` and matches that against each record's own 0-based index. The mod moved the displayed year and left the base, so the app hunts for season −19 while all 926 `SeasonGame` rows (861 with scores) and every sampled player's `SEAS_YEAR` slot sit at 0. Nothing matches, so nothing is written — the emptiness is in the SNAPSHOTS, not in a filter at read time, which is why it can't be fixed by toggling something at display time.
+
+**Measured by importing into a throwaway profile:** schedule 0 games, game log 0, player stats 50 rows with **every** `season` line null. What survived: school/coach identity, the 2007 label, a 10-1 record, team stats (6,590 yards), 70-man roster, 3 coaches, 138 league teams. Team stats live because `TeamSeasonStats` is read by ARRAY SLOT, not by year — which is exactly why the page shows a record with no games behind it.
+
+### Both candidate fixes were tested, on copies
+
+**A — set `BaseCalendarYear` to 2007 in the save** (edited a copy; the user's file's checksum is unchanged). Full recovery: 13 games / 12 played, 50 of 50 stat lines populated, 35,494 box-score rows, history "2007: 10-1", CFP Quarterfinal appearance.
+
+**B — app-side: override the index, leave the base alone** (temporary patch to `extract-all.ts`, since reverted and `dist/` rebuilt clean). **Identical on every measurable surface.**
+
+### The prediction that was wrong, and the one that survived
+
+I expected B to mislabel the History page as 2026. It doesn't — that page reads the app's own `seasons` table, which stores 2007 from `CurrentSeasonYear`. Never at risk.
+
+The real gap is elsewhere and is currently INVISIBLE: `extractAll` matches league-history years (labelled `baseCalendarYear + PeriodIndex`) against `league.seasonYear` to find the current year's summary. FL2007 holds exactly one `YearSummary` row, `PeriodIndex 0`, **undecided** (no winning coach — it's week 13), and the extractor drops undecided years. So league history is empty under BOTH options, which is why they tied. Once a season completes, A labels that row 2007 and matches; B labels it 2026 and never matches — losing conference-champion trophies and the BEST_HC/BEST_AC coach awards, and reading 2026, 2027… for any backfilled league-history years.
+
+**So if we ever do the app-side fix: normalise the BASE YEAR, not the index.** Derive one value at extraction — when the computed index isn't present in the data, treat the base as `CurrentSeasonYear − dataIndex` — and feed it to the six year-scoped extractors *and* `extractLeagueHistory`. That makes it exactly equivalent to editing the save, with no residual gap, and needs no user-facing toggle: a normal save derives the base it already has, so non-mod users are unaffected by construction.
+
+### Where a toggle would have had to live (if we'd wanted one)
+
+Extraction runs in the MAIN process, so renderer preferences are invisible to it; it would need a column on `dynasties` (append-only migration, the pattern `schema_v9` used for `finalized`) set at import. And because the decision bakes into the snapshots, flipping it later means a **re-sync** of that dynasty — cheap, since `save_path` is stored, but note `finalized` seasons refuse overwrites outside the finalize window.
+
+### Chosen direction (2026-07-29): ask the mod author
+
+Cleanest, because it fixes the file for every tool, not just ours. The rule to give him is **shift `BaseCalendarYear` by the same delta as `CurrentSeasonYear`** — not "set base = current". They coincide only on a fresh dynasty (index 0); on one already two seasons in, setting them equal would zero the index and break it the other way.
+
+**Not tested, and flagged to him:** whether the game itself is happy with a shifted `BaseCalendarYear` (class years, recruiting, in-game history screens). We only verified our own read path.
+
+**Gap that leaves:** a mod-side fix only helps saves made after it ships. Existing 2007 dynasties keep failing, and today they fail confusingly — a 10-1 record with zero games looks like our bug. The cheap insurance is a detection + message at import, not the toggle: no schema, no setting, and it covers any other mod that does this later.
+
+---
+
+## Phase — The dropdown, wave 1: a listbox that moves like the sidebar (2026-07-29)
+
+User brought a reference (`UI/Dropdown.md`) and asked for it app-wide: premium feel, artwork left of the names, team logos for team switching, logo · team · year for seasons, plain labels elsewhere. Their constraints: our motion and shape language, snug sizing, no rounded corners, **black on dark / white on light**, team colour on light, **no check mark**, and — the line that shaped the whole thing — *"make it feel fluid like our side menu selector."*
+
+### Why none of this could be a restyle
+
+All 49 dropdowns were native `<select>`s, and a native popup is drawn by WINDOWS, not by the page: no artwork in the rows, no panel styling, no motion, and a highlight colour we don't own. The reference isn't a select either — it's `<el-select>` from Tailwind Plus, a licensed library pulled from a CDN. The user doesn't have that licence and the app runs offline, so neither the runtime nor the markup came across; what transferred was the *pattern*, written as our own component.
+
+**The highlight is the glider.** Taking "fluid like our side menu selector" literally, the panel reuses `GliderNav` (vertical) rather than painting a filled row: the lit segment slides between rows as you arrow or hover, at the app's own ease. A dropdown that moves like the sidebar belongs to this app — a blue filled row is a component from somewhere else. `GliderNav` gained one optional prop for it (`itemsRole="listbox"`), because a dropdown's rows are `option`s and their container has to be the `listbox`; without that the glider's own wrapper would have quietly broken the required ARIA pairing.
+
+Everything native gave away for free is re-implemented deliberately: arrows, Home/End, Enter, Escape, type-ahead, focus return to the trigger, and scrolling the active row into view. **That is the real cost of leaving `<select>`** — and losing it is how this kind of change ends up prettier and worse.
+
+### Two bugs the captures caught, both about width
+
+The panel is WIDER than its trigger (search field, logos, long school names), so left-aligning it blindly pushed it off screen — and both switchers live at the right edge. The clamp took two attempts:
+
+1. **It measured a panel that didn't exist.** On the first open `rect` is null, so nothing is rendered; a one-shot effect measured nothing and never re-ran. Fixed by making placement a dependency (`isPlaced`).
+2. **It measured too early.** The width settles a beat later — the search field, the scrollbar arriving on a 138-team list — so the clamp used a stale number and the panel sat flush against the window edge anyway (measured: `gapFromEdge: 0`). Now a **ResizeObserver** watches the panel, which also keeps it honest while the list FILTERS and rows come and go. Measured after: `left 1167, right 1392, gapFromEdge 8`.
+
+Neither was visible in the code; both came from measuring the rendered result.
+
+### Depth, and the shortcut that would have fought it
+
+The panel takes its z-index from `useModalLayer` — the app's depth-on-open stack — rather than a fixed value. That's deliberate groundwork: wave 3 converts 12 selects inside `PlayerEditorModal`, and depth-on-open means a dropdown opened inside a modal automatically sits above it.
+
+`TeamSwitcher`'s **Shift + ← / →** shortcut had to learn about it too. It skips keystrokes aimed at inputs by tag name, which can't see this: the trigger is a `button` and the panel is portalled to `<body>`. Without the new `[role="listbox"]` check, Shift+Arrow would change the team behind the list you're reading.
+
+### The harness had to be taught the new dropdown
+
+`SCREENSHOT_SELECT_VALUE` drove `HTMLSelectElement.prototype` directly — the hook I use to verify anything season- or team-scoped (it's how the coach-tenure fix was checked hours ago). Converting these switchers would have silently cost me that. It now falls back for a custom select: click the trigger, wait for the panel, click `[data-select-option="…"]`. **Verified end to end** — `[data-select-root="Season"]::1` switched the page to 2026 and the tenure lines read 1st/3rd year, matching the earlier fix.
+
+### Shipped in wave 1
+
+`ui/Select.tsx`, plus the two switchers the user named. Team switcher: logo per school, **type-to-filter** (typing "ala" → Alabama, South Alabama), 138 rows mounted only while open. Season switcher: logo · team · year, with the year in the trailing slot so school names stay a readable left-aligned column. Verified in both themes — black panel on dark with the gold segment, white panel on light with the team accent, 8px off the window edge, cut corner, no rounded anything. typecheck/lint/build clean.
+
+**Still native: 47 selects.** Wave 2 is the page filters (Roster, Statistics, the National pages, Media, Standings, Scores, AllTeams); wave 3 the editors (`PlayerEditorModal` alone has 12, plus Scandals and PortraitPicker), which is where the modal-layering groundwork pays off.
+
+---
+
+## Phase — Dropdown wave 2: the page filters, and a lighter edge (2026-07-29)
+
+**The border first.** Panel, trigger and the search field's rule now all use `--section-divider` — the same hairline that separates sections — instead of a slate step. A panel floating over the page shouldn't announce itself with a heavier frame than the page's own dividing lines; at divider weight it reads as part of the same drawing. The hover state came down with it, to a 55% team-colour mix rather than the full accent.
+
+**Then the filters.** Converted in this pass: Roster (4), Statistics (2), Standings, Scores, NCAA Hub team picker, Media (2), All-America teams (4), National Players (6), National Recruits (5) — **26 dropdowns across 9 files**.
+
+Three things the sweep turned up rather than the plan predicting:
+
+- **`disabled` had to exist.** Media's batch "Set game" control is disabled until something is selected — the primitive had no such prop, so it gained one (plus the matching cursor/opacity treatment). A native select gave that away for free.
+- **A `<label>` can't wrap the new control.** Media had `<label>Set game <select/></label>`; a label wrapping a BUTTON doesn't forward clicks the way it does for a native input, so the text would have looked clickable and done nothing. It's a `<span>` now.
+- **`<optgroup>` has no equivalent.** National Recruits grouped its wider position groupings under a "Groups" heading. The new list is flat, so those entries carry a `(group)` suffix instead — they deliberately overlap the list above, and inline without a marker they'd read as duplicates.
+
+Two lists got search automatically by crossing the 12-option threshold (position filters at 22 options), and the NCAA Hub's team picker and National Players' team filter were opted in explicitly for the same reason the team switcher was: typing beats scrolling a conference list.
+
+**Verified in the app** on Roster — six triggers on the page, the position panel opening with 22 rows inside the viewport, glider highlight tracking, snug hard-edged triggers at divider weight. typecheck/lint/build clean.
+
+**21 native selects left, all in editors:** `PlayerEditorModal` (12), `PortraitPicker` (3), `ScandalsModal` (2), `PlayerComparison` (2), and National Recruits' own edit panel (2). That's wave 3, and it's where the `useModalLayer` groundwork from wave 1 gets exercised — every one of those opens inside a modal.
+
+**Addendum — no horizontal scrollbars (same day).** Narrow panels ("All stars", "All stages") were rendering a horizontal scrollbar. Cause: the row list is `overflow-y-auto`, and CSS computes the OTHER axis to `auto` as soon as one axis isn't `visible` — and the glider's wash is a fixed 9rem hanging off a 1–2px segment, so on a 101px panel it overflowed by ~43px. Wide panels never showed it, which is how it survived wave 1. Fixed with an explicit `overflow-x: hidden`; the wash is a fade, so clipping it at the panel edge costs nothing.
+
+Worth recording how it was verified, because the first check was wrong: `scrollWidth > clientWidth` STILL reports overflow under `overflow-x: hidden` (the content is scrollable programmatically, just not by the user), so two dropdowns looked broken when they weren't. The honest test is whether a bar is rendered — `offsetHeight − clientHeight`. Measured across all six dropdowns on Roster plus the stars filter: `overflow-x: hidden`, bar height **0px**, on panels from 101px to 231px wide.
+
+---
+
+## Phase — Dropdown wave 3: the editors, and the layering it was groundwork for (2026-07-29)
+
+The last 21 native selects, all inside modals: `PlayerEditorModal` (12), `PortraitPicker` (3), `ScandalsModal` (2), `PlayerComparison` (2), and National Recruits' own edit panel (2). **Zero `<select>` elements remain in the app.**
+
+### The two hazards, checked before converting anything
+
+A portalled panel sits OUTSIDE its modal in the DOM, so both of the modal's dismissal paths had to be examined rather than assumed:
+
+- **Click-outside was already safe.** `CenteredModalPanel`'s backdrop closes only when `event.target === event.currentTarget` — the click has to land on the backdrop itself. A click inside a panel portalled to `<body>` never reaches it.
+- **Escape was not.** Every modal listens on `document`, so one Escape would have closed the dropdown AND the editor behind it, losing unsaved edits. The Select now calls `stopPropagation()` on Escape — the innermost thing closes, which is the list. Enter stops too, so committing a choice can't submit the form it sits in.
+
+**Both verified live inside the player editor:** panel at **z-120** over the modal's **z-110** (the depth-on-open stack from wave 1, doing exactly what it was put there for), Escape closing the dropdown with `modalStillOpen: true`.
+
+### What the conversion turned up
+
+- **`EnumSelect` carried nine of the twelve.** Converting that one helper did most of `PlayerEditorModal`; two more helpers (`BoolSelect`, `StringSelect`) absorbed the repetitive true/false and ability-tier fields, so the file lost markup rather than gaining it.
+- **The unknown-value guard had to survive.** Several editor fields deliberately keep an unrecognised enum selectable so opening the editor can never silently rewrite a legacy value. That's preserved everywhere it existed — the enum select, the scheme picker, the recruit's commitment stage, and the team slot that must stay selectable before the league list loads.
+- **A second `<optgroup>` casualty:** the scheme picker's Offense/Defense groups became `· Offense` / `· Defense` suffixes, same treatment as National Recruits' position groups.
+- **Three lists got search** where the old native control offered only scrolling: both player pickers in the comparison modal (with jersey numbers as keywords, so "#12" works) and the recruit's top-school slots.
+
+typecheck/lint/build clean.
+
+**Addendum — staff tenure moved (2026-07-30).** On the coaching-staff cards, "Nth year with <school>" moved out of the record block and up under the coach's position, matching the head coach's masthead shape (role, then tenure). In the record block it read as another statistic; with the role it reads as identity. The block below is now the record plus the coordinator's own per-game numbers, nothing else.
+
+**Addendum — the nav jitter on History, and the staff-card smudge (2026-07-30).**
+
+**The jitter was the overshoot, exactly as the user guessed.** `--glider-ease` is `cubic-bezier(0.34, 1.28, 0.64, 1)` — the 1.28 means the segment travels PAST its target before settling. Moving to the LAST tab (History) therefore pushed it beyond the row's right edge, and inside the `overflow-x-auto` wrapper that is genuine scrollable overflow: a horizontal scrollbar flashed in for a frame or two, stole height from the row, and the whole nav jumped.
+
+Fixed by giving the rail and segment their own clipped `.glider-track` (`position:absolute; inset:0; overflow:hidden`). Clipping THERE rather than on the root is the point: the tabs are siblings of the track, so a nav too wide for its wrapper still scrolls normally while the overshoot has nowhere to spill. **Measured both halves** — sampling every frame of the animation to History: max overflow 0px, max scrollbar height 0px across 32 frames. And at 1024px the 8-tab NCAA nav still reports `scrollWidth 856 > clientWidth 629` and scrolls under a programmatic `scrollLeft` — so the fix didn't trade the jitter for an unreachable tab.
+
+**The "element floating behind" the staff cards was `shadow-[0_20px_70px_-44px_rgba(15,23,42,0.38)]`** on CoachCard — a soft drop shadow tuned for a light theme, which on the black ground reads as a grey haze sitting behind the card rather than as depth. Removed; the border carries the edge, which is how every other surface in the app already works.
+
+**Addendum — the section bar loses its box (2026-07-30).** Four asks on the top nav: lift it so the tabs align with the sidebar's "Dynasty" row, drop the border, add a rule under the menu, and close the gap between the season switcher and search.
+
+The bar was the last framed surface left after sections lost theirs — bordered, filled, shadowed, with its own padding. It's a plain row now, closed by one divider-weight hairline.
+
+**Why it sat low is structural, not this component's doing:** the shell gives `<main>`'s scroller `p-8` while the sidebar's nav uses `p-4` (app.tsx), and the sidebar's row is taller (`py-3` vs `py-2`) — about 20px between them. Cancelled with `-mt-5` on the nav rather than by trimming the shell, which would have moved every page's content instead of this one bar. Measured after: Coach's text centre at 78 against Dynasty's 79.
+
+**The gap was two auto-margins.** The switcher and the search each carried `ml-auto`, so the first pushed the switcher to the middle and the second threw the search to the far edge. They're one right-hand group now with a single `ml-auto` — measured 8px apart.
+
+---
+
+## Phase — The command palette (2026-07-30)
+
+The on-screen search modal becomes a Ctrl/Cmd+K palette that reaches **pages as well as people**. `GlobalSearch.tsx` is gone; `CommandPalette.tsx` replaces it.
+
+### Most of this already existed, which is why it's one component
+
+`Ctrl+K` was already bound (it just opened a modal), and `globalSearch(dynastyId, query)` already returned players, coaches and teams. The keyboard contract — arrows, Home/End, Enter, Escape, scroll-into-view, the sliding highlight — came straight from the dropdown work: **each section is its own `GliderNav`**, and the sections that don't hold the cursor pass `-1`, which hides their mark. That's what lets one indicator span grouped results, and it's why the palette feels like the sidebar rather than like a new widget bolted on.
+
+### The grey was the blur, not the dimming
+
+The old shell put `backdrop-blur-md` on the scrim and `backdrop-blur-2xl` on the panel — that, not the darkness, is what turned the page behind into mush. The palette's scrim is `rgba(0,0,0,0.55)` with **`backdrop-filter: none`** (measured), so the page stays sharp underneath and the palette reads as a light switched on over your work.
+
+### What's genuinely new
+
+- **A page registry with human labels.** Written out rather than derived from the route table: someone types toward "Standings" or "Analytics", not `trends`. Each entry carries `keywords` for the words people actually reach for that aren't in the label — "depth chart" finds Roster, "polls" finds Standings, "heisman" finds Annual Awards.
+- **Ranking, because list order isn't relevance.** Label-prefix beats word-start beats substring beats keyword. Typing `stan` puts **Standings above every player named Stanton** — verified.
+- **A useful empty state.** Recent searches (localStorage, last 5) plus "Jump to" — every page, one keystroke away. The old modal's empty state said "Start typing to search."
+- **Ghost autofill, and deliberately not the other kind.** The completion is a muted span layered *under* the input, accepted with Tab; the input's value is never rewritten as you type. Writing it in means fighting the caret and the selection on every keystroke and being wrong the instant the guess is wrong — a ghost is honest about being a guess. Only offered when what's typed is a real prefix of the armed row.
+
+**Ctrl+K is ignored while a `[role="dialog"]` is open** — a palette stacked on an unsaved player edit is a way to lose work by reflex. The nav keeps a slim trigger, since a shortcut-only feature is invisible to anyone who doesn't read release notes.
+
+**Verified by driving it:** opens on the shortcut; `stan` → Standings ranked first with `dings` ghosted and a Tab chip appearing; Enter navigates to `#/dynasty/…/standings` and closes; reopening shows "Recent searches → standings" and "Jump to"; Escape closes. Scrim measured at `rgba(0,0,0,0.55)`, no backdrop filter. typecheck/lint/build clean.
+
+**Addendum — palette: nav vocabulary and a shorter open (2026-07-30).**
+
+**The page labels were teaching retired words.** The registry shipped with "Coach Hub", "Team Hub", "NCAA Hub", "Media Hub" and "My Board" — names the nav stopped using. Someone who has only ever seen the current nav has no idea what "Team Hub" is, so typing `program` found nothing at all. The five section landings now carry the words ON the nav — Coach, Program, NCAA, Recruiting, Media — with the retired names kept as keywords so they still resolve for anyone who remembers them, and the sublabel says what the page holds ("Team overview") rather than repeating the section name back. Verified: `coach` → Coach, `program` → Program, `ncaa` → NCAA, `recruiting` → Recruiting, `media` → Media, and `team hub` → Program.
+
+**The empty state was a wall.** Opening the palette listed every page under "Jump to" — 28 rows before typing a character. It's recents only now, with a single line for a first run that has none. Every page is still one keystroke away; they just don't greet you.
+
+---
+
+## Phase — One modal treatment across the app (2026-07-30)
+
+Every overlay now shares a scrim and a panel: `.modal-scrim` / `.modal-panel` in globals.css, applied across **15 files, 30 class strings**.
+
+### What was actually there
+
+Thirteen overlays had each hand-written their own chrome, and it had drifted into four scrim values across two base colours (`slate-950/60`, `/80`, `black/75`), three blur radii, and half the panels rounded while the other half already carried the cut corner. None of that was a decision — it was thirteen separate afternoons.
+
+### The scrim darkens and nothing else
+
+Same call the command palette made, now everywhere. Every one of these previously stacked `backdrop-blur` on the scrim **and** `backdrop-blur-2xl` on the panel, which is what turned the page behind into grey mush. Dimming alone keeps it legible, so a modal reads as something laid on your work rather than a wall replacing it. Two values survive: **55%** standard, **80%** for media and portrait viewers, where there's no page content worth keeping legible and artwork reads better against a deeper ground.
+
+Panels lost their `shadow-[0_60px_160px_-40px_…]` with the blur — the same lesson the coach cards taught, that a soft shadow on a dark ground is a smudge, not depth. They're solid `--surface-overlay`, bordered at `--section-divider` weight, cut corner, no radius.
+
+**Motion joins the family:** dropdown rises 6px, palette 8px, modal 12px, all on the same curve and duration. A bigger surface travelling further reads as weight rather than as a different animation.
+
+**Measured on a real modal:** scrim `rgba(0,0,0,0.55)` with `backdrop-filter: none`; panel `rgb(0,0,0)`, border `rgba(255,255,255,0.09) 1px` (identical to the page's section dividers), no blur, no shadow, `modal-panel-in 0.18s`.
+
+### The action dialog
+
+The one idea worth taking from the reference pattern: **a glyph on destructive dialogs only**. It makes "this deletes something" register before the sentence is read, and it only works as a signal because it isn't on every dialog — so ordinary confirms don't get one. Squared with the cut corner in a tinted box rather than the usual round badge, since nothing else in the app is round. Verified live on the delete-dynasty confirm.
+
+The rest of that anatomy was already right and is now written down in `UI/ModalAction.md`: the title is a question, the body is the consequence, the confirm button says the verb (someone skimming reads only the buttons), cancel is quiet and first, and a destructive primary is **outlined** in the danger colour rather than filled with it — a big red block reads as the recommended action.
+
+`UI/ModalAction.md` now carries the full spec, including the layering and dismissal rules the sweep depended on. typecheck/lint/build clean.
+
+---
+
+## Phase — The History tab tells a career, not a sync log (2026-07-30)
+
+Three changes to the player modal's History tab: the "First tracked season" row is gone, transfers show up as their own event, and the timeline now carries **position-specific career milestones** built from per-game box scores.
+
+### "First tracked season" was talking about us, not him
+
+It labelled the earliest imported season as if it were an event in the player's life. It wasn't — it was a fact about when the dynasty started syncing. Year one renders as a normal `Season` row now, same as every other year.
+
+### Transfers, and the 27 fake ones
+
+Development rows resolve each season from the **leaguewide** roster, so `teamName` names whichever school the player was actually at that year — a school change between consecutive seasons is the transfer. The user's own roster snapshot can't see this at all: a player who leaves simply stops appearing in it.
+
+The naive version was wrong in a way that only showed up on real data. The game parks not-yet-enrolled incoming players on a placeholder FCS roster, so **every signed recruit** reads as a school change into your program. One Auburn offseason: 27 of those against 13 real transfers. The discriminator is clean — all 13 real ones advanced a class year (Freshman → Sophomore, and their OVR moved); all 27 fakes had class year *and* OVR frozen, because it's the same snapshot carried forward. So a transfer requires `CLASS_ORDER` to advance. Known cost: a player who redshirts the same year he transfers is skipped. Rare, and far cheaper than flooding every freshman's timeline with "Transferred from FCS East".
+
+### Milestones need Saturdays, not seasons
+
+"First 100-yard game" is a fact about one game and cannot be recovered from a season total, so this walks every box score the player has ever appeared in, in order, and fires each milestone once — on the earliest game that earns it. 34 distinct milestones (37 definitions — the universal three exist once per box-score category), scoped by position group (QB / HB-FB / WR-TE / front seven / secondary), plus three universal ones.
+
+**The opponent lookup is the part that had to be redone.** The first pass resolved game IDs against the user's own schedule and produced `vs Unknown · Wk 0` for a transfer's pre-arrival games — which also destroyed the chronological ordering the whole mechanism depends on. The game log turns out to be **leaguewide**: 944 distinct game IDs in one Auburn season against a 13-game user schedule. Opponents now come from `getLeagueScores`, with the side resolved from the entry's `teamIndex` (falling back to the user's schedule row for seasons synced before `teamIndex` existed). Games that still can't be placed are dropped rather than rendered as "Unknown".
+
+That also means milestones work for players opened through the team switcher, so the fetch is its own effect running in parallel with the main load rather than tacked onto the end of it.
+
+**Not covered, honestly:** offensive linemen record no countable stats and kickers/punters aren't in the game-log categories at all — those players get the three universal milestones and nothing else, which beats inventing one the data can't support. The universal debut is worded "First **recorded** game" for the same reason: a dynasty imported mid-career has no box scores from before the first sync.
+
+**Verified on the two-season Auburn save.** AK Dear (HB, Alabama → Auburn): "Transferred from Alabama to Auburn", then his 2026 Alabama season resolving against Alabama's real slate — first rushing TD @ Kentucky Wk 2, first 100-yard game vs Florida State Wk 3, 50-yard TD run and 155 scrimmage yards @ Mississippi St Wk 5, in order. Byrum Brown (QB): first TD pass and a 3-TD/0-INT game vs Baylor Wk 1, then 445 yards / 5 TD vs Southern Miss Wk 2 firing the 300-, 400-, four-TD and dual-threat milestones together. Bryce Deas (MLB): first tackle vs Southern Miss Wk 2, first start @ Georgia Wk 7, 14 tackles and a 100 rating vs LSU Wk 8. Marcus Pullard (the FCS East placeholder case) correctly shows no transfer. typecheck/build clean.
+
+---
+
+## Phase — The close button is an X (2026-07-30)
+
+Every overlay header's bordered **CLOSE** pill is now a bare glyph, via one new `ModalCloseButton` — and the milestone list from the previous phase is now an editable document at `docs/MILESTONES.md`.
+
+### Twelve copies of the same class string
+
+The pill existed as twelve hand-written copies across the profile modals, the editors, the media and portrait viewers, the box score and the recruiting editor — the same drift `ActionIcons.tsx` was created to stop for the pencil/export/bin. `CloseIcon` joins that file; `ModalCloseButton` wraps it with the behaviour.
+
+A glyph rather than a word for the reason the nav search trigger became one: a bordered box in a header reads as a control of equal weight to whatever else is up there, and an X in the corner of an overlay is the most universally understood control in software. No border, no fill, muted resolving to full contrast on hover. `label` is a **required** prop rather than an optional `aria-label`, so a nameless button can't ship.
+
+### The focus ring put the box straight back
+
+Caught by looking at the capture rather than the CSS: the first build rendered the X inside a white rectangle, on every open. Nothing in the component drew it — the player profile, recruit profile and team profile all call `closeButtonRef.current?.focus()` on open to start the focus trap, and the browser's default focus ring was outlining the glyph. The bordered pill had absorbed it; a bare 18px mark cannot.
+
+Two changes, and the second is the real fix:
+
+1. `focus-visible` instead of `focus`, so a mouse user never sees a ring.
+2. **The panel takes focus on open, not the close button.** Both are valid trap entries, but focusing a *control* lands it in its focused state every time you open the thing, and focusing the dialog announces its own label ("Player profile") rather than "Close player profile, button". `tabIndex={-1}` to make it programmatically focusable, `outline-none` so the panel doesn't ring itself. The Tab handler already worked off `panelRef`, so the trap is unchanged.
+
+**Deliberately not converted:** the quiet `Close` in a footer action pair — PortraitPicker's `Close | Use this portrait` and ScandalsModal's `Close | Commit the crime`. Those are the cancel half of a pair and have to read as a word beside the verb they're declining; an X there loses the pairing and contradicts the action-dialog anatomy in `UI/ModalAction.md`.
+
+**Verified in both themes** on the player profile: no border, transparent background, no ring on open, `aria-label="Close player profile"`, and a DOM sweep finding zero remaining buttons whose text is "Close". `UI/ModalAction.md` carries the rule now. typecheck/lint/build clean.
+
+### docs/MILESTONES.md
+
+The 34 career milestones are now a document the user edits — every row carries the `id` of its entry in the `MILESTONES` array, so a change in one maps to exactly one change in the other, and the array's comment points back at the file. It also lists the full set of per-game fields available to build new milestones from, which is the honest boundary: anything not in that list isn't in the save's per-game data and can't be added without new extraction work.
+
+---
+
+## Phase — Stats that fit the position, a modal that clips, and bowls with names (2026-07-30)
+
+Four fixes off one round of screenshots.
+
+### Career totals stopped leading with eleven zeros
+
+The save stores one row shape per side of the ball, so every offensive player carries all eleven offensive counters. Rendering them unconditionally meant a receiver's Career tab opened with **Comp/Att 0/0 · Pass Yds 0 · Pass TD 0 · INT 0 · Rush Att 0** before the first number anyone opened the card to see.
+
+Each field now belongs to a group (passing / rushing / receiving; tackling / pass rush / coverage / takeaways), each position declares which groups it's judged on, and **anything with a recorded value shows regardless**. That second half is what makes the filter safe rather than lossy: a receiver's jet-sweep touchdown, a lineman's fumble recovery, a corner's sack — none are "relevant to the position" and all appear the moment they happen. A zero is the only thing ever hidden, and only where the position wouldn't be expected to post one. Games stays unconditional; it's the denominator for everything else.
+
+One rule, four surfaces: the Stats tab's season tiles, the Career tab's totals, the Overview hero strip (which keeps its stricter "no zeros at all" rule on top), the Best game tiles, **and the season-by-season table's columns** — chosen from every row at once so a column can't be present for one season and missing the next.
+
+**INT is now in the season-by-season table**, which is what the request was really pointing at: it lived in the tiles but the table went Pass Yds · Pass TD · Rush Yds · Rush TD, skipping it entirely. Putting it in the `passing` group means a quarterback always sees it, including a clean sheet.
+
+Measured on Auburn 2026: the WR went from 11 tiles to 4 (Games · Rec · Rec Yds · Rec TD) with a 7-column table down to Season · Team · Class · Pos · GP · Rec Yds · Rec TD; the QB kept Comp/Att · Pass Yds · Pass TD · INT · Rush Att/Yds/TD and dropped the three receiving zeros, with INT added to his table.
+
+### The box-score modal scrolled the wrong thing
+
+Its scrim carried `overflow-y-auto` and the panel had no height cap, so the whole panel scrolled inside the scrim with the header held by `sticky top-0`. A sticky header sticks to the **scrollport**, not to the panel it belongs to — and with no `overflow-hidden` on the panel there was nothing to clip what escaped, so the helmets rode up past the header and out the top.
+
+Now the same shell every other overlay uses and that `UI/ModalAction.md` specifies: `max-h` on the panel, `flex flex-col overflow-hidden`, a `shrink-0` header, and a `min-h-0 flex-1 overflow-y-auto` body. The blur went with it, per the same spec. Verified by driving it: 3,086px of internal scroll with the panel's top and bottom unchanged at 32/968 in a 1000px viewport, and the page behind still at scrollTop 0.
+
+### "BowlSeason3" was a week bucket, not a round
+
+A Louisville CFP Semifinal read **BowlSeason3** in the Schedule table while the same game's box score said *CFP Semifinal*. Two separate faults on top of each other.
+
+**The data.** `extract-league-schedule.ts` resolves the save's BowlGame reference — but it runs *before* `extract-schedule.ts`, which is what preloads the BowlGame table, and `resolveReference` needs the target table's records loaded. So it silently returned undefined for **every postseason game in the league**: all 43 bowls in one Auburn season came back with `bowlName: null`. Fixed with the preload plus `resolveReferenceWithTable`, matching extract-schedule exactly.
+
+That only helps seasons synced from now on, so the query layer reads across instead: `GameData` (the `schedule` snapshot) is already **leaguewide** — every game, with the reference properly resolved — so `getLeagueTeamSchedule` and `getLeagueScores` take bowl identity from there and fall back to the league copy. **Existing dynasties are fixed with no re-sync.** That also repaired the Scores page, which had been silently rendering no bowl name at all for the same reason.
+
+**The display.** The Type cell printed `game.weekType` whenever the name was missing, and that string can never be shown to anyone: it's a week bucket, and one Auburn season put **28 games in BowlSeason1** — every December bowl mixed in with the Playoff first round. There is nothing in it to derive a round from. The league Type cell now runs the identical code path as the user's own (`getGameTypeImagePath` + a new `bowlLabel`), so a Playoff semifinal renders the CFP round graphic whichever team's schedule you're looking at; those helpers took a structural `GameTypeFields` parameter instead of `ScheduleGame` so there's one implementation rather than two that drift. The fallback is the generic bowl mark and the words "Bowl Game" — honest, where the enum was just wrong.
+
+Verified on Louisville's 2026 schedule: CFP round logos on weeks 18/19/20, and no "BowlSeason" string anywhere in the document. typecheck/lint/build clean.
+
+---
+
+## Phase — Rivalry logos on the schedule and in the box score (2026-07-30)
+
+New art landed in `public/assets/rivalry/rivalrylogo` — 31 matchup badges plus a generic shield. Trophies were supplied too and are **deliberately untouched** at the user's request, pending a pass to weed out redundant ones.
+
+### Keyed on the matchup, not the rivalry name
+
+The obvious route was the save's own rivalry name, and it's the wrong one twice over. The art is named by pairing (`AlabamaVsAuburn`), not by rivalry (`Iron Bowl`) — and `extract-rivalries.ts` only ever runs for the **user's team**, so a browsed program's schedule and any league game's box score carry no rivalry data at all. Keying on the two team names makes all three surfaces work off one map with no new extraction.
+
+**The pairs are written out rather than parsed from the filenames**, because the filenames disagree with each other and with the save. The art ships `TexasAM` in one file and `Texasam` in another; the save says `New Mexico St.` where the art says `NewMexicoState`, `USF` where the art says `SouthFlorida`, `Washington St.` where the art says `WashingtonState`. A parser would need every one of those exceptions anyway and would fail *silently* on the next one. Names verified against the real 138-team display list; lookup normalises case and punctuation and sorts the pair, so home/away doesn't matter.
+
+The generic shield only appears when the save actually flags a rivalry (`isRivalryGame`, user's team only) and the pairing has no dedicated art — "these two teams played" is not evidence of a rivalry, so a browsed schedule shows nothing rather than guessing. It renders for upcoming games as well as played ones: a rivalry you can see coming is the point of a schedule.
+
+### Its own column, not the Type cell
+
+`Record` → `Rec` bought the width, per the request. The column header is intentionally blank — a label over a column that's empty on eleven of thirteen rows reads as missing data. Both schedule tables get it: the user's own and the league browse view.
+
+**The first build rendered it crushed.** Measured at **16×40** where it should have been 40×40: the `<td>` inherited the row's `px-5`, so a 56px column had 40px of padding and a 16px content box, and the table squeezed the image sideways to fit. `px-2` on that one cell and a 64px column fixed it — caught by measuring, not by looking, since a 40px-tall badge squashed to 16px wide still looks like *an* icon.
+
+### The box score
+
+Rivalry mark replaces the conference mark in the hero, between the two helmets. It does **not** replace a bowl logo: if two rivals meet in the Playoff, the round is the occasion. So the priority is rivalry → conference → bowl/playoff, with bowl short-circuiting the first two.
+
+**Verified on Auburn 2026:** week 13 @ Alabama renders the Iron Bowl badge in both the schedule column and the box-score hero; weeks 7 (Georgia) and 8 (LSU) are real flagged rivalries with no dedicated art and correctly fall back to the generic shield; headers read `Wk · Date · Rank · Rec · (blank) · Opponent · Type · Location · Kickoff · Result`. typecheck/lint/build clean.
+
+---
+
+## Phase — Rivalry trophies renamed from save data, not from memory (2026-07-30)
+
+The ask was to research 106 rivalry-trophy filenames and rename them to carry their schools, with an honest question attached: *"is this something you could do accurately?"*
+
+**From memory, no. From the save, yes — for 89 of them.**
+
+### The Rivalry table has a Trophy reference
+
+Before guessing at a single one, the question worth asking was whether the save already knows. It does: `Rivalry` carries `Trophy` alongside `Team1`/`Team2`, plus `Name` and an `AssetName` that spells out both schools. 233 rivalries in `DYNASTY-TULANEMASTER`, 91 with a trophy.
+
+The `Trophy` reference points at tables 16443–16488, which are **outside the save** — the same wall the AD-goal text hit. So the trophy's *name* is unreachable. That turned out not to matter: the reference is still a stable catalogue id, every rivalry sharing an id shares a trophy, and the ids line up one-for-one with the art files. 82 files pinned that way with zero recall involved, including several nobody would have gotten right by hand — `KuterTrophy` is Air Force/Hawaiʻi, `GanszTrophy` is Navy/SMU (Frank Gansz coached both), `IrelandTrophy` is the Boston College/Notre Dame game.
+
+Seven more came from exact rivalry-name matches in the same save's list, and `SouthwestClassicTrophy` from the artwork itself — the trophy has the Arkansas and Texas A&M logos on it.
+
+### 26 of the 106 files are the same image
+
+Hashing the folder answered the "some are redundant" suspicion with a number: **80 distinct images across 106 files.** One generic gold "RIVALRY TROPHY" render is shared by 26 differently-named files, `PurdueCannon`/`VictoryCannon` are a second identical pair, and `DefaultRivalryTrophy` is a small EA SPORTS badge rather than a trophy.
+
+That reframes the remaining 17 unnamed files: 16 of them ship the placeholder, so there is no artwork behind the name to identify. They were left untouched rather than guessed at.
+
+### The rename
+
+`rvlt-TrophyName-CODE1-CODE2[-CODE3].webp`, schools in the save's own Team1/Team2 order so the document and the filenames can't drift apart. The codes are what let four `VictoryBell` files and three `GovernorsCup` files coexist legibly — the shipped `_C_M` / `_K_KS` suffixes were doing the same job unreadably. `FloridaCup` is the only three-school trophy: two save rows are both named "Battle for the Florida Cup" (Florida/Miami and Florida State/Miami).
+
+**The file list moved mid-task** — 112 files on the first read, 106 by the time the plan was built, with five mapped trophies (two Commander-in-Chief variants, two Michigan MAC, one Shillelagh) no longer present. The rename script reconciles against the live folder rather than the earlier read and reports anything mapped-but-missing, which is how that surfaced instead of silently failing.
+
+Also worth recording: **9 rivalries the save ties to a trophy have no art in the pack at all** — Apple Cup, Bedlam, the Big Game, Bayou Bucket, Battle Line, Battle of I-75, Marshall/Ohio's Bell, the Holy War, Utah/Utah State.
+
+Full mapping, placeholder flags and a reverse manifest in `docs/RIVALRY_TROPHIES.md`. Nothing in the app reads these yet — trophies stay unwired until the redundant ones are settled.
+
+---
+
+## Phase — The Overview trophy case: bigger, unlabelled, and it counts rivalries (2026-07-30)
+
+### The caption was doing the work the trophy should
+
+A 64px thumbnail under the words "LIBERTY BOWL CHAMPIONS" meant the *name* carried the message and the trophy was decoration beside it — backwards for the one thing on the page worth celebrating. The badge is now a bare image at `MASTHEAD_ART_SLOT.logo.maxHeight` (170px), the same slot the team mark uses, so the two read as equals. The name moved to `title`/`alt` rather than being deleted; it's still the accessible label, just not competing with the artwork.
+
+### Any trophy won that season, not just the bowl
+
+Rivalry trophies now appear alongside national/conference/bowl. There's no new data source for this — a rivalry trophy is won by beating the school it's contested with, so every won game is checked against the pairing map derived last phase from the save's own `Rivalry` table.
+
+**Deliberately NOT gated on the save's `isRivalryGame` flag.** That flag only covers the user's own three `Rival1/2/3` slots, while a program can hold trophies against schools outside them — Auburn's slots are Alabama, Georgia and LSU, but the James E. Foy is the only trophy among those three. The pairing map is the authority on whether a trophy exists at all; the flag was never the right question.
+
+`shared/rivalryTrophies.ts` holds the map, in `shared/` because both sides need it — the database layer decides whether a trophy was *won*, the renderer decides what to draw. `Trophy` gained an optional `id` so several rivalry wins in one season don't collide on a React key that used to be `trophy.kind`.
+
+Labels are split from the filename stem, with a dozen overrides where splitting on capitals mangles the name: "Floydof Rosedale", "Kegof Nails", "James EFoy", "ORourke Mc Fadden", "Waron I4". No rule to find there, it's a closed set.
+
+### Verified
+
+The Liberty Bowl trophy renders at 170×170 against a 170px team mark, captioned nowhere, titled "Liberty Bowl Champions". The lookup was checked against the save's own display names verbatim: **77 of 91 trophy-bearing rivalries resolve**, order-independent, every one pointing at a file that exists; the 14 that don't are exactly the expected set (9 with no art in the pack, 5 whose files were removed). The three-way Florida Cup resolves from all three pairings, and a non-rivalry pairing returns null.
+
+Auburn 2026 shows no rivalry trophy, correctly — they beat Georgia, Arkansas, Mississippi St and Southern Miss, none of which contest one with Auburn, and lost the Iron Bowl. typecheck/lint/build clean.
+
+**Untested and worth watching:** a season with four or more trophies. They wrap, so the masthead would grow a second 170px row.
+
+---
+
+## Phase — Conference championship identity, and where those games are actually played (2026-07-30)
+
+### The division badge is gone
+
+The standings table is already grouped by division and sorted within it, so the team on top IS the leader. The `◆ DIV` chip was restating the row's own position back to it.
+
+### Week 16 games now carry their championship logo
+
+`public/assets/confchamp` had ten `*Championship.webp` event marks sitting unused beside the `*ChampionshipTrophy.webp` files the trophy case already uses. A championship game was rendering the plain conference roundel — the same mark as the other eight conference games that season.
+
+**The championship week is derived, not hardcoded.** The save does NOT give these games their own `SeasonWeekType`: on a real week-16 save all ten championships sit in `RegularSeason` alongside the rest of the year (weeks 0–14, then 16; week 15 carries no games at all). `shared/championshipWeek.ts` takes the last regular-season week on the calendar, which stays true if a user shifts the schedule where a literal `week === 16` would silently stop matching. A game is the championship when it's a conference game in that week — both halves matter, since the week alone would catch a stray non-conference game and the type alone catches the whole season.
+
+Wired into the Type cell on both schedules, the Game Info hero, and `gameTypeLabel`, so the meta line now reads "SEC Championship" instead of nothing. Verified live on `DYNASTY-AUBURNW17CONFCHAMPS`: Oklahoma vs Ole Miss, week 16, flagged in the schedule row *and* the box score, with `confchamp__SECChampionship.webp` loading (1024×1024) in both places.
+
+### Where the championship is played — the save DOES know
+
+The venue problem turned out to be answerable, and the answer is better than expected.
+
+**`Conference.ChampionshipStadium` exists**, and it is populated for exactly five conferences — ACC, Big 12, Big Ten, MAC, SEC — and **empty** for American, CUSA, MWC, Pac-12 and Sun Belt. That is a perfect 10-for-10 match with the real-world list: the five with a reference are the ones played at a fixed neutral venue, the five without are the ones hosted by a qualifying team.
+
+The same signal is on the game itself: every week-16 game's `SeasonGame.Stadium` reference is **identical to its conference's** `ChampionshipStadium`, or absent when the conference has none. So neutral-vs-hosted is readable per game, with no inference.
+
+**The venue's NAME is not in the save.** Those references point at tables 16433/16434, outside the file — the same wall as the AD-goal catalogue and the rivalry trophies. The in-save `Stadium` table (id 4111, capacity 183) is entirely empty, and `ScheduleStructure`'s championship defaults are literally `"TBA"/"TBA"/"TBA"`. Worth noting this is not special to championships: `Team.Stadium` is unresolvable too, which is why the app's stadium names have always been a bundled lookup.
+
+**The reference is stable.** Checked across three unrelated saves (AUBURNW17CONFCHAMPS, TULANEMASTER, JMUTESTER): every conference's id is byte-identical, and so are `ConfChampGameName`, `ConfChampGameLogoID` (300–309) and `ChampionshipGameType` (`TOPTEAMS`, except Sun Belt's `TOPDIVISIONS`).
+
+That makes a stable-id lookup viable and, importantly, *not* a hardcode of conference→venue: keying on the save's own stadium id means a user who moves a championship elsewhere in-game gets the new venue resolved, and a conference that switches from neutral to hosted simply loses its id and flips to the host's stadium automatically.
+
+**Confirmed the bug is live:** the Oklahoma/Ole Miss SEC Championship currently reads "SEC Championship | Gaylord Family Oklahoma Memorial Stadium, Norman, OK". It's at Mercedes-Benz Stadium in Atlanta.
+
+Extraction and the venue lookup are not built yet — recommendation shared with the user first. typecheck/lint/build clean.
+
+**Addendum — the venue fix, built (2026-07-30).**
+
+`SeasonGame.Stadium` turned out to be a **general neutral-site signal**, not a championship-only one. Measured across a full season: 46 games leaguewide carry the reference and **every single one differs from the home team's own stadium** — neutral-site kickoff games, Army-Navy in week 14, every bowl, and the five conference championships played at a fixed venue. Presence means "somewhere that isn't a home field".
+
+The extractor now records it as `neutralVenueId` (a stable `tableId:rowNumber` string), and only when it differs from the home team's stadium — comparing rather than just checking presence costs nothing and keeps the signal honest if EA ever starts stamping the home stadium on ordinary games. It also feeds `isNeutralSite`, which previously relied on `isBowlGame || IsKickoffGame || ScheduleNeutralStadium pairs` and therefore missed championships entirely.
+
+`lib/neutralVenues.ts` resolves the id to a real venue, **keyed on the save's id rather than the conference** — move a championship in-game and the id moves with it, switch a conference from neutral to hosted and the id simply disappears, and realignment is irrelevant because we never key on who's in which conference. **Two ids cross-validate against a second, independent appearance**, which is what makes them evidence rather than assertion: `16433:99895` is both the SEC Championship *and* Auburn's week-1 neutral kickoff game — both really are at Mercedes-Benz Stadium; `16434:85121` is both the MAC Championship *and* a Central/Eastern Michigan regular-season game — both really are at Ford Field. An unknown id resolves to null and keeps the bare "Neutral Site" badge, never a guessed stadium.
+
+`getLocationDisplay` no longer falls through to the host's stadium for a neutral game. That fall-through *was* the bug.
+
+**All ten championships verified after re-import:** SEC → Mercedes-Benz, Big Ten → Lucas Oil, Big 12 → AT&T, ACC → Bank of America, MAC → Ford Field, and American / CUSA / MWC / Pac-12 / Sun Belt correctly hosted with no venue override. A 10-for-10 match with the real-world list. The SEC title game now reads **"SEC Championship | Mercedes-Benz Stadium, Atlanta, GA"** where it previously claimed Gaylord Family Oklahoma Memorial Stadium.
+
+**Needs a re-sync** — `neutralVenueId` is new extraction, so existing seasons keep their old (championship-less) neutral classification until re-imported. No editable venue database was built: keying on the save's own id means an in-game venue move follows automatically, so an override table would only cover venues we can't name, and none showed up in the FBS championship set. typecheck/lint/build clean.
+
+**Addendum 2 — bowl venues named, and CFP first round corrected (2026-07-30).**
+
+The first pass only named the five conference-championship venues, so every bowl still read "Neutral Site" with no city. Pairing each postseason game's `BowlGame` identity with its `Stadium` reference gave **40 distinct (bowl, venue) pairs** and, with them, the whole postseason map.
+
+**Keying on the venue rather than the bowl is what makes this work**, and the data insisted on it: Camping World Stadium hosts the Citrus, Cure AND Pop-Tarts bowls; Raymond James hosts Gasparilla and ReliaQuest; Bank of America hosts Duke's Mayo *and* the ACC Championship. One entry serves all of them. And the CFP rounds carry a **blank** `AssetName`, so a bowl-keyed table could never have resolved them at all — a venue key picks them up for free wherever they land.
+
+Most entries are confirmed by the same id appearing somewhere independent: `16433:99895` is the SEC Championship, a CFP Quarterfinal *and* Auburn's week-1 kickoff (all Mercedes-Benz); `16434:85219` is the Las Vegas Bowl *and* the National Championship (Allegiant); `16434:85072` is the Armed Forces Bowl *and* TCU's own home-stadium id (Amon G. Carter — the bowl is played there); `16434:85244` likewise matches UAB's home id (Protective Stadium, where the Birmingham Bowl is played). Four ids seen only on CFP quarterfinals/semifinals plus one week-0 opener are **deliberately left unmapped** — those rounds carry no bowl name, so there's nothing to identify the venue by, and they keep the honest "Neutral Site" badge rather than a confidently-wrong stadium.
+
+**CFP first-round games were being mislabelled**, in the opposite direction to the championships. They're played on the higher seed's campus, and the save says so by giving them no `Stadium` reference while every other bowl gets one — but `isNeutralSite` treated any postseason game as neutral, so the app claimed "Neutral Site" and refused to name the host. Now scoped to that round specifically rather than "any bowl missing a venue", because a bowl whose matchup isn't set yet also has no reference and must not be reported as a home game for whoever is penciled in. Verified: all four first-round games report hosted, at Miami, Ole Miss, SMU and Texas Tech.
+
+Auburn's Liberty Bowl now reads **"Liberty Bowl | Simmons Bank Liberty Stadium, Memphis, TN"** in both the schedule row and the box score. typecheck/lint/build clean.
+
+---
+
+## Phase — Both flanks glow, and the winner gets sparks (2026-07-30)
+
+### The glow is staging, not a scoreboard
+
+It only appeared under the winning helmet, which left half the header unlit. Now each flank carries its own radial glow in that team's own colour. Nothing is lost by making it symmetric: the result is already unmistakable from the losing score's 0.5 opacity and the colour rule under each name, so the glow is free to just be lighting.
+
+### Sparks, built the cheap way
+
+Adapted from the starfield in `UI/Particle.md`: **one element carrying a long `box-shadow` list, moved by a single transform**, with a `::after` copy offset by exactly one loop-span so the field wraps seamlessly. Fifty-two particles cost one composited layer and *zero* DOM nodes each — the naive version (a div per particle, or a canvas) would cost fifty of both in a header that re-renders whenever the box-score team toggle changes.
+
+One improvement on the reference: the wrap copy uses `box-shadow: inherit` instead of repeating the entire list by hand. Same result, half the CSS, and the two can't drift apart.
+
+Two layers at different sizes and speeds (1px/19s and 2px/13s) so it reads as depth rather than one sheet sliding past. Gold is `#e9d28c`, the same logo gold the nav glider uses.
+
+**The mask is what keeps it disciplined.** Sparks fade in at the outer edge, hold, and are fully gone by 78% of the flank — so nothing ever crosses into the logo/week/score column. Verified by measurement rather than by eye: the spark band spans 900–1220px against a centre column at 599–884, no overlap.
+
+**Direction is one animation, not two.** The right-hand flank is the same field mirrored with `scaleX(-1)`, so "inward" is inward on both sides and there's a single keyframe set to maintain.
+
+Only on the winning side, and only once a game has been played — that's what makes it read as celebration rather than as decoration. The flanks and centre column took `relative z-10` so the helmets paint above the effect layers; without it an absolutely-positioned sibling wins the paint order and the sparks would have drifted *over* the helmet instead of behind it.
+
+Reduced motion needs nothing here — the global clamp in globals.css already stops the drift.
+
+Verified: two glows (left + right), sparks on the winner's side only, 2 layers, 52 + 14 particles, `overflow: hidden`, masked, gold `rgb(233, 210, 140)`, flanks at `z-index: 10`. typecheck/lint/build clean.
+
+---
+
+## Phase — Venues resolve without a re-sync (2026-07-30)
+
+### The mistake in the previous phase
+
+"Needs a re-sync" was not a viable answer, and the reason is one I should have caught: **a dynasty's past seasons can never be re-synced.** The save has long since moved past week 16 of 2026 and there is no way to regenerate that state. Keying venue resolution solely on the extracted `neutralVenueId` therefore left every championship already sitting in a user's archive permanently wrong — the Big Ten title game reading "Ohio Stadium, Columbus, OH" because Ohio State was nominally the home team. That's what users were reporting.
+
+### The fix doesn't need the id
+
+`isConferenceChampionship`, `conferenceName` and `bowlAssetName` are all derived or stored on the OLD snapshots — the championship week is computed at query time from `week` + `isBowlGame`, both of which predate any of this work. So two name-keyed fallbacks repair history with no re-sync at all:
+
+- **Conference championship → conference name.** The neutral/hosted split is still read from the save (`Conference.ChampionshipStadium`, populated for exactly ACC/Big 12/Big Ten/MAC/SEC and empty for the other five) rather than from recall, so this is the same fact arriving by a different route.
+- **Bowl → `bowlAssetName`.** The asset name rather than the display name, because EA rebrands bowls by sponsor year to year: "Salute to Veterans Bowl" and "Xbox Bowl" are the Camellia and Bahamas bowls wearing a sponsor.
+
+**`hosted` is recorded explicitly, not left out.** A conference we don't recognise and a conference we know is hosted are different answers: the first should fall through, the second should stop the lookup and let the host's stadium stand. Five of the ten championships genuinely are at the higher seed's field.
+
+**The championship check runs BEFORE the `siteType` test**, which is the part that's easy to get wrong: on an old snapshot the game was never flagged neutral in the first place, so anything waiting for `siteType === 'neutral'` would never reach it.
+
+The extracted id still wins when present, so an in-game venue move is respected and the fallbacks stay a floor rather than a ceiling.
+
+**Verified against a genuinely pre-fix import** (`venueId: null`, `neutral: false` on all ten championships — the exact shape of a user's existing archive): Big Ten → **Lucas Oil Stadium, Indianapolis, IN** where it previously said Ohio Stadium, and American → **Skelly Field at H.A. Chapman Stadium, Tulsa, OK**, correctly hosted. typecheck/lint/build clean.
+
+**Addendum — the hero's meta line is three rows (2026-07-30).**
+
+Date, then what the game IS, then where it's played, each on its own line, replacing the single pipe-joined string. Combined it ran long enough to wrap at the hero's width and the break landed *mid-venue* — "Simmons Bank Liberty / Stadium, Memphis, TN" — splitting the stadium's own name across two rows. Giving each fact its own line means the wrap point can never fall inside one.
+
+The venue row is **stadium + city, not city + state**. Dropping the state is what the layout needed (with it, "TN" orphaned onto a fourth line) and "Memphis" carries the meaning by itself. `LocationDisplay` gained a `city` field alongside `cityState` rather than changing it — the Schedule page's Location column has room for the full address and keeps it.
+
+Measured after: all three rows 20px, i.e. single-line each, at a 1280px modal.
+
+---
+
+## Phase — Agenda board audit (2026-07-30)
+
+Asked to check whether the lists were caught up. They weren't, and the first problem was the board itself.
+
+**`Productivity/agenda.html` had a JavaScript syntax error and rendered nothing.** An orphaned `prompt:` line was left behind when the conference-divisions idea was converted into a shipped row — it sat outside any object literal, so the whole inline script failed to parse and the page came up blank. It predates today; the version in the last commit is broken too, which means the board has been dark for a while. One line removed; the script now parses and the array evaluates to 197 entries.
+
+**Three rows claimed "planned" for work that had already shipped:** the Season Yearbook export (button on Team Hub → Overview), Head-to-Head / Rivalry history (`getHeadToHead` + the Rivalries page) and the coaching tree (`getCoachingTree`, on Coach Hub). Marked done with a note on where each actually lives.
+
+**Three "By Design" limitations are no longer true**, which matters more than a stale idea row — those are the entries that stop a feature being attempted again:
+- *No real conference divisions* — resolved back on 2026-07-20 (there's a shipped row for it); Standings renders real East/West tables. The original note recorded a wrong read of the schema and was never revised.
+- *No opponent player stats* — game logs are leaguewide now (944 distinct game ids in one season against a 13-game user schedule), and the box score has a both-teams toggle.
+- *No stadium/venue names* — the save limitation still holds, but the app no longer shows blanks: real-world home stadiums plus `lib/neutralVenues.ts` for neutral venues.
+
+All three rewritten to say what changed rather than deleted, so the correction is on the record.
+
+**Four open items added** from this session's loose ends: the two deferred decisions (past-season backfill, venue override editor) with the research and recommendation captured in the row, plus the 4 unnamed CFP venue ids and the CFP round graphics washing out on the light theme.
+
+Standing: **179 done, 18 open** — 12 planned ideas, 2 code-health items, 4 limitation entries (3 of which are now historical rather than active).
+
+---
+
+## Research — card flip: what's possible (2026-07-30)
+
+`UI/cardflip.md` is empty (0 bytes), so this is grounded in the codebase rather than a reference. Nothing implemented.
+
+### The trap, measured — and then corrected
+
+**Only a grouping property on the SAME element as `preserve-3d` flattens it.** My first pass over-claimed this and I had it wrong for a full pass: I said `PlayerCard`'s root `filter: drop-shadow` would break a flip. It doesn't, because that filter sits on the *perspective* wrapper, not on the rotating element.
+
+The measurement that started it still holds — a child at `translateZ(400px)` under `perspective: 800px` renders 200px wide with `preserve-3d` alive and 100px once flattened, and `filter`, `clip-path`, `overflow: hidden` and `opacity < 1` each flatten *the element they're on*. What I got wrong was which element that is in this card.
+
+`getComputedStyle` still reports `preserve-3d` in every flattened case, so the CSS reads correct either way. That part is worth keeping in mind.
+
+### What actually decides it: where the cut corner goes
+
+Rendered the reference's own structure with only one variable — which element carries `.corner-cut` / `overflow-hidden`:
+
+| | result |
+|---|---|
+| clip on the **faces**, inner untouched | works — back shows, cut corner intact |
+| clip **+ overflow:hidden** on the faces | works |
+| clip on the **inner** (the `preserve-3d` element) | **broken — the front renders mirrored** |
+| `filter` on the outer `.flip-card` | works (this is where PlayerCard's already is) |
+
+So the reference works essentially as-is. **One rule: the clip and any overflow belong on the two faces, never on the rotating wrapper.** An independent-face variant (no `preserve-3d` at all, each face rotated separately) also works and is immune to the whole class of problem, but it isn't required.
+
+### The back face is free
+
+`PlayerCardRecord` already stores `player` (the full `RosterPlayer` — bio, class, jersey, OVR, archetype, dev trait, height/weight, hometown), the computed `stats` pairs, `seasonYear`, `teamName`, `favorite` and `createdAt`. A back showing full bio + the complete stat line + card metadata needs **no new queries and no extraction**. In the player modal there's more still loaded (career totals, attributes, honors, milestones).
+
+### Two constraints worth designing around
+
+**Click is already taken in the card book.** A click expands a card into its overlay, and in Select mode it picks. Flip needs either a different affordance there or to live inside the expanded overlay. `PlayerCardTab` (single card) and the export preview have click free.
+
+**Export is a live screenshot, not a re-render.** `capturePage` with a clip rect grabs whatever is on screen — so a flipped card exports its back (a feature if intended, a footgun if not), and a mid-animation capture exports a smeared card. Export has to force a settled state, and "export front / export back / export both" becomes a real question rather than an accident.
+
+### Smaller notes
+
+- `ScaledSavedPlayerCard` draws at 330px and CSS-`scale()`s down to 78/220/380. A flip composes fine with that, but `perspective` has to be set relative to the scaled box or the rotation reads wrong at 78px — where a flip probably shouldn't be offered at all.
+- Reduced motion: the global clamp kills the transition, so the flip must stay *usable* as an instant swap, not merely degrade.
+- The face turned away needs `aria-hidden` and its controls need removing from the tab order, or keyboard focus lands on an invisible side.
+
+**Addendum — working prototype + confirmed scope (2026-07-30).**
+
+`UI/cardflip-prototype.html` — standalone, no app code or assets, opens straight in a browser. Confirmed working by the user.
+
+It carries the card at its real 330×496 with a front approximating `PlayerCard` and a back built only from fields `PlayerCardRecord` already stores; controls for flip duration, perspective, click-vs-hover and three team colour schemes; a **"break it on purpose"** toggle that moves the cut corner onto `.flip-card-inner` so the 3D collapse into a mirrored front can be watched happening; and a correct/broken/unflipped triptych.
+
+**Scope, decided:** the flip is for the **full-size card only** — the Card Book's *expanded* overlay, and the full-size card on the player modal's Cardbook page. Not the book's grid thumbnails, not the 78px strip.
+
+That settles the interaction collision raised in the research. In the grid, click already means expand (or pick, in Select mode), so putting the flip one level down in the expanded overlay means nothing has to be renegotiated — click keeps meaning expand, and flip is a separate gesture on a card that is already the user's sole focus. The player modal's single card has click free anyway.
+
+It also keeps export out of it: `CardExportDialog` renders its own preview card rather than reusing the book's expanded one, so exports continue to capture the front and the "front / back / both" question can stay closed until someone actually asks for it.
+
+**The cut corner costs nothing.** The user's call was that they wouldn't fight for it if the flip demanded a compromise — but it doesn't. The clip simply lives on the two faces instead of the rotating wrapper, which is where the prototype already puts it, so the shape language keeps its exception-free record.
+
+Not implemented; the user is picking it up later.
+
+---
+
+## Player Cards — the tab became a collection (2026-07-30)
+
+User request, eleven numbered items (three withdrawn before work started). The
+Cards tab had grown popular enough to attract requests, which is a good sign and
+also a diagnosis: it was still shaped like the single-card feature it started as.
+
+### The shape
+
+**The hero-plus-strip is gone.** One card at full size with the rest as 78px
+tiles beneath it says *the big one is the card and the others are a filing
+detail* — exactly wrong for a set, where the second card you made is not a lesser
+version of the first. `CardGrid.tsx` replaces `CardStrip.tsx` with equal tiles,
+three to a row.
+
+**The row is capped, not stretched.** Across the full width of the player modal
+three cards come out at ~350px — near their 330px design size — which turns a
+collection into three posters and puts the second row a full screen below the
+first. Capped at 48rem they land at 243px, which is what a card measures on a
+page of the card book. Two surfaces, one object, one scale.
+
+**Add is a bare plus.** No dashed box: a box reads as a card that hasn't loaded,
+a plus on its own reads as the one thing on the page that isn't a card.
+
+### The expanded card, and where editing went
+
+Clicking a tile opens `CardFocusModal` — the card centred on a deep scrim, ← / →
+through the rest of the set, and a control pill (star, edit, export, default,
+delete) borrowed wholesale from the card's own hover rollover so the gesture
+language doesn't change just because the card got bigger.
+
+**Every one-card action moved there.** The grid keeps only the default dot; there
+is no wrong card to hit in a view that contains exactly one, and a grid you were
+browsing shouldn't be wearing five controls per tile.
+
+**The card book's expanded view was replaced with the same component**, editor
+omitted. That collapses two implementations into one and gives the planned card
+flip a single place to land — which the flip research had already concluded was
+where it belonged.
+
+**The editor is a panel beside the card, never over it.** Every control in it
+changes what the card looks like, so you have to be able to watch that happen.
+Four equal buttons two-by-two (Upload Photo / Media Photo / Remove Photo / Done)
+under the zoom, with the "the full photo shows at first…" line removed.
+
+### Two new capabilities
+
+**A card can celebrate one game.** The stat line now comes from the season *or*
+from a single Saturday, picked from a dropdown built out of the same per-game
+tiles the "best game" panel already computed. No new queries. This is the ask
+behind the ask: the four-touchdown night against the rival is the card people
+actually want to make, and until now the card could only ever be a card of a
+year.
+
+**Layers belong to the card.** Turning the OVR, name, profile line, stat row or
+team logo off used to be a property of the *export dialog* — checkboxes that
+reset to all-on every time it opened. So a card designed as a clean
+photo-and-name piece looked like that once, in a PNG, and never again. They now
+live on the row (`CardLayerToggles` is shared by the editor and the dialog), so
+the book, the hover preview and the export all agree. The dialog's copy of the
+control is labelled "Show in this export" and seeds from the card.
+
+### The lock, and where it is enforced
+
+Items 13 and 14 — cards are independent of the selected season, and a card locks
+its year and profile when made — are one rule, and it is enforced in the DAL
+rather than in the editor: `updatePlayerCard` no longer writes `season_year`,
+`team_name` or `player_json` at all.
+
+The bug that motivates it was silent. `update` previously re-froze all three from
+whatever the app happened to be showing, so opening a 2026 freshman card two
+seasons later and nudging the zoom quietly reprinted it as a 2028 senior. Nothing
+in the UI would have said so; the card just stopped being the card you made.
+Alongside it, the tab stopped reloading when the season switches, and the stat
+line can only be re-picked from the season the card was printed in — the editor
+shows the frozen line and says so rather than offering this year's numbers for
+another year's card.
+
+Schema **v13** adds `layers_json` (defaults `'{}'`, merged over all-on, so every
+existing card draws exactly as it did) and `stat_source_json` (null on pre-v13
+cards, i.e. a season line by construction).
+
+### Three bugs the verification runs caught
+
+- **`transform: scale()` doesn't change layout.** The fluid grid card was left in
+  normal flow, so it still occupied its full 496px however small it was drawn —
+  a 140px hole under every row. Measured (row 1 bottom 983, row 2 top 1015 after)
+  rather than eyeballed. Fixed by taking the scaled card out of flow.
+- **The drag delta needed dividing by the render scale.** Framing is stored in the
+  card's own 330px space; the drag happens in screen pixels. Miss it and a card
+  drawn at 260px slides slower than the cursor.
+- **The pointer handlers had to read through a ref, not capture dependencies.**
+  `setDraft` re-renders on every pointer move, so a callback rebuilt each render
+  had its own cleanup tear the listeners off mid-drag.
+
+### Two small honesty fixes found on the way
+
+Negatives are no longer auto-picked for the default stat line — a quarterback's
+rushing line is often `-30 Rush Yds` once sacks are counted, and it ranks high
+enough to walk straight onto the card. They stay pickable. And game labels test
+`typeof week === 'number'`: Week Zero is a real week and a falsy one, and testing
+for truth silently dropped the label on it.
+
+Help menu gained a "Trading cards and the card book" section. typecheck / lint /
+build clean; verified against a real imported save (screenshots in
+`Productivity/screenshots/player-cards-*-2026-07-30.png`).
+
+**Addendum (2026-07-30).** The pointer-tracked sheen on the expanded card was
+removed at the user's request — the card keeps the fixed diagonal highlight it is
+drawn with, and that is all. The expanded view shows the card; it doesn't perform
+it. Six follow-ups (rarity treatment, the card flip, serial numbering, an
+auto-caption from `game_context`, a 3×3 print-sheet export, and milestone
+prompts) went to the Command Center as a single backlog item,
+`cards-premium-next`, with a matching row on the agenda board.
+
+---
+
+## Why the player modal was slow — measured, then fixed (2026-07-30)
+
+User report: opening a player takes a while. Asked whether prefetching the
+not-yet-visible tabs in the background would help. **It would not have**, and the
+measurements say why.
+
+### The measurement
+
+Instrumented against real imported saves in an isolated `CFB_USER_DATA_DIR`
+(`Dynasty Save Test/DYNASTY-TESTER`, and `AUBURNW16` for a season with a full
+slate of games actually played).
+
+| call | one played season |
+|---|---|
+| `getGameLog` | **721 ms, 16.5 MB** |
+| `getAwards` | 20 ms, 130 KB |
+| `getLeagueScores` | 24 ms, 174 KB |
+| `getPlayerDevelopment` | 58 ms |
+| `getRoster` / `getPlayerStats` | 2 ms each |
+
+Click-to-hero: **916 ms** on AUBURNW16, **224 ms** on TESTER (which has no games
+played yet, and so never paid the big one).
+
+### Three findings
+
+**1. The game log is leaguewide, and the modal asked for it twice.** 944 games ×
+~50 lines is every player in the country. The modal fetched the whole 16.5 MB
+across IPC — once for the Stats/Game Log tabs, once more for the History tab's
+career milestones, per season — to keep the ~13 rows belonging to one player.
+That single call was ~80% of the wait, and it scales with seasons: a
+three-full-season dynasty pays it four times.
+
+**2. Nothing was cached, and sql.js is synchronous on the main thread.** Every
+`getSnapshot` was a fresh gunzip + `JSON.parse` of the whole blob, so a second
+read cost exactly as much as the first — and blocked everything else while it
+ran. Prev/Next inside the modal paid full price on every step. "Concurrent" IPC
+calls are not concurrent here; they queue behind one thread.
+
+**3. The hero was gated on data the hero doesn't use.** `setRoster` — the call
+that ends "Loading player…" — sat behind awards + roster + stats + team-award
+results for EVERY season. `getAwards` alone is 130 KB per season, and it feeds
+the Awards tab.
+
+### The fix
+
+- **`getPlayerGameLog(dynastyId, playerId, seasonId)`** — the same filter, run in
+  the main process instead of the renderer. 16.5 MB → 3 KB, 721 ms → 1 ms.
+- **A bounded LRU snapshot cache** in `helpers.ts`, charged in DECOMPRESSED JSON
+  length rather than stored bytes — league snapshots are gzipped and expand by an
+  order of magnitude, so charging the row size would let a nominally-8 MB cache
+  pin hundreds of megabytes. The 48 MB budget was sized by measurement: one
+  season's working set is the gamelog (16.5 MB) plus that season's leagueRoster
+  and some small ones, and at 24 MB the two biggest evicted each other on every
+  open — second player back to 190 ms, `getPlayerDevelopment` back to its full
+  64 ms. At 48 MB they coexist and the second player opens in 47 ms.
+  Correctness over hit rate: every write path
+  clears the whole thing (`saveSnapshot`, `saveSnapshotCompressed`,
+  `deleteDynasty`, the restore's direct row copy), and a `dbEpoch` counter in
+  `init.ts` covers handle swaps. A generation counter rather than an import,
+  because `helpers` already imports `init` and the reverse would be a cycle —
+  and it can't be forgotten at a new call site, since replacing `db` is both what
+  invalidates and what bumps it.
+- **The common case resolves on its own.** Nine times out of ten the player is on
+  the roster of the season the caller was already viewing: two small reads, and
+  the hero paints. The exhaustive newest-first search across all seasons stays,
+  as the exception it always was. The all-seasons aggregate runs alongside and
+  fills in behind the tabs that need it.
+
+### After
+
+| | before | after |
+|---|---|---|
+| AUBURNW16, first open | 916 ms | **192 ms** |
+| AUBURNW16, next player | — | **46–56 ms** |
+| TESTER, first open | 224 ms | **90 ms** |
+| TESTER, next player | — | **40 ms** |
+
+Verified the data is still right, not just fast: Stats shows 12 game-log rows,
+Career totals present, and History still builds the full milestone timeline
+("First 400-yard passing game", "First four-touchdown game", weekly honors) —
+all of which are exactly the things that would have gone blank if the scoped
+fetch or the deferred aggregate were wrong.
+
+### On prefetching
+
+Worth writing down, because it's the intuitive answer and it's wrong here.
+Prefetching the other tabs in the background would have moved the stall, not
+removed it: the cost was one call shipping 16.5 MB to find thirteen rows, and
+doing that early — on the main process's single synchronous thread — would have
+made the *rest of the app* janky while the user browsed, in exchange for a modal
+that opened faster. Fix the call, and there is nothing left worth prefetching;
+the snapshot cache gives the same warm-second-open benefit for free, without
+speculative work.
+
+---
+
+## Media photos zoom, using the card's control (2026-07-30)
+
+User request: the same zoom the trading cards have, on media images.
+
+**One control, two viewers.** The Media page's lightbox and the `MediaGallery`
+used on player bios and the Game info page had structurally identical image
+stages, so `ZoomableImage.tsx` replaces the bare `<img>` in both rather than
+either growing its own copy. Same collapse the card work made a week's worth of
+surfaces do.
+
+**Same gesture, deliberately.** It's the card editor's slider — 1×–5×, 0.02 step,
+team-coloured track — plus drag-to-move once past 1×. Someone who has framed a
+card photo already knows how to use this, which is the entire reason for taking
+the control from there instead of inventing one.
+
+**Two things it does that the card's doesn't**, because a viewer is not an
+editor:
+
+- **It doesn't persist.** Card framing is part of the card and is written to the
+  row. Here the zoom is how you're looking at a photo right now, so `src`
+  changing resets it — which also covers Prev/Next swapping the photo under an
+  open viewer.
+- **The pan is clamped.** A card's framing is allowed to hang the photo off the
+  edge; that's how you crop to a face. In a viewer it just loses the picture. At
+  scale `s` the image overflows its box by `(s-1)/2` each way, so translation is
+  bounded to exactly that. Verified by dragging 4000 px in one gesture and
+  landing on the computed bound to the pixel: `translate(-581px, -348.6px)`
+  against a predicted `-581 / -348.6`.
+
+Two additions beyond the card, both because an image viewer invites them: the
+wheel zooms, and a double-click snaps back to fit.
+
+**The wheel listener is attached by hand, and has to be.** React registers
+`wheel` on its root as PASSIVE, so `preventDefault()` inside an `onWheel` prop is
+silently ignored (with a console warning) — and the page behind the overlay
+scrolls away underneath the photo while you zoom. A non-passive listener on the
+element is the only version that works. Worth remembering: the JSX form looks
+correct and fails quietly.
+
+The stages gained `overflow-hidden`, since a zoomed photo has to be clipped by
+something. Verified in both viewers against real imported media; Help's Media
+section documents it.
+
+---
+
+## A saved framing for media photos — the crop sticks, the file doesn't move (2026-07-30)
+
+Follow-up to the media zoom. Users wanted the zoomed look kept: crop out the HUD
+clutter, push in on the one player who matters, and have the photo read that way
+from then on instead of re-doing it every open.
+
+**Three numbers next to the row, and nothing else** (schema v14: `frame_x`,
+`frame_y`, `frame_scale` on `media_items`). The image on disk is never
+re-encoded, re-cropped or rewritten, and Reset returns the whole frame. Verified
+rather than assumed: the media file's sha256 is byte-identical to the source PNG
+after a framing was saved.
+
+**That is exactly why a card is unaffected.** Pulling a media photo onto a
+trading card already COPIES the file into `card-photos/<dynasty>/` and stores
+that card's own pan/zoom on the card row (v12) — the two were always independent,
+and keeping the framing as metadata is what preserves it. Proved end to end: the
+same shot ended up at `{x: -0.145, y: -0.120, scale: 2.5}` in the gallery and
+`{x: 77, y: -33, scale: 3.3}` on a card built from it, with the card reading from
+its own copy at a different path, and neither disturbed the other.
+
+### Fractions, not pixels
+
+`frame_x`/`frame_y` are fractions of the photo's own displayed size. Pixels would
+be wrong the moment the same framing is drawn at another size — and it is,
+constantly: a full-screen viewer, a grid thumbnail, a laptop, a 4K monitor. As
+fractions the value means the same thing everywhere, `translate()` takes it as a
+percentage with nothing to measure, and the pan limit falls out as a pure number:
+at scale `s` the photo overhangs its box by `(s-1)/2` each way, so both offsets
+are bounded to exactly that. (The earlier pixel version needed `offsetWidth` to
+clamp; this one doesn't need it at all except to convert a drag, which arrives in
+screen pixels by definition.)
+
+### Two decisions worth recording
+
+**Transient until saved.** Zooming to read a scoreboard must not quietly become
+how that photo looks forever, so nothing persists until asked. `Save framing`
+only appears once the framing differs from what's stored, and `Reset` only once
+there's something stored. Moving to another photo drops an unsaved zoom and picks
+up that photo's own framing.
+
+**The thumbnail follows.** A crop you saved and then couldn't see anywhere would
+read as not having saved. Tiles stay `object-cover` with the framing riding on
+top, so an un-framed tile looks exactly as it always did (no letterboxing, no
+regression) and a framed one lands on the same part of the photo, cropped to the
+tile's shape.
+
+**Framing is the exception to MediaGallery's read-only rule**, deliberately.
+Re-tagging which game a shot belongs to from a player's bio would be confusing —
+the item spans seasons and the bio isn't where it's managed — but "this photo
+should be cropped like THIS" is unambiguous wherever you're looking at it, and
+refusing it there would mean walking to the Media page to fix a crop you're
+staring at. It also gets its own IPC call rather than a field on
+`MediaItemPatch`: that patch is the details form submitted as a unit, and folding
+them together would mean either the form silently rewriting a framing set
+elsewhere, or the viewer sending a whole patch it doesn't own.
+
+Verified end to end: saved at 2.5× off-centre, survived a full app restart, the
+thumbnail re-cropped to match, the original file unchanged, and a card built from
+the same photo kept its own framing.
+
+---
+
+## Teambuilder imports, and the Program editor (2026-07-30)
+
+User asked a direct question — did an imported "East Point" take Kent State's
+TeamID? — and proposed an editor for stadium name and team artwork.
+
+### The save, measured
+
+`Dynasty Save Test/DYNASTY-EPUY01WK0START`, read with madden-franchise and
+diffed against a stock save.
+
+**No. East Point took Kent State's SLOT, not its identity.** `TeamIndex` 39 is
+unchanged — it's the slot the whole app keys on, and it's stable — but every
+field inside it was overwritten: `TEAM_ORIGID` 1148 → **1803**, `TEAM_LOGO` 48 →
+**602**, `AssetName` `KENTXX` → **`CrcEPmcoLi`** (a random 10-character token),
+and the display/short/nick names with it. Kent State is gone from the 143-team
+table entirely.
+
+**It is ten teams, not one**: UNH (slot 1, was Akron), Illinois State (9),
+Montana (18), Montana State (25), Hawaii (31), East Point (39), Idaho (59), SDSU
+(111), Florida A&M (132), Furman (135).
+
+**And there is a reliable detector.** Stock `TEAM_ORIGID` runs 1100–1504 and
+`TEAM_LOGO` 0–151; every imported team here sits at origId **1801+** / logoId
+**600+**.
+
+### Why their art breaks — and the alias trap
+
+The app resolves logo, helmet, jersey and coach polo from the team's DISPLAY
+NAME through the shipped library. Seven of the ten resolve fine, because the
+library already carries FCS art (Illinois State, Montana, Montana State, Hawaii,
+Idaho, Florida A&M, Furman). Three don't: UNH, SDSU, East Point.
+
+My first instinct was that UNH and SDSU were a free two-line alias fix — the art
+exists under `newhampshire` and `sandiegostate`. **Rejected on inspection**:
+`southdakotastate` and `sanjosestate` are also in the library, so "SDSU" is
+genuinely ambiguous and an alias would quietly hand some other user's team the
+wrong school's helmet. Guessing from an abbreviation fails silently, which is the
+worst way to fail. Upload is the honest answer.
+
+### The editor
+
+`Program editor` sits above `Program budget` on the Team Hub masthead, same
+width (both `w-full` in a stretched column — two stacked buttons of different
+widths read as an accident). Two tabs: **Identity** (stadium name, city) and
+**Artwork** (four uploads).
+
+Sizes shown in the UI are MEASURED off the shipped art, not chosen: 1024×1024 for
+logo and helmet, 512×512 for jersey and polo. Telling a user a number the app
+doesn't actually use would be worse than telling them nothing.
+
+**Four uploads dress a team completely.** One logo serves the on-light and
+on-dark variants, and the gold celebration variant is CSS-tinted from it rather
+than demanding a gold version nobody has. One helmet serves both sides, with the
+right-hand one mirrored at the call site — shipped art has a real right-side
+render and is left alone.
+
+### Two decisions that carry the design
+
+**Keyed by `teamIndex`, scoped to one dynasty.** This is correctness, not taste:
+the same save has a custom "Montana" and a custom "Hawaii", and the existing
+global, name-keyed stadium store would have rewritten the REAL Montana and Hawaii
+in every other dynasty the user opens. The row's identity is the slot; a
+`team_name_key` rides alongside purely so the renderer can find it from a
+component that only knows a name — safe because only one dynasty's rows are ever
+loaded at a time.
+
+**A registry in front of the resolvers, not props.** Team art resolves through
+four pure functions called from a dozen components — mastheads, matchup
+graphics, roster portraits, coach cards, trading cards, the hover preview, the
+PNG export. Threading an override map through all of them would still have missed
+the next caller. `programArt.ts` sits in front of the four resolvers instead, so
+an uploaded logo appears everywhere a logo appears. `ProgramArtProvider` owns the
+lifecycle and publishes a VERSION through context, because a plain module
+variable can't tell React that a logo changed.
+
+### Verified end to end
+
+Imported EPUY01 into an isolated user-data dir, seeded a program row and art
+files, and launched: the uploaded mark renders on the Team Hub masthead, the team
+switcher and the roster portraits (12 program-art images on one page); the
+`Program editor` button sits above `Program budget` at matching width; the saved
+stadium name and city reach the Schedule page; and the modal opens on both tabs
+with live previews on a checkerboard (so a transparent upload reads as
+transparent rather than as a white rectangle). typecheck / lint / build clean.
+
+Not covered: the file-picker dialog itself is Electron's, so the upload path was
+exercised by seeding the row and files directly rather than by clicking through
+a native dialog.
+
+**Follow-up — the venue was blank in Game Info (2026-07-30).** User-defined
+stadium showed on the Schedule page and nowhere else. The cause was mounting:
+`ProgramArtProvider` sat inside `DynastyLayout`, but the game box score is a
+GLOBAL modal (`GameDetailModal`, rendered in `app.tsx` alongside the player and
+recruit modals) — outside the dynasty route, so `useProgramStadium` fell through
+to its inert fallback and returned no override.
+
+Only the STADIUM broke, which is what made it look arbitrary: artwork kept
+working in the same modal, because the art registry is a plain module and reads
+fine from anywhere — it's the React context carrying the stadium text that
+wasn't there.
+
+Fixed by hoisting the provider to wrap the whole shell, modal hosts included,
+and reading the dynasty from `useMatch('/dynasty/:id/*')` instead of `useParams`
+(params require being a descendant of the route that declares it; a match
+doesn't). Both matches are called unconditionally and combined afterwards — `a
+?? b` would have skipped the second hook whenever the first fired, which is the
+conditional-hook rule exactly.
+
+Also fixed while there: `getLocationDisplay` built `cityState` by interpolation,
+so a user-defined venue — which has a city but no state, because the editor asks
+for a city rather than an address — produced a dangling "East Point, " in the
+Schedule page's Location column. Filtered and joined now.
+
+Verified on the same save: the box score for a home game reads "Green Storm
+Field, East Point", away games keep their real venues, and the uploaded helmet
+renders inside the modal too.
+
+---
+
+## Player profile — five destinations (Phase 1 of the PlayerModal brief, 2026-07-31)
+
+`docs/PlayerModal.md`, phases 0 and 1.
+
+### Phase 0 — what opening a player actually costs
+
+Baseline typecheck/lint/build: clean before starting (no pre-existing failures to
+disentangle). Three effects fire on open, and the request inventory splits like
+this:
+
+**Tier 1, needed for first paint** — `getSeasons`, then `getRoster` +
+`getPlayerStats` for the resolved season, and `getSeasonOverview` for the team
+name. This is already the fast path after yesterday's perf work.
+
+**Tier 2, Overview enhancement** — `getPlayerDevelopment` (the chart), and
+`getPlayerGameLog` + `getSchedule` for the resolved season (latest game).
+
+**Tier 3, currently EAGER and shouldn't be** — two whole effects:
+
+- `loadAggregate`: `getAwards` × every season, `getRoster` + `getPlayerStats` ×
+  every season, `getTeamAwardDefinitions`, `getTeamAwardResults` × every season.
+  Only Performance/Career and Journey/Honors need any of it.
+- the career-games effect: `getSeasons` again, then `getPlayerGameLog` +
+  `getLeagueScores` + `getSchedule` for every season. Only Journey/Milestones
+  needs it.
+
+**Remaining duplicate**: `getSeasons` is called by both effects. Cheap (5 ms) but
+it's the same call twice and belongs in the core resolver Phase 7 will build.
+
+Deferring Tier 3 is Phase 7's job; Phase 1 deliberately didn't touch loading, so
+the shell change and the data change stay separately reviewable.
+
+### Phase 1 — the shell
+
+Ten destinations became five: **Overview · Performance · Ratings · Journey ·
+Cards**. The old set wasn't ten answers — Stats / Career / Game Log were all
+"how is he performing", and Awards / Media / Notes / History were all "what has
+happened to him". Ten tabs made the user do the consolidating.
+
+Modes within a destination use the shared `SegmentedControl`, not a second
+glider: Performance gets `This Season | Career | Games`, Journey gets
+`All | Milestones | Honors | Media | Notes`. Mode is local state — a reading
+preference for the current visit, with no claim from Prev/Next or any other
+surface.
+
+Overview's jump links now carry a mode with them (`goToPerformance('games')`
+rather than `setTab('gamelog')`), because "Full stats" and "Game log" land in the
+same destination and would otherwise both dump the user on whatever mode was open
+last.
+
+**One thing fixed beyond the brief**, because verification tripped over it: the
+primary nav had no programmatic active state at all — the lit glider segment was
+the only signal, which is a visual-only answer that no screen reader could read.
+Added `aria-current`.
+
+**Best Game now needs two games.** It was in the old Game Log tab unconditionally;
+with one game played it's not a comparative best, it's just the game wearing a
+superlative.
+
+Verified in the running app: five destinations present, all eight old tab labels
+gone, both mode switches render their content, and the selected destination
+survives a Prev/Next player change. typecheck / lint / build clean.
+
+**Deferred to later phases:** Overview is still the old tile composition (Phase
+2), Ratings still wraps the raw attributes grid (Phase 4), Journey stacks its
+existing sections rather than merging them into one sorted timeline (Phase 5),
+and all Tier-3 loading is still eager (Phase 7).
+
+### Phase 2 — Overview rebuilt around hierarchy (2026-07-31)
+
+The brief's layout, implemented exactly:
+
+```
+Player profile   |  Development
+Season snapshot  |  Player DNA
+Latest journey event
+```
+
+**What it replaced:** six `BioTile` boxes stacked above three `OverviewCard`
+boxes above the development chart — eleven bordered rectangles at the same
+visual weight. That's a wall, not a hierarchy. Modules now carry structure in a
+heading and a hairline (`SurfaceCard` + the app's section rhythm), and each owns
+exactly one question. `BioTile` and `OverviewCard` are deleted, not left behind.
+
+**One owner per field.** The hero was repeating the archetype, development trait,
+height and weight that Overview's Player Profile also listed. The hero now keeps
+only the six identity essentials — number, team, position, class, name, overall —
+and Player Profile owns the supporting bio.
+
+**Hero tightened**: 390px → **282px**, and the nav row moved from ~530px to
+394px below the dialog top. Padding drops one step and `PlayerPortrait` gained a
+`largeMaxHeight` prop so the hero could shorten the portrait WITHOUT losing the
+full-body `object-contain` composition — dropping to a `size` step would have
+cropped the cinematic shot into a headshot.
+
+**Player DNA** is new: strength, weakness, develop-next, from
+`player-profile/playerRatingRelevance.ts` — one typed position→rating map that
+Phase 4's Ratings destination will share rather than duplicate. It returns nulls
+rather than guesses: a historical player has no live ratings (the save state is
+gone) and gets an honest sentence, not synthetic analysis. Its ratings read is
+Tier 2 — fired inside the module, gating nothing, so the hero and the other four
+modules are on screen before it resolves.
+
+Verified on a real save: all five modules present, DNA reading `BSK 95 / TUP 77 /
+TUP` for a scrambling QB, no duplicated bio, whole Overview visible without
+scrolling. typecheck / lint / build clean.
+
+**Still open:** Phase 3 (Performance is composed but not re-ordered around
+progressive disclosure), Phase 4 (Ratings is still the raw grid — the DNA
+utility is ready for it), Phase 5 (Journey stacks its sections under filters
+instead of one merged timeline), Phase 7 (Tier-3 loading still eager).
+
+### Phase 3 — Performance ordered by how fast each part answers the question (2026-07-31)
+
+`This Season` now reads: **headline numbers → recent form → full season line →
+game log**. Each step answers "how is he playing" more slowly and more completely
+than the one above it, which is the progressive disclosure the brief asked for —
+previously it opened straight into a full stat table and a log.
+
+**Recent form** is new: the last five results as chips with each game's line. It
+only renders with **two or more** results, for the same reason Best Game does —
+one game isn't a trend, and the table two inches below already says what
+happened.
+
+**The game log became an index.** Rows are now keyboard-focusable buttons that
+open the box score through the existing `GameDetailModal` rather than dead-ending.
+The brief explicitly preferred this over building another navigation level inside
+the profile, and it reuses a modal the app already has. Verified the layering:
+clicking a row opens the box score above the profile, and Escape closes the box
+score first, leaving the profile open — the Phase 8 requirement, met early
+because this is the change that could have broken it.
+
+Career is unchanged and deliberately so: career totals plus the season-by-season
+table already emphasise comparison across time, and the brief's warning was
+against re-showing the This Season tile grid under a new heading — which it
+doesn't.
+
+typecheck / lint / build clean; verified in the running app.
+
+### Phase 4 — Ratings, and part of Phase 7 (2026-07-31)
+
+**Ratings** replaced Attributes. It was ~50 identical bordered boxes in schema
+order, which makes the reader do the evaluating. It now leads with **Player DNA**
+(strength, weakness, develop-next, and OVR change when more than one season is
+tracked), then the two rating groups that decide THIS position, with the
+remaining four behind a **View all ratings** disclosure. Group order comes from
+`orderedRatingSections` in the same `playerRatingRelevance` utility Overview's
+DNA module uses — one position→relevance judgement, not two that drift. Labels,
+abbreviations and keys still come only from `RATING_SECTIONS`.
+
+**Phase 7, partially.** The career-games effect — `getSeasons` plus
+`getPlayerGameLog` + `getLeagueScores` + `getSchedule` for EVERY season — no
+longer runs on modal open. It's gated on Journey having been opened, and the gate
+latches, so returning to Journey doesn't repeat the work. Verified both
+directions: Overview open no longer triggers it, and Journey still renders its
+8 milestones and honors afterwards.
+
+**The all-seasons aggregate is still eager, deliberately.** Gating it the same way
+does not work from inside the effect that owns it: the gate would have to join
+that effect's dependency array, and that effect is the one that resolves the
+player — so every tab change would refetch the roster and re-resolve the player
+underneath the user. Doing it properly means lifting it into its own keyed hook,
+which is the data-layer extraction Phase 7 describes and is too large to bolt on
+to the existing effect. Left explicitly, with the reasoning in the code.
+
+typecheck / lint / build clean.
+
+### Phase 5 — Journey as one timeline (2026-07-31)
+
+`playerJourneyEvents.ts` holds the canonical model and the merge. Milestones,
+national awards, honor tiers, weekly honors and team awards become one
+`PlayerJourneyEvent[]`, sorted once: season desc → week desc → a fixed kind
+weight → the stable id. The final tiebreak matters — without it two awards from
+the same season swap places between renders depending on array order, and a
+timeline that reshuffles when you click a filter reads as broken. Verified by
+asserting that entering All, leaving, and re-entering produces byte-identical
+text.
+
+`JourneyTimeline` replaced `HistoryTab` + `HonorsSection` + `TeamAwardsWonSection`
+stacked together. Those three each sorted themselves, so a season's award could
+never sit next to the milestones that earned it; the user was reading three lists
+and interleaving them by eye.
+
+**A bug the filter test caught.** `buildTimeline` had itself been merging honors
+and team awards — it WAS the old History tab's whole timeline — so feeding its
+output in as "milestones" merged honors twice, and the Milestones filter (which
+selects on `kind === 'milestone'`) showed Player of the Week. `buildTimeline` is
+now what its name says: the player's own career events. Journey adds honors on
+top, typed as honors, with their week numbers intact — which is also how weekly
+honors now sort into the right place within a season, something the old stacked
+version couldn't do at all.
+
+Media and Notes keep `PlayerMediaTab` / `PlayerNotesTab` under their own filters
+rather than being folded into the merged stream: they own their fetches and their
+editing, and the brief is explicit about reusing them rather than duplicating
+gallery or note behaviour. The consequence is that `All` is milestones + honors,
+not literally everything — see the open items below.
+
+Verified: All interleaves both kinds, Milestones shows no honors, Honors shows no
+milestones, Media and Notes still render, and the sort is deterministic across
+filter changes. typecheck / lint / build clean.
+
+### Review pass — Showcase, glider submenus, Overview rules (2026-07-31)
+
+Four changes from the user's review of the refactored modal.
+
+**Cards + Media became Showcase.** Both are things the USER made about this
+player — cards they built, photos they tagged — and splitting them put "my stuff
+about him" in two destinations. Journey drops its Media filter and keeps
+`All | Milestones | Honors | Notes`; Media now lives beside Cards.
+
+**Showcase uses the app's ToggleSwitch, not a mode nav**, because it is a PAIR.
+A switch is for two states, a nav is for a set — and the switch carries the gold
+team logo as its knob, so it reads as the same control the Roster ⇄ Transfers
+row uses one layer up.
+
+**Submenus now speak the navigation language.** Performance and Journey were
+`SegmentedControl` — a filled box with a light active pill — which made the
+submenu look like a component borrowed from elsewhere sitting under a glider nav.
+Both now use `GliderNav` at `emphasis="quiet"` with smaller padding: same device,
+quieter voice, so hierarchy still reads. One `ModeNav` helper, so the two can't
+diverge.
+
+**Overview is separated by rules, not gaps.** A vertical hairline down the middle
+of the 2×2 and horizontals between the rows, in `--section-divider` — the app's
+own line, not a new colour. The modules dropped `SurfaceCard`: cards would have
+drawn four full outlines on top of the rules, which is two systems saying the
+same thing. `divide-*` doesn't apply to grid tracks, so each cell carries its own
+edge (left column a right rule, top row a bottom rule) with padding inside the
+line to keep the columns off it.
+
+Verified: nav reads Overview · Performance · Ratings · Journey · Showcase; the
+Overview cells measure 1px rules on both axes; Journey's submenu renders as a
+quiet glider with Media gone; Showcase exposes a real `role="switch"` and
+flipping it swaps Cards for Media. typecheck / lint / build clean.
+
+### Closing items (2026-07-31)
+
+**Latest journey event** stopped showing the season marker. It was picking
+`timelineEvents[0]` — newest, but "2026 Season · Senior · QB · 92 OVR" says
+nothing the hero hasn't. It now takes the first event off the merged model that
+isn't a plain season row, so it reads "National Offensive Player of the Week ·
+Week 2". Only possible because Phase 5 built the canonical list; before that
+there was no single sorted stream to take the first meaningful item from.
+
+**Showcase gained its heading and count** — "Cards / 3 cards", or "None yet",
+rendered only once the collection has loaded so a count never flickers in from
+nothing. Overview's local `OverviewJourneyEvent` type was deleted in favour of
+the canonical `PlayerJourneyEvent`; two shapes for one concept was exactly what
+the model was built to stop.
+
+**Light mode checked.** Rules resolve to `rgba(15, 23, 42, 0.12)` — the light
+`--section-divider`, not a hardcoded colour — the hero surface stays the app's
+own, and the whole Overview reads correctly. The glider is deliberately quieter
+in light than the gold-and-bloom dark treatment; that's the established rule, not
+a regression.
+
+**Still open, and honestly:** the all-seasons aggregate is still eager (Phase 7's
+last piece — it needs its own keyed hook, and the effect it currently lives in is
+the one that resolves the player, so it isn't a small edit). The Phase 8 QA
+matrix is partial: layering, keyboard, focus, filters, determinism and light mode
+are verified; team-theme variety, responsive widths, and the data-state grid
+(historical player, league-team player, slow/rejected IPC) are not.
+
+### Toggle fixes from review (2026-07-31)
+
+**Knob size.** I'd passed `!h-4 !w-4` on the Showcase switch's team logo — 16px
+in a slot built for 35. The knob is deliberately TALLER than its 24px track so it
+overhangs top and bottom; shrinking it removed the overhang and made this read as
+a different, smaller control than the Roster ⇄ Transfers switch one layer up.
+Now `h-[35px] w-[35px]`, matching `PairLayout` exactly. Measured against the real
+reference on the page behind the modal: both 35×35.
+
+**The modal no longer jumps on toggle.** Cards is a grid of ~360px tiles and
+Media's empty state is three lines, so flipping the switch collapsed the modal by
+a few hundred pixels — and threw the switch itself up the screen, out from under
+the cursor that had just used it. The Showcase content sits on a `min-h-[26rem]`
+FLOOR rather than a fixed height: the shorter side is held up, the taller side
+still grows past it. Measured after: 949px on Cards vs 936px on Media, a 13px
+delta, and the switch moves 6px.
+
+Not zero, and worth saying why: the residual comes from the two sides' own
+headings differing slightly in height. A fixed height would zero it and cost dead
+space on every short state, which is the worse trade.
+
+### Phase 7 complete — the aggregate loads on demand (2026-07-31)
+
+The last eager Tier-3 load is gone. `loadAggregate` lifted out of the main effect
+into a memoised loader with two guarantees that make it safe to call from several
+places at once:
+
+- **Deduped.** The in-flight promise is cached against a `(dynasty, player)` key,
+  so Performance asking, Journey asking, and the player-resolution fallback
+  asking at the same moment all await ONE request. A revisit is free.
+- **Key-checked, not cancel-flagged.** A response arriving after the user has
+  moved on is dropped by comparing the key it started under. The failure this
+  replaces is an older player's awards landing on the newly selected one — the
+  exact hazard of moving a fetch out of an effect whose cleanup used to cancel it.
+
+The gate latches in state rather than reading `tab` directly, so leaving a
+destination doesn't throw the data away, and it resets on player change.
+
+**Why this needed the extraction rather than a flag.** Gating it inside the main
+effect would have put the gate in that effect's dependency array — and that
+effect is the one that RESOLVES THE PLAYER, so every tab change would have
+refetched the roster and re-resolved the player underneath the user. The
+`loadAggregate` reference is deliberately excluded from that array with a note,
+because it's memoised on `(dynastyId, playerId)` which are already listed.
+
+Verified end to end: click-to-hero **202 ms**; Overview renders complete
+(profile + DNA) without the aggregate at all; Journey's honors and Performance's
+career table both populate on first open; revisiting is instant with content
+retained; and a deliberate rapid double Next-player switch left the correct
+player in the hero with Journey rendering cleanly after — no stale crossover.
+
+That closes Phase 7. Remaining from the brief: the Phase 8 QA matrix
+(team-theme variety, responsive widths, historical/league-team/slow-IPC data
+states) and the reconstructed `StatGroup` type worth a second look.
+
+### Phase 8 QA — narrow width and empty data states (2026-07-31)
+
+**At 1024px** (the app's enforced minimum): the five-destination nav fits on one
+line with no wrap and no glider jitter, Performance's mode glider fits under it,
+and the Overview grid keeps both rules with 1px on each axis. No dangling
+vertical rule, no doubled borders.
+
+Worth noting the grid stays TWO columns at 1024 because `lg:` is a viewport
+query, not a container one — the modal is narrower than the viewport, so the
+columns are ~450px each. It reads fine at that width; if the modal ever gets
+narrower than about 800px the rules would want a container query rather than a
+breakpoint.
+
+**A player with nothing** (a freshman kicker, no games, no stats, no honors):
+Overview renders in full with an honest "No stats recorded yet this season";
+Performance shows no Recent Form (it needs two results) and no Best Game (it
+needs two games), leaving just the game log's empty state. Every gate I added
+held on the side that matters — the side where showing the thing would have been
+a lie.
+
+**Kicker ratings degrade honestly.** `POSITION_RATINGS` lists `kpw`/`kac` for K
+and P, and those keys aren't in `RATING_SECTIONS` on this schema. `relevantRatings`
+filters to keys that actually exist rather than trusting the map, so a kicker
+gets a DNA built from what he really has instead of a confident 0 for a rating
+the save never stored — which is exactly why that filter is there.
+
+**Observed, NOT caused by this work and worth a look:** the teammate-rail
+("Roster") button in the modal header is absent at 1024px, where Prev/Next and
+Close remain. That's in `PlayerProfileModal`'s header, untouched by this
+refactor, but the brief's QA asks that the rail stay usable at narrow widths —
+so it needs confirming as intentional rather than a casualty of the header
+running out of room.
+
+**Still not covered:** team-theme variety (very bright / very dark primaries),
+a genuinely historical multi-season player, a league-team player with limited
+data, and slow or rejected IPC.
+
+### QA corrections (2026-07-31)
+
+**The ratings "hang" was NOT a bug.** Confirmed by the user in the real app:
+Player DNA, the position-ordered grid and the "View all ratings (4 more groups)"
+disclosure all render correctly, with the teammate rail open or closed. The
+symptom was an artifact of my scratch verification environment. The `.catch`
+added to both ratings reads stays — a rejected save read still ought to land on
+the honest empty state rather than a permanent spinner — but it is a defensive
+addition, not a fix for anything that was broken.
+
+**A single save file can never produce a multi-season archive.** `DYNASTY-TESTER4`
+imports as 2028 full + 2027 and 2026 HISTORY-ONLY, and no player has a
+development arc longer than one season. This is not a property of that save: a
+save carries only the CURRENT season's roster, so any single import yields one
+full season plus history-only entries for prior years (the same finding the
+past-season-backfill research reached from the other direction).
+
+To exercise the multi-season paths — the development curve, the OVR-change
+readouts in Player DNA and Ratings, and a genuinely historical player — the
+archive needs SUCCESSIVE saves imported into the same dynasty. The repo has the
+material: `Dynasty Save Test/Full Season Saves/DYNASTY-AUBURNW16` (season 1) and
+`DYNASTY-AUBURNW31SEASON2W0` (season 2) are the same dynasty a year apart, so
+importing both into one user-data dir builds a real two-season archive. That is
+the outstanding QA, and it needs ~10 minutes of import before any of it can be
+looked at.
+
+**Teammate rail vanishing at 1024px is intentional** (confirmed by the user), so
+that observation is closed rather than outstanding.
+
+### Closing note — the philosophy this refactor established (2026-07-31)
+
+User direction on closing: **fluidity and efficient navigation are the standing
+approach**, not a one-off brief. Recorded to memory as
+`feedback_fluid_navigation`.
+
+The principle worth carrying forward is the test that drove every decision here:
+**count the QUESTIONS, not the data sources.** Team Hub had 11 tabs and the
+player modal had 10, and neither was 11 or 10 answers — Stats / Career / Game Log
+were one question asked three ways, and Awards / Media / Notes / History were
+another. A surface with more destinations than it has questions is making the
+user do the consolidating.
+
+Everything else followed from that: modes live inside a destination rather than
+beside it; submenus speak the navigation language (glider, quiet) with a
+ToggleSwitch reserved for genuine pairs; one owner per field; merged views need
+one deterministic sort rather than sections that each sort themselves; sections
+divide with rules, not boxes; content that swaps under a control needs a height
+floor so the control doesn't move out from under the cursor; and nothing loads
+that isn't on screen.
+
+**Final state:** all eight phases of `docs/PlayerModal.md` implemented.
+typecheck / lint / build clean. Two items carried forward, both documented above:
+a two-season archive still needs building from successive Auburn saves before the
+multi-season paths can be exercised, and the `StatGroup` union was reconstructed
+from its call sites rather than recovered.

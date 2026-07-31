@@ -1,8 +1,9 @@
-import { app, BrowserWindow, Menu, dialog, screen, protocol } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, screen, protocol } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { IPC } from '../shared/ipcChannels';
 import { getAssetsRoot } from './assetRoot';
 import { migrateLegacyUserData } from './userDataMigration';
 import { registerFilesystemHandlers } from './ipc/filesystem';
@@ -13,6 +14,7 @@ import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
 import { registerCardHandlers } from './ipc/card';
+import { registerProgramHandlers } from './ipc/program';
 import { registerNotesHandlers } from './ipc/notes';
 import { registerUpdateHandlers } from './ipc/update';
 import {
@@ -47,6 +49,23 @@ if (process.env.CFB_USER_DATA_DIR) {
   app.setPath('userData', process.env.CFB_USER_DATA_DIR);
 }
 
+/**
+ * Keep the window compositing even when Windows thinks it's hidden.
+ *
+ * Windows' native occlusion detection tells Chromium a covered window can stop
+ * producing frames — sensible for power, ruinous for `capturePage`, which reads
+ * whatever the compositor last submitted. Measured: with the window behind
+ * another, three captures taken with a visible DOM change between each came
+ * back BYTE-IDENTICAL, every one of them reporting success. The card export
+ * rasterises the page, so a user who alt-tabs during a twenty-card export would
+ * get twenty copies of card one and no indication anything went wrong.
+ *
+ * Must be set before app ready. Costs a little idle GPU when the window is
+ * fully covered, which is the right trade for exports that are actually the
+ * cards you asked for.
+ */
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+
 // The rename to DynastyOS changes the folder Electron derives from the app
 // name, so a user's entire archive would otherwise be stranded under the old
 // one while the app reported an empty workspace. Runs here, before the single
@@ -76,6 +95,13 @@ const DEFAULT_WIDTH = 1400;
 const DEFAULT_HEIGHT = 900;
 const MIN_WIDTH = 1024;
 const MIN_HEIGHT = 700;
+/**
+ * Height of the Windows Control Overlay strip. The renderer reserves exactly
+ * this much space above the masthead (`--titlebar-height` in globals.css) so
+ * the buttons float over the page background rather than landing on the card —
+ * keep the two in step if either changes.
+ */
+const TITLE_BAR_HEIGHT = 36;
 const USE_PRE_SPLASH_ONLY = process.env.USE_PRE_SPLASH_ONLY === '1';
 
 /**
@@ -216,6 +242,17 @@ function buildAppMenu(): Menu {
   return Menu.buildFromTemplate(template);
 }
 
+/**
+ * Overlay colours per appearance. `color` is the strip behind the buttons and
+ * matches the page ground exactly (globals.css: pure black in dark, the light
+ * theme's top gradient stop in light) so the strip is invisible; `symbolColor`
+ * is the glyph, which has to invert with it or the close button vanishes.
+ */
+const TITLE_BAR_THEMES = {
+  dark: { color: '#000000', symbolColor: '#d2d2d5' },
+  light: { color: '#f3f4f6', symbolColor: '#4d4d52' },
+} as const;
+
 function createWindow(): BrowserWindow {
   const state = sanitizeWindowState(loadWindowState());
 
@@ -227,7 +264,34 @@ function createWindow(): BrowserWindow {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
-    autoHideMenuBar: false,
+    /*
+      Frameless with the Windows Control Overlay — the Figma/VS Code treatment,
+      not the Slack/Discord one. Windows still DRAWS the minimise/maximise/close
+      buttons, just as a transparent overlay on our own page, which is why Snap
+      Layouts (hover-maximise), correct hit targets, tooltips and accessibility
+      all keep working for free. Drawing our own buttons would have meant owning
+      every one of those forever.
+
+      `color` is the strip behind the buttons: it's set to the page background
+      of the CURRENT theme so the strip disappears into the page, and it's
+      re-set from the renderer whenever light/dark flips (see
+      IPC.window.setTitleBarTheme). Starting value is the dark ground, matching
+      the app's default appearance.
+    */
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { ...TITLE_BAR_THEMES.dark, height: TITLE_BAR_HEIGHT },
+    /*
+      Without this the window has no opaque backing, and on Windows 11 a
+      frameless window composites the SYSTEM BACKDROP wherever the page hasn't
+      painted a pixel. Measured: the top 40px band read rgb(10,10,11) and the
+      bottom edge rgb(13,13,13) — two different off-blacks, which is the tell
+      that it was the desktop showing through rather than any CSS. No amount of
+      making surfaces black in the renderer could reach it.
+    */
+    backgroundColor: '#000000',
+    // The menu bar is only ever built in dev (packaged releases pass null), and
+    // a hidden title bar has nowhere to draw it — Alt still reveals it.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -260,6 +324,26 @@ function createWindow(): BrowserWindow {
   }
 
   win.on('close', () => saveWindowState(win));
+
+  /*
+    Repaint the overlay when the renderer's appearance changes. Registered per
+    window (and cleaned up with it) rather than globally, so it always targets
+    the window that sent it and can't outlive it. Wrapped because
+    setTitleBarOverlay only exists on Windows — on any other platform the whole
+    thing is a no-op rather than a crash.
+  */
+  const applyTitleBarTheme = (_event: Electron.IpcMainInvokeEvent, appearance: 'light' | 'dark') => {
+    if (win.isDestroyed() || typeof win.setTitleBarOverlay !== 'function') return;
+    try {
+      win.setTitleBarOverlay({ ...TITLE_BAR_THEMES[appearance] ?? TITLE_BAR_THEMES.dark, height: TITLE_BAR_HEIGHT });
+    } catch {
+      // Platform doesn't support the overlay — the window simply keeps its
+      // initial colours, which is cosmetic only.
+    }
+  };
+  ipcMain.handle(IPC.window.setTitleBarTheme, applyTitleBarTheme);
+  win.on('closed', () => ipcMain.removeHandler(IPC.window.setTitleBarTheme));
+
   if (process.env.SCREENSHOT_ROUTE) {
     if (process.env.SCREENSHOT_DEBUG_CONSOLE) {
       win.webContents.on('console-message', (_e, _level, message) => {
@@ -281,7 +365,15 @@ function showWhenReady(win: BrowserWindow, onShown?: () => void): void {
   });
 }
 
-/** Matches spshscr.png's native resolution exactly (868×420) — and the pre-splash HTA's own size, see scripts/pre-splash.hta — so neither ever scales/crops the image and the handoff between the two is pixel-identical. */
+/**
+ * The splash window's CSS size, matched by scripts/pre-splash.hta so the handoff
+ * between the two is pixel-identical.
+ *
+ * This is a LAYOUT size, not the artwork's pixel size — a claim this comment
+ * used to make and got wrong. The previous spshscr.png was 1736×839, i.e. a 2×
+ * asset for HiDPI displayed at 868×420; the current one is 868×420 native.
+ * Either renders correctly; a 2× source is simply sharper on a high-DPI screen.
+ */
 const SPLASH_WIDTH = 868;
 const SPLASH_HEIGHT = 420;
 /** Real startup (sql.js init + IPC registration) can finish in well under a second on a warm cache — this floor keeps the splash from just flashing on screen instead of being visible/legible. */
@@ -461,6 +553,7 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerCardHandlers();
+      registerProgramHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       try {
@@ -485,6 +578,7 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerCardHandlers();
+      registerProgramHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       // Diagnostic/screenshot runs keep no menu bar so its height doesn't shift
@@ -530,10 +624,30 @@ app
                 await win.webContents.executeJavaScript(
                   `(() => {
                     const el = document.querySelector(${JSON.stringify(selector)});
-                    if (!el) return;
-                    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-                    setter.call(el, ${JSON.stringify(value)});
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (!el) return 'not-found';
+                    // Native <select>: set the value the way React sees it.
+                    if (el instanceof HTMLSelectElement) {
+                      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+                      setter.call(el, ${JSON.stringify(value)});
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      return 'select';
+                    }
+                    // The app's own dropdown (ui/Select.tsx) has no value to set
+                    // — its options only exist while the panel is open, and the
+                    // panel is portalled to <body>. So drive it the way a user
+                    // does: open it, then click the option. Returns 'pending'
+                    // because the click happens on the next tick below.
+                    el.click();
+                    return 'listbox';
+                  })();`,
+                );
+                // Second step for the custom dropdown — the panel has to mount
+                // (and animate in) before its options can be found.
+                await new Promise((r) => setTimeout(r, 350));
+                await win.webContents.executeJavaScript(
+                  `(() => {
+                    const option = document.querySelector('[data-select-option=' + JSON.stringify(${JSON.stringify(value)}) + ']');
+                    if (option) option.click();
                   })();`,
                 );
                 await new Promise((r) => setTimeout(r, 900));
@@ -605,6 +719,7 @@ app
       registerEditorHandlers();
       registerMediaHandlers();
       registerCardHandlers();
+      registerProgramHandlers();
       registerNotesHandlers();
       registerUpdateHandlers();
       // Native menu bar (File/Edit/View/Window) — reload, DevTools, zoom, and

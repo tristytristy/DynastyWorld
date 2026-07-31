@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { InfoHint } from '../../components/ui/InfoHint';
 import { ConferenceMark } from '../../components/common/ConferenceMark';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
+import { Select } from '../../components/ui/Select';
 import { StatTile } from '../../components/ui/StatTile';
 import { PlayerNameButton, TeamLine } from './AwardsShared';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -98,56 +99,35 @@ function AllTeamsContent({ dynastyId, seasonId, awards }: { dynastyId: string; s
 
       <SurfaceCard className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200/80 p-5 dark:border-white/5">
-          <select
+          <Select
             value={phase}
-            onChange={(event) => {
-              const next = event.target.value as HonorPhase;
+            onChange={(next) => {
               setPhase(next);
               if (next === 'preseason' && tier === 'freshman') setTier('first');
             }}
-            className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-          >
-            {PHASE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
+            ariaLabel="Honor phase"
+            options={PHASE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+          />
+          <Select
             value={kind}
-            onChange={(event) => setKind(event.target.value as HonorKind)}
-            className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-          >
-            {KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
+            onChange={setKind}
+            ariaLabel="Honor kind"
+            options={KIND_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+          />
+          <Select
             value={effectiveTier}
-            onChange={(event) => setTier(event.target.value as HonorTier)}
-            className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-          >
-            {tierOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={setTier}
+            ariaLabel="Honor tier"
+            options={tierOptions.map((option) => ({ value: option.value, label: option.label }))}
+          />
           {kind === 'all-conference' && (
             <>
-              <select
+              <Select
                 value={conference}
-                onChange={(event) => setConference(event.target.value)}
-                className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-              >
-                {awards.conferences.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                onChange={setConference}
+                ariaLabel="Conference"
+                options={awards.conferences.map((name) => ({ value: name, label: name }))}
+              />
               {conference && (
                 <ConferenceMark conferenceName={conference} background={appearance} context="picker" alt={conference} />
               )}

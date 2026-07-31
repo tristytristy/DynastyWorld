@@ -9,6 +9,10 @@ import schemaV8 from './schema_v8_season_coach.sql';
 import schemaV9 from './schema_v9_season_phase.sql';
 import schemaV10 from './schema_v10_media_order.sql';
 import schemaV11 from './schema_v11_game_context.sql';
+import schemaV12 from './schema_v12_player_cards.sql';
+import schemaV13 from './schema_v13_card_layers.sql';
+import schemaV14 from './schema_v14_media_framing.sql';
+import schemaV15 from './schema_v15_program_overrides.sql';
 
 export interface Migration {
   version: number;
@@ -32,4 +36,8 @@ export const MIGRATIONS: Migration[] = [
   { version: 9, name: 'season_phase', sql: schemaV9 },
   { version: 10, name: 'media_order', sql: schemaV10 },
   { version: 11, name: 'game_context', sql: schemaV11 },
+  { version: 12, name: 'player_cards', sql: schemaV12 },
+  { version: 13, name: 'card_layers', sql: schemaV13 },
+  { version: 14, name: 'media_framing', sql: schemaV14 },
+  { version: 15, name: 'program_overrides', sql: schemaV15 },
 ];

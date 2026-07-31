@@ -1,3 +1,4 @@
+import { Select } from '../ui/Select';
 import { useEffect, useRef, useState } from 'react';
 import { useScrollLock } from '../../lib/useScrollLock';
 import {
@@ -22,6 +23,8 @@ import {
 import { PortraitPicker } from './PortraitPicker';
 import { Button } from '../ui/Button';
 import type { PlayerEditFields, RecruitEditFields } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -76,14 +79,55 @@ function EnumSelect({
 }) {
   const known = options.some((o) => o.value === value);
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
-      {!known && <option value={value}>{value || '—'}</option>}
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <Select
+      value={value}
+      onChange={onChange}
+      ariaLabel="Value"
+      className="w-full"
+      options={[
+        ...(known ? [] : [{ value, label: value || '—' }]),
+        ...options.map((o) => ({ value: o.value, label: o.label })),
+      ]}
+    />
+  );
+}
+
+/** The save stores these as real booleans; the dropdown trades in strings, so the conversion lives in one place rather than at four call sites. */
+function BoolSelect({ value, onChange, label }: { value: boolean; onChange: (value: boolean) => void; label: string }) {
+  return (
+    <Select
+      value={String(value)}
+      onChange={(next) => onChange(next === 'true')}
+      ariaLabel={label}
+      className="w-full"
+      options={[
+        { value: 'true', label: 'True' },
+        { value: 'false', label: 'False' },
+      ]}
+    />
+  );
+}
+
+/** A plain list of strings — the ability/tier enums, which have no separate label. */
+function StringSelect({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly string[];
+  label: string;
+}) {
+  return (
+    <Select
+      value={value}
+      onChange={onChange}
+      ariaLabel={label}
+      className="w-full"
+      options={options.map((o) => ({ value: o, label: o }))}
+    />
   );
 }
 
@@ -106,22 +150,22 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
           <input type="text" value={draft.lastName} onChange={(e) => update({ lastName: e.target.value })} className={INPUT_CLASS} />
         </Field>
         <Field label="Position">
-          <select value={draft.position} onChange={(e) => update({ position: e.target.value })} className={INPUT_CLASS}>
-            {POSITION_ORDER.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={draft.position}
+            onChange={(position) => update({ position })}
+            ariaLabel="Position"
+            className="w-full"
+            options={POSITION_ORDER.map((p) => ({ value: p, label: p }))}
+          />
         </Field>
         <Field label="School Year">
-          <select value={draft.schoolYear} onChange={(e) => update({ schoolYear: e.target.value })} className={INPUT_CLASS}>
-            {['Freshman', 'Sophomore', 'Junior', 'Senior'].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={draft.schoolYear}
+            onChange={(schoolYear) => update({ schoolYear })}
+            ariaLabel="School year"
+            className="w-full"
+            options={['Freshman', 'Sophomore', 'Junior', 'Senior'].map((y) => ({ value: y, label: y }))}
+          />
         </Field>
         <Field label="Redshirt Status">
           <input type="text" value={draft.redshirtStatus} onChange={(e) => update({ redshirtStatus: e.target.value })} className={INPUT_CLASS} />
@@ -160,21 +204,21 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
           <EnumSelect value={draft.personality} options={PERSONALITY_OPTIONS} onChange={(v) => update({ personality: v })} />
         </Field>
         <Field label="Scheme">
-          <select value={draft.scheme} onChange={(e) => update({ scheme: e.target.value })} className={INPUT_CLASS}>
-            {!SCHEME_OFFENSE_OPTIONS.concat(SCHEME_DEFENSE_OPTIONS).some((o) => o.value === draft.scheme) && (
-              <option value={draft.scheme}>{draft.scheme || '—'}</option>
-            )}
-            <optgroup label="Offense">
-              {SCHEME_OFFENSE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Defense">
-              {SCHEME_DEFENSE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </optgroup>
-          </select>
+          {/* The two <optgroup>s become suffixes — the list is flat now, and an
+              unlabelled mix of offensive and defensive schemes would be a puzzle. */}
+          <Select
+            value={draft.scheme}
+            onChange={(scheme) => update({ scheme })}
+            ariaLabel="Scheme"
+            className="w-full"
+            options={[
+              ...(SCHEME_OFFENSE_OPTIONS.concat(SCHEME_DEFENSE_OPTIONS).some((o) => o.value === draft.scheme)
+                ? []
+                : [{ value: draft.scheme, label: draft.scheme || '—' }]),
+              ...SCHEME_OFFENSE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} · Offense` })),
+              ...SCHEME_DEFENSE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} · Defense` })),
+            ]}
+          />
         </Field>
         <Field label="Role">
           <EnumSelect value={draft.role} options={ROLE_OPTIONS} onChange={(v) => update({ role: v })} />
@@ -216,30 +260,21 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
           />
         </Field>
         <Field label="Impact Player">
-          <select
-            value={String(draft.isImpactPlayer)}
-            onChange={(e) => update({ isImpactPlayer: e.target.value === 'true' })}
-            className={INPUT_CLASS}
-          >
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
+          <BoolSelect
+            value={draft.isImpactPlayer}
+            onChange={(isImpactPlayer) => update({ isImpactPlayer })}
+            label="Impact player"
+          />
         </Field>
         <Field label="Created">
-          <select value={String(draft.isCreated)} onChange={(e) => update({ isCreated: e.target.value === 'true' })} className={INPUT_CLASS}>
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
+          <BoolSelect value={draft.isCreated} onChange={(isCreated) => update({ isCreated })} label="Created" />
         </Field>
         <Field label="User Controlled">
-          <select
-            value={String(draft.isUserControlled)}
-            onChange={(e) => update({ isUserControlled: e.target.value === 'true' })}
-            className={INPUT_CLASS}
-          >
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
+          <BoolSelect
+            value={draft.isUserControlled}
+            onChange={(isUserControlled) => update({ isUserControlled })}
+            label="User controlled"
+          />
         </Field>
       </div>
     </div>
@@ -299,30 +334,20 @@ function MentalAbilitiesTab({ draft, update }: { draft: PlayerEditFields; update
         {MENTAL_ABILITY_FIELDS.map((f, i) => (
           <div key={f.abilityKey} className="grid grid-cols-2 gap-2">
             <Field label={`Mental Ability ${i + 1}`}>
-              <select
+              <StringSelect
                 value={draft.mentalAbilities[f.abilityKey] ?? 'None'}
-                onChange={(e) => update({ mentalAbilities: { ...draft.mentalAbilities, [f.abilityKey]: e.target.value } })}
-                className={INPUT_CLASS}
-              >
-                {MENTAL_ABILITY_OPTIONS.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => update({ mentalAbilities: { ...draft.mentalAbilities, [f.abilityKey]: next } })}
+                options={MENTAL_ABILITY_OPTIONS}
+                label={`Mental ability ${i + 1}`}
+              />
             </Field>
             <Field label={`Rank ${i + 1}`}>
-              <select
+              <StringSelect
                 value={draft.mentalAbilities[f.rankKey] ?? 'None'}
-                onChange={(e) => update({ mentalAbilities: { ...draft.mentalAbilities, [f.rankKey]: e.target.value } })}
-                className={INPUT_CLASS}
-              >
-                {ABILITY_TIER_OPTIONS.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => update({ mentalAbilities: { ...draft.mentalAbilities, [f.rankKey]: next } })}
+                options={ABILITY_TIER_OPTIONS}
+                label={`Mental ability ${i + 1} rank`}
+              />
             </Field>
           </div>
         ))}
@@ -341,17 +366,12 @@ function PhysicalAbilitiesTab({ draft, update }: { draft: PlayerEditFields; upda
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {PHYSICAL_ABILITY_FIELDS.map((f) => (
           <Field key={f.key} label={f.label}>
-            <select
+            <StringSelect
               value={draft.physicalAbilities[f.key] ?? 'None'}
-              onChange={(e) => update({ physicalAbilities: { ...draft.physicalAbilities, [f.key]: e.target.value } })}
-              className={INPUT_CLASS}
-            >
-              {ABILITY_TIER_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => update({ physicalAbilities: { ...draft.physicalAbilities, [f.key]: next } })}
+              options={ABILITY_TIER_OPTIONS}
+              label={f.label}
+            />
           </Field>
         ))}
       </div>
@@ -376,22 +396,22 @@ function RecruitingInfoTab({
           <input type="text" value={draft.hometown} onChange={(e) => update({ hometown: e.target.value })} className={INPUT_CLASS} />
         </Field>
         <Field label="Star Rating">
-          <select value={draft.stars} onChange={(e) => update({ stars: Number(e.target.value) })} className={INPUT_CLASS}>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <option key={s} value={s}>
-                {s} Star{s === 1 ? '' : 's'}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={String(draft.stars)}
+            onChange={(next) => update({ stars: Number(next) })}
+            ariaLabel="Star rating"
+            className="w-full"
+            options={[1, 2, 3, 4, 5].map((s) => ({ value: String(s), label: `${s} Star${s === 1 ? '' : 's'}` }))}
+          />
         </Field>
         <Field label="Class">
-          <select value={draft.classYear} onChange={(e) => update({ classYear: e.target.value })} className={INPUT_CLASS}>
-            {CLASS_YEAR_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={draft.classYear}
+            onChange={(classYear) => update({ classYear })}
+            ariaLabel="Class"
+            className="w-full"
+            options={CLASS_YEAR_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          />
         </Field>
         <Field label="National Rank">
           <input
@@ -534,8 +554,8 @@ export function PlayerEditorModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -546,21 +566,14 @@ export function PlayerEditorModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${playerLabel}`}
-        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-[0_60px_160px_-40px_rgba(2,6,23,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden modal-panel corner-cut md:max-h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
           <div>
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Edit Player</p>
             <h3 className="text-lg font-semibold text-slate-950 dark:text-white">{playerLabel}</h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close player editor"
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Close
-          </button>
+          <ModalCloseButton label="player editor" onClick={onClose} />
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2 border-b border-slate-200/80 px-5 py-3 dark:border-white/10">
@@ -621,6 +634,6 @@ export function PlayerEditorModal({
           </div>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
+import { DEFAULT_GROUND_DARK, DEFAULT_GROUND_LIGHT } from '../../theme/themePreference';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import type { ColorMode } from '../../theme/themePreference';
 import type {
@@ -148,8 +149,8 @@ function CollapsibleSection({
   );
 }
 
-export function PreferencesMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
-  const { preference, appearance, setAppearance, setColorMode } = useTheme();
+export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?: string; icon?: React.ReactNode } = {}) {
+  const { preference, appearance, setAppearance, setColorMode, setGround } = useTheme();
   const { ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing } = useRecruitingExperience();
   const revealAll = ovr.unlockedAll && athletic.unlockedAll;
   const setRevealAll = (value: boolean) => {
@@ -281,8 +282,10 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
         className={triggerClassName ?? 'border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800'}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
+        aria-label={icon ? 'Preferences' : undefined}
+        title={icon ? 'Preferences' : undefined}
       >
-        Preferences
+        {icon ?? 'Preferences'}
       </button>
 
       <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={30} eyebrow="Experience Settings" title="Customize your workspace.">
@@ -315,6 +318,39 @@ export function PreferencesMenu({ triggerClassName }: { triggerClassName?: strin
               }
             >
               <p className={`text-xs leading-5 ${subtleTextClass}`}>Pick the base canvas for the app.</p>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Background" isDark={isDark} outerClass={sectionClass}>
+              <p className={`text-xs leading-5 ${subtleTextClass}`}>
+                The surface everything else sits on. Light and dark keep separate values — one colour can&apos;t sit
+                behind both light and dark text — so this edits whichever appearance is active.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                {/* A native colour input: it's the one control every OS already
+                    knows how to render well, and a hand-built picker here would
+                    be a lot of surface for a setting most people touch once. */}
+                <input
+                  type="color"
+                  aria-label={`${isDark ? 'Dark' : 'Light'} mode background colour`}
+                  value={isDark ? preference.groundDark : preference.groundLight}
+                  onChange={(event) => setGround(appearance, event.target.value)}
+                  className="h-9 w-14 cursor-pointer border border-slate-300/80 bg-transparent p-0.5 dark:border-slate-700"
+                />
+                <code className={`tnum text-xs ${subtleTextClass}`}>
+                  {isDark ? preference.groundDark : preference.groundLight}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setGround(appearance, isDark ? DEFAULT_GROUND_DARK : DEFAULT_GROUND_LIGHT)}
+                  className={`ml-auto border px-3 py-1.5 text-xs font-medium transition ${
+                    isDark
+                      ? 'border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'
+                      : 'border-slate-300/80 text-slate-600 hover:border-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  Reset
+                </button>
+              </div>
             </CollapsibleSection>
 
             <CollapsibleSection title="Theme Source" isDark={isDark} outerClass={sectionClass}>

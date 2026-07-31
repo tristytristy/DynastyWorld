@@ -1,3 +1,4 @@
+import { useProgramArt } from '../../data/ProgramArtProvider';
 import { useEffect, useMemo, useState } from 'react';
 import type { KeyboardEvent, SyntheticEvent } from 'react';
 import { getPlayerPortraitCandidates } from '../../lib/playerAssetMapping';
@@ -12,6 +13,7 @@ export function PlayerPortrait({
   size = 'md',
   className = '',
   large = false,
+  largeMaxHeight = 'max-h-[22rem]',
   onClick,
   teamAssetName,
   fill = false,
@@ -20,6 +22,13 @@ export function PlayerPortrait({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   large?: boolean;
+  /**
+   * How tall the `large` portrait may get. The player modal's hero tightened in
+   * Phase 2 of the profile refactor and needed a shorter portrait WITHOUT losing
+   * the full-body `object-contain` composition — cropping it to a `size` step
+   * would have turned the cinematic shot into a headshot.
+   */
+  largeMaxHeight?: string;
   /**
    * Full-bleed: the portrait (and its jersey overlay / initials fallback) fill a
    * positioned parent edge-to-edge instead of a fixed size box. Used by the
@@ -56,6 +65,8 @@ export function PlayerPortrait({
         : 'h-20 w-20';
 
   const src = candidates[candidateIndex] ?? null;
+  // `version` subscribes this to uploaded art — see ProgramArtProvider.
+  const { version: programArtVersion } = useProgramArt();
   const jerseySrc = getJerseyPath(teamAssetName);
 
   const interactiveClass = onClick
@@ -81,7 +92,7 @@ export function PlayerPortrait({
     const initialsBox = fill
       ? 'absolute inset-0 h-full w-full'
       : large
-        ? 'max-h-[22rem] max-w-full px-6 py-4'
+        ? `${largeMaxHeight} max-w-full px-6 py-4`
         : sizeClass;
     return (
       <div
@@ -98,7 +109,7 @@ export function PlayerPortrait({
   const imgClass = fill
     ? `${className} absolute inset-0 h-full w-full object-cover object-top`
     : large
-      ? `${className} max-h-[22rem] max-w-full rounded-xl ${fit} object-top`
+      ? `${className} ${largeMaxHeight} max-w-full rounded-xl ${fit} object-top`
       : `${sizeClass} ${className} shrink-0 rounded-xl ${fit} object-top`;
 
   // Rule of thirds: raise the head so the eyes land near the upper-third line
@@ -144,6 +155,7 @@ export function PlayerPortrait({
     >
       {portraitImg}
       <img
+        key={programArtVersion}
         src={jerseySrc}
         alt=""
         aria-hidden

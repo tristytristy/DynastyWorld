@@ -42,6 +42,8 @@ const api: DynastyApi = {
     getKickingStats: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getKickingStats, dynastyId, seasonId),
     getGameLog: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getGameLog, dynastyId, seasonId),
+    getPlayerGameLog: (dynastyId, playerId, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getPlayerGameLog, dynastyId, playerId, seasonId),
     getGameDetail: (dynastyId, gameId, seasonId) => ipcRenderer.invoke(IPC.db.getGameDetail, dynastyId, gameId, seasonId),
     getTeamTrophies: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getTeamTrophies, dynastyId, seasonId),
@@ -62,6 +64,8 @@ const api: DynastyApi = {
     getNationalRecruits: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getNationalRecruits, dynastyId, seasonId),
     getNcaaRecords: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getNcaaRecords, dynastyId, seasonId),
     getDynastyTrends: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTrends, dynastyId),
+    getSeasonAnalytics: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getSeasonAnalytics, dynastyId, seasonId),
+    getProgramArc: (dynastyId) => ipcRenderer.invoke(IPC.db.getProgramArc, dynastyId),
     getTransfers: (dynastyId, focusTeamName) => ipcRenderer.invoke(IPC.db.getTransfers, dynastyId, focusTeamName),
     getDepartures: (dynastyId, teamIndex, seasonId) => ipcRenderer.invoke(IPC.db.getDepartures, dynastyId, teamIndex, seasonId),
     globalSearch: (dynastyId, query, seasonId) => ipcRenderer.invoke(IPC.db.globalSearch, dynastyId, query, seasonId),
@@ -101,6 +105,9 @@ const api: DynastyApi = {
     historyToHtml: (dynastyId) => ipcRenderer.invoke(IPC.export.historyToHtml, dynastyId),
     seasonYearbookToHtml: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.export.seasonYearbookToHtml, dynastyId, seasonId),
     playerCardToPng: (fileName, rect) => ipcRenderer.invoke(IPC.export.playerCardToPng, fileName, rect),
+    pickCardFolder: () => ipcRenderer.invoke(IPC.export.pickCardFolder),
+    playerCardToFolder: (folderPath, fileName, rect) =>
+      ipcRenderer.invoke(IPC.export.playerCardToFolder, folderPath, fileName, rect),
   },
   editor: {
     backupSaveFile: (dynastyId) => ipcRenderer.invoke(IPC.editor.backupSaveFile, dynastyId),
@@ -142,6 +149,28 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.card.setPhotoFromPath, dynastyId, playerId, sourcePath),
     getPhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.getPhoto, dynastyId, playerId),
     removePhoto: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.removePhoto, dynastyId, playerId),
+    pickPhotoForCard: (dynastyId, playerId, cardId) =>
+      ipcRenderer.invoke(IPC.card.pickPhotoForCard, dynastyId, playerId, cardId),
+    setCardPhotoFromPath: (dynastyId, playerId, cardId, sourcePath) =>
+      ipcRenderer.invoke(IPC.card.setCardPhotoFromPath, dynastyId, playerId, cardId, sourcePath),
+    removeCardPhoto: (dynastyId, photoFile) => ipcRenderer.invoke(IPC.card.removeCardPhoto, dynastyId, photoFile),
+    list: (dynastyId, playerId) => ipcRenderer.invoke(IPC.card.list, dynastyId, playerId),
+    listFavorites: (dynastyId) => ipcRenderer.invoke(IPC.card.listFavorites, dynastyId),
+    listCardedPlayerIds: (dynastyId) => ipcRenderer.invoke(IPC.card.listCardedPlayerIds, dynastyId),
+    create: (dynastyId, playerId, input) => ipcRenderer.invoke(IPC.card.create, dynastyId, playerId, input),
+    update: (dynastyId, id, input) => ipcRenderer.invoke(IPC.card.update, dynastyId, id, input),
+    setFavorite: (dynastyId, id, favorite) => ipcRenderer.invoke(IPC.card.setFavorite, dynastyId, id, favorite),
+    setDefault: (dynastyId, playerId, id) => ipcRenderer.invoke(IPC.card.setDefault, dynastyId, playerId, id),
+    remove: (dynastyId, id) => ipcRenderer.invoke(IPC.card.remove, dynastyId, id),
+  },
+  program: {
+    list: (dynastyId) => ipcRenderer.invoke(IPC.program.list, dynastyId),
+    setIdentity: (dynastyId, teamIndex, teamNameKey, identity) =>
+      ipcRenderer.invoke(IPC.program.setIdentity, dynastyId, teamIndex, teamNameKey, identity),
+    pickArt: (dynastyId, teamIndex, teamNameKey, slot) =>
+      ipcRenderer.invoke(IPC.program.pickArt, dynastyId, teamIndex, teamNameKey, slot),
+    clearArt: (dynastyId, teamIndex, teamNameKey, slot) =>
+      ipcRenderer.invoke(IPC.program.clearArt, dynastyId, teamIndex, teamNameKey, slot),
   },
   media: {
     pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
@@ -150,6 +179,7 @@ const api: DynastyApi = {
     listForPlayer: (dynastyId, playerId) => ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
     listForGame: (dynastyId, seasonId, gameId) => ipcRenderer.invoke(IPC.media.listForGame, dynastyId, seasonId, gameId),
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
+    setFraming: (id, framing) => ipcRenderer.invoke(IPC.media.setFraming, id, framing),
     reorder: (dynastyId, seasonId, orderedIds) => ipcRenderer.invoke(IPC.media.reorder, dynastyId, seasonId, orderedIds),
     remove: (id) => ipcRenderer.invoke(IPC.media.remove, id),
     getStorageUsage: () => ipcRenderer.invoke(IPC.media.getStorageUsage),
@@ -170,6 +200,9 @@ const api: DynastyApi = {
   update: {
     check: () => ipcRenderer.invoke(IPC.update.check),
     openDownload: (url) => ipcRenderer.invoke(IPC.update.openDownload, url),
+  },
+  window: {
+    setTitleBarTheme: (appearance) => ipcRenderer.invoke(IPC.window.setTitleBarTheme, appearance),
   },
 };
 

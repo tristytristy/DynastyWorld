@@ -11,6 +11,7 @@ import type { DynastySummary, ExtractionStep, ExtractionStepStatus } from '../..
 import { useConfirm } from '../data/ConfirmDialogProvider';
 import { DynastyBackupModal } from '../components/common/DynastyBackupModal';
 import { ImportDynastyModal } from '../components/common/ImportDynastyModal';
+import { ExportIcon, TrashIcon } from '../components/common/ActionIcons';
 
 const ANGLED_PANEL = angledClip('1.1rem');
 
@@ -42,17 +43,6 @@ function initialProgress(): Record<ExtractionStep, StepState> {
   return Object.fromEntries(EXTRACTION_STEPS.map((step) => [step, 'pending'])) as Record<ExtractionStep, StepState>;
 }
 
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
-      <path d="M4 6h12" strokeLinecap="round" />
-      <path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3h3A1.5 1.5 0 0 1 13 4.5V6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5.5 6 6.2 16a1.5 1.5 0 0 0 1.5 1.4h4.6a1.5 1.5 0 0 0 1.5-1.4L14.5 6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8.5 9v5M11.5 9v5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function SyncIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
@@ -66,16 +56,6 @@ function BackupIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
       <path d="M10 3v9.5M10 12.5 6.5 9M10 12.5 13.5 9" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 13v1.5A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V13" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-/** Export-history icon — an upward arrow leaving a tray, distinct from Backup's downward-into-tray shape. Replaces the standalone Exports page (removed); this is the one thing it did (a self-contained HTML export of the dynasty's history). */
-function ExportIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
-      <path d="M10 12.5V3M10 3 6.5 6.5M10 3l3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 13v1.5A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V13" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -450,7 +430,7 @@ export function Dashboard() {
                   ...(colorVars as unknown as CSSProperties),
                   ...ANGLED_PANEL,
                 }}
-                className="group relative overflow-hidden border border-white/65 bg-white/78 p-5 shadow-[0_24px_80px_-42px_rgba(15,23,42,0.42)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:shadow-[0_28px_90px_-42px_rgba(15,23,42,0.48)] dark:border-white/10 dark:bg-slate-950/74"
+                className="group relative overflow-hidden border border-white/65 bg-white/78 p-5 shadow-[0_24px_80px_-42px_rgba(15,23,42,0.42)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:shadow-[0_28px_90px_-42px_rgba(15,23,42,0.48)] dark:border-white/10 dark:bg-black"
               >
                 <div
                   className="pointer-events-none absolute inset-0"
@@ -458,7 +438,8 @@ export function Dashboard() {
                     background: `linear-gradient(270deg, rgb(${primaryTint} / 0.34) 0%, rgb(${primaryTint} / 0.2) 28%, rgb(${primaryTint} / 0.1) 56%, transparent 100%)`,
                   }}
                 />
-                <div className="pointer-events-none absolute inset-[1px] bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.03))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.01))]" />
+                {/* Sheen is light-mode only — in dark it was a 5% white film over the whole card, which is precisely the grey being complained about. The team-colour wash above still gives the card its identity. */}
+                <div className="pointer-events-none absolute inset-[1px] bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.03))] dark:bg-none" />
 
                 <div className="relative flex min-h-[15rem] items-stretch justify-between gap-6">
                   {/*
@@ -537,20 +518,40 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex h-[13.5rem] flex-1 items-center justify-end">
+                  <div className="flex flex-1 items-end justify-end">
                     {dynasty.coachPortraitAssetName ? (
-                      // Fixed-size box so the logo can be pinned outside the portrait's own bounds — clearly behind and above-right, never overlapping the coach's face.
-                      <div className="relative h-[13.5rem] w-[10.5rem] shrink-0">
+                      /*
+                        The portrait is anchored INTO the card's lower-right
+                        corner rather than floated in the middle of the row:
+                        negative margins cancel the card's 1.25rem padding so
+                        it runs flush to both edges, and the card's own
+                        clip-path + overflow-hidden crop it there. That's the
+                        mask — it reads as part of the card instead of a
+                        cut-out pasted on top, which is what the drop shadow
+                        and the centred position made it look like.
+
+                        Sized to 16.25rem, which is exactly the row's 15rem
+                        minimum plus the bottom padding it bleeds through, so
+                        it grew without making the card any taller. Hover
+                        scales from the bottom-right so it swells into its own
+                        corner instead of lifting off the edge.
+                      */
+                      <div className="relative -mb-5 -mr-5 h-[16.25rem] w-[12.6rem] shrink-0">
                         <TeamLogo
                           team={{ assetName: dynasty.teamName, label: dynasty.teamName }}
                           size="lg"
-                          className="absolute -right-4 -top-6 h-16 w-16 opacity-90 drop-shadow-[0_14px_32px_rgba(15,23,42,0.26)] transition duration-300 group-hover:scale-[1.04]"
+                          className="absolute -top-4 right-1 h-20 w-20 opacity-90 drop-shadow-[0_14px_32px_rgba(15,23,42,0.26)] transition duration-300 group-hover:scale-[1.04]"
                         />
                         <CoachPortrait
                           coach={coachPortraitIdentity(dynasty.coachName, dynasty.coachPortraitAssetName)}
                           teamAssetName={dynasty.teamName}
                           size="lg"
-                          className="relative z-[1] h-[13.5rem] w-[10.5rem] drop-shadow-[0_20px_44px_rgba(15,23,42,0.3)] transition duration-300 group-hover:scale-[1.03]"
+                          /* Right and bottom are the card's own edges, so those
+                             cuts are meant to be hard. The left one isn't an
+                             edge of anything — object-cover slices straight
+                             through the shoulder there — so it fades out
+                             instead of ending in a seam. */
+                          className="relative z-[1] h-[16.25rem] w-[12.6rem] origin-bottom-right transition duration-300 [mask-image:linear-gradient(to_right,transparent_0%,black_20%)] group-hover:scale-[1.03]"
                         />
                       </div>
                     ) : (

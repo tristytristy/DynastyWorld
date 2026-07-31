@@ -2,27 +2,21 @@ import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeProvider';
+import { GliderNav, gliderItemClass } from '../ui/GliderNav';
+import { Select, type SelectOption } from '../ui/Select';
+import { TeamLogo } from './TeamLogo';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
-import { GlobalSearch } from './GlobalSearch';
+import { CommandPalette } from './CommandPalette';
 import { TeamProfileModal } from './TeamProfileModal';
 import type { DynastyTheme } from '../../../shared/types';
 
-// Search sits inside the section bar's own inset rail, so it's styled to read
-// as part of that rail rather than as a floating control dropped on top of it.
+// A bare glyph — no border, no fill. It sits beside the season switcher, and a
+// second bordered box there read as a second control of equal weight when this is
+// really just a way in. It still STRETCHES to the row's height, which costs
+// nothing visually and keeps the click target full-size rather than icon-size.
 const NAV_SEARCH_TRIGGER_CLASS =
-  'w-full border border-slate-200/80 bg-white/80 px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10';
-
-// Hard-edged tabs in the display face; the active tab carries the signature
-// cut corner (shape language — see feedback_shape_language memory / DevLog).
-function sectionTabClass(active: boolean): string {
-  return [
-    'px-4 py-2 font-display text-sm font-semibold transition-all duration-base ease-standard',
-    active
-      ? 'corner-cut-sm bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white',
-  ].join(' ');
-}
+  'flex w-[38px] shrink-0 self-stretch items-center justify-center text-slate-400 transition-colors duration-base ease-standard hover:text-slate-900 dark:text-slate-500 dark:hover:text-white';
 
 // The top nav is three sections (IA reorg 2026-07-19). Team and league pages
 // keep flat URLs (pathless layout shells), so a section highlights by
@@ -40,24 +34,42 @@ function SeasonSwitcher() {
 
   if (seasons.length <= 1) return null;
 
+  /*
+    Logo · team · year (user direction). The school is what a coach-journey
+    dynasty is actually scanning for — a list of bare years tells you nothing
+    about which of them was the Sac State era. The year moves to the row's
+    trailing slot so the school names stay left-aligned and readable as a column.
+  */
+  const options: SelectOption<string>[] = seasons.map((season) => ({
+    value: String(season.id),
+    label: [
+      season.teamName ?? `${season.seasonYear} season`,
+      season.isCurrent ? '(current)' : '',
+      season.hasFullData ? '' : '· History Only',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    meta: String(season.seasonYear),
+    keywords: String(season.seasonYear),
+    icon: season.teamName ? (
+      <TeamLogo team={{ assetName: season.teamName, label: season.teamName }} size="sm" className="shrink-0" />
+    ) : undefined,
+  }));
+
   return (
-    <label className="ml-auto flex items-center gap-2 border border-slate-200/80 bg-slate-50/90 px-3.5 py-1.5 text-sm text-slate-500 dark:border-slate-800 dark:bg-white/5 dark:text-slate-300">
-      <span>Season</span>
-      <select
-        value={selectedSeasonId ?? ''}
-        onChange={(event) => setSelectedSeasonId(event.target.value ? Number(event.target.value) : undefined)}
-        className="bg-transparent font-medium text-slate-900 outline-none dark:text-white"
-      >
-        {seasons.map((season) => (
-          <option key={season.id} value={season.id}>
-            {season.seasonYear}
-            {season.teamName ? ` — ${season.teamName}` : ''}
-            {season.isCurrent ? ' (current)' : ''}
-            {season.hasFullData ? '' : ' · History Only'}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      value={String(selectedSeasonId ?? '')}
+      onChange={(next) => setSelectedSeasonId(next ? Number(next) : undefined)}
+      options={options}
+      ariaLabel="Season"
+      // Bare in the nav: the row is chrome, and a boxed switcher next to a bare
+      // search glyph read as two controls of different weight. The dropdown
+      // panel keeps its own border — it floats over the page and needs the edge.
+      variant="bare"
+      // No `ml-auto` — the nav row positions this as part of its right-hand
+      // group, and a second auto-margin was what split it from the search.
+      className="shrink-0"
+    />
   );
 }
 
@@ -87,7 +99,7 @@ function HistoryOnlySeasonBanner({ dynastyId }: { dynastyId: string }) {
   );
 }
 
-/** Top-level section nav: Coach Hub · Team Hub · NCAA Hub · Recruit Hub · Media Hub. Highlights by section membership since pages keep flat URLs. */
+/** Top-level section nav: Coach · Program · NCAA · Recruiting · Media. Highlights by section membership since pages keep flat URLs. */
 function DynastyNav({ id }: { id: string }) {
   const location = useLocation();
   const sub = location.pathname.split(`/dynasty/${id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
@@ -100,33 +112,57 @@ function DynastyNav({ id }: { id: string }) {
         : MEDIA_PATHS.has(sub)
           ? 'media'
           : 'coach';
+  // The glider is driven by position, so the sections need a declared order —
+  // the same order they're rendered in below.
+  const activeIndex = ['coach', 'team', 'league', 'recruit', 'media'].indexOf(section);
 
   return (
-    <nav className="border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-md dark:border-white/10 dark:bg-black">
-      <div className="corner-cut flex flex-wrap items-center gap-2 border border-slate-200/80 bg-slate-100/80 p-1.5 dark:border-white/5 dark:bg-black/25">
-        <Link to={`/dynasty/${id}`} className={sectionTabClass(section === 'coach')}>
-          Coach Hub
-        </Link>
-        <Link to={`/dynasty/${id}/team-hub`} className={sectionTabClass(section === 'team')}>
-          Team Hub
-        </Link>
-        <Link to={`/dynasty/${id}/ncaa-hub`} className={sectionTabClass(section === 'league')}>
-          NCAA Hub
-        </Link>
-        <Link to={`/dynasty/${id}/recruiting`} className={sectionTabClass(section === 'recruit')}>
-          Recruit Hub
-        </Link>
-        <Link to={`/dynasty/${id}/media`} className={sectionTabClass(section === 'media')}>
-          Media Hub
-        </Link>
-        <SeasonSwitcher />
-        {/* Search sits at the far right of the section bar — `ml-auto` pushes it
-            there so it stays pinned regardless of how many tabs precede it.
-            Moved out of the sidebar's Tools list: search spans the whole
-            archive, so it belongs with the top-level navigation rather than
-            filed under utilities. */}
-        <div className="ml-auto w-full min-w-[12rem] sm:w-auto sm:max-w-xs sm:flex-1">
-          <GlobalSearch triggerClassName={NAV_SEARCH_TRIGGER_CLASS} />
+    /*
+      No box. The section bar was a bordered, filled card with its own padding —
+      the last framed surface left after sections lost theirs. It's a plain row
+      now, closed off by a single divider-weight rule, the same hairline used
+      between sections.
+
+      The `-mt-5` lifts the tabs onto the sidebar's first row. They sat ~20px
+      low, and the reason is structural rather than anything in this component:
+      the shell gives <main>'s scroller `p-8` while the sidebar's own nav uses
+      `p-4` (app.tsx), and the sidebar row is taller (py-3 against py-2). This
+      cancels that difference HERE rather than reducing the shell's padding,
+      which would move every page's content, not just this bar.
+    */
+    <nav className="-mt-5 border-b border-[color:var(--section-divider)] pb-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {/* The glider spans the TABS only — the season switcher and search that
+            follow are controls, not destinations, so the rail must not run under
+            them. px-3.5 (gliderItemClass's default) matches the hub sub-navs
+            exactly: the two rows sit directly above one another, so their text
+            has to start on the same pixel. */}
+        <GliderNav activeIndex={activeIndex} ariaLabel="Dynasty sections" itemsClassName="gap-1.5">
+          <Link to={`/dynasty/${id}`} className={gliderItemClass(section === 'coach')}>
+            Coach
+          </Link>
+          <Link to={`/dynasty/${id}/team-hub`} className={gliderItemClass(section === 'team')}>
+            Program
+          </Link>
+          <Link to={`/dynasty/${id}/ncaa-hub`} className={gliderItemClass(section === 'league')}>
+            NCAA
+          </Link>
+          <Link to={`/dynasty/${id}/recruiting`} className={gliderItemClass(section === 'recruit')}>
+            Recruiting
+          </Link>
+          <Link to={`/dynasty/${id}/media`} className={gliderItemClass(section === 'media')}>
+            Media
+          </Link>
+        </GliderNav>
+        {/* Switcher and search travel together as one right-hand group. They
+            each carried their own `ml-auto` before, which pushed them apart —
+            the switcher to the middle, the search to the far edge — and left the
+            gap the user asked to close. One `ml-auto` on the group, the row's
+            own gap between them. Search keeps the whole archive company with
+            navigation rather than being filed under utilities. */}
+        <div className="ml-auto flex items-stretch gap-2">
+          <SeasonSwitcher />
+          <CommandPalette triggerClassName={NAV_SEARCH_TRIGGER_CLASS} />
         </div>
       </div>
     </nav>

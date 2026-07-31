@@ -7,12 +7,14 @@ import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { StatisticsCategorySection, type ColumnDef, type LeaderCardRow, type LeaderMetric } from '../components/common/StatisticsCategorySection';
 import type { StatTableRow } from '../components/common/StatisticsTable';
 import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
-import { getBowlLogoPath, getConferenceLogoPath } from '../lib/trophyAssetMapping';
+import { getBowlLogoPath, getConferenceChampionshipGamePath, getConferenceLogoPath } from '../lib/trophyAssetMapping';
+import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import { getHelmetPath, DEFAULT_HELMET_PATH, type HelmetSide } from '../lib/helmetAssetMapping';
+import { useProgramArt, useProgramStadium } from '../data/ProgramArtProvider';
+import { isProgramArtPath } from '../lib/programArt';
 import { buildTeamColorVars, type TeamColorVars } from '../lib/teamTheme';
 import { gameImpactScore } from '../../shared/gameImpactScore';
 import { useTheme } from '../theme/ThemeProvider';
-import { useStadiumData } from '../data/StadiumDataProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
 import type {
@@ -46,9 +48,17 @@ function teamTextColor(colors: TeamColorVars, appearance: 'light' | 'dark'): str
  * Falls back once to the generic Default helmet if a team's file 404s.
  */
 function HelmetImg({ teamName, side, className }: { teamName: string; side: HelmetSide; className?: string }) {
+  const { version } = useProgramArt();
+  const src = getHelmetPath(teamName, side);
+  // ONE uploaded helmet serves both sides, so the right-hand one is flipped
+  // here — otherwise a matchup would show two helmets facing the same way.
+  // Shipped art already has a real right-side render and is left alone.
+  const mirrored = side === 'right' && isProgramArtPath(src);
   return (
     <img
-      src={getHelmetPath(teamName, side)}
+      key={version}
+      src={src}
+      style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
       alt=""
       onError={(event) => {
         const img = event.currentTarget;
@@ -262,6 +272,14 @@ function buildGameRows<TLine>(entries: GameLogEntry[], roster: RosterPlayer[]): 
       if (firstName === undefined || lastName === undefined) return null;
       return {
         playerId: entry.playerId,
+        /*
+          The row's OWN team, carried through so a click can resolve the player
+          against that team's league snapshot. Without it both the table and the
+          leader cards fell back to the page's viewed team — which is null when
+          the box score is open as an app-root modal — so every non-user player
+          resolved against the user's roster and came back "Player not found".
+        */
+        ...(entry.teamIndex !== undefined ? { teamIndex: entry.teamIndex } : {}),
         firstName,
         lastName,
         position: player?.position ?? entry.position ?? '',
@@ -355,7 +373,8 @@ export function GameDetailContent({
 }) {
   const id = dynastyId;
   const { appearance } = useTheme();
-  const { getStadium } = useStadiumData();
+  // Program-editor overrides layered over the built-in reference data.
+  const getStadium = useProgramStadium();
   const [detail, setDetail] = useState<GameDetailData | null | undefined>(undefined);
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [media, setMedia] = useState<MediaItemResolved[]>([]);
@@ -437,6 +456,8 @@ export function GameDetailContent({
     bowlName: detail.bowlName,
     bowlAssetName: detail.bowlAssetName,
     isNationalChampionship: detail.isNationalChampionship,
+    isConferenceChampionship: detail.isConferenceChampionship,
+    neutralVenueId: detail.neutralVenueId,
     conferenceName: detail.conferenceName,
     isRivalryGame: false,
     rivalryName: null,
@@ -514,16 +535,28 @@ export function GameDetailContent({
         })()
       : null;
 
-  // Hero game emblem — the conference mark for a conference game, else the
-  // bowl / playoff / CFP logo — sized to roughly 80% of the eyebrow's width and
-  // centered above it. Null for a plain non-conference game (no emblem exists).
+  /*
+    Hero game emblem, most specific occasion first: the rivalry mark, then the
+    conference mark, then the bowl / playoff / CFP logo. Null for a plain
+    non-conference game — no emblem exists and inventing one would say nothing.
+
+    Rivalry outranks conference because the Iron Bowl is not "an SEC game" to
+    anyone who cares that it's being played. It does NOT outrank a bowl: if two
+    rivals meet in the Playoff, the round is the occasion, and the bowl art is
+    the thing you'd actually want on the wall.
+  */
+  const rivalryLogoSrc = getRivalryLogoPath(home.name, away.name);
   const conferenceLogoSrc =
     game.gameType === 'conference' && game.conferenceName
-      ? getConferenceLogoPath(game.conferenceName, appearance)
+      ? // The championship game's own mark, falling back to the plain
+        // conference logo for a conference with no championship art.
+        (game.isConferenceChampionship ? getConferenceChampionshipGamePath(game.conferenceName) : null) ??
+        getConferenceLogoPath(game.conferenceName, appearance)
       : null;
   const gameTypeImgSrc = getGameTypeImagePath(game, appearance);
-  const gameLogo = conferenceLogoSrc ? (
-    <img src={conferenceLogoSrc} alt="" className="h-32 w-32 object-contain sm:h-44 sm:w-44" draggable={false} />
+  const nonBowlLogoSrc = game.gameType === 'bowl' ? null : rivalryLogoSrc ?? conferenceLogoSrc;
+  const gameLogo = nonBowlLogoSrc ? (
+    <img src={nonBowlLogoSrc} alt="" className="h-32 w-32 object-contain sm:h-44 sm:w-44" draggable={false} />
   ) : gameTypeImgSrc ? (
     <img
       src={gameTypeImgSrc ?? undefined}
@@ -534,19 +567,28 @@ export function GameDetailContent({
     />
   ) : null;
 
+  /*
+    Three stacked lines — date, what the game IS, then where it's played —
+    rather than one pipe-joined string. Combined, it ran long enough to wrap at
+    the hero's width and the break landed mid-venue ("Simmons Bank Liberty /
+    Stadium, Memphis, TN"), splitting the stadium's own name across two rows.
+    Giving each fact its own line means the wrap point is never inside one.
+  */
+  const eventName = gameTypeLabel(game);
+  const location = getLocationDisplay(game, getStadium);
+  // Stadium + CITY, not city+state: the state orphaned onto a line of its own
+  // in a column this narrow, and "Memphis" carries the meaning by itself.
+  const venueLine = location.stadium
+    ? `${location.stadium}, ${location.city}`
+    : game.siteType === 'neutral'
+      ? location.badge
+      : null;
+
   const metaLine = (
-    <p className="text-sm text-slate-500 dark:text-slate-400">
-      {[
-        gameTypeLabel(game),
-        (() => {
-          const location = getLocationDisplay(game, getStadium);
-          if (location.stadium) return `${location.stadium}, ${location.cityState}`;
-          return game.siteType === 'neutral' ? location.badge : null;
-        })(),
-      ]
-        .filter(Boolean)
-        .join(' | ')}
-    </p>
+    <div className="flex flex-col items-center gap-0.5">
+      {eventName && <p className="text-sm text-slate-500 dark:text-slate-400">{eventName}</p>}
+      {venueLine && <p className="text-sm text-slate-500 dark:text-slate-400">{venueLine}</p>}
+    </div>
   );
 
   // A team flank in the header: a big helmet over the team name + rank. The
@@ -554,9 +596,18 @@ export function GameDetailContent({
   // back in so it doesn't add height (the overlap region is only the helmet
   // PNG's own transparent padding, so no art is clipped or collides).
   const TeamFlank = ({ team, sideName, teamColor }: { team: GameDetailTeamSide; sideName: HelmetSide; teamColor: string }) => (
-    <div className="flex w-52 shrink-0 flex-col items-center sm:w-80">
+    <div className="relative z-10 flex w-52 shrink-0 flex-col items-center sm:w-80">
       <HelmetImg teamName={team.name} side={sideName} className="-my-6 h-52 w-52 object-contain sm:-my-10 sm:h-80 sm:w-80" />
       <div className="flex flex-col items-center gap-1 text-center">
+        {/* Rank leads the stack, above the colour rule — it's the loudest thing
+            about a matchup ("#3 vs #7"), and it was buried under the name in
+            eyebrow grey. Bold and a step larger than the name; only ever shown
+            for a real top-25 position. */}
+        {team.currentRank !== null && team.currentRank <= 25 && (
+          <span className="font-display text-lg font-extrabold leading-none text-slate-950 dark:text-white sm:text-xl">
+            #{team.currentRank}
+          </span>
+        )}
         <span className="h-1 w-12" style={{ backgroundColor: teamColor }} />
         <TeamLink
           teamIndex={team.teamIndex}
@@ -566,8 +617,14 @@ export function GameDetailContent({
           showLogo={false}
           nameClassName="font-display text-base font-bold leading-tight text-slate-950 dark:text-white sm:text-lg"
         />
-        {team.currentRank && team.currentRank <= 25 && (
-          <span className="type-eyebrow text-slate-400 dark:text-slate-500">#{team.currentRank}</span>
+        {/* The record as it stood going INTO this game, not today's — the same
+            captured-at-kickoff rule the schedule page follows. Absent for games
+            played before context capture existed, which is honest: the save
+            can't reconstruct it. */}
+        {team.recordAtGame && (
+          <span className="tnum type-eyebrow text-slate-400 dark:text-slate-500">
+            {team.recordAtGame.wins}-{team.recordAtGame.losses}
+          </span>
         )}
       </div>
     </div>
@@ -578,18 +635,43 @@ export function GameDetailContent({
       {/* Header — helmet duel + hero score. Deliberately NOT a SurfaceCard:
           transparent ground so the helmets + score are the whole statement. */}
       <div className="relative flex items-center justify-between gap-2 overflow-visible sm:gap-4">
+        {/* A glow under EACH helmet, in that team's own colour — it used to
+            appear on the winning side alone, which made half the header look
+            unlit. The result is still unmistakable from the score's opacity and
+            the colour rule under each name, so the glow is free to be pure
+            staging. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(120% 90% at 0% 50%, color-mix(in srgb, ${awayColor} 14%, transparent), transparent 60%)`,
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(120% 90% at 100% 50%, color-mix(in srgb, ${homeColor} 14%, transparent), transparent 60%)`,
+          }}
+        />
+        {/* Sparks drift in from the winner's outer edge, across their glow and
+            behind their helmet, and are masked out well before the score column
+            — see .hero-sparks. Only ever on the winning side, and only once a
+            game has actually been played: that's what makes it read as
+            celebration rather than as decoration. */}
         {winnerColor && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background: `radial-gradient(120% 90% at ${homeWon ? '100%' : '0%'} 50%, color-mix(in srgb, ${winnerColor} 14%, transparent), transparent 60%)`,
-            }}
-          />
+            className={`hero-sparks pointer-events-none ${homeWon ? 'right-0' : 'left-0'}`}
+            data-side={homeWon ? 'right' : 'left'}
+          >
+            <span className="hero-spark-field" data-layer="far" />
+            <span className="hero-spark-field" data-layer="near" />
+          </div>
         )}
         <TeamFlank team={away} sideName="left" teamColor={awayColor} />
 
-        <div className="relative flex min-w-0 flex-1 flex-col items-center gap-2">
+        <div className="relative z-10 flex min-w-0 flex-1 flex-col items-center gap-2">
           {gameLogo && <div className="mb-0.5 flex justify-center">{gameLogo}</div>}
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Week {game.week}</p>
           {played ? (

@@ -7,6 +7,9 @@ const PLAYOFF_BASE_PATH = 'cfbmedia://media/playoffs';
 // fallback UI) — only the big raster art moves to the external image folder.
 const CONF_BASE_PATH = 'assets/conf';
 const AWARDS_BASE_PATH = 'cfbmedia://media/awards';
+// Bundled with the app, like the conference marks - small files, and the trophy
+// case would look broken without them if the external media folder is missing.
+const RIVALRY_TROPHY_BASE_PATH = 'assets/rivalry/rivalrytophy';
 
 const NATIONAL_CHAMPIONSHIP_TROPHY = `${CONFCHAMP_BASE_PATH}/confchamp__NationalChampionshipTrophy.webp`;
 const BOWL_DEFAULT_LOGO = `${BOWL_BASE_PATH}/bowl_Default.webp`;
@@ -83,6 +86,26 @@ const CONFERENCE_TROPHY_FILES: Record<string, string> = {
 };
 
 /**
+ * The championship GAME logo (the event mark), as distinct from the trophy
+ * lifted afterwards above. Same conference-name keys, including the save's own
+ * abbreviations - `Conference.Name` is "MWC", not "Mountain West".
+ */
+const CONFERENCE_CHAMPIONSHIP_GAME_FILES: Record<string, string> = {
+  ACC: 'confchamp__ACCChampionship.webp',
+  American: 'confchamp__AmericanChampionship.webp',
+  'Conference USA': 'confchamp__CUSAChampionship.webp',
+  CUSA: 'confchamp__CUSAChampionship.webp',
+  'Big 12': 'confchamp__BIG12Championship.webp',
+  'Big Ten': 'confchamp__BIG10Championship.webp',
+  MAC: 'confchamp__MACChampionship.webp',
+  MWC: 'confchamp__MountainWestChampionship.webp',
+  'Mountain West': 'confchamp__MountainWestChampionship.webp',
+  'Pac-12': 'confchamp__PAC12Championship.webp',
+  SEC: 'confchamp__SECChampionship.webp',
+  'Sun Belt': 'confchamp__SunBeltChampionship.webp',
+};
+
+/**
  * Exact map from the save's real `AwardType` string (see extract-awards.ts -
  * verified against the save's real `LeagueHistoryAward` table) to the
  * closest real-world college football trophy image. Only Heisman is a
@@ -139,6 +162,12 @@ export function getConferenceChampionshipTrophyPath(conferenceName: string): str
   return file ? `${CONFCHAMP_BASE_PATH}/${file}` : null;
 }
 
+/** The championship game's own mark. Null for a conference with no art (e.g. Independent). */
+export function getConferenceChampionshipGamePath(conferenceName: string): string | null {
+  const file = CONFERENCE_CHAMPIONSHIP_GAME_FILES[conferenceName];
+  return file ? `${CONFCHAMP_BASE_PATH}/${file}` : null;
+}
+
 export function getBowlLogoPath(bowlAssetName: string | null): string {
   if (!bowlAssetName) return BOWL_DEFAULT_LOGO;
   return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}.webp`;
@@ -175,6 +204,10 @@ export function getTrophyImagePath(trophy: Trophy): string | null {
       return trophy.assetKey ? getConferenceChampionshipTrophyPath(trophy.assetKey) : null;
     case 'bowl-win':
       return getBowlTrophyPath(trophy.assetKey);
+    // assetKey IS the file stem here - the rename encoded the schools into the
+    // filename, so no second lookup is needed. See docs/RIVALRY_TROPHIES.md.
+    case 'rivalry-win':
+      return trophy.assetKey ? `${RIVALRY_TROPHY_BASE_PATH}/${trophy.assetKey}.webp` : null;
     default:
       return null;
   }

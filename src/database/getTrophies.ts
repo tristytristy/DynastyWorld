@@ -2,6 +2,7 @@ import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './
 import type { GameData } from '../extractors/extract-schedule';
 import type { ConferenceChampionshipData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
+import { rivalryTrophyFor, rivalryTrophyLabel } from '../shared/rivalryTrophies';
 import type { BowlAppearance, PostseasonKind, Trophy, TeamTrophies } from '../shared/types';
 
 /** The real BowlGame.Name strings the save uses for the three CFP bracket rounds - verified directly, not guessed. */
@@ -131,6 +132,31 @@ export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies 
         kind: 'bowl-win',
         label: `${latest.bowlName} Champions`,
         assetKey: latest.bowlAssetName,
+      });
+    }
+  }
+
+  /*
+    Rivalry trophies. Not a separate data source — a rivalry trophy is won by
+    beating the school it's contested with, so every won game is checked against
+    the pairing map (which is itself read out of the save's Rivalry table; see
+    shared/rivalryTrophies.ts).
+
+    Deliberately NOT gated on the save's isRivalryGame flag: that only covers
+    the user's own three Rival1/2/3 slots, while a program can hold several
+    trophies against schools outside those slots. The pairing map is the
+    authority on whether a trophy exists at all.
+  */
+  if (userTeam) {
+    for (const game of teamGames) {
+      if (game.status === 'Unplayed' || gameResult(game, userTeamIndex) !== 'W') continue;
+      const stem = rivalryTrophyFor(userTeam.displayName, opponentName(game, userTeamIndex));
+      if (!stem || trophies.some((t) => t.assetKey === stem)) continue;
+      trophies.push({
+        kind: 'rivalry-win',
+        id: stem,
+        label: rivalryTrophyLabel(stem),
+        assetKey: stem,
       });
     }
   }

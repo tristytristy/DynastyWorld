@@ -22,6 +22,7 @@
  * helmet just like they do for logos.
  */
 import { TEAM_3D_LOGOS, canonicalKey } from './assetMapping';
+import { programArtFor } from './programArt';
 
 /**
  * Which of the two shipped source folders to draw from:
@@ -52,7 +53,13 @@ export function hasTeamHelmet(teamAssetName: string): boolean {
  * caller never has to guard for a missing file.
  */
 export function getHelmetPath(teamAssetName: string, side: HelmetSide = 'left'): string {
-  const filename = TEAM_3D_LOGOS[canonicalKey(teamAssetName)];
+  const key = canonicalKey(teamAssetName);
+  // ONE uploaded helmet serves both sides; the caller flips the right one (see
+  // isProgramArtPath at the call site). Asking for two uploads to save a CSS
+  // transform would be asking the user to do the app's work.
+  const uploaded = programArtFor(key, 'helmet');
+  if (uploaded) return uploaded;
+  const filename = TEAM_3D_LOGOS[key];
   const token = filename ? filename.replace(/\.webp$/i, '') : DEFAULT_HELMET_TOKEN;
   return helmetUrl(side, token);
 }

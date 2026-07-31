@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useScrollLock } from '../../lib/useScrollLock';
 import { useGameModal } from '../../data/GameModalProvider';
 import { GameDetailContent } from '../../pages/GameDetail';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 /**
  * Global game box-score modal. Renders the full GameDetailContent inside a
@@ -30,8 +32,20 @@ export function GameDetailModal() {
   if (!state) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-start md:p-8"
+    /*
+      The panel caps its own height and scrolls INSIDE itself — it used to be
+      the scrim that scrolled, with the header pinned by `sticky top-0`. That
+      let the box score's helmet artwork ride up past the header and out the top
+      of the panel, because a sticky header sticks to the SCROLLPORT (the scrim)
+      rather than to the panel it belongs to, and the panel had no
+      `overflow-hidden` to clip what escaped it.
+
+      This is the same shell every other overlay uses, and what
+      UI/ModalAction.md specifies: cap the height, scroll the body, so the page
+      behind never scrolls and nothing can render above the header.
+    */
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeGameModal();
@@ -41,24 +55,17 @@ export function GameDetailModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Game box score"
-        className="corner-cut relative w-full max-w-5xl border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95"
+        className="corner-cut relative flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden modal-panel md:max-h-[calc(100vh-4rem)]"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/85 px-5 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/85">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3 dark:border-white/10">
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game box score</p>
-          <button
-            type="button"
-            onClick={closeGameModal}
-            aria-label="Close game box score"
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Close
-          </button>
+          <ModalCloseButton label="game box score" onClick={closeGameModal} />
         </div>
-        <div className="p-5 md:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
           <GameDetailContent dynastyId={state.dynastyId} gameId={state.gameId} seasonId={state.seasonId} />
         </div>
       </div>
-    </div>,
+    </ModalOverlay>,
     document.body,
   );
 }

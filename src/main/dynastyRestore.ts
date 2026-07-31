@@ -5,7 +5,7 @@ import path from 'path';
 import yauzl from 'yauzl';
 import type { Database } from 'sql.js';
 import { backupDatabase, compactDatabase, getDb, loadDatabaseFromBuffer, persist } from '../database/init';
-import { getDynastyById, updateDynasty } from '../database/helpers';
+import { getDynastyById, invalidateSnapshotCache, updateDynasty } from '../database/helpers';
 import { mediaDirFor } from './ipc/media';
 import { BACKUP_PATHS } from './dynastyBackup';
 import type { BackupInspection, DynastyRestoreResult } from '../shared/types';
@@ -72,6 +72,7 @@ const STANDALONE_ID_TABLES = [
   'ranking_history',
   'media_items',
   'player_notes',
+  'player_cards',
   'team_award_results',
   'team_award_settings',
 ];
@@ -331,6 +332,9 @@ export async function restoreDynastyBackup(zipPath: string): Promise<DynastyRest
       shiftIncomingIds(scratch, live);
       const rows = copyAllRows(scratch, live);
       persist();
+      // Snapshot rows were written straight into the live handle, so the handle
+      // itself never changed and the epoch check can't see it. Say so directly.
+      invalidateSnapshotCache();
 
       // Point the restored dynasty at this machine's copy of the save file, if
       // one came along — otherwise its stored path refers to a machine that may

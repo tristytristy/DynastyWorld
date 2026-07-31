@@ -1,3 +1,4 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
@@ -32,6 +33,15 @@ function toCoach(c: CoachData, teamNameByLogo: Map<number, string>): Coach {
     dominantArchetype: c.dominantArchetype,
     seasonsWithTeam: c.seasonsWithTeam,
     currentJobSecurityStatus: c.currentJobSecurityStatus,
+    // Nullish-coalesced like the contract fields below: seasons synced before
+    // these were extracted have no value in their snapshot, and a stale season
+    // should read as "not available" rather than NaN.
+    currentJobSecurityPercentage: c.currentJobSecurityPercentage ?? null,
+    seasonStartJobSecurityStatus: c.seasonStartJobSecurityStatus ?? null,
+    currentContractExpectation: c.currentContractExpectation ?? null,
+    earnedContractPointsThisYear: c.earnedContractPointsThisYear ?? null,
+    coachPoints: c.coachPoints ?? null,
+    contractGoals: c.contractGoals ?? null,
     contractSalary: c.contractSalary ?? 0,
     contractLength: c.contractLength ?? 0,
     contractYearsRemaining: c.contractYearsRemaining ?? 0,
@@ -40,8 +50,6 @@ function toCoach(c: CoachData, teamNameByLogo: Map<number, string>): Coach {
   };
 }
 
-/** teamIndex bucket that lumps every non-FBS placeholder (Practice + the five FCS pools). */
-const FCS_POOL_TEAM_INDEX = 255;
 
 /**
  * Builds the TEAM_LOGO -> school-name map used to resolve Coach.AlmaMater.

@@ -1,7 +1,9 @@
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { getSeasonGameContext } from './gameContext';
+import { isBowlSlateSet } from '../shared/syncPhase';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
+import { conferenceChampionshipWeek } from '../shared/championshipWeek';
 import type { RivalryData } from '../extractors/extract-rivalries';
 import type { GameContext, ScheduleGame, ScheduleOverview } from '../shared/types';
 
@@ -51,6 +53,7 @@ function toScheduleGame(
   rivalryByOpponent: Map<number, string | null>,
   recordByTeam: Map<number, { wins: number; losses: number }>,
   context: GameContext | undefined,
+  championshipWeek: number | null,
 ): ScheduleGame {
   const isHome = game.homeTeamIndex === userTeamIndex;
   const opponentIndex = isHome ? game.awayTeamIndex : game.homeTeamIndex;
@@ -106,6 +109,11 @@ function toScheduleGame(
     teamStats,
     opponentStats,
     gameType,
+    // A conference game in the championship week IS the championship. Both
+    // halves matter: the week alone would catch a stray non-conference game if
+    // one were ever scheduled there, and gameType alone catches the whole season.
+    isConferenceChampionship: gameType === 'conference' && championshipWeek !== null && game.week === championshipWeek,
+    neutralVenueId: game.neutralVenueId ?? null,
     bowlName: game.bowlName,
     bowlAssetName: game.bowlAssetName,
     isNationalChampionship: game.isNationalChampionship,
@@ -180,12 +188,21 @@ export function getSchedule(dynastyId: string, seasonId?: number): ScheduleOverv
 
   const gameContext = getSeasonGameContext(season.id);
   const allGames = getSnapshot<GameData[]>(season.id, 'schedule') ?? [];
+  // A bowl the game hasn't actually assigned yet is a placeholder pairing, not
+  // a fixture — see isBowlSlateSet. Hidden until bowl week, but never once it's
+  // been played, so a finished season always shows the bowl it really played.
+  const bowlsVisible = isBowlSlateSet(season.syncedWeekType);
   const teamGames = allGames
     .filter((g) => g.homeTeamIndex === userTeamIndex || g.awayTeamIndex === userTeamIndex)
+    .filter((g) => !g.isBowlGame || bowlsVisible || g.status !== 'Unplayed')
     .sort((a, b) => a.week - b.week);
 
+  // Derived from the LEAGUEWIDE game list, not the user's own — a team that
+  // doesn't reach its championship still needs the week identified correctly.
+  const championshipWeek = conferenceChampionshipWeek(allGames);
+
   const games = teamGames.map((g) =>
-    toScheduleGame(g, userTeamIndex, userTeam.displayName, rankByTeam, conferenceByTeamIndex, rivalryByOpponent, recordByTeam, gameContext.get(g.gameId)),
+    toScheduleGame(g, userTeamIndex, userTeam.displayName, rankByTeam, conferenceByTeamIndex, rivalryByOpponent, recordByTeam, gameContext.get(g.gameId), championshipWeek),
   );
   applyRunningRecords(games);
   const playedNewestFirst = [...games].filter((g) => g.result !== null).reverse();

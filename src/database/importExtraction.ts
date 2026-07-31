@@ -14,6 +14,7 @@ import {
   type Dynasty,
   type Season,
 } from './helpers';
+import { withBatchedPersist } from './init';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
 import { captureGameContext } from './gameContext';
 import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
@@ -58,6 +59,12 @@ export interface PersistedImport {
  * data is the common case, not an edge case.
  */
 export function persistExtraction(savePath: string, extraction: ExtractionData): PersistedImport {
+  // ~25 writes land below, and each one would otherwise rewrite the entire
+  // archive to disk. One flush at the end instead — see withBatchedPersist.
+  return withBatchedPersist(() => persistExtractionInner(savePath, extraction));
+}
+
+function persistExtractionInner(savePath: string, extraction: ExtractionData): PersistedImport {
   const { league, userTeam } = extraction;
   const label = `${userTeam.displayName} Dynasty`;
 
@@ -297,15 +304,20 @@ export async function syncDynasty(dynastyId: string): Promise<ImportResult> {
 
   try {
     const extraction = await extractAll(dynasty.savePath);
-    const { season, backfilledSeasonYears } = persistExtraction(dynasty.savePath, extraction);
-    // Best-effort — a coach's confirmed/finalized winner is never touched
-    // regardless, and a failure here shouldn't fail the sync itself (already
-    // logged per-award inside autoRecalculateTeamAwards).
-    try {
-      autoRecalculateTeamAwards(dynastyId, season.id);
-    } catch (err) {
-      console.error('[team-awards] autoRecalculateTeamAwards failed:', err);
-    }
+    // One batch across BOTH halves, so the award recalculation's own writes
+    // don't each trigger another full-archive flush after the import's single one.
+    const { backfilledSeasonYears } = withBatchedPersist(() => {
+      const persisted = persistExtraction(dynasty.savePath, extraction);
+      // Best-effort — a coach's confirmed/finalized winner is never touched
+      // regardless, and a failure here shouldn't fail the sync itself (already
+      // logged per-award inside autoRecalculateTeamAwards).
+      try {
+        autoRecalculateTeamAwards(dynastyId, persisted.season.id);
+      } catch (err) {
+        console.error('[team-awards] autoRecalculateTeamAwards failed:', err);
+      }
+      return persisted;
+    });
     return {
       success: true,
       message: `Synced — season ${extraction.league.seasonYear}.${formatBackfillSuffix(backfilledSeasonYears)}`,

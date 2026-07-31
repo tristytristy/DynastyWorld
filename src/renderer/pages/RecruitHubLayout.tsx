@@ -1,12 +1,12 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
+import { GliderNav, gliderItemClass, matchTabIndex } from '../components/ui/GliderNav';
 
-const subTabClass = ({ isActive }: { isActive: boolean }) =>
-  [
-    'shrink-0 px-3.5 py-1.5 text-sm font-medium transition-all duration-base ease-standard',
-    isActive
-      ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white',
-  ].join(' ');
+/** Render order — the glider is positional, so the list is the source of truth. */
+const TABS: { to: string; label: string }[] = [
+  { to: '/recruiting', label: 'My Board' },
+  { to: '/recruits', label: 'National Recruits' },
+  { to: '/watchlist', label: 'Watchlist' },
+];
 
 /**
  * Recruit Hub shell — a dedicated top-level section for everything recruiting
@@ -17,13 +17,11 @@ const subTabClass = ({ isActive }: { isActive: boolean }) =>
  */
 export function RecruitHubLayout() {
   const { id } = useParams<{ id: string }>();
+  const { pathname } = useLocation();
   if (!id) return null;
 
-  const tab = (to: string, label: string, end = false) => (
-    <NavLink to={`/dynasty/${id}${to}`} end={end} className={subTabClass}>
-      {label}
-    </NavLink>
-  );
+  const base = `/dynasty/${id}`;
+  const activeIndex = matchTabIndex(pathname, base, TABS);
 
   return (
     <div className="space-y-5">
@@ -34,10 +32,18 @@ export function RecruitHubLayout() {
         </h2>
       </div>
 
-      <div className="flex items-center gap-1.5 overflow-x-auto border border-slate-200/80 bg-slate-50/90 p-1.5 dark:border-slate-800 dark:bg-white/5">
-        {tab('/recruiting', 'My Board')}
-        {tab('/recruits', 'National Recruits')}
-        {tab('/watchlist', 'Watchlist')}
+      <div className="overflow-x-auto">
+        <GliderNav activeIndex={activeIndex} emphasis="quiet" ariaLabel="Recruit Hub sections" itemsClassName="gap-1.5">
+          {TABS.map((tab, index) => (
+            <Link
+              key={tab.to}
+              to={`${base}${tab.to}`}
+              className={gliderItemClass(index === activeIndex, 'px-3.5 py-1.5')}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </GliderNav>
       </div>
 
       <Outlet />

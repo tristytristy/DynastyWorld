@@ -3,7 +3,7 @@ import { InfoHint } from '../components/ui/InfoHint';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
-import { PageHeader } from '../components/ui/PageHeader';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { TeamLink } from '../components/common/TeamLink';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
@@ -226,18 +226,18 @@ export function History() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageMasthead
         eyebrow="Program History"
-        title={
-          viewedLeagueTeamName
-            ? `${viewedLeagueTeamName} — championships on record.`
-            : `The program story and record book for ${history.teamName}.`
-        }
+        title={viewedLeagueTeamName ?? history.teamName}
+        subtitle={viewedLeagueTeamName ? 'Championships on record' : 'The program story and record book'}
         description={
           viewedLeagueTeamName
             ? 'From the league history the save itself tracks — national and conference titles by year. The full record book and timeline are tracked for your own program only.'
             : "The program's history, with or without you as the coach — school records from the save's own book, plus the timeline, milestones, and league titles that accumulate across the archive."
         }
+        /* Gold: the page is the trophy case, so the celebratory variant is the
+           honest choice here rather than a general appearance decision. */
+        mark={{ kind: 'logo', teamAssetName: viewedLeagueTeamName ?? history.teamName, variant: 'gold' }}
       />
 
       {viewedLeagueTeamName && (

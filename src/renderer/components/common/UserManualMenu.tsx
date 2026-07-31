@@ -9,7 +9,7 @@ import { CenteredModalPanel } from './CenteredModalPanel';
  * app's CSS (and vice versa); on screen the manual uses its fluid, responsive
  * layout. Same origin as the app, so it loads with no network and no CSP fuss.
  */
-export function UserManualMenu({ triggerClassName }: { triggerClassName?: string } = {}) {
+export function UserManualMenu({ triggerClassName, icon }: { triggerClassName?: string; icon?: React.ReactNode } = {}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -20,8 +20,10 @@ export function UserManualMenu({ triggerClassName }: { triggerClassName?: string
         className={triggerClassName ?? 'border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800'}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
+        aria-label={icon ? 'User Manual' : undefined}
+        title={icon ? 'User Manual' : undefined}
       >
-        User Manual
+        {icon ?? 'User Manual'}
       </button>
 
       <CenteredModalPanel open={isOpen} onClose={() => setIsOpen(false)} widthRem={64} eyebrow="Guide" title="User Manual">

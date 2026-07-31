@@ -1,11 +1,15 @@
 import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot, resolveSeasonHeadCoach } from './helpers';
+import { conferenceChampionshipWeek } from '../shared/championshipWeek';
 import { getSeasonGameContext } from './gameContext';
 import { getTeamGameStats } from './getTeamGameStats';
+import { isBowlSlateSet } from '../shared/syncPhase';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { LeagueGameData } from '../extractors/extract-league-schedule';
+import type { GameData } from '../extractors/extract-schedule';
 import type { ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GameSummary, LeagueTeamGame, LeagueTeamHonors, LeagueTeamRoster, LeagueTeamSummary, NationalPlayer, SeasonOverview, TeamCard } from '../shared/types';
+import { isFcsPool } from '../shared/fcsPool';
 
 interface TeamsSnapshotEntry {
   teamIndex: number;
@@ -33,6 +37,7 @@ export function getLeagueTeamOverview(
   teamIndex: number,
   seasonId?: number,
 ): SeasonOverview | undefined {
+  if (isFcsPool(teamIndex)) return undefined;
   const resolved = resolveSeasonId(dynastyId, seasonId);
   if (resolved === undefined) return undefined;
   const dynasty = getDynastyById(dynastyId);
@@ -42,7 +47,15 @@ export function getLeagueTeamOverview(
   if (!team || !dynasty || !season) return undefined;
 
   const games = getSnapshot<LeagueGameData[]>(resolved, 'leagueSchedule') ?? [];
-  const teamGames = games.filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex);
+  // "Upcoming games" below would otherwise surface the save's placeholder bowl
+  // pairing as a real fixture — the same defect as the schedule page, so it
+  // takes the same gate (isBowlSlateSet).
+  const bowlsVisible = isBowlSlateSet(season.syncedWeekType);
+  const teamGames = games.filter(
+    (g) =>
+      (g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex) &&
+      (g.weekType === 'RegularSeason' || bowlsVisible || (g.homeScore !== null && g.awayScore !== null)),
+  );
   const toSummary = (g: LeagueGameData): GameSummary => {
     const isHome = g.homeTeamIndex === teamIndex;
     const teamScore = isHome ? g.homeScore : g.awayScore;
@@ -94,6 +107,7 @@ export function getLeagueTeamOverview(
  * unknown / generic-FCS-pool team — TeamLink shouldn't open the modal for those.
  */
 export function getTeamCard(dynastyId: string, teamIndex: number, seasonId?: number): TeamCard | null {
+  if (isFcsPool(teamIndex)) return null;
   const overview = getLeagueTeamOverview(dynastyId, teamIndex, seasonId);
   if (!overview) return null;
   const resolved = resolveSeasonId(dynastyId, seasonId);
@@ -138,6 +152,10 @@ export function getLeagueTeams(dynastyId: string, seasonId?: number): LeagueTeam
     counts.set(player.teamIndex, (counts.get(player.teamIndex) ?? 0) + 1);
   }
   return [...counts.entries()]
+    // The FCS pool is not a team — 4,525 players share index 255, and offering
+    // it in the switcher is what let a user open a roster large enough to take
+    // the renderer down. See shared/fcsPool.ts.
+    .filter(([teamIndex]) => !isFcsPool(teamIndex))
     .map(([teamIndex, playerCount]) => ({
       teamIndex,
       displayName: nameByIndex.get(teamIndex) ?? `Team ${teamIndex}`,
@@ -149,6 +167,7 @@ export function getLeagueTeams(dynastyId: string, seasonId?: number): LeagueTeam
 
 /** One team's full roster from the league snapshot, with season stat lines joined for stat-holders. */
 export function getLeagueTeamRoster(dynastyId: string, teamIndex: number, seasonId?: number): LeagueTeamRoster | null {
+  if (isFcsPool(teamIndex)) return null;
   const resolved = resolveSeasonId(dynastyId, seasonId);
   if (resolved === undefined) return null;
   const league = getSnapshot<LeagueRosterData>(resolved, 'leagueRoster');
@@ -194,6 +213,7 @@ export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): Natio
 
 /** Any team's season schedule from the league-wide game snapshot, mapped relative to that team (their opponent, their W/L). */
 export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seasonId?: number): LeagueTeamGame[] | null {
+  if (isFcsPool(teamIndex)) return null;
   const resolved = resolveSeasonId(dynastyId, seasonId);
   if (resolved === undefined) return null;
   const games = getSnapshot<LeagueGameData[]>(resolved, 'leagueSchedule');
@@ -206,8 +226,40 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
   const conferenceByTeamIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
   const gameContext = getSeasonGameContext(resolved);
 
+  // Same placeholder-bowl gate the user's own schedule applies (isBowlSlateSet):
+  // before bowl week the save's bowl pairings are pre-assignments that will be
+  // rewritten, and browsing another program shouldn't show them either.
+  const bowlsVisible = isBowlSlateSet(getSeasonById(resolved)?.syncedWeekType);
+
+  /*
+    Bowl identity comes from the `schedule` snapshot, not from `leagueSchedule`
+    — GameData is leaguewide (every game, not just the user's), and it's the one
+    that actually resolves the save's BowlGame reference. The leagueSchedule
+    copy was null for EVERY postseason game, so the Type column fell back to
+    printing the raw week bucket: a CFP Semifinal read "BowlSeason3".
+
+    Reading across fixes existing dynasties with no re-sync. The extractor was
+    fixed too (it ran before BowlGame was preloaded, so the reference never
+    resolved), but that only helps seasons synced from now on.
+  */
+  const championshipWeek = conferenceChampionshipWeek(
+    (getSnapshot<GameData[]>(resolved, 'schedule') ?? []).map((g) => ({ week: g.week, isBowlGame: g.isBowlGame })),
+  );
+  const bowlByGameId = new Map(
+    (getSnapshot<GameData[]>(resolved, 'schedule') ?? []).map((g) => [
+      g.gameId,
+      { bowlName: g.bowlName, bowlAssetName: g.bowlAssetName, isNationalChampionship: g.isNationalChampionship },
+    ]),
+  );
+
   return games
     .filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex)
+    .filter(
+      (g) =>
+        g.weekType === 'RegularSeason' ||
+        bowlsVisible ||
+        (g.homeScore !== null && g.awayScore !== null),
+    )
     .sort((a, b) => a.week - b.week)
     .map((g) => {
       const isHome = g.homeTeamIndex === teamIndex;
@@ -243,7 +295,10 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         gameId: g.gameId,
         week: g.week,
         weekType: g.weekType,
-        bowlName: g.bowlName,
+        bowlName: bowlByGameId.get(g.gameId)?.bowlName ?? g.bowlName,
+        bowlAssetName: bowlByGameId.get(g.gameId)?.bowlAssetName ?? null,
+        isNationalChampionship: bowlByGameId.get(g.gameId)?.isNationalChampionship ?? g.weekType === 'NationalChampionship',
+        isConferenceChampionship: gameType === 'conference' && championshipWeek !== null && g.week === championshipWeek,
         isHome,
         opponent: isHome ? g.awayTeamName : g.homeTeamName,
         opponentTeamIndex: opponentIndex,
@@ -268,6 +323,7 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
  * shows no trophy rather than a wrong one.
  */
 export function getLeagueTeamHonors(dynastyId: string, teamIndex: number, seasonId?: number): LeagueTeamHonors | null {
+  if (isFcsPool(teamIndex)) return null;
   const resolved = resolveSeasonId(dynastyId, seasonId);
   if (resolved === undefined) return null;
 

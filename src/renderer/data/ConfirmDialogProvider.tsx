@@ -88,7 +88,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
         createPortal(
           <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
             <div
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+              className="modal-scrim absolute inset-0"
               onMouseDown={() => settle(false)}
               aria-hidden="true"
             />
@@ -96,17 +96,43 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
               role="alertdialog"
               aria-modal="true"
               aria-label={options.title}
-              className="corner-cut content-enter relative w-full max-w-md border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-950"
+              className="corner-cut modal-panel relative w-full max-w-md p-6"
             >
-              {options.eyebrow && (
-                <p className={`type-eyebrow ${isDanger ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {options.eyebrow}
-                </p>
-              )}
-              <h2 className="mt-1 font-display text-lg font-bold text-slate-950 dark:text-white">{options.title}</h2>
-              {options.message && (
-                <div className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{options.message}</div>
-              )}
+              {/*
+                A DESTRUCTIVE dialog gets a glyph; an ordinary one doesn't. The
+                mark is what makes "this deletes something" register before the
+                sentence is read — and it only works as a signal because it isn't
+                on every dialog. Squared with the app's cut corner rather than the
+                usual round badge, since nothing else here is round.
+              */}
+              <div className="flex items-start gap-4">
+                {isDanger && (
+                  <span
+                    aria-hidden="true"
+                    className="corner-cut-sm mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center border border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5">
+                      <path d="M12 9v4" strokeLinecap="round" />
+                      <path d="M12 17h.01" strokeLinecap="round" />
+                      <path
+                        d="M10.3 3.9 2.7 16.1c-.9 1.5.2 3.4 1.9 3.4h14.7c1.7 0 2.8-1.9 1.9-3.4L13.7 3.9c-.9-1.5-3-1.5-3.9 0Z"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                )}
+                <div className="min-w-0">
+                  {options.eyebrow && (
+                    <p className={`type-eyebrow ${isDanger ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                      {options.eyebrow}
+                    </p>
+                  )}
+                  <h2 className="mt-1 font-display text-lg font-bold text-slate-950 dark:text-white">{options.title}</h2>
+                  {options.message && (
+                    <div className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{options.message}</div>
+                  )}
+                </div>
+              </div>
               <div className="mt-6 flex items-center justify-end gap-2">
                 <button
                   type="button"

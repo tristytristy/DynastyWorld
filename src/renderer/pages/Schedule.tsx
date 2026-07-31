@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react';
-import { InfoHint } from '../components/ui/InfoHint';
 import type { SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { TeamLink } from '../components/common/TeamLink';
 import { useTheme } from '../theme/ThemeProvider';
-import { useStadiumData } from '../data/StadiumDataProvider';
+import { useProgramStadium } from '../data/ProgramArtProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
-import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
+import { bowlLabel, gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
 import { getBowlLogoPath } from '../lib/trophyAssetMapping';
-import { getHelmetPath, DEFAULT_HELMET_PATH } from '../lib/helmetAssetMapping';
+import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import type { LeagueTeamGame, ScheduleGame, ScheduleOverview } from '../../shared/types';
 
-/**
- * Premium schedule masthead — the team's own helmet (facing right, into the
- * page) leading the page identity, with the season's headline numbers as
- * compact stat chips. Shared by the user's own schedule and any league team's.
- */
+/** Schedule's masthead — the shared PageMasthead with the team's helmet and the season's headline numbers as chips. */
 function ScheduleHero({
   teamAssetName,
   teamLabel,
@@ -33,44 +29,13 @@ function ScheduleHero({
   stats: { label: string; value: string }[];
 }) {
   return (
-    <SurfaceCard surface="raised" className="relative overflow-hidden">
-      {/* Signature left edge in the active team color — ties the masthead to the app chrome. */}
-      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-[var(--team-primary)]" />
-      <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:gap-7 sm:text-left">
-        <img
-          src={getHelmetPath(teamAssetName, 'left')}
-          alt=""
-          onError={(event) => {
-            const img = event.currentTarget;
-            if (img.dataset.fellBack) return;
-            img.dataset.fellBack = '1';
-            img.src = DEFAULT_HELMET_PATH.left;
-          }}
-          className="-my-4 h-36 w-36 shrink-0 object-contain sm:-my-6 sm:h-52 sm:w-52"
-          draggable={false}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Schedule</p>
-          <h2 className="type-page-title mt-1.5 flex items-center justify-center gap-2 text-slate-950 dark:text-white sm:justify-start">
-            <span>{teamLabel}</span>
-            {description ? <InfoHint label="About this schedule">{description}</InfoHint> : null}
-          </h2>
-          {stats.length > 0 && (
-            <div className="mt-4 flex flex-wrap justify-center gap-2.5 sm:justify-start">
-              {stats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="corner-cut-sm border border-slate-200/80 bg-slate-50/85 px-4 py-2 dark:border-slate-800 dark:bg-white/5"
-                >
-                  <p className="type-eyebrow text-slate-400 dark:text-slate-500">{stat.label}</p>
-                  <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-slate-900 dark:text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </SurfaceCard>
+    <PageMasthead
+      eyebrow="Schedule"
+      title={teamLabel}
+      description={description}
+      mark={{ kind: 'helmet', teamAssetName }}
+      stats={stats}
+    />
   );
 }
 
@@ -100,9 +65,30 @@ function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): voi
   event.currentTarget.src = fallback;
 }
 
+/**
+ * The rivalry mark, in its own column beside the opponent — the matchup's
+ * identity belongs next to who you're playing, not in Type, which is already
+ * saying conference/bowl and can only hold one thing.
+ *
+ * Keyed on the two team NAMES (see rivalryAssetMapping), so it lights up on a
+ * browsed team's schedule too, where the save gives no rivalry flag at all.
+ * `isKnownRivalry` only ever adds the generic shield on top of that.
+ *
+ * Renders for upcoming games as well as played ones: a rivalry you can see
+ * coming is the point of a schedule.
+ */
+function RivalryCell({ teamName, opponent, isKnownRivalry }: { teamName: string; opponent: string; isKnownRivalry?: boolean }) {
+  const src = getRivalryLogoPath(teamName, opponent, isKnownRivalry);
+  if (!src) return null;
+  return <img src={src} alt="" title="Rivalry game" className="h-10 w-10 shrink-0 object-contain" draggable={false} />;
+}
+
 function TypeCell({ game }: { game: ScheduleGame }) {
   const { appearance } = useTheme();
-  if (game.gameType === 'conference' && game.conferenceName) {
+  // Conference games normally show the plain conference mark — except the
+  // championship, which falls through to getGameTypeImagePath for the event's
+  // own logo.
+  if (game.gameType === 'conference' && game.conferenceName && !game.isConferenceChampionship) {
     return <ConferenceMark conferenceName={game.conferenceName} background={appearance} context="table" alt="" />;
   }
 
@@ -141,7 +127,8 @@ function RankBadge({ rank, captured }: { rank: number | null; captured?: boolean
 }
 
 function LocationCell({ game }: { game: ScheduleGame }) {
-  const { getStadium } = useStadiumData();
+  // Program-editor overrides layered over the built-in reference data.
+  const getStadium = useProgramStadium();
   const { badge, stadium, cityState } = getLocationDisplay(game, getStadium);
   // A neutral-site bowl/championship game shows its real event name here
   // instead of the generic "Neutral Site" label — the event IS the location
@@ -194,6 +181,12 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
       <td className="px-5 py-4 proportional-nums text-slate-500 dark:text-slate-400">
         {game.opponentRecord ? `${game.opponentRecord.wins}-${game.opponentRecord.losses}` : '-'}
       </td>
+      {/* px-2, not the row's usual px-5: a 56px column minus 40px of padding
+          left a 16px content box, and the table squeezed the 40px mark into it
+          — measured at 16x40 before this, i.e. visibly crushed sideways. */}
+      <td className="px-2 py-4">
+        <RivalryCell teamName={game.teamName} opponent={game.opponent} isKnownRivalry={game.isRivalryGame} />
+      </td>
       <td className="px-5 py-4">
         <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
           <span className="text-slate-400 dark:text-slate-500">{game.isHome ? 'vs' : '@'}</span>
@@ -227,13 +220,50 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
  * perspective. No stadiums/kickoff/game-detail links: those are only tracked
  * for the user's own games.
  */
-/** Type-column content for a league-view game: conference icon, bowl name, or a non-conference label — mirrors the user's own schedule's conference-icon treatment. */
+/**
+ * Type-column content for a league-view game — now the SAME treatment as the
+ * user's own schedule (TypeCell above), logo included.
+ *
+ * It used to print `game.weekType` whenever the bowl name was missing, which
+ * was every postseason game: a CFP Semifinal read "BowlSeason3". That string is
+ * a week bucket, not a round — one Auburn season had 28 games in BowlSeason1,
+ * every December bowl mixed in with the Playoff first round — so it could never
+ * be shown to anyone. The name itself is fixed at the source (see
+ * getLeagueTeamSchedule); this just stops the raw enum from ever surfacing
+ * again, falling back to the generic bowl mark and "Bowl Game".
+ */
 function LeagueTypeCell({ game, appearance }: { game: LeagueTeamGame; appearance: 'light' | 'dark' }) {
+  if (game.isConferenceChampionship && game.conferenceName) {
+    const champPath = getGameTypeImagePath(game, appearance);
+    if (champPath) {
+      return (
+        <img
+          src={champPath}
+          alt={`${game.conferenceName} Championship`}
+          title={`${game.conferenceName} Championship`}
+          className="h-12 w-12 shrink-0 object-contain"
+          draggable={false}
+        />
+      );
+    }
+  }
   if (game.gameType === 'conference' && game.conferenceName) {
     return <ConferenceMark conferenceName={game.conferenceName} background={appearance} context="table" alt={game.conferenceName} />;
   }
   if (game.gameType === 'bowl') {
-    return <span className="text-slate-600 dark:text-slate-300">{game.bowlName ?? (game.weekType === 'RegularSeason' ? '—' : game.weekType)}</span>;
+    const imagePath = getGameTypeImagePath(game, appearance);
+    const label = bowlLabel(game);
+    if (!imagePath) return <span className="text-slate-600 dark:text-slate-300">{label}</span>;
+    return (
+      <img
+        src={imagePath}
+        alt={label}
+        title={label}
+        onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
+        className="h-12 w-12 shrink-0 object-contain"
+        draggable={false}
+      />
+    );
   }
   return <span className="text-slate-400 dark:text-slate-500">Non-Conf</span>;
 }
@@ -285,7 +315,8 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                       record AS THEY STOOD at kickoff, so browsing another
                       program shows their season as it actually unfolded. */}
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Rank</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Record</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Rec</th>
+                  <th className="w-16 px-2 py-3.5" aria-label="Rivalry" />
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opponent</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-[0.2em]">Result</th>
@@ -312,6 +343,9 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                       </td>
                       <td className="tnum px-5 py-3.5 text-slate-500 dark:text-slate-400">
                         {g.opponentRecord ? `${g.opponentRecord.wins}-${g.opponentRecord.losses}` : '—'}
+                      </td>
+                      <td className="px-2 py-3.5">
+                        <RivalryCell teamName={teamName} opponent={g.opponent} />
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
@@ -402,7 +436,11 @@ export function Schedule() {
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Wk</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Date</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Rank</th>
-                <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Record</th>
+                <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Rec</th>
+                {/* Rivalry mark — intentionally unlabelled, and shortening Record to
+                    Rec is what bought the width. A header over a column that's
+                    empty on eleven of thirteen rows reads as missing data. */}
+                <th className="w-16 px-2 py-4" aria-label="Rivalry" />
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Opponent</th>
                 <th className="w-16 px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Type</th>
                 <th className="min-w-[16rem] px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Location</th>

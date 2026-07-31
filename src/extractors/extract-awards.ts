@@ -5,6 +5,7 @@ import {
   resolveReferenceWithTable,
   type OpenFranchise,
 } from './lib/franchise';
+import { PLAYER_FIELDS } from './lib/playerFields';
 import { AWARD_DISPLAY_ORDER } from '../shared/awardOrder';
 
 /**
@@ -155,7 +156,7 @@ export async function extractAwards(
 ): Promise<AwardsData> {
   const playerAwardTable = getLargestTable(franchise, 'PlayerAward');
   await playerAwardTable.readRecords();
-  await preloadAllInstances(franchise, 'Player');
+  await preloadAllInstances(franchise, 'Player', PLAYER_FIELDS);
   await preloadAllInstances(franchise, 'Team');
   await preloadAllInstances(franchise, 'Conference');
 

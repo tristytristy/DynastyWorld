@@ -6,6 +6,7 @@ import {
   type FranchiseRecord,
   type OpenFranchise,
 } from './lib/franchise';
+import { PLAYER_FIELDS } from './lib/playerFields';
 
 /**
  * One prospect on the user's own recruiting board — NOT the leaguewide pool
@@ -184,7 +185,7 @@ export async function extractRecruits(franchise: OpenFranchise, userTeamIndex: n
     preloadAllInstances(franchise, 'RecruitTarget[]'),
     preloadAllInstances(franchise, 'UserRecruitTarget'),
     preloadAllInstances(franchise, 'Recruit'),
-    preloadAllInstances(franchise, 'Player'),
+    preloadAllInstances(franchise, 'Player', PLAYER_FIELDS),
   ]);
 
   const signedDestinations = await buildSignedDestinationMap(franchise, teamTable);

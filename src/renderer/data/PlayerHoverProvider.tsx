@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { PlayerCard } from '../components/common/PlayerCard';
-import { useTheme } from '../theme/ThemeProvider';
+import { SavedPlayerCard } from '../components/common/SavedPlayerCard';
+import { mediaFileUrl as fileUrl } from '../components/common/MediaGallery';
+import { useTeamThemeVars } from '../lib/cardTheme';
 import { getPlayerCardHoverDelayMs, getPlayerCardHoverEnabled } from '../lib/hoverCardPrefs';
-import type { RosterPlayer, TeamTheme } from '../../shared/types';
+import type { CardPhotoTransform, PlayerCardRecord, RosterPlayer } from '../../shared/types';
 
 /** Everything the floating card needs — the player object we already hold at the hover site, plus its team/season context. */
 export interface PlayerHoverData {
@@ -31,55 +33,60 @@ const PlayerHoverContext = createContext<PlayerHoverContextValue | null>(null);
 const CARD_W = 250;
 const CARD_H = Math.round((CARD_W * 496) / 330);
 
-// Team colors are stable within a session; cache by team so a hover never
-// re-hits IPC for a team we've already themed.
-const themeCache = new Map<string, TeamTheme | null>();
+const NO_TRANSFORM: CardPhotoTransform = { x: 0, y: 0, scale: 1 };
 
-function readTransform(dynastyId: string, playerId: number): { x: number; y: number; scale: number } {
+/** Pre-v12 framing, kept only as the fallback for a player who has a legacy photo file but no saved card row. */
+function readLegacyTransform(dynastyId: string, playerId: number): CardPhotoTransform {
   try {
     const raw = localStorage.getItem(`cfb.cardphoto.${dynastyId}.${playerId}`);
     if (raw) {
-      const parsed = JSON.parse(raw) as { x: number; y: number; scale: number };
+      const parsed = JSON.parse(raw) as Partial<CardPhotoTransform>;
       return { x: parsed.x ?? 0, y: parsed.y ?? 0, scale: parsed.scale ?? 1 };
     }
   } catch {
     /* ignore */
   }
-  return { x: 0, y: 0, scale: 1 };
+  return NO_TRANSFORM;
 }
 
-/** The floating preview itself — resolves colors + the player's framed photo, then positions near the anchor. */
+/**
+ * The floating preview itself.
+ *
+ * When the player has a saved card, the preview IS that card — the one marked
+ * default — rendered straight from its row: its photo and framing, its stat
+ * line, the player as they were on it, and its school's colours. That is what
+ * makes "the default is what shows on hover" mean something; drawing the live
+ * player with only the photo borrowed would show a card the user never made.
+ *
+ * With no saved card it falls back to a live card built from the hover site's
+ * own player object, plus any pre-v12 photo file and its localStorage framing.
+ */
 function HoverCard({ data, rect }: HoverState) {
-  const { resolveColorVars } = useTheme();
-  const cacheKey = `${data.dynastyId}::${data.teamName ?? ''}`;
-  const [theme, setTheme] = useState<TeamTheme | null>(() => themeCache.get(cacheKey) ?? null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const colorVars = useTeamThemeVars(data.dynastyId, data.teamName);
+  const [card, setCard] = useState<PlayerCardRecord | null>(null);
+  const [legacyPhotoUrl, setLegacyPhotoUrl] = useState<string | null>(null);
+  const [legacyTransform, setLegacyTransform] = useState<CardPhotoTransform>(NO_TRANSFORM);
 
   useEffect(() => {
     let cancelled = false;
-    if (themeCache.has(cacheKey)) {
-      setTheme(themeCache.get(cacheKey) ?? null);
-    } else {
-      const request = data.teamName
-        ? window.api.db.getTeamTheme(data.dynastyId, data.teamName)
-        : window.api.db.getDynastyTheme(data.dynastyId);
-      request.then((t) => {
-        const colors = t ? { primaryColor: t.primaryColor, secondaryColor: t.secondaryColor } : null;
-        themeCache.set(cacheKey, colors);
-        if (!cancelled) setTheme(colors);
-      });
-    }
-    window.api.card.getPhoto(data.dynastyId, data.player.id).then((p) => {
+    setCard(null);
+
+    window.api.card.list(data.dynastyId, data.player.id).then(async (cards) => {
+      const preferred = cards.find((c) => c.isDefault) ?? cards[0] ?? null;
+      if (preferred) {
+        if (!cancelled) setCard(preferred);
+        return;
+      }
+      const legacy = await window.api.card.getPhoto(data.dynastyId, data.player.id);
       if (!cancelled) {
-        setPhotoUrl(p ? encodeURI(`file:///${p.replace(/\\/g, '/')}`) : null);
+        setLegacyPhotoUrl(legacy ? fileUrl(legacy) : null);
+        setLegacyTransform(legacy ? readLegacyTransform(data.dynastyId, data.player.id) : NO_TRANSFORM);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, data.dynastyId, data.teamName, data.player.id]);
-
-  const colorVars = resolveColorVars({ primary: theme?.primaryColor ?? null, secondary: theme?.secondaryColor ?? null });
+  }, [data.dynastyId, data.player.id]);
 
   // Prefer the right of the name; flip left if it would overflow, then clamp.
   let left = rect.right + 12;
@@ -90,16 +97,20 @@ function HoverCard({ data, rect }: HoverState) {
   return createPortal(
     <div
       className="pointer-events-none fixed z-[9999] animate-[cardHoverIn_140ms_ease-out]"
-      style={{ left, top, width: CARD_W, ...(colorVars as CSSProperties) }}
+      style={{ left, top, width: CARD_W, ...colorVars }}
     >
-      <PlayerCard
-        player={data.player}
-        teamName={data.teamName}
-        seasonYear={data.seasonYear}
-        stats={data.stats ?? []}
-        photoUrl={photoUrl}
-        photoTransform={photoUrl ? readTransform(data.dynastyId, data.player.id) : undefined}
-      />
+      {card ? (
+        <SavedPlayerCard dynastyId={data.dynastyId} card={card} />
+      ) : (
+        <PlayerCard
+          player={data.player}
+          teamName={data.teamName}
+          seasonYear={data.seasonYear}
+          stats={data.stats ?? []}
+          photoUrl={legacyPhotoUrl}
+          photoTransform={legacyPhotoUrl ? legacyTransform : undefined}
+        />
+      )}
     </div>,
     document.body,
   );

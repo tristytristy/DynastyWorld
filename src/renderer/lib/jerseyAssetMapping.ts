@@ -13,6 +13,7 @@
  * jersey — the caller just passes the player's CURRENT team.
  */
 import { TEAM_3D_LOGOS, canonicalKey } from './assetMapping';
+import { programArtFor } from './programArt';
 
 const JERSEY_BASE_PATH = 'cfbmedia://media/jersey';
 
@@ -29,6 +30,10 @@ export function hasTeamJersey(teamAssetName: string): boolean {
  */
 export function getJerseyPath(teamAssetName: string | null | undefined): string | null {
   if (!teamAssetName) return null;
-  const filename = TEAM_3D_LOGOS[canonicalKey(teamAssetName)];
+  const key = canonicalKey(teamAssetName);
+  // An upload wins over the shipped library — see programArt.ts.
+  const uploaded = programArtFor(key, 'jersey');
+  if (uploaded) return uploaded;
+  const filename = TEAM_3D_LOGOS[key];
   return filename ? `${JERSEY_BASE_PATH}/tjer_teamjerseys_${filename.replace(/\.webp$/i, '')}_result.webp` : null;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { StatTile } from '../components/ui/StatTile';
-import { TeamLogo } from '../components/common/TeamLogo';
 import {
   StatisticsCategorySection,
   LeaderCard,
@@ -529,23 +530,12 @@ export function Statistics() {
 
   return (
     <div className="space-y-6">
-      <SurfaceCard>
-        <div className="flex items-center gap-4">
-          <TeamLogo
-            team={{ assetName: viewedTeamName ?? overview.teamName, label: viewedTeamName ?? overview.teamName }}
-            size="lg"
-          />
-          <div>
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Statistics</p>
-            <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-              {viewedTeamName ?? overview.teamName}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Season {overview.seasonYear} — last synced {new Date(overview.lastSyncedAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-      </SurfaceCard>
+      <PageMasthead
+        eyebrow="Statistics"
+        title={viewedTeamName ?? overview.teamName}
+        subtitle={`Season ${overview.seasonYear} — last synced ${new Date(overview.lastSyncedAt).toLocaleDateString()}`}
+        mark={{ kind: 'helmet', teamAssetName: viewedTeamName ?? overview.teamName }}
+      />
 
       {/* Sticky controls — mode switcher + shared filters that drive both views.
           Restrained treatment (§4): fine border, subtle depth, no floating panel. */}
@@ -560,31 +550,21 @@ export function Statistics() {
           ]}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
             value={gameType}
-            onChange={(e) => setGameType(e.target.value as TeamGameTypeFilter)}
-            aria-label="Game type"
-            className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-          >
-            {gameTypeOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <select
+            onChange={setGameType}
+            ariaLabel="Game type"
+            options={gameTypeOptions.map((o) => ({ value: o.value, label: o.label }))}
+          />
+          <Select
             value={opponentFilter}
-            onChange={(e) => setOpponentFilter(e.target.value)}
-            aria-label="Opponent filter"
-            className="border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-          >
-            <option value="all">All Opponents</option>
-            {opponents.map((opp) => (
-              <option key={opp} value={opp}>
-                vs {opp}
-              </option>
-            ))}
-          </select>
+            onChange={setOpponentFilter}
+            ariaLabel="Opponent filter"
+            options={[
+              { value: 'all', label: 'All Opponents' },
+              ...opponents.map((opp) => ({ value: opp, label: `vs ${opp}` })),
+            ]}
+          />
           <SegmentedControl<StatMode>
             value={mode}
             onChange={setMode}

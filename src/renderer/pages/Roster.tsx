@@ -5,7 +5,8 @@ import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { EditButton } from '../components/common/CoachCard';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
-import { PageHeader } from '../components/ui/PageHeader';
+import { Select } from '../components/ui/Select';
+import { PageMasthead } from '../components/common/PageMasthead';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { usePlayerHoverCard } from '../data/PlayerHoverProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
@@ -339,9 +340,11 @@ export function Roster() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageMasthead
         eyebrow="Roster"
-        title={viewedTeamName ? `${viewedTeamName} roster.` : 'Search, compare, and review every player in one pass.'}
+        title={hoverTeamName ?? 'Roster'}
+        description="Search, compare, and review every player in one pass."
+        mark={{ kind: 'logo', teamAssetName: hoverTeamName ?? '' }}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -361,56 +364,36 @@ export function Roster() {
               onChange={(event) => setSearch(event.target.value)}
               className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
             />
-            <select
+            <Select
               value={unitFilter}
-              onChange={(event) => setUnitFilter(event.target.value as Unit | '')}
-              className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-            >
-              <option value="">All units</option>
-              {UNITS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unit}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setUnitFilter}
+              ariaLabel="Unit"
+              className="w-full"
+              options={[{ value: '' as Unit | '', label: 'All units' }, ...UNITS.map((unit) => ({ value: unit as Unit | '', label: unit }))]}
+            />
+            <Select
               value={positionFilter}
-              onChange={(event) => setPositionFilter(event.target.value)}
-              className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-            >
-              <option value="">All positions</option>
-              {positions.map((position) => (
-                <option key={position} value={position}>
-                  {position}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setPositionFilter}
+              ariaLabel="Position"
+              className="w-full"
+              options={[{ value: '', label: 'All positions' }, ...positions.map((position) => ({ value: position, label: position }))]}
+            />
+            <Select
               value={classFilter}
-              onChange={(event) => setClassFilter(event.target.value)}
-              className="rounded-lg border border-slate-200/80 bg-slate-50/85 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-            >
-              <option value="">All classes</option>
-              {CLASS_ORDER.map((cls) => (
-                <option key={cls} value={cls}>
-                  {cls}
-                </option>
-              ))}
-            </select>
+              onChange={setClassFilter}
+              ariaLabel="Class"
+              className="w-full"
+              options={[{ value: '', label: 'All classes' }, ...CLASS_ORDER.map((cls) => ({ value: cls, label: cls }))]}
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <select
+            <Select
               value={sortKey}
-              onChange={(event) => handleSort(event.target.value as SortKey)}
-              className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-            >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.key} value={option.key}>
-                  Sort by {option.label}
-                </option>
-              ))}
-            </select>
+              onChange={handleSort}
+              ariaLabel="Sort by"
+              options={SORT_OPTIONS.map((option) => ({ value: option.key, label: `Sort by ${option.label}` }))}
+            />
             <button
               type="button"
               onClick={() => setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))}

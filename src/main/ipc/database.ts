@@ -54,7 +54,7 @@ import { getPlayerStats } from '../../database/getPlayerStats';
 import { getTeamStats } from '../../database/getTeamStats';
 import { getTeamGameStats } from '../../database/getTeamGameStats';
 import { getKickingStats } from '../../database/getKickingStats';
-import { getGameLog } from '../../database/getGameLog';
+import { getGameLog, getPlayerGameLog } from '../../database/getGameLog';
 import { getGameDetail } from '../../database/getGameDetail';
 import { getTrophies } from '../../database/getTrophies';
 import { getSchedule } from '../../database/getSchedule';
@@ -70,6 +70,8 @@ import { getNationalStatLeaders } from '../../database/getNationalStatLeaders';
 import { getNationalRecruits } from '../../database/getNationalRecruits';
 import { getNcaaRecords } from '../../database/getNcaaRecords';
 import { getDynastyTrends } from '../../database/getDynastyTrends';
+import { getSeasonAnalytics } from '../../database/getSeasonAnalytics';
+import { getProgramArc } from '../../database/getProgramArc';
 import { getTransfers } from '../../database/getTransfers';
 import { getDepartures } from '../../database/getDepartures';
 import { globalSearch } from '../../database/globalSearch';
@@ -258,6 +260,18 @@ export function registerDatabaseHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC.db.getPlayerGameLog,
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      seasonId?: number,
+    ): Promise<GameLogEntry[] | null> => {
+      return getPlayerGameLog(dynastyId, playerId, seasonId) ?? null;
+    },
+  );
+
+  ipcMain.handle(
     IPC.db.getGameDetail,
     async (_event, dynastyId: string, gameId: number, seasonId?: number): Promise<GameDetailData | null> => {
       return getGameDetail(dynastyId, gameId, seasonId) ?? null;
@@ -359,6 +373,14 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.getNcaaRecords, async (_event, dynastyId: string, seasonId?: number) => {
     return getNcaaRecords(dynastyId, seasonId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.getSeasonAnalytics, async (_event, dynastyId: string, seasonId?: number) => {
+    return getSeasonAnalytics(dynastyId, seasonId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.getProgramArc, async (_event, dynastyId: string) => {
+    return getProgramArc(dynastyId) ?? null;
   });
 
   ipcMain.handle(IPC.db.getDynastyTrends, async (_event, dynastyId: string) => {

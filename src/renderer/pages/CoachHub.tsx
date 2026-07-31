@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { CardBookModal } from '../components/common/CardBookModal';
 import { ScandalsModal } from '../components/common/ScandalsModal';
 import { Link, useParams } from 'react-router-dom';
-import { CoachCard, EditButton, coachKey, spaceCamelCase, type CoachResume } from '../components/common/CoachCard';
+import { CoachCard, EditButton, coachKey, spaceCamelCase, type CoachResume, type UnitStats } from '../components/common/CoachCard';
 import { CoachPortrait } from '../components/common/CoachPortrait';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { TeamLink } from '../components/common/TeamLink';
@@ -18,6 +19,7 @@ import type {
   ScheduleOverview,
   SeasonOverview,
 } from '../../shared/types';
+import type { TeamStatsData } from '../../extractors/extract-team-stats';
 
 /** "'26" / "'26–'28" for a coach's tenure span. */
 function yearsSpan(a: number, b: number): string {
@@ -140,13 +142,80 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
+/**
+ * The two per-game numbers a coordinator is actually judged on, for the season
+ * on screen: yards and points, on their own side of the ball.
+ *
+ * The offensive pair comes from the team's own season line; the defensive pair
+ * is the same idea from the other direction — `defPassYards + defRushYards` is
+ * what the defence GAVE UP, and points against come off the schedule, since the
+ * team-stats snapshot carries yardage but not scoring. Games played is taken
+ * from the finished games on the schedule rather than the record, so a
+ * mid-season average divides by the games that have actually happened.
+ */
+function buildUnitStats(
+  teamStats: TeamStatsData | null,
+  schedule: ScheduleOverview | null,
+): UnitStats | null {
+  if (!teamStats && !schedule) return null;
+  const played = (schedule?.games ?? []).filter(
+    (g) => g.teamScore !== null && g.opponentScore !== null,
+  );
+  const games = played.length;
+  if (games === 0) return null;
+
+  const per = (total: number) => Math.round((total / games) * 10) / 10;
+  const pointsFor = played.reduce((sum, g) => sum + (g.teamScore ?? 0), 0);
+  const pointsAgainst = played.reduce((sum, g) => sum + (g.opponentScore ?? 0), 0);
+
+  return {
+    offenseYardsPerGame: teamStats ? per(teamStats.totalYards) : null,
+    pointsPerGame: per(pointsFor),
+    defenseYardsPerGame: teamStats ? per(teamStats.defPassYards + teamStats.defRushYards) : null,
+    pointsAgainstPerGame: per(pointsAgainst),
+  };
+}
+
+/**
+ * How many years into their run at this school a coach is, for the season being
+ * viewed.
+ *
+ * NOT `seasonsWithTeam + 1`, which is what this used to be, and the reason a
+ * coach read "2nd year" in both 2026 and 2027.
+ *
+ * WHAT THE SAVE ACTUALLY DOES, measured across a full Auburn cycle (W0 → W30 →
+ * season 2 W0): `SeasonsWithTeam` counts **completed** seasons and it bumps
+ * during the OFFSEASON of the season it belongs to, not at the next season's
+ * start. Joel Gordon reads 0 at 2026 preseason, 1 by 2026's offseason, and still
+ * 1 at 2027 preseason. So `+ 1` is correct for a season synced while it's being
+ * played, and one too high for the same season synced after its offseason — and
+ * the next season then repeats the number, which is exactly what was reported.
+ *
+ * The fix doesn't try to guess the phase (it isn't stored). It estimates the
+ * coach's FIRST year here from each observation as `year - seasonsWithTeam`, and
+ * takes the LATEST such estimate: an in-season observation gives the true first
+ * year, a post-offseason one gives a year too early, and the maximum discards
+ * the too-early answer as soon as any single in-season observation exists —
+ * which one more synced season almost always provides. Tenure is then plain
+ * arithmetic against the season on screen, so it always advances year over year.
+ *
+ * With one season, synced post-offseason, and nothing to cross-check against,
+ * this is still one high — the same answer as before, never worse.
+ */
+function tenureYearFor(resume: CoachResume | null, viewedSeasonYear: number, fallbackSeasonsWithTeam: number): number {
+  if (!resume || resume.firstYearWithTeam === null) return fallbackSeasonsWithTeam + 1;
+  return Math.max(1, viewedSeasonYear - resume.firstYearWithTeam + 1);
+}
+
 /** Each staff member's own win-loss record for the seasons they've actually been on this staff, keyed by coach name across every imported season. */
 function buildCoachResumeMap(
   seasons: { seasonYear: number; coaches: CoachOverview | null; schedule: ScheduleOverview | null }[],
 ): Map<string, CoachResume> {
   const map = new Map<string, CoachResume>();
 
-  for (const season of seasons) {
+  // Oldest first, so the FIRST entry a coach gets is genuinely their earliest
+  // season here — that's the one whose `seasonsWithTeam` becomes the baseline.
+  for (const season of [...seasons].sort((a, b) => a.seasonYear - b.seasonYear)) {
     const wins = season.schedule?.record.wins ?? 0;
     const losses = season.schedule?.record.losses ?? 0;
     const conferenceWins = season.schedule?.conferenceRecord.wins ?? 0;
@@ -163,6 +232,13 @@ function buildCoachResumeMap(
         existing.conferenceLosses += conferenceLosses;
         existing.firstSeason = Math.min(existing.firstSeason, season.seasonYear);
         existing.lastSeason = Math.max(existing.lastSeason, season.seasonYear);
+        if (!existing.staffYears.includes(season.seasonYear)) existing.staffYears.push(season.seasonYear);
+        // Latest estimate wins — see tenureYearFor for why the maximum is the
+        // right pick and not, say, the earliest observation.
+        existing.firstYearWithTeam = Math.max(
+          existing.firstYearWithTeam ?? Number.NEGATIVE_INFINITY,
+          season.seasonYear - coach.seasonsWithTeam,
+        );
         if (!existing.positions.includes(coach.position)) existing.positions.push(coach.position);
       } else {
         map.set(key, {
@@ -173,6 +249,8 @@ function buildCoachResumeMap(
           conferenceLosses,
           firstSeason: season.seasonYear,
           lastSeason: season.seasonYear,
+          staffYears: [season.seasonYear],
+          firstYearWithTeam: season.seasonYear - coach.seasonsWithTeam,
           positions: [coach.position],
         });
       }
@@ -182,8 +260,45 @@ function buildCoachResumeMap(
   return map;
 }
 
+type Tone = 'good' | 'ok' | 'warn' | 'bad';
+
+/** The chip palette, shared by the AD's evaluation and the standing job-security status so the two read as one row. */
+const TONE_CLASS: Record<Tone, string> = {
+  good: 'border-emerald-300/70 bg-emerald-100/70 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+  ok: 'border-slate-300/70 bg-slate-100/70 text-slate-700 dark:border-slate-700 dark:bg-white/5 dark:text-slate-300',
+  warn: 'border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+  bad: 'border-red-300/70 bg-red-100/70 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300',
+};
+
+function jobSecurityTone(status: string): Tone {
+  if (status === 'HotSeat') return 'bad';
+  if (status === 'Low') return 'warn';
+  if (status === 'Safe') return 'good';
+  return 'ok';
+}
+
+/*
+ * WHY THERE IS NO AD-GOAL RENDERER HERE.
+ *
+ * The in-game AD Expectations screen writes each goal out in full ("Have 15 or
+ * fewer Turnovers on Offense this season", worth 50 coach points, passed). The
+ * save gives us the verdict and not the question: each slot carries status and
+ * progress plus a reference into the game's own goal catalogue — table 16483,
+ * while a dynasty file's tables run 4096–6385.
+ *
+ * The catalogue isn't reachable from outside the game either, which was checked
+ * rather than assumed (2026-07-29): CollegeFB27.exe and 14 Frostbite .cas
+ * archives, the English localisation bundle among them, scanned for the goal
+ * wording in ASCII and UTF-16 — no hits. Frostbite keeps those strings in
+ * Oodle-compressed chunks, so reading them means parsing the .toc/.sb layout and
+ * decompressing the EBX payloads.
+ *
+ * So the slots stay extracted (they're on the Coach record) and stay unrendered:
+ * "Passed" next to nothing is a verdict on a question the page can't ask.
+ */
+
 /** JobSecurityStatus enum → a short performance evaluation for the contract card. */
-function jobSecurityEvaluation(status: string): { label: string; tone: 'good' | 'ok' | 'warn' | 'bad' } {
+function jobSecurityEvaluation(status: string): { label: string; tone: Tone } {
   if (status === 'Safe') return { label: 'Exceeding expectations', tone: 'good' };
   if (status === 'SafeForNow') return { label: 'Meeting expectations', tone: 'ok' };
   if (status === 'Low') return { label: 'At risk', tone: 'warn' };
@@ -195,6 +310,7 @@ export function CoachHub() {
   const { id } = useParams<{ id: string }>();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const [scandalsOpen, setScandalsOpen] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(false);
   const [overview, setOverview] = useState<SeasonOverview | null | undefined>(undefined);
   const [coaches, setCoaches] = useState<CoachOverview | null | undefined>(undefined);
   const [history, setHistory] = useState<ProgramHistoryOverview | null | undefined>(undefined);
@@ -204,6 +320,7 @@ export function CoachHub() {
   // across school changes, HC/OC/DC year to year).
   const [userPositionByYear, setUserPositionByYear] = useState<Map<number, string>>(new Map());
   const [coachingTree, setCoachingTree] = useState<CoachingTree | null>(null);
+  const [unitStats, setUnitStats] = useState<UnitStats | null>(null);
   const { openCoachEditor } = useEditorModal();
 
   // The coaching tree is dynasty-level (season-over-season staff diff), not per-season.
@@ -217,6 +334,22 @@ export function CoachHub() {
       cancelled = true;
     };
   }, [id]);
+
+  // The coordinators' per-game numbers for the season on screen: yardage comes
+  // off the team-stats snapshot, scoring off the schedule (see buildUnitStats).
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    Promise.all([
+      window.api.db.getTeamStats(id, seasonId),
+      window.api.db.getSchedule(id, seasonId),
+    ]).then(([teamStats, schedule]) => {
+      if (!cancelled) setUnitStats(buildUnitStats(teamStats ?? null, schedule ?? null));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, seasonId]);
 
   useEffect(() => {
     if (!id) return;
@@ -321,7 +454,7 @@ export function CoachHub() {
               )}
               <div>
                 <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                  Coach Hub
+                  Coach
                 </p>
                 <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
                   {userCoach ? `${userCoach.firstName} ${userCoach.lastName}` : overview.teamName}
@@ -331,41 +464,62 @@ export function CoachHub() {
                     {spaceCamelCase(userCoach.position)}
                   </p>
                 )}
+                {/* Same counter as the staff cards — the save's own figure sits
+                    still across seasons, so this counts observed seasons from it. */}
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   {userCoach
-                    ? `${ordinal(userCoach.seasonsWithTeam + 1)} year as ${spaceCamelCase(userCoach.position)} with ${overview.teamName}`
+                    ? `${ordinal(
+                        tenureYearFor(
+                          coachResumes?.get(coachKey(userCoach)) ?? null,
+                          overview.seasonYear,
+                          userCoach.seasonsWithTeam,
+                        ),
+                      )} year as ${spaceCamelCase(userCoach.position)} with ${overview.teamName}`
                     : overview.teamName}
                 </p>
-                {userCoach && (
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {jobSecurityLabel(userCoach.currentJobSecurityStatus)}
-                    {career && career.timesFired > 0
-                      ? ` — fired ${career.timesFired} time${career.timesFired === 1 ? '' : 's'} previously`
-                      : ''}
-                  </p>
-                )}
+                {/* Job security used to repeat here; it lives in the Contract
+                    section's status chip now, beside the AD's evaluation, which
+                    is the one place it means something. The fired count only
+                    ever showed alongside it, so it moved there too. */}
               </div>
             </div>
           </div>
 
-          {/* User coaches only — Scandals writes to the save, and there's
-              nothing to cheat on behalf of a CPU staff. */}
-          {userCoach && id && (
-            <div className="flex shrink-0 items-end">
+          {id && (
+            /* `items-stretch`, not `items-end`: both buttons then take the
+               column's width — the widest label's — instead of each sizing to
+               its own text, so "Cardbook" and "Scandals" match. They already
+               share padding and type size, so the heights follow. */
+            <div className="flex shrink-0 flex-col items-stretch justify-end gap-2">
+              {/* The card book. Not coach-gated the way Scandals is — a book of
+                  your own cards is yours whoever you happen to be coaching. */}
               <button
                 type="button"
-                onClick={() => setScandalsOpen(true)}
-                title="Off-the-books adjustments — writes to your save"
-                className="corner-cut-sm border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/20 dark:border-red-500/40 dark:text-red-300"
+                onClick={() => setCardsOpen(true)}
+                title="Your card book — every card you've starred"
+                className="corner-cut-sm border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
               >
-                Scandals
+                Cardbook
               </button>
+              {/* User coaches only — Scandals writes to the save, and there's
+                  nothing to cheat on behalf of a CPU staff. */}
+              {userCoach && (
+                <button
+                  type="button"
+                  onClick={() => setScandalsOpen(true)}
+                  title="Off-the-books adjustments — writes to your save"
+                  className="corner-cut-sm border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/20 dark:border-red-500/40 dark:text-red-300"
+                >
+                  Scandals
+                </button>
+              )}
             </div>
           )}
         </div>
       </SurfaceCard>
 
       {id && <ScandalsModal open={scandalsOpen} onClose={() => setScandalsOpen(false)} dynastyId={id} />}
+      {id && <CardBookModal open={cardsOpen} onClose={() => setCardsOpen(false)} dynastyId={id} />}
 
       {userCoach && (
         <SurfaceCard>
@@ -387,50 +541,57 @@ export function CoachHub() {
       {userCoach && (
         <SurfaceCard>
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">Contract</p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-            {overview.teamName} — {spaceCamelCase(userCoach.position)}
-          </h3>
           {(() => {
             const evalResult = jobSecurityEvaluation(userCoach.currentJobSecurityStatus);
-            const toneClass =
-              evalResult.tone === 'good'
-                ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
-                : evalResult.tone === 'warn'
-                  ? 'border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'
-                  : evalResult.tone === 'bad'
-                    ? 'border-red-300/70 bg-red-100/70 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300'
-                    : 'border-slate-300/70 bg-slate-100/70 text-slate-700 dark:border-slate-700 dark:bg-white/5 dark:text-slate-300';
-            const yearOf =
-              userCoach.contractLength > 0
-                ? Math.min(userCoach.contractLength, Math.max(1, userCoach.contractLength - userCoach.contractYearsRemaining + 1))
-                : 0;
             return (
               <>
-                <div className="mt-3 inline-flex items-center gap-2">
-                  <span className={`border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${toneClass}`}>
-                    {evalResult.label}
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <StatTile
-                    label="Contract year"
-                    value={userCoach.contractLength > 0 ? `${yearOf} of ${userCoach.contractLength}` : 'Not available'}
-                  />
+                {/*
+                  NO AD-GOAL TILES — see the note above jobSecurityEvaluation.
+                  They were built and pulled the same day, on the user's call and
+                  for the right reason: three tiles reading "In Progress /
+                  Passed / Failed" were verdicts on questions the page couldn't
+                  show. A status that refers to nothing visible is worse than no
+                  tile at all.
+
+                  The slots are still extracted and still on the Coach record —
+                  the day the goal catalogue is readable, this is a render change
+                  and nothing more.
+                */}
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <StatTile
                     label="Years remaining"
                     value={userCoach.contractLength > 0 ? String(userCoach.contractYearsRemaining) : '—'}
                   />
                   <StatTile
-                    label="Contract length"
-                    value={userCoach.contractLength > 0 ? `${userCoach.contractLength} yr${userCoach.contractLength === 1 ? '' : 's'}` : '—'}
+                    label="Coach points"
+                    value={userCoach.coachPoints === null ? 'Not available' : String(userCoach.coachPoints)}
                   />
-                  <StatTile label="Job security" value={jobSecurityLabel(userCoach.currentJobSecurityStatus)} />
                 </div>
-                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-                  Contract terms are read straight from the save. AD-goal expectations and per-goal milestones aren&apos;t
-                  exposed as readable targets in the save data, so the job-security status above is the game&apos;s own
-                  standing evaluation of the coach.
-                </p>
+                {/* The AD's evaluation and the standing status, side by side:
+                    the first is how the season is going, the second is what it
+                    has done to the job. */}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className={`border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${TONE_CLASS[evalResult.tone]}`}>
+                    {evalResult.label}
+                  </span>
+                  <span className={`border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${TONE_CLASS[jobSecurityTone(userCoach.currentJobSecurityStatus)]}`}>
+                    {jobSecurityLabel(userCoach.currentJobSecurityStatus)}
+                    {userCoach.currentJobSecurityPercentage !== null
+                      ? ` · ${userCoach.currentJobSecurityPercentage}%`
+                      : ''}
+                  </span>
+                  {/* The "Expectation · Win 7 games" chip is gone (user's call).
+                      `CurrentContractExpectation` is a win-count enum, while the
+                      game's own AD screen states a TIER ("Conference
+                      Competitor") — so the chip sat next to the evaluation
+                      claiming to be the AD's expectation while saying something
+                      the AD screen never says. The field is still extracted. */}
+                  {career && career.timesFired > 0 && (
+                    <span className={`border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${TONE_CLASS.warn}`}>
+                      Fired {career.timesFired}×
+                    </span>
+                  )}
+                </div>
               </>
             );
           })()}
@@ -465,7 +626,6 @@ export function CoachHub() {
                 <StatTile label="1st round picks" value={String(career.firstRoundDraftPicks)} />
                 <StatTile label="Top-5 recruit classes" value={String(career.top5RecruitClasses)} />
                 <StatTile label="Players developed to max" value={String(career.playersMaxProgressed)} />
-                <StatTile label="Prestige gains" value={String(career.numPrestigeIncreases)} />
               </div>
             </>
           ) : (
@@ -476,17 +636,34 @@ export function CoachHub() {
 
       <SurfaceCard>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-          Current Coaching Staff
+          {overview.seasonYear} Coaching Staff
         </p>
         {staff.length === 0 ? (
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No other coaches on staff this season.</p>
         ) : (
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          /*
+            Columns follow the count instead of being fixed at three. A staff of
+            two in a three-column grid left a third of the row empty, which read
+            as a missing card rather than a design. Capped at three so a large
+            staff still wraps instead of shrinking each card to nothing.
+          */
+          <div
+            className={`mt-4 grid grid-cols-1 gap-4 ${
+              staff.length >= 3 ? 'md:grid-cols-2 xl:grid-cols-3' : staff.length === 2 ? 'md:grid-cols-2' : ''
+            }`}
+          >
             {staff.map((coach, index) => (
               <CoachCard
                 key={`${coach.position}-${index}`}
                 coach={coach}
                 resume={coachResumes?.get(coachKey(coach)) ?? null}
+                teamName={overview.teamName}
+                tenureYear={tenureYearFor(
+                  coachResumes?.get(coachKey(coach)) ?? null,
+                  overview.seasonYear,
+                  coach.seasonsWithTeam,
+                )}
+                unitStats={unitStats}
                 onEdit={() => editCoach(coach)}
               />
             ))}

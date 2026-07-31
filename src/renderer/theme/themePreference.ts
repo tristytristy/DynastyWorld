@@ -19,6 +19,16 @@ export interface ThemePreference {
   /** Only consulted when colorMode === 'custom'. Hex, validated on load. */
   customPrimary: string;
   customSecondary: string;
+  /**
+   * The page ground, per appearance — the surface everything else sits on.
+   *
+   * Defaults reproduce exactly what was hardcoded in globals.css before this
+   * existed, so the setting changes nothing until it's deliberately used. The
+   * two appearances are stored separately because one value can't serve both:
+   * a ground that reads well behind light text is unreadable behind dark text.
+   */
+  groundDark: string;
+  groundLight: string;
 }
 
 /** Active dynasty's colors, supplied by DynastyLayout; null outside a dynasty. */
@@ -29,12 +39,17 @@ export interface ActiveTeamColors {
 
 const BRAND_PRIMARY = '#9C9C9C'; // brand-500, DynastyOS silver
 const BRAND_SECONDARY = '#6E6E6E'; // brand-700, DynastyOS silver (deep)
+/** The grounds as they were hardcoded in globals.css — the "no opinion" values. */
+export const DEFAULT_GROUND_DARK = '#000000';
+export const DEFAULT_GROUND_LIGHT = '#e8eaed';
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
 export const DEFAULT_THEME_PREFERENCE: ThemePreference = {
   colorMode: 'team',
   customPrimary: BRAND_PRIMARY,
   customSecondary: BRAND_SECONDARY,
+  groundDark: DEFAULT_GROUND_DARK,
+  groundLight: DEFAULT_GROUND_LIGHT,
 };
 
 /** Storage key kept on the pre-DynastyOS prefix ON PURPOSE: it is invisible to users, and renaming it would silently discard the setting for everyone who already has one. */
@@ -58,6 +73,10 @@ export function loadThemePreference(storage: Pick<Storage, 'getItem'>): ThemePre
       colorMode: isColorMode(parsed.colorMode) ? parsed.colorMode : DEFAULT_THEME_PREFERENCE.colorMode,
       customPrimary: validHexOr(parsed.customPrimary, DEFAULT_THEME_PREFERENCE.customPrimary),
       customSecondary: validHexOr(parsed.customSecondary, DEFAULT_THEME_PREFERENCE.customSecondary),
+      // Absent in preferences saved before the ground was settable, so these
+      // fall back to the defaults rather than to undefined.
+      groundDark: validHexOr(parsed.groundDark, DEFAULT_THEME_PREFERENCE.groundDark),
+      groundLight: validHexOr(parsed.groundLight, DEFAULT_THEME_PREFERENCE.groundLight),
     };
   } catch {
     return DEFAULT_THEME_PREFERENCE;

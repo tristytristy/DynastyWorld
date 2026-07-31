@@ -6,6 +6,8 @@ import { TeamLogo } from './TeamLogo';
 import { PlayerPortrait } from './PlayerPortrait';
 import { EditButton } from './CoachCard';
 import type { RecruitBoardEntry, RecruitBoardStage } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -180,7 +182,6 @@ function RecruitModalContent({
 export function RecruitProfileModal() {
   const { recruit, dynastyId, canEdit, closeRecruitModal } = useRecruitModal();
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
   const isOpen = recruit !== null;
@@ -191,7 +192,15 @@ export function RecruitProfileModal() {
     if (!isOpen) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
+    /*
+      Focus the PANEL, not the close button. Those are both valid trap entries,
+      but focusing a control means it lands in its focused state on every single
+      open — and with a bare glyph the browser's ring reads as a box drawn
+      around the X, which is the bordered look this stopped being. Focusing the
+      dialog itself also announces its own label rather than "Close …, button".
+      Needs tabIndex={-1} to be programmatically focusable.
+    */
+    panelRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -227,8 +236,8 @@ export function RecruitProfileModal() {
   if (!recruit) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeRecruitModal();
@@ -239,23 +248,16 @@ export function RecruitProfileModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Recruit profile"
-        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-[0_60px_160px_-40px_rgba(2,6,23,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        tabIndex={-1}
+        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden outline-none modal-panel corner-cut md:max-h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-end gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={closeRecruitModal}
-            aria-label="Close recruit profile"
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Close
-          </button>
+          <ModalCloseButton label="recruit profile" onClick={closeRecruitModal} />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
           <RecruitModalContent recruit={recruit} dynastyId={dynastyId} canEdit={canEdit} />
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -3,6 +3,7 @@ import type { ReactNode, SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CoachPortrait } from '../components/common/CoachPortrait';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { TeamLink } from '../components/common/TeamLink';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
@@ -947,19 +948,23 @@ function LeagueRostersSection({ dynastyId, seasonId }: { dynastyId: string; seas
           </h3>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={teamIndex}
-            onChange={(e) => setTeamIndex(e.target.value === '' ? '' : Number(e.target.value))}
-            aria-label="League team"
-            className="border border-slate-200/80 bg-slate-50/90 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-200"
-          >
-            <option value="">Select a team...</option>
-            {(teams ?? []).map((t) => (
-              <option key={t.teamIndex} value={t.teamIndex}>
-                {t.displayName} ({t.playerCount})
-              </option>
-            ))}
-          </select>
+          {/* Every FBS team — long enough that typing beats scrolling, same as
+              the team switcher. */}
+          <Select
+            value={teamIndex === '' ? '' : String(teamIndex)}
+            onChange={(next) => setTeamIndex(next === '' ? '' : Number(next))}
+            ariaLabel="League team"
+            searchable
+            searchPlaceholder="Find a team…"
+            options={[
+              { value: '', label: 'Select a team...' },
+              ...(teams ?? []).map((t) => ({
+                value: String(t.teamIndex),
+                label: t.displayName,
+                meta: String(t.playerCount),
+              })),
+            ]}
+          />
           {roster && roster !== null && (
             <input
               type="text"

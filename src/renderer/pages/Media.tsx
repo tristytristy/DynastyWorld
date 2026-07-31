@@ -3,14 +3,18 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { PageHeader } from '../components/ui/PageHeader';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useConfirm } from '../data/ConfirmDialogProvider';
+import { TrashIcon } from '../components/common/ActionIcons';
+import { ModalCloseButton } from '../components/common/ModalCloseButton';
+import { ZoomableImage, framingTransform } from '../components/common/ZoomableImage';
 
 const DELETE_MEDIA_CONFIRM = {
   eyebrow: 'Delete media',
@@ -23,14 +27,6 @@ const DELETE_MEDIA_CONFIRM = {
 /** Absolute on-disk path → a URL the (file://-origin) renderer can load. */
 function fileUrl(absolutePath: string): string {
   return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
-      <path d="M4 6h12M8 6V4.5A1.5 1.5 0 0 1 9.5 3h1A1.5 1.5 0 0 1 12 4.5V6m1.5 0-.4 9a1.5 1.5 0 0 1-1.5 1.4H8.4A1.5 1.5 0 0 1 6.9 15L6.5 6M9 9v5M11 9v5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }
 
 function gameLabel(game: ScheduleGame): string {
@@ -97,19 +93,16 @@ function MediaDetailsForm({
     <div className="space-y-4">
       <div>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game</p>
-        <select
-          value={gameId ?? ''}
-          onChange={(e) => setGameId(e.target.value === '' ? null : Number(e.target.value))}
-          aria-label="Game this media is from"
-          className={`${inputClass} mt-1.5`}
-        >
-          <option value="">Not from a specific game</option>
-          {games.map((game) => (
-            <option key={game.gameId} value={game.gameId}>
-              {gameLabel(game)}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={gameId === null ? '' : String(gameId)}
+          onChange={(next) => setGameId(next === '' ? null : Number(next))}
+          ariaLabel="Game this media is from"
+          className="mt-1.5 w-full"
+          options={[
+            { value: '', label: 'Not from a specific game' },
+            ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+          ]}
+        />
       </div>
 
       <div>
@@ -191,6 +184,7 @@ function MediaLightbox({
   onNavigate,
   onClose,
   onSaved,
+  onFramed,
   onDeleted,
 }: {
   dynastyId: string;
@@ -202,6 +196,7 @@ function MediaLightbox({
   onNavigate: (index: number) => void;
   onClose: () => void;
   onSaved: (item: MediaItemWithPath, patch: MediaItemPatch) => void;
+  onFramed: (item: MediaItemWithPath, framing: MediaFraming | null) => void;
   onDeleted: (item: MediaItemWithPath) => void;
 }) {
   const { openPlayerModal } = usePlayerModal();
@@ -253,7 +248,7 @@ function MediaLightbox({
   // and load it off-center (top/bottom) instead of centered in the viewport.
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md md:p-8"
+      className="modal-scrim modal-scrim-deep fixed inset-0 z-[90] flex items-center justify-center p-4 md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -263,9 +258,11 @@ function MediaLightbox({
         role="dialog"
         aria-modal="true"
         aria-label="Media viewer"
-        className="corner-cut flex max-h-full w-full max-w-6xl flex-col overflow-hidden border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 lg:flex-row"
+        className="corner-cut flex max-h-full w-full max-w-6xl flex-col overflow-hidden modal-panel lg:flex-row"
       >
-        <div className="relative flex min-h-[16rem] flex-1 items-center justify-center bg-slate-950 lg:min-h-[32rem]">
+        {/* overflow-hidden because a zoomed photo has to be clipped by
+            something, and the stage is what it lives in. */}
+        <div className="relative flex min-h-[16rem] flex-1 items-center justify-center overflow-hidden bg-slate-950 lg:min-h-[32rem]">
           {item.mediaType === 'video' ? (
             <video
               key={item.id}
@@ -275,12 +272,12 @@ function MediaLightbox({
               className="max-h-[70vh] max-w-full"
             />
           ) : (
-            <img
+            <ZoomableImage
               key={item.id}
               src={fileUrl(item.absolutePath)}
               alt={item.description || 'Dynasty media'}
-              className="max-h-[70vh] max-w-full object-contain"
-              draggable={false}
+              saved={item.framing}
+              onSave={(framing) => onFramed(item, framing)}
             />
           )}
           <button
@@ -313,14 +310,7 @@ function MediaLightbox({
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">
               {item.mediaType === 'video' ? 'Video' : 'Photo'} details
             </p>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close media viewer"
-              className="border border-slate-300/80 bg-white/85 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-            >
-              Close
-            </button>
+            <ModalCloseButton label="media viewer" onClick={onClose} />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -547,6 +537,17 @@ export function Media() {
     setItems((prev) => prev?.map((m) => (m.id === item.id ? { ...m, ...patch } : m)) ?? prev);
   }
 
+  /**
+   * Framing is saved on its own, not through `handleSaved`: it comes from
+   * dragging the photo rather than from submitting the details form, and it
+   * changes nothing else about the item. Local state updates optimistically so
+   * the tile behind the viewer re-crops the moment you save.
+   */
+  function handleFramed(item: MediaItemWithPath, framing: MediaFraming | null) {
+    void window.api.media.setFraming(item.id, framing);
+    setItems((prev) => prev?.map((m) => (m.id === item.id ? { ...m, framing } : m)) ?? prev);
+  }
+
   function handleDeleted(item: MediaItemWithPath) {
     window.api.media.remove(item.id).then(refresh);
     setLightboxIndex(null);
@@ -556,9 +557,6 @@ export function Media() {
 
   const games = schedule?.games ?? [];
   const hasItems = !!items && items.length > 0;
-
-  const selectClass =
-    'border border-slate-200/80 bg-slate-50/85 px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] disabled:opacity-50 dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
   return (
     <div className="space-y-6">
@@ -610,23 +608,22 @@ export function Media() {
             Select all
           </button>
           <div className="h-5 w-px bg-slate-300/70 dark:bg-slate-700/70" aria-hidden="true" />
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+          {/* A span, not a <label>: a label wrapping a BUTTON doesn't forward
+              clicks the way it does for a native control, so the text would look
+              clickable and do nothing. */}
+          <span className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
             Set game
-            <select
+            <Select
               value={batchGameId}
-              onChange={(e) => setBatchGameId(e.target.value)}
+              onChange={setBatchGameId}
               disabled={selectedIds.size === 0}
-              aria-label="Game to assign to the selected media"
-              className={selectClass}
-            >
-              <option value="">Not from a specific game</option>
-              {games.map((game) => (
-                <option key={game.gameId} value={game.gameId}>
-                  {gameLabel(game)}
-                </option>
-              ))}
-            </select>
-          </label>
+              ariaLabel="Game to assign to the selected media"
+              options={[
+                { value: '', label: 'Not from a specific game' },
+                ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+              ]}
+            />
+          </span>
           <Button onClick={batchSetGame} disabled={selectedIds.size === 0}>
             Apply to {selectedIds.size}
           </Button>
@@ -730,7 +727,14 @@ export function Media() {
                     src={fileUrl(item.absolutePath)}
                     alt={caption}
                     loading="lazy"
-                    className="pointer-events-none h-full w-full object-cover transition duration-base ease-standard group-hover:scale-[1.03]"
+                    /* A framed photo shows its framing here too — a crop you
+                       saved and then didn't see anywhere would read as not
+                       having saved. The tile stays object-cover (so nothing
+                       letterboxes and un-framed tiles look exactly as before)
+                       and the framing rides on top, which lands on the same
+                       part of the photo cropped to the tile's shape. */
+                    className={`pointer-events-none h-full w-full object-cover ${item.framing ? '' : 'transition duration-base ease-standard group-hover:scale-[1.03]'}`}
+                    style={{ transform: framingTransform(item.framing) }}
                     draggable={false}
                   />
                 )}
@@ -786,6 +790,7 @@ export function Media() {
           onNavigate={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onSaved={handleSaved}
+          onFramed={handleFramed}
           onDeleted={handleDeleted}
         />
       )}

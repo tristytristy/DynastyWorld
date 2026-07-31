@@ -2,7 +2,7 @@ import { getDb, persist } from './init';
 import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
 import { getRoster } from './getRoster';
 import { getSchedule } from './getSchedule';
-import type { MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer } from '../shared/types';
+import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer } from '../shared/types';
 
 /** Resolved display shape minus the absolute path — the media IPC layer adds the path (it owns the on-disk library location; see withPath in src/main/ipc/media.ts). */
 export type MediaItemDisplay = Omit<MediaItemResolved, 'absolutePath'>;
@@ -23,8 +23,15 @@ interface MediaRow {
   game_id: number | null;
   description: string;
   player_ids_json: string;
+  frame_x: number | null;
+  frame_y: number | null;
+  frame_scale: number | null;
   created_at: string;
 }
+
+/** The one column list every read uses, so a new column can't be added to three of four queries. */
+const MEDIA_COLS =
+  'id, season_id, file_name, media_type, game_id, description, player_ids_json, frame_x, frame_y, frame_scale, created_at';
 
 function mapRow(row: MediaRow): MediaItem {
   let playerIds: number[] = [];
@@ -42,6 +49,11 @@ function mapRow(row: MediaRow): MediaItem {
     gameId: row.game_id,
     description: row.description,
     playerIds,
+    // Scale is the presence flag: no scale, no saved framing.
+    framing:
+      row.frame_scale === null
+        ? null
+        : { x: row.frame_x ?? 0, y: row.frame_y ?? 0, scale: row.frame_scale },
     createdAt: row.created_at,
   };
 }
@@ -53,7 +65,7 @@ export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[
   if (!season || season.dynastyId !== dynastyId) return undefined;
 
   const stmt = getDb().prepare(
-    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? AND season_id = ? ORDER BY sort_order ASC, created_at DESC, id DESC',
+    `SELECT ${MEDIA_COLS} FROM media_items WHERE dynasty_id = ? AND season_id = ? ORDER BY sort_order ASC, created_at DESC, id DESC`,
   );
   stmt.bind([dynastyId, season.id]);
   const items: MediaItem[] = [];
@@ -133,7 +145,7 @@ function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[]
 /** Every media item this player is tagged in, across all of the dynasty's seasons, newest first — powers the Media tab on player bios. */
 export function listMediaForPlayer(dynastyId: string, playerId: number): MediaItemDisplay[] {
   const stmt = getDb().prepare(
-    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? ORDER BY created_at DESC, id DESC',
+    `SELECT ${MEDIA_COLS} FROM media_items WHERE dynasty_id = ? ORDER BY created_at DESC, id DESC`,
   );
   stmt.bind([dynastyId]);
   const items: MediaItem[] = [];
@@ -150,7 +162,7 @@ export function listMediaForGame(dynastyId: string, seasonId: number | undefined
   const season = seasonId !== undefined ? getSeasonById(seasonId) : getCurrentSeason(dynastyId);
   if (!season || season.dynastyId !== dynastyId) return [];
   const stmt = getDb().prepare(
-    'SELECT id, season_id, file_name, media_type, game_id, description, player_ids_json, created_at FROM media_items WHERE dynasty_id = ? AND season_id = ? AND game_id = ? ORDER BY created_at DESC, id DESC',
+    `SELECT ${MEDIA_COLS} FROM media_items WHERE dynasty_id = ? AND season_id = ? AND game_id = ? ORDER BY created_at DESC, id DESC`,
   );
   stmt.bind([dynastyId, season.id, gameId]);
   const items: MediaItem[] = [];
@@ -191,6 +203,7 @@ export function addMediaItem(
     gameId: null,
     description: '',
     playerIds: [],
+    framing: null,
     createdAt,
   };
 }
@@ -200,6 +213,25 @@ export function updateMediaItem(id: number, patch: MediaItemPatch): void {
     patch.gameId ?? null,
     patch.description,
     JSON.stringify(patch.playerIds),
+    id,
+  ]);
+  persist();
+}
+
+/**
+ * Saves how a photo is framed, or clears it with null.
+ *
+ * Deliberately its own call rather than a field on `MediaItemPatch`: that patch
+ * is the details FORM (game, description, tags), submitted as a unit, and
+ * framing is set by dragging a photo in the viewer. Folding them together would
+ * mean either the form silently rewriting a framing the user set elsewhere, or
+ * the viewer having to send a whole patch it doesn't own.
+ */
+export function setMediaFraming(id: number, framing: MediaFraming | null): void {
+  getDb().run('UPDATE media_items SET frame_x = ?, frame_y = ?, frame_scale = ? WHERE id = ?', [
+    framing?.x ?? null,
+    framing?.y ?? null,
+    framing?.scale ?? null,
     id,
   ]);
   persist();

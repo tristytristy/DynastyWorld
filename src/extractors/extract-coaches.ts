@@ -84,6 +84,28 @@ export interface CoachData {
   seasonsWithTeam: number;
   /** JobSecurityStatus enum: "Safe" | "SafeForNow" | "Low" | "HotSeat" | "Invalid". */
   currentJobSecurityStatus: string;
+  /**
+   * The AD-expectations block, verified 2026-07-29 against DYNASTY-JMUTESTER —
+   * the save behind the in-game "AD Expectations" screen the user supplied.
+   * `currentJobSecurityPercentage` is the same 98 that screen shows, so these
+   * ARE the fields behind it.
+   *
+   * What is NOT here, and why: the three goal LINES on that screen ("Make a Bowl
+   * Game in the next 4 seasons", + its 100 coach-point reward) are not in the
+   * save. Each `CoachContractGoalSummaryEntry` holds only status/progress plus a
+   * `CoachContractGoal` reference into **table 16483** — and this save's tables
+   * run 4096–6385, so that catalogue ships with the game, not the dynasty. A raw
+   * scan of the file for the goal text finds nothing either. Status and progress
+   * per slot are readable; the wording and rewards are not.
+   */
+  currentJobSecurityPercentage: number;
+  /** Where job security stood when the season began — the baseline the current number moved from. */
+  seasonStartJobSecurityStatus: string;
+  /** The AD's headline expectation as an enum, e.g. "Win8Games". The one goal that IS readable. */
+  currentContractExpectation: string;
+  /** Coach points earned toward this contract year, and the coach's unspent balance. */
+  earnedContractPointsThisYear: number;
+  coachPoints: number;
   /** Contract terms straight off the Coach record (same fields the coach editor writes). */
   contractSalary: number;
   contractLength: number;
@@ -96,6 +118,30 @@ export interface CoachData {
    * position) — see resolveReferenceWithTable in lib/franchise.ts.
    */
   careerStats: CareerCoachStats | null;
+  /**
+   * The AD's three goal slots, attached to the USER's coach only (they're
+   * user-scoped, not per-coach — the save stores them as three separate
+   * single-row `CoachContractGoalSummaryEntry` tables keyed to the user entity).
+   * Riding along on the coach record keeps them inside the snapshot that already
+   * exists rather than adding a snapshot key for three rows.
+   */
+  contractGoals?: ContractGoalSlot[];
+}
+
+/**
+ * One AD goal as the save actually stores it. `goalId` is the row this slot
+ * points at in the game's goal catalogue — the catalogue itself is not in the
+ * save (see the note on `currentContractExpectation`), so the goal's WORDING and
+ * its coach-point reward can't be read. What can: whether it's live, how far
+ * along it is, and the job-security reading attached to it.
+ */
+export interface ContractGoalSlot {
+  goalId: number | null;
+  /** GoalStatus enum, observed: "InProgress". */
+  status: string;
+  progress: number;
+  isHotSeat: boolean;
+  jobSecurity: number;
 }
 
 const FIELDS = [
@@ -114,6 +160,11 @@ const FIELDS = [
   'DominantArchetype',
   'SeasonsWithTeam',
   'CurrentJobSecurityStatus',
+  'CurrentJobSecurityPercentage',
+  'SeasonStartJobSecurityStatus',
+  'CurrentContractExpectation',
+  'EarnedContractPoints_ThisYear',
+  'CoachPoints',
   'ContractSalary',
   'ContractLength',
   'ContractYearsRemaining',
@@ -151,10 +202,47 @@ function mapCareerCoachStats(r: { [key: string]: unknown }): CareerCoachStats {
   };
 }
 
+/**
+ * The AD's goal slots. Each one is its OWN single-row table — the save carries
+ * three tables all named `CoachContractGoalSummaryEntry`, not three rows in one
+ * — so this reads every instance rather than `getLargestTable`'s single biggest.
+ * Verified against DYNASTY-JMUTESTER (3 slots, JobSecurity 98, matching the
+ * in-game screen) and DYNASTY-EVANZSYNC (3 slots, different goal ids).
+ */
+async function extractContractGoals(franchise: OpenFranchise): Promise<ContractGoalSlot[]> {
+  const tables = franchise.getAllTablesByName('CoachContractGoalSummaryEntry') as unknown as {
+    records: {
+      isEmpty: boolean;
+      getReferenceDataByKey(key: string): { tableId: number; rowNumber: number } | null;
+      [key: string]: unknown;
+    }[];
+    readRecords(): Promise<void>;
+  }[];
+  if (!tables || tables.length === 0) return [];
+
+  const slots: ContractGoalSlot[] = [];
+  for (const table of tables) {
+    await table.readRecords();
+    for (const record of table.records) {
+      if (record.isEmpty) continue;
+      const ref = record.getReferenceDataByKey('CoachContractGoal');
+      slots.push({
+        goalId: ref && ref.tableId ? ref.rowNumber : null,
+        status: String(record.StatusGoal ?? ''),
+        progress: Number(record.ProgressGoal ?? 0),
+        isHotSeat: Boolean(record.IsHotSeat),
+        jobSecurity: Number(record.JobSecurity ?? 0),
+      });
+    }
+  }
+  return slots;
+}
+
 export async function extractCoaches(franchise: OpenFranchise): Promise<CoachData[]> {
   const table = getLargestTable(franchise, 'Coach');
   await table.readRecords(FIELDS);
   await preloadAllInstances(franchise, 'CareerCoachStats');
+  const contractGoals = await extractContractGoals(franchise);
 
   return nonEmpty(table.records)
     .filter((r) => r.LastName)
@@ -176,11 +264,18 @@ export async function extractCoaches(franchise: OpenFranchise): Promise<CoachDat
         dominantArchetype: String(r.DominantArchetype),
         seasonsWithTeam: Number(r.SeasonsWithTeam),
         currentJobSecurityStatus: String(r.CurrentJobSecurityStatus),
+        currentJobSecurityPercentage: Number(r.CurrentJobSecurityPercentage),
+        seasonStartJobSecurityStatus: String(r.SeasonStartJobSecurityStatus),
+        currentContractExpectation: String(r.CurrentContractExpectation),
+        earnedContractPointsThisYear: Number(r.EarnedContractPoints_ThisYear),
+        coachPoints: Number(r.CoachPoints),
         contractSalary: Number(r.ContractSalary),
         contractLength: Number(r.ContractLength),
         contractYearsRemaining: Number(r.ContractYearsRemaining),
         personality: String(r.Personality),
         careerStats: careerStatsResolved ? mapCareerCoachStats(careerStatsResolved.record) : null,
+        // User-scoped, so it rides on the one coach it belongs to.
+        ...(Boolean(r.IsUserControlled) && contractGoals.length > 0 ? { contractGoals } : {}),
       };
     });
 }

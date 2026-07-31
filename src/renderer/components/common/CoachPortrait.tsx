@@ -1,3 +1,4 @@
+import { useProgramArt } from '../../data/ProgramArtProvider';
 import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { getCoachPortraitPath } from '../../lib/coachAssetMapping';
@@ -23,6 +24,8 @@ export function CoachPortrait({
 }) {
   const [failed, setFailed] = useState(false);
   const src = getCoachPortraitPath(coach.portraitAssetName);
+  // `version` subscribes this to uploaded art — see ProgramArtProvider.
+  const { version: programArtVersion } = useProgramArt();
   const poloSrc = getCoachPoloPath(teamAssetName);
 
   useEffect(() => {
@@ -73,6 +76,7 @@ export function CoachPortrait({
     <span className={`${sizeClass} ${className} relative inline-block shrink-0 overflow-hidden`}>
       {portraitImg}
       <img
+        key={programArtVersion}
         src={poloSrc}
         alt=""
         aria-hidden

@@ -7,16 +7,16 @@
  * in small steps � preserving hue � until it clears WCAG AA (4.5:1).
  */
 
-type Rgb = [number, number, number];
+export type Rgb = [number, number, number];
 
-const LIGHT_SURFACE_HEX = '#f8fafc'; // tailwind slate-50 � matches body bg-slate-50
-const DARK_SURFACE_HEX = '#020617'; // tailwind slate-950 � matches body dark:bg-slate-950
+export const LIGHT_SURFACE_HEX = '#f8fafc'; // tailwind slate-50 � matches body bg-slate-50
+export const DARK_SURFACE_HEX = '#020617'; // tailwind slate-950 � matches body dark:bg-slate-950
 const MIN_TEXT_CONTRAST = 4.5; // WCAG AA, normal text
 const FALLBACK_PRIMARY = '#9C9C9C'; // DynastyOS silver (brand-500), used if no team color is set
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
-function hexToRgb(hex: string): Rgb {
+export function hexToRgb(hex: string): Rgb {
   const clean = hex.replace('#', '');
   return [
     parseInt(clean.slice(0, 2), 16),
@@ -35,7 +35,7 @@ function channelLuminance(c: number): number {
   return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
 }
 
-function relativeLuminance([r, g, b]: Rgb): number {
+export function relativeLuminance([r, g, b]: Rgb): number {
   return 0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
 }
 
@@ -56,7 +56,7 @@ function mix(rgb: Rgb, target: Rgb, amount: number): Rgb {
 }
 
 /** Darkens toward black on a light surface, lightens toward white on a dark one. */
-function ensureContrastText(hex: string, surfaceHex: string, minContrast = MIN_TEXT_CONTRAST): string {
+export function ensureContrastText(hex: string, surfaceHex: string, minContrast = MIN_TEXT_CONTRAST): string {
   const surfaceRgb = hexToRgb(surfaceHex);
   const original = hexToRgb(hex);
   if (contrastRatio(original, surfaceRgb) >= minContrast) return hex;

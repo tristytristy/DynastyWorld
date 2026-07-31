@@ -1,7 +1,7 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getAllLeaguePlayers } from './getLeagueRoster';
 import type { DefensiveStatLine, NationalLeaderEntry, NationalStatLeaders, OffensiveStatLine } from '../shared/types';
 
-const FCS_POOL_TEAM_INDEX = 255;
 const TOP_N = 100;
 
 /**

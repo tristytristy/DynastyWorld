@@ -1,13 +1,13 @@
+import { Select } from '../ui/Select';
 import { useEffect, useState } from 'react';
 import { BUILD_LABELS, SKIN_TONE_LABELS } from '../../../shared/portraitTaxonomy';
 import type { PortraitBuild, PortraitSkinTone, PortraitType } from '../../../shared/portraitTaxonomy';
 import type { PortraitFilters, PortraitSearchResult } from '../../../shared/types';
 import { getPlayerPortraitCandidates } from '../../lib/playerAssetMapping';
 import { getCoachPortraitPath } from '../../lib/coachAssetMapping';
+import { ModalOverlay } from './ModalOverlay';
 
 const PAGE_SIZE = 60;
-const SELECT_CLASS =
-  'rounded-md border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-xs text-slate-800 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
 /**
  * Resolves a portrait through the SAME `cfbmedia://` scheme every other
@@ -82,8 +82,8 @@ function Lightbox({
   if (!portrait) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-md"
+    <ModalOverlay
+      className="modal-scrim modal-scrim-deep fixed inset-0 flex items-center justify-center p-6"
       role="dialog"
       aria-modal="true"
       aria-label={`Preview ${portrait.assetName}`}
@@ -148,7 +148,7 @@ function Lightbox({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -232,31 +232,40 @@ export function PortraitPicker({
           onChange={(event) => setQuery(event.target.value)}
           className="min-w-[12rem] flex-1 rounded-lg border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
         />
-        <select value={type} onChange={(event) => setType(event.target.value as PortraitType | 'all')} className={SELECT_CLASS}>
-          <option value="all">All types</option>
-          <option value="generic">Generic</option>
-          <option value="unique">Unique</option>
-        </select>
-        <select value={build} onChange={(event) => setBuild(event.target.value as PortraitBuild | 'all')} className={SELECT_CLASS}>
-          <option value="all">All builds</option>
-          {(Object.keys(BUILD_LABELS) as PortraitBuild[]).map((b) => (
-            <option key={b} value={b}>
-              {BUILD_LABELS[b]}
-            </option>
-          ))}
-        </select>
-        <select
+        <Select
+          value={type}
+          onChange={setType}
+          ariaLabel="Portrait type"
+          options={[
+            { value: 'all' as PortraitType | 'all', label: 'All types' },
+            { value: 'generic' as PortraitType | 'all', label: 'Generic' },
+            { value: 'unique' as PortraitType | 'all', label: 'Unique' },
+          ]}
+        />
+        <Select
+          value={build}
+          onChange={setBuild}
+          ariaLabel="Portrait build"
+          options={[
+            { value: 'all' as PortraitBuild | 'all', label: 'All builds' },
+            ...(Object.keys(BUILD_LABELS) as PortraitBuild[]).map((b) => ({
+              value: b as PortraitBuild | 'all',
+              label: BUILD_LABELS[b],
+            })),
+          ]}
+        />
+        <Select
           value={skinTone}
-          onChange={(event) => setSkinTone(event.target.value as PortraitSkinTone | 'all')}
-          className={SELECT_CLASS}
-        >
-          <option value="all">All skin tones</option>
-          {(Object.keys(SKIN_TONE_LABELS) as PortraitSkinTone[]).map((s) => (
-            <option key={s} value={s}>
-              {SKIN_TONE_LABELS[s]}
-            </option>
-          ))}
-        </select>
+          onChange={setSkinTone}
+          ariaLabel="Portrait skin tone"
+          options={[
+            { value: 'all' as PortraitSkinTone | 'all', label: 'All skin tones' },
+            ...(Object.keys(SKIN_TONE_LABELS) as PortraitSkinTone[]).map((s) => ({
+              value: s as PortraitSkinTone | 'all',
+              label: SKIN_TONE_LABELS[s],
+            })),
+          ]}
+        />
       </div>
 
       {loading ? (

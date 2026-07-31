@@ -1,10 +1,9 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { NationalTeamStatRow } from '../shared/types';
 
-/** The generic FCS pool (five buckets, all index 255) — not a real, rankable team. */
-const FCS_POOL_TEAM_INDEX = 255;
 
 /**
  * National team-stat leaderboard rows — one aggregated season line per real FBS

@@ -342,6 +342,22 @@ const HELP_TOPICS: HelpTopic[] = [
           bottom-left of its thumbnail.
         </p>
         <p>
+          Open photos <strong>zoom</strong>, the same way a trading-card photo does: drag the slider at the bottom-left
+          (or scroll the wheel over the picture) to go in up to 5×, then drag the photo to move around it.
+          Double-click to snap back to fit.
+        </p>
+        <p>
+          Found a crop you like? <strong>Save framing</strong> keeps it — the photo then opens that way every time, and
+          its thumbnail shows the same crop. <strong>Reset</strong> gives the whole picture back. Nothing is done to the
+          file itself: the framing is just a note about how to show it, so the full original is always there
+          underneath.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          That&apos;s also why a <strong>trading card is unaffected</strong>. Putting a media photo on a card takes its
+          own copy with its own zoom, so the same shot can be cropped one way in the gallery and framed a completely
+          different way on the card — changing either one never touches the other.
+        </p>
+        <p>
           When tagging players, if you don&apos;t know a name, search by jersey number instead: start your search
           with <strong>#</strong> (e.g. <em>#17</em>) and the roster filters to whoever wears that number — handy when
           you recognize the number in the picture but not the face.
@@ -354,6 +370,78 @@ const HELP_TOPICS: HelpTopic[] = [
         <p className="text-slate-500 dark:text-slate-400">
           Uploads land in whichever season the Season dropdown is set to — switch seasons first if you&apos;re
           backfilling older memories. Supported: PNG/JPG/WebP/GIF images and MP4/WebM video.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'program-editor',
+    title: 'Imported teams, and the Program editor',
+    content: (
+      <>
+        <p>
+          If you brought a team in from Teambuilder, the game writes it over an existing school&apos;s spot — your team
+          keeps that slot, but its name, colours and art token are all new. The app has artwork for the real schools,
+          not for a school it&apos;s never seen, so an imported program shows a placeholder logo, a generic helmet, and
+          no uniform or coach polo.
+        </p>
+        <p>
+          <strong>Program editor</strong>, on your Team Hub above <strong>Program budget</strong>, is where you fix
+          that. <strong>Identity</strong> sets your stadium name and city — those show on your schedule and on every
+          game&apos;s info page. <strong>Artwork</strong> takes four uploads:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li><strong>Program logo</strong> — 1024 × 1024, transparent</li>
+          <li><strong>Helmet</strong> — 1024 × 1024, transparent, facing left (the other side is mirrored for you)</li>
+          <li><strong>Uniform</strong> — 512 × 512, sits over a player portrait</li>
+          <li><strong>Coach polo</strong> — 512 × 512, sits over a coach portrait</li>
+        </ul>
+        <p>
+          The uniform and polo are the fussy ones: they lay directly on top of a portrait, so the collar and shoulders
+          have to line up with the portrait&apos;s or every player will look slightly wrong. Upload, look at a few
+          players, adjust.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Your files are copied into the app&apos;s own storage, so moving or deleting the originals won&apos;t break
+          anything, and nothing here is written to your save file. Remove an upload and the built-in artwork comes
+          back. Edits belong to <strong>this dynasty only</strong> — an imported team that happens to share a name with
+          a real school never changes that school in your other saves.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'trading-cards',
+    title: 'Trading cards and the card book',
+    content: (
+      <>
+        <p>
+          Every player profile has a <strong>Cards</strong> tab. It opens on a grid of that player&apos;s cards, three
+          to a row — click one to open it full size, or click the <strong>+</strong> to start another. A player can have
+          as many as you like; the small dot under a card marks the one that pops up when you hover their name anywhere
+          in the app.
+        </p>
+        <p>
+          With a card open, the <strong>pencil</strong> opens its editor. <strong>Upload Photo</strong> takes a
+          screenshot from your computer and <strong>Media Photo</strong> reuses anything already tagged to that player
+          in the Media gallery; then drag the photo to frame it and use <strong>Zoom</strong> to fill the card.{' '}
+          <strong>Show on card</strong> turns the overall, the name, the profile line, the stat row and the team logo on
+          or off, so you can make a clean photo-and-name card if that&apos;s the look you want.
+        </p>
+        <p>
+          The stat line can come from the <strong>season</strong> or from <strong>one game</strong> — pick the game from
+          the dropdown and the card celebrates that Saturday instead of the year. Choose up to four stats to run across
+          the bottom.
+        </p>
+        <p>
+          The <strong>star</strong> puts a card in your <strong>card book</strong> (the book icon in the top bar), which
+          collects every starred card in the dynasty, a page per season. The <strong>export</strong> icon saves a card
+          as a PNG.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          A card is a printed moment: the year, the school and the profile line are locked in when you make it, and
+          nothing later — a transfer, a class change, a re-sync — rewrites them. That&apos;s why cards don&apos;t change
+          when you switch seasons, and why the stat line can only be re-picked from the season the card was made in.
         </p>
       </>
     ),

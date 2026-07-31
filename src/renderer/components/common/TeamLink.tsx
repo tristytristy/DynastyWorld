@@ -5,10 +5,10 @@ import { canonicalKey } from '../../lib/assetMapping';
 import { useTeamModalOptional } from '../../data/TeamModalProvider';
 import { useViewedTeamOptional } from '../../data/ViewedTeamProvider';
 import { useSelectedSeasonOptional } from '../../data/SelectedSeasonProvider';
+import { FCS_POOL_TEAM_INDEX } from '../../../shared/fcsPool';
 import type { LeagueTeamSummary } from '../../../shared/types';
 
-/** The generic FCS pool (five buckets, all index 255) — never a real, browsable team. */
-const FCS_POOL_TEAM_INDEX = 255;
+
 
 /**
  * Resolve a team display name to its league index, tolerant of abbreviations

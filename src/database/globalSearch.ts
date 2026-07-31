@@ -1,11 +1,10 @@
+import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getSeasonById, getSnapshot } from './helpers';
 import { getAllLeaguePlayers } from './getLeagueRoster';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GlobalSearchResults } from '../shared/types';
 
-/** The FCS/placeholder pool — never a real searchable school/coach. */
-const FCS_POOL_TEAM_INDEX = 255;
 
 const EMPTY: GlobalSearchResults = { players: [], coaches: [], teams: [] };
 

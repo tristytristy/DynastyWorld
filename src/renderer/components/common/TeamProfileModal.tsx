@@ -10,6 +10,8 @@ import { TeamLink } from './TeamLink';
 import { PlayerPortrait } from './PlayerPortrait';
 import { aggregateTeamGames, perGame as perGameAvg, ratioPct, turnoverMargin } from '../../lib/teamStats';
 import type { GameSummary, TeamCard, TeamCardPlayer } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -191,7 +193,6 @@ export function TeamProfileModal() {
   const { setViewedTeamIndex } = useViewedTeam();
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const [card, setCard] = useState<TeamCard | null | undefined>(undefined);
 
@@ -217,7 +218,15 @@ export function TeamProfileModal() {
   useEffect(() => {
     if (!isOpen) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
+    /*
+      Focus the PANEL, not the close button. Those are both valid trap entries,
+      but focusing a control means it lands in its focused state on every single
+      open — and with a bare glyph the browser's ring reads as a box drawn
+      around the X, which is the bordered look this stopped being. Focusing the
+      dialog itself also announces its own label rather than "Close …, button".
+      Needs tabIndex={-1} to be programmatically focusable.
+    */
+    panelRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -262,8 +271,8 @@ export function TeamProfileModal() {
   // push it low). The React tree is unchanged, so ViewedTeam/router context for
   // the "View Team Hub" button still resolves.
   return createPortal(
-    <div
-      className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeTeamModal();
@@ -274,17 +283,14 @@ export function TeamProfileModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Team profile"
-        className="corner-cut relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden border border-white/70 bg-white/95 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        tabIndex={-1}
+        className="corner-cut relative flex outline-none max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden modal-panel md:max-h-[calc(100vh-4rem)]"
       >
-        <button
-          ref={closeButtonRef}
-          type="button"
+        <ModalCloseButton
+          label="team profile"
           onClick={closeTeamModal}
-          aria-label="Close team profile"
-          className="absolute right-3 top-3 z-10 border border-slate-300/80 bg-white/85 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-        >
-          Close
-        </button>
+          className="absolute right-3 top-3 z-10"
+        />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {card === undefined && <p className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">Loading team…</p>}
           {card === null && <p className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">No data for this team.</p>}
@@ -295,7 +301,7 @@ export function TeamProfileModal() {
           )}
         </div>
       </div>
-    </div>,
+    </ModalOverlay>,
     document.body,
   );
 }

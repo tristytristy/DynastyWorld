@@ -154,6 +154,7 @@ function buildSingleDynastyArchive(dynastyId: string): Buffer {
       ['program_milestones', 'dynasty_id'],
       ['player_career_stats', 'dynasty_id'],
       ['player_notes', 'dynasty_id'],
+      ['player_cards', 'dynasty_id'],
       ['media_items', 'dynasty_id'],
       ['team_award_results', 'dynasty_id'],
       ['team_award_settings', 'dynasty_id'],

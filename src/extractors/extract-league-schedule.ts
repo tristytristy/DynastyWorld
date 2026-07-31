@@ -1,4 +1,4 @@
-import { getLargestTable, resolveReference, type OpenFranchise } from './lib/franchise';
+import { getLargestTable, preloadAllInstances, resolveReference, resolveReferenceWithTable, type OpenFranchise } from './lib/franchise';
 
 /**
  * Every game in the league for the synced season — compact rows keyed by
@@ -28,6 +28,14 @@ export async function extractLeagueSchedule(
   await teamTable.readRecords(['DisplayName', 'TeamIndex']);
   const gameTable = getLargestTable(franchise, 'SeasonGame');
   await gameTable.readRecords();
+  /*
+    BowlGame must be loaded before its reference can resolve, and this extractor
+    runs BEFORE extract-schedule (which does its own preload) — so every
+    postseason row shipped with bowlName null and the league Schedule view fell
+    back to printing the raw week bucket, e.g. "BowlSeason3" for a CFP
+    Semifinal. resolveReferenceWithTable to match extract-schedule exactly.
+  */
+  await preloadAllInstances(franchise, 'BowlGame');
 
   const games: LeagueGameData[] = [];
   gameTable.records.forEach((r, gameId) => {
@@ -45,13 +53,13 @@ export async function extractLeagueSchedule(
     // convention (which is why the user's OWN schedule always worked).
     const played = String(r.GameStatus) !== 'Unplayed';
     const weekType = String(r.SeasonWeekType);
-    const bowlResolved = weekType !== 'RegularSeason' ? resolveReference(franchise, r, 'BowlGame') : null;
+    const bowlResolved = weekType !== 'RegularSeason' ? resolveReferenceWithTable(franchise, r, 'BowlGame') : null;
 
     games.push({
       gameId,
       week: Number(r.SeasonWeek),
       weekType,
-      bowlName: bowlResolved ? String(bowlResolved.Name) : null,
+      bowlName: bowlResolved ? String(bowlResolved.record.Name) : null,
       homeTeamIndex: Number(home.TeamIndex),
       awayTeamIndex: Number(away.TeamIndex),
       homeTeamName: String(home.DisplayName),

@@ -7,6 +7,7 @@ import { getBackupsFolderInfo, getDatabaseFileBytes, pruneOldBackups } from '../
 import { clearDeletedDynastyCache, getDeletedDynastyCacheBytes } from '../../database/helpers';
 import { getSaveBackupsFolderInfo, pruneAllSaveBackups } from '../editorWrite';
 import type {
+  MediaFraming,
   MediaItemPatch,
   MediaItemWithPath,
   MediaLibraryMoveResult,
@@ -21,6 +22,7 @@ import {
   listMediaForPlayer,
   listMediaItems,
   reorderMedia,
+  setMediaFraming,
   updateMediaItem,
 } from '../../database/media';
 import type { MediaItemResolved } from '../../shared/types';
@@ -158,6 +160,13 @@ export function registerMediaHandlers(): void {
   ipcMain.handle(IPC.media.update, async (_event, id: number, patch: MediaItemPatch): Promise<void> => {
     updateMediaItem(id, patch);
   });
+
+  ipcMain.handle(
+    IPC.media.setFraming,
+    async (_event, id: number, framing: MediaFraming | null): Promise<void> => {
+      setMediaFraming(id, framing);
+    },
+  );
 
   ipcMain.handle(
     IPC.media.reorder,

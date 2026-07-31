@@ -1,6 +1,7 @@
 import { getSeasonsByDynasty } from './helpers';
 import { getSchedule } from './getSchedule';
 import type { HeadToHeadGame, HeadToHeadOpponent } from '../shared/types';
+import { isFcsPool } from '../shared/fcsPool';
 
 interface Bucket {
   opponentTeamIndex: number | null;
@@ -31,6 +32,12 @@ export function getHeadToHead(dynastyId: string): HeadToHeadOpponent[] {
     if (!schedule) continue;
     for (const g of schedule.games) {
       if (!g.result || g.teamScore === null || g.opponentScore === null) continue; // played games only
+      // Every FCS opponent shares index 255, so bucketing by index merged games
+      // against FCS West, Southeast and Midwest into ONE series row labelled
+      // after whichever was seen last — a record for a team that doesn't exist.
+      // The games still count in your season record; they just don't get a
+      // head-to-head series of their own. See shared/fcsPool.ts.
+      if (isFcsPool(g.opponentTeamIndex)) continue;
       const key = g.opponentTeamIndex !== null ? `i${g.opponentTeamIndex}` : `n:${g.opponent}`;
       let bucket = buckets.get(key);
       if (!bucket) {

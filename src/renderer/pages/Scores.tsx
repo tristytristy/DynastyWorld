@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { InfoHint } from '../components/ui/InfoHint';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
 import { TeamLink } from '../components/common/TeamLink';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useGameModal } from '../data/GameModalProvider';
@@ -69,17 +70,12 @@ export function Scores() {
             <InfoHint label="About scores">Every game in the country — click any for the full box score.</InfoHint>
           </h3>
         </div>
-        <select
-          value={activeWeek ?? ''}
-          onChange={(event) => setPickedWeek(Number(event.target.value))}
-          className="border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-        >
-          {weeks.map((w) => (
-            <option key={w} value={w}>
-              Week {w}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={String(activeWeek ?? '')}
+          onChange={(next) => setPickedWeek(Number(next))}
+          ariaLabel="Week"
+          options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))}
+        />
       </div>
 
       {heldWeek !== null && activeWeek !== null && activeWeek >= heldWeek && (

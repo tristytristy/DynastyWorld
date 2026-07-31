@@ -1,0 +1,38 @@
+/**
+ * The DynastyOS mark, inlined rather than loaded from a file.
+ *
+ * Inlined for the same reason InnerActivityMark is: an <img> at a bundled asset
+ * path is exactly what broke the portrait picker on packaged builds. This one
+ * couldn't use a path at all — the source lives in /DynastyOS/logo, which isn't
+ * part of the packaged assets, so it would have resolved in dev and 404'd in a
+ * release.
+ *
+ * The gradient ids are namespaced (`dos-`) because SVG ids are global to the
+ * document: two of these on one page would otherwise fight over the same
+ * gradient definitions.
+ */
+export function DynastyOSMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 913 412"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M355.712 3C378.479 2.99079 400.225 7.33919 417.401 17.6201C434.678 27.9612 447.179 44.2254 451.385 67.5859C455.201 88.785 454.453 110.058 449.474 131.293L413.918 282.92C396.403 357.612 340.06 408.374 263.31 408.572L98.3896 409C76.8357 409.056 55.0616 404.074 36.7402 393.273C18.7994 382.697 9.17104 364.515 5.21582 344.27C1.26344 324.038 2.90206 301.458 7.73145 281.448L47.5273 116.566C64.1497 47.6992 125.083 3.09376 197.407 3.06445L355.712 3ZM909.099 8.50195C909.199 10.1203 909.184 12.0028 908.596 13.8721L885.334 87.7773L882.479 89.877L626.757 90.4814C612.556 90.5151 603.356 96.493 597.065 105.923C590.635 115.563 587.185 128.926 585.128 143.643C583.435 155.755 592.103 166.25 605.023 166.292L769.545 166.823C791.474 166.894 811.333 171.772 826.269 182.543C841.301 193.383 851.057 209.991 853.022 232.831C855.257 258.804 848.8 282.202 842.808 306.615C828.45 365.105 781.951 404.862 720.566 408.078L720.415 408.082L434.397 408.574L431.504 404.766L453.49 326.226L456.375 324.034L714.411 323.667C729.526 323.645 739.544 317.127 746.267 306.893C753.114 296.469 756.608 282.061 758.02 266.405C759.021 255.299 750.8 246.701 739.141 246.672L571.706 246.252C548.515 246.194 527.272 239.902 511.929 227.603C496.499 215.234 487.245 196.941 487.944 173.493C488.96 139.423 496.447 105.184 512.598 74.1523C533.735 33.5395 575.887 6.88158 622.736 6.66504H622.74L906.095 5.68848L909.099 8.50195ZM193.487 87.4053C163.937 87.4506 141.89 108.053 135.301 136.454V136.455L99.3154 291.536C97.2753 300.331 101.343 310.891 106.52 317.135C110.968 322.5 120.147 326.183 129.172 326.133L262.928 325.395C293.767 325.224 315.857 304.69 323.024 274.382L354.403 141.697C357.465 128.751 359.277 116.155 355.211 103.981C351.962 94.2536 340.559 87.1796 329.063 87.1973L193.487 87.4053Z" fill="url(#dos-paint0_radial_8_267)" stroke="url(#dos-paint1_radial_8_267)" strokeWidth="6" strokeLinejoin="bevel"/>
+      <defs>
+      <radialGradient id="dos-paint0_radial_8_267" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(456.073 206) scale(450.073 200)">
+      <stop stopColor="#FEEA9D"/>
+      <stop offset="0.495192" stopColor="#D8B67C"/>
+      <stop offset="1" stopColor="#FEEA9D"/>
+      </radialGradient>
+      <radialGradient id="dos-paint1_radial_8_267" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(456.073 206) scale(450.073 200)">
+      <stop stopColor="white"/>
+      <stop offset="0.495192"/>
+      <stop offset="1" stopColor="white"/>
+      </radialGradient>
+      </defs>
+    </svg>
+  );
+}

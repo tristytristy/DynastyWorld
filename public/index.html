@@ -6,7 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DynastyOS</title>
   </head>
-  <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+  <!--
+    The ground lives in globals.css (`body` / `.dark body`), NOT here. This
+    element used to carry `dark:bg-slate-950`, which is #0a0a0b — and because a
+    Tailwind utility outranks an `@layer base` rule, it silently beat the
+    `.dark body { background-color: #000 }` declaration in the stylesheet.
+    That one class was why the app kept reading dark-grey no matter how many
+    surfaces were set to black: every fix was in the CSS, and the paint was
+    coming from the HTML.
+  -->
+  <body>
     <div id="root"></div>
   </body>
 </html>

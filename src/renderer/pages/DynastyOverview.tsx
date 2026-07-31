@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { GRADIENT_TEAM_BLOCK } from '../lib/gradients';
-import type { SyntheticEvent } from 'react';
+import type { ReactNode, SyntheticEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
-import { TeamLogo } from '../components/common/TeamLogo';
+import { MASTHEAD_ART_SLOT } from '../components/common/PageMasthead';
+import { boundsFor, markGeometry } from '../lib/markBounds';
+import { getLogoPath } from '../lib/assetMapping';
 import { TopPlayersCard } from '../components/common/TopPlayersCard';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
+import { ProgramEditorModal } from '../components/common/ProgramEditorModal';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   getBowlLogoPath,
@@ -34,23 +37,29 @@ function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): voi
   event.currentTarget.src = fallback;
 }
 
+/**
+ * A trophy in the masthead's case, at the FULL height of the row.
+ *
+ * No caption. The name under a 64px thumbnail was carrying the whole message,
+ * which meant the trophy itself was decoration next to it — the wrong way round
+ * for the one thing on this page worth celebrating. Sized to the same slot as
+ * the team mark so the two read as equals, with the name moved to the tooltip
+ * rather than deleted (it's still the accessible label).
+ */
 function TrophyBadge({ trophy }: { trophy: Trophy }) {
   const imagePath = getTrophyImagePath(trophy);
   if (!imagePath) return null;
 
   return (
-    <div className="flex flex-col items-center gap-1.5 text-center">
-      <img
-        src={imagePath}
-        alt={trophy.label}
-        onError={trophy.kind === 'bowl-win' ? fallbackToDefaultBowlLogo : undefined}
-        className="h-16 w-16 object-contain drop-shadow-[0_10px_24px_rgba(15,23,42,0.25)]"
-        draggable={false}
-      />
-      <p className="max-w-[6rem] text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400">
-        {trophy.label}
-      </p>
-    </div>
+    <img
+      src={imagePath}
+      alt={trophy.label}
+      title={trophy.label}
+      onError={trophy.kind === 'bowl-win' ? fallbackToDefaultBowlLogo : undefined}
+      style={{ height: MASTHEAD_ART_SLOT.logo.maxHeight }}
+      className="w-auto shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(15,23,42,0.25)]"
+      draggable={false}
+    />
   );
 }
 
@@ -73,16 +82,169 @@ function BowlAppearanceBadge({ bowl }: { bowl: BowlAppearance }) {
 }
 
 /** Shared affordance for opening the program-budget editor (Program Points / NIL funding). */
-function BudgetButton({ onClick }: { onClick: () => void }) {
+/** The masthead's action buttons. One class, so the stack can't drift apart. */
+const MASTHEAD_BTN =
+  'inline-flex w-full shrink-0 items-center justify-center gap-2 border border-slate-300/80 bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition duration-fast ease-standard hover:border-[var(--team-primary)] hover:text-[var(--team-accent-text)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300';
+
+/**
+ * Program editor above Program budget, both the same width.
+ *
+ * `w-full` inside a stretched column rather than each sizing to its own text —
+ * two buttons of different widths stacked on top of each other reads as an
+ * accident, and "Program editor" and "Program budget" are near enough in length
+ * that matching them costs nothing.
+ */
+function MastheadActions({ onEditor, onBudget }: { onEditor: () => void; onBudget: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-2 border border-slate-300/80 bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:border-[var(--team-primary)] hover:text-[var(--team-accent-text)] dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300"
-    >
-      Program budget
-    </button>
+    <div className="flex shrink-0 flex-col items-stretch gap-2">
+      <button type="button" onClick={onEditor} className={MASTHEAD_BTN}>
+        Program editor
+      </button>
+      <button type="button" onClick={onBudget} className={MASTHEAD_BTN}>
+        Program budget
+      </button>
+    </div>
   );
+}
+
+/**
+ * The team mark at the SAME size every other team page's masthead uses. This
+ * page's header is hand-rolled rather than a `PageMasthead` (it carries
+ * trophies and the record banner, which that component has no slot for), and it
+ * had been rendering a plain 128px `TeamLogo` — visibly smaller than the marks
+ * on Roster, Schedule and the rest.
+ *
+ * It borrows PageMasthead's own slot and geometry rather than picking a bigger
+ * number: the art floats inside a much larger transparent canvas and fills a
+ * different fraction of it for every school (a 3.19x spread), so matching by
+ * raw box size would leave Auburn and Texas State visibly different heights.
+ * See lib/markBounds.ts. `slotLeft: 0` because here the slot IS this element,
+ * not a position inside a wider card.
+ */
+function MastheadMark({ teamAssetName }: { teamAssetName: string }) {
+  const { appearance } = useTheme();
+  const src = getLogoPath(teamAssetName, appearance);
+  const geometry = markGeometry(boundsFor(src, 'logo'), {
+    ...MASTHEAD_ART_SLOT.logo,
+    slotLeft: 0,
+    textGap: 0,
+  });
+
+  return (
+    <div
+      className="relative shrink-0"
+      style={{ width: MASTHEAD_ART_SLOT.logo.maxWidth, height: MASTHEAD_ART_SLOT.logo.maxHeight }}
+    >
+      <img src={src} alt={teamAssetName} draggable={false} className="absolute max-w-none" style={geometry.style} />
+    </div>
+  );
+}
+
+/**
+ * Team Hub's header, shared by the user's own hub and a browsed league team so
+ * the two can't drift.
+ *
+ * The row is `items-end`: the actions column (Program budget) lines up with the
+ * BOTTOM of the identity block — i.e. with the coach line — instead of floating
+ * at the vertical centre of a header whose height is set by the mark.
+ */
+function TeamHubMasthead({
+  teamName,
+  headCoach,
+  trophies,
+  actions,
+}: {
+  teamName: string;
+  headCoach?: { firstName: string; lastName: string } | null;
+  trophies?: Trophy[];
+  actions?: ReactNode;
+}) {
+  return (
+    <SurfaceCard>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
+        <MastheadMark teamAssetName={teamName} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-6">
+          <div className="min-w-0">
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Team Hub</p>
+            <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">{teamName}</h2>
+            {headCoach && (
+              <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                {headCoach.firstName} {headCoach.lastName} · Head Coach
+              </p>
+            )}
+          </div>
+          {trophies && trophies.length > 0 && (
+            <div className="flex flex-wrap items-end gap-5 border-l border-slate-200/80 pl-6 dark:border-slate-800">
+              {trophies.map((trophy) => (
+                <TrophyBadge key={trophy.id ?? trophy.kind} trophy={trophy} />
+              ))}
+            </div>
+          )}
+          {actions && <div className="ml-auto shrink-0">{actions}</div>}
+        </div>
+      </div>
+    </SurfaceCard>
+  );
+}
+
+/**
+ * The record banner is a SIBLING of the masthead card, not a child of it
+ * (2026-07-29, user direction). Inside the card it inherited the card's `p-5`,
+ * so it sat 20px inside the stat tiles below it on both edges — the one block
+ * on the page that didn't line up with anything. As its own block it spans the
+ * same column as everything else.
+ *
+ * Hard edges with the signature cut corner, matching the tiles it now aligns
+ * with; the old `rounded-xl` was the only rounded surface left on the page. The
+ * drop-shadow went with it — clip-path clips box-shadow (see `.corner-cut`).
+ */
+function OverallRecordBanner({
+  record,
+  conferenceRecord,
+  trailing,
+}: {
+  record: { wins: number; losses: number };
+  conferenceRecord: { wins: number; losses: number };
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className={`corner-cut overflow-hidden ${GRADIENT_TEAM_BLOCK} p-5 text-[var(--team-on-primary)]`}>
+      <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <p className="proportional-nums text-5xl font-semibold tracking-tight">
+            {record.wins}-{record.losses}
+          </p>
+          <p className="text-sm opacity-80">
+            Conference {conferenceRecord.wins}-{conferenceRecord.losses}
+          </p>
+        </div>
+        {trailing}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Recent | Upcoming, split by a hairline (2026-07-29, user direction). The
+ * divider is a real 1px grid column rather than a border on either card, so it
+ * sits centred in the gap and spans the taller of the two — and it collapses
+ * with the columns at narrow widths, where the two cards stack and a vertical
+ * rule would mean nothing.
+ */
+function GamesPair({ recent, upcoming }: { recent: ReactNode; upcoming: ReactNode }) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[1fr_1px_1fr]">
+      {recent}
+      <div aria-hidden className="hidden bg-[color:var(--section-divider)] xl:block" />
+      {upcoming}
+    </div>
+  );
+}
+
+/** The rule closing off a stacked-then-paired run of sections, where the automatic card-to-card divider can't reach (see globals.css). */
+function SectionRule() {
+  return <div aria-hidden className="h-px bg-[color:var(--section-divider)]" />;
 }
 
 function GameRow({ game }: { game: GameSummary }) {
@@ -160,44 +322,28 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
 
   return (
     <div className="space-y-6">
-      <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-6">
-            <div className="flex items-center gap-4">
-              <TeamLogo team={{ assetName: teamName, label: teamName }} size="lg" />
-              <div>
-                <p className="type-eyebrow text-slate-400 dark:text-slate-500">Team Hub</p>
-                <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">{teamName}</h2>
-                {overview?.headCoach && (
-                  <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                    {overview.headCoach.firstName} {overview.headCoach.lastName} · Head Coach
-                  </p>
-                )}
-              </div>
-            </div>
-            {teamTrophies.length > 0 && (
-              <div className="flex flex-wrap items-center gap-4 border-l border-slate-200/80 pl-6 dark:border-slate-800">
-                {teamTrophies.map((trophy) => (
-                  <TrophyBadge key={trophy.kind} trophy={trophy} />
-                ))}
-              </div>
-            )}
-          </div>
-          <BudgetButton onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })} />
-        </div>
+      <TeamHubMasthead
+        teamName={teamName}
+        headCoach={overview?.headCoach}
+        trophies={teamTrophies}
+        actions={
+          /* Another team's hub: budget only. The program editor is for YOUR
+             program — it's stored per team slot, so opening it here later is
+             an entry point rather than a change of shape. */
+          <button
+            type="button"
+            onClick={() => openTeamBudgetEditor({ dynastyId, teamIndex, teamLabel: teamName })}
+            className={MASTHEAD_BTN}
+          >
+            Program budget
+          </button>
+        }
+      />
 
-        <div className={`mt-6 overflow-hidden rounded-xl ${GRADIENT_TEAM_BLOCK} p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(0,0,0,0.90)]`}>
-          <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
-          <div className="mt-3 flex flex-wrap items-end gap-4">
-            <p className="proportional-nums text-5xl font-semibold tracking-tight">
-              {overview?.record.wins ?? 0}-{overview?.record.losses ?? 0}
-            </p>
-            <p className="text-sm opacity-80">
-              Conference {overview?.conferenceRecord.wins ?? 0}-{overview?.conferenceRecord.losses ?? 0}
-            </p>
-          </div>
-        </div>
-      </SurfaceCard>
+      <OverallRecordBanner
+        record={overview?.record ?? { wins: 0, losses: 0 }}
+        conferenceRecord={overview?.conferenceRecord ?? { wins: 0, losses: 0 }}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatTile label="Conference record" value={`${overview?.conferenceRecord.wins ?? 0}-${overview?.conferenceRecord.losses ?? 0}`} />
@@ -210,35 +356,40 @@ function LeagueTeamHub({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId
         <StatTile label="Average OVR" value={avgOvr} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SurfaceCard>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recent games</p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Latest results</h3>
-          {!overview || overview.recentGames.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games played yet.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {overview.recentGames.map((game) => (
-                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
-              ))}
-            </ul>
-          )}
-        </SurfaceCard>
+      <GamesPair
+        recent={
+          <SurfaceCard>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Recent games</p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Latest results</h3>
+            {!overview || overview.recentGames.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games played yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {overview.recentGames.map((game) => (
+                  <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+                ))}
+              </ul>
+            )}
+          </SurfaceCard>
+        }
+        upcoming={
+          <SurfaceCard>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Upcoming games</p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">What is next</h3>
+            {!overview || overview.upcomingGames.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games scheduled.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {overview.upcomingGames.map((game) => (
+                  <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+                ))}
+              </ul>
+            )}
+          </SurfaceCard>
+        }
+      />
 
-        <SurfaceCard>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Upcoming games</p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">What is next</h3>
-          {!overview || overview.upcomingGames.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games scheduled.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {overview.upcomingGames.map((game) => (
-                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
-              ))}
-            </ul>
-          )}
-        </SurfaceCard>
-      </div>
+      <SectionRule />
 
       <TopPlayersCard
         players={roster?.players ?? []}
@@ -275,6 +426,7 @@ export function DynastyOverview() {
   const { openPlayerModal } = usePlayerModal();
   const [yearbookMsg, setYearbookMsg] = useState<string | null>(null);
   const [yearbookBusy, setYearbookBusy] = useState(false);
+  const [programEditorOpen, setProgramEditorOpen] = useState(false);
 
   async function exportYearbook() {
     if (!id || seasonId === undefined) return;
@@ -340,64 +492,33 @@ export function DynastyOverview() {
 
   return (
     <div className="space-y-6">
-      <SurfaceCard>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-6">
-            <div className="flex items-center gap-4">
-              <TeamLogo team={{ assetName: overview.teamName, label: overview.teamName }} size="lg" />
-              <div>
-                <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                  Team Hub
-                </p>
-                <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-                  {overview.teamName}
-                </h2>
-                {overview.headCoach && (
-                  <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                    {overview.headCoach.firstName} {overview.headCoach.lastName} · Head Coach
-                  </p>
-                )}
-              </div>
-            </div>
+      {/* Season Yearbook moved to the foot of the page — see the export row at
+          the bottom. It's an end-of-visit action, not part of the team's
+          identity header, and stacked up here it crowded the masthead. */}
+      <TeamHubMasthead
+        teamName={overview.teamName}
+        headCoach={overview.headCoach}
+        trophies={trophies?.trophies}
+        actions={
+          userTeamIndex !== null && id ? (
+            <MastheadActions
+              onEditor={() => setProgramEditorOpen(true)}
+              onBudget={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
+            />
+          ) : undefined
+        }
+      />
 
-            {trophies && trophies.trophies.length > 0 && (
-              <div className="flex flex-wrap items-center gap-4 border-l border-slate-200/80 pl-6 dark:border-slate-800">
-                {trophies.trophies.map((trophy) => (
-                  <TrophyBadge key={trophy.kind} trophy={trophy} />
-                ))}
-              </div>
-            )}
+      <OverallRecordBanner
+        record={overview.record}
+        conferenceRecord={overview.conferenceRecord}
+        trailing={trophies?.bowlAppearance ? <BowlAppearanceBadge bowl={trophies.bowlAppearance} /> : undefined}
+      />
 
-          </div>
-
-          {/* Season Yearbook moved to the foot of the page — see the export row
-              at the bottom. It's an end-of-visit action, not part of the team's
-              identity header, and stacked up here it crowded the masthead. */}
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            {userTeamIndex !== null && id && (
-              <BudgetButton
-                onClick={() => openTeamBudgetEditor({ dynastyId: id, teamIndex: userTeamIndex, teamLabel: overview.teamName })}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className={`mt-6 overflow-hidden rounded-xl ${GRADIENT_TEAM_BLOCK} p-5 text-[var(--team-on-primary)] shadow-[0_24px_70px_-38px_rgba(0,0,0,0.90)]`}>
-          <p className="text-xs uppercase tracking-[0.24em] opacity-75">Overall record</p>
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-wrap items-end gap-4">
-              <p className="proportional-nums text-5xl font-semibold tracking-tight">
-                {overview.record.wins}-{overview.record.losses}
-              </p>
-              <p className="text-sm opacity-80">
-                Conference {overview.conferenceRecord.wins}-{overview.conferenceRecord.losses}
-              </p>
-            </div>
-            {trophies?.bowlAppearance && <BowlAppearanceBadge bowl={trophies.bowlAppearance} />}
-          </div>
-        </div>
-      </SurfaceCard>
-
+      {/* ONE grid, not two. The season-high tiles used to be their own grid, so
+          the gap above that row was the page's 24px section spacing while the
+          rows inside each grid were 12px apart — the third row visibly sat lower
+          than the first two. Same grid, same gap everywhere. */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatTile
           label="Conference record"
@@ -411,62 +532,67 @@ export function DynastyOverview() {
           label="Program prestige"
           value={overview.teamPrestige === null ? 'Not available' : String(overview.teamPrestige)}
         />
+        {rankings && (
+          <>
+            <StatTile label="Season-High Media/AP" value={rankLabel(rankings.highestMediaPollRank)} />
+            <StatTile label="Season-High Coaches" value={rankLabel(rankings.highestCoachesPollRank)} />
+            <StatTile label="Season-High CFP" value={rankLabel(rankings.highestCfpRank)} />
+          </>
+        )}
       </div>
 
-      {rankings && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatTile label="Season-High Media/AP" value={rankLabel(rankings.highestMediaPollRank)} />
-          <StatTile label="Season-High Coaches" value={rankLabel(rankings.highestCoachesPollRank)} />
-          <StatTile label="Season-High CFP" value={rankLabel(rankings.highestCfpRank)} />
-        </div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SurfaceCard>
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                Recent games
-              </p>
-              <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                Latest results
-              </h3>
+      <GamesPair
+        recent={
+          <SurfaceCard>
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+                  Recent games
+                </p>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Latest results
+                </h3>
+              </div>
+              <Link to={`/dynasty/${id}/schedule`} className="text-sm font-medium text-[var(--team-accent-text)] hover:underline">
+                Schedule
+              </Link>
             </div>
-            <Link to={`/dynasty/${id}/schedule`} className="text-sm font-medium text-[var(--team-accent-text)] hover:underline">
-              Schedule
-            </Link>
-          </div>
-          {overview.recentGames.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games played yet.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {overview.recentGames.map((game) => (
-                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
-              ))}
-            </ul>
-          )}
-        </SurfaceCard>
-
-        <SurfaceCard>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-            Upcoming games
-          </p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-            What is next
-          </h3>
-          {overview.upcomingGames.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games scheduled.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {overview.upcomingGames.map((game) => (
-                <GameRow key={`${game.week}-${game.opponent}`} game={game} />
-              ))}
-            </ul>
-          )}
-        </SurfaceCard>
-      </div>
+            {overview.recentGames.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games played yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {overview.recentGames.map((game) => (
+                  <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+                ))}
+              </ul>
+            )}
+          </SurfaceCard>
+        }
+        upcoming={
+          <SurfaceCard>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+              Upcoming games
+            </p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              What is next
+            </h3>
+            {overview.upcomingGames.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">No games scheduled.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {overview.upcomingGames.map((game) => (
+                  <GameRow key={`${game.week}-${game.opponent}`} game={game} />
+                ))}
+              </ul>
+            )}
+          </SurfaceCard>
+        }
+      />
 
       {/* Top players — the same shared card the league-team view uses (Phase 4 unification). */}
+      {roster && roster.length > 0 && userTeamIndex !== null && (
+        <SectionRule />
+      )}
       {roster && roster.length > 0 && userTeamIndex !== null && (
         <TopPlayersCard
           players={roster}
@@ -504,6 +630,16 @@ export function DynastyOverview() {
           </button>
           {yearbookMsg && <p className="text-xs text-slate-400 dark:text-slate-500">{yearbookMsg}</p>}
         </div>
+      )}
+
+      {id && userTeamIndex !== null && (
+        <ProgramEditorModal
+          open={programEditorOpen}
+          onClose={() => setProgramEditorOpen(false)}
+          dynastyId={id}
+          teamIndex={userTeamIndex}
+          teamName={overview.teamName}
+        />
       )}
     </div>
   );

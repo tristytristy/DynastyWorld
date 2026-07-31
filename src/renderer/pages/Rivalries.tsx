@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { PageHeader } from '../components/ui/PageHeader';
+import { PageMasthead } from '../components/common/PageMasthead';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { TeamLogo } from '../components/common/TeamLogo';
 import { TeamLink } from '../components/common/TeamLink';
 import type { HeadToHeadOpponent } from '../../shared/types';
 
@@ -70,14 +70,21 @@ function RivalCard({ o }: { o: HeadToHeadOpponent }) {
   return (
     <SurfaceCard>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <TeamLogo team={{ assetName: o.opponentName, label: o.opponentName }} size="md" className="!h-10 !w-10" />
-          <div>
-            <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">
-              <TeamLink teamIndex={o.opponentTeamIndex ?? undefined} teamName={o.opponentName} />
-            </h3>
-            {o.rivalryName && <p className="type-eyebrow text-[var(--team-accent-text)]">{o.rivalryName}</p>}
-          </div>
+        <div className="min-w-0">
+          {/* TeamLink draws its own logo — the standalone one that used to sit
+              to its left rendered the same mark twice at two sizes, the same
+              duplication already fixed in the All-time series table. It carries
+              the card's identity mark now, sized up to what that logo was. */}
+          <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">
+            <TeamLink
+              teamIndex={o.opponentTeamIndex ?? undefined}
+              teamName={o.opponentName}
+              size="md"
+              className="gap-3"
+              logoClassName="!h-10 !w-10"
+            />
+          </h3>
+          {o.rivalryName && <p className="type-eyebrow text-[var(--team-accent-text)]">{o.rivalryName}</p>}
         </div>
         <StreakBadge o={o} />
       </div>
@@ -116,15 +123,20 @@ export function Rivalries() {
     };
   }, [id]);
 
+  // Head-to-head is always the USER's series (getHeadToHead walks their own
+  // schedules), so the mark follows the user's team rather than the viewed one.
+  const { userTeamName } = useViewedTeam();
   const rivals = (data ?? []).filter((o) => o.isRival);
   const others = (data ?? []).filter((o) => !o.isRival);
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageMasthead
         eyebrow="Rivalries & Head-to-Head"
-        title="Every series you've built."
+        title={userTeamName ?? 'Rivalries'}
+        subtitle="Every series you've built"
         description="All-time record vs every opponent you've played across your synced seasons — series record, current streak, and average margin. Your program's designated rivals lead the way. Only this app keeps the per-season schedule history that makes this possible."
+        mark={{ kind: 'helmet', teamAssetName: userTeamName ?? '' }}
       />
 
       {data === undefined ? (

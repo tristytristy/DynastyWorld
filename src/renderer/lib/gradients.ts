@@ -22,7 +22,11 @@
 
 /** Panel/card fill: a hint of lift at the top dissolving into the page. */
 export const GRADIENT_SURFACE =
-  'bg-gradient-to-b from-white to-slate-50 dark:from-white/[0.055] dark:to-transparent';
+  // Dark mode carries NO wash. The 5.5% white top-edge lift was the single
+  // biggest reason panels read grey on a black page: it sits on every
+  // SurfaceCard, so the effect compounded everywhere at once. Light mode keeps
+  // its paper falloff, where the same trick works against white.
+  'bg-gradient-to-b from-white to-slate-50 dark:from-transparent dark:to-transparent';
 
 /**
  * Section header rows ("PASSING", table column heads). Slightly stronger than

@@ -31,6 +31,7 @@ export const IPC = {
     getNationalStatLeaders: 'db:getNationalStatLeaders',
     getKickingStats: 'db:getKickingStats',
     getGameLog: 'db:getGameLog',
+    getPlayerGameLog: 'db:getPlayerGameLog',
     getGameDetail: 'db:getGameDetail',
     getTeamTrophies: 'db:getTeamTrophies',
     getSchedule: 'db:getSchedule',
@@ -49,6 +50,8 @@ export const IPC = {
     getNationalRecruits: 'db:getNationalRecruits',
     getNcaaRecords: 'db:getNcaaRecords',
     getDynastyTrends: 'db:getDynastyTrends',
+    getSeasonAnalytics: 'db:getSeasonAnalytics',
+    getProgramArc: 'db:getProgramArc',
     getTransfers: 'db:getTransfers',
     getDepartures: 'db:getDepartures',
     globalSearch: 'db:globalSearch',
@@ -77,6 +80,8 @@ export const IPC = {
     historyToHtml: 'export:historyToHtml',
     seasonYearbookToHtml: 'export:seasonYearbookToHtml',
     playerCardToPng: 'export:playerCardToPng',
+    pickCardFolder: 'export:pickCardFolder',
+    playerCardToFolder: 'export:playerCardToFolder',
   },
   editor: {
     backupSaveFile: 'editor:backupSaveFile',
@@ -100,10 +105,31 @@ export const IPC = {
     searchPortraits: 'editor:searchPortraits',
   },
   card: {
+    // Photo files. The legacy four are keyed by player (one photo per player) and
+    // stay because cards made before schema v12 adopt those files where they sit;
+    // the *ForCard trio is keyed by card, which is what multiple cards needs.
     pickPhoto: 'card:pickPhoto',
     setPhotoFromPath: 'card:setPhotoFromPath',
     getPhoto: 'card:getPhoto',
     removePhoto: 'card:removePhoto',
+    pickPhotoForCard: 'card:pickPhotoForCard',
+    setCardPhotoFromPath: 'card:setCardPhotoFromPath',
+    removeCardPhoto: 'card:removeCardPhoto',
+    // Saved cards (schema v12).
+    list: 'card:list',
+    listFavorites: 'card:listFavorites',
+    listCardedPlayerIds: 'card:listCardedPlayerIds',
+    create: 'card:create',
+    update: 'card:update',
+    setFavorite: 'card:setFavorite',
+    setDefault: 'card:setDefault',
+    remove: 'card:remove',
+  },
+  program: {
+    list: 'program:list',
+    setIdentity: 'program:setIdentity',
+    pickArt: 'program:pickArt',
+    clearArt: 'program:clearArt',
   },
   media: {
     pickFiles: 'media:pickFiles',
@@ -112,6 +138,7 @@ export const IPC = {
     listForPlayer: 'media:listForPlayer',
     listForGame: 'media:listForGame',
     update: 'media:update',
+    setFraming: 'media:setFraming',
     reorder: 'media:reorder',
     remove: 'media:remove',
     getStorageUsage: 'media:getStorageUsage',
@@ -132,5 +159,9 @@ export const IPC = {
   update: {
     check: 'update:check',
     openDownload: 'update:openDownload',
+  },
+  window: {
+    /** Recolours the Windows Control Overlay strip when the app's light/dark appearance flips. */
+    setTitleBarTheme: 'window:setTitleBarTheme',
   },
 } as const;

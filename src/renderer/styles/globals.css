@@ -45,12 +45,20 @@
     height: 100%;
   }
 
+  /*
+    The ground is painted on HTML as well as body. body alone leaves the
+    overscroll/rubber-band region and any area body doesn't cover unpainted —
+    and on a frameless Windows 11 window "unpainted" means the system backdrop
+    shows through, which is what made the top strip read grey.
+  */
   html {
     color-scheme: light;
+    background-color: var(--ground, #e8eaed);
   }
 
   html.dark {
     color-scheme: dark;
+    background-color: var(--ground, #000000);
   }
 
   /**
@@ -62,7 +70,15 @@
    * or the SurfaceCard component (Phase 2).
    */
   :root {
-    --surface-primary: rgba(252, 252, 253, 0.92);
+    /*
+      TRANSPARENT, so a section sits ON the page rather than in a panel. It was
+      a near-white fill, and once the borders came off (2026-07-29) that fill was
+      still drawing the box: a white block on the light grey ground reads as a
+      framed card even with no frame on it. Dark already worked this way — its
+      surface is #000 on a #000 ground — so this is the light theme catching up,
+      and the hairline between sections does the separating in both.
+    */
+    --surface-primary: transparent;
     --surface-primary-border: rgba(15, 23, 42, 0.1);
     --surface-raised: #ffffff;
     --surface-raised-border: rgba(15, 23, 42, 0.12);
@@ -77,6 +93,8 @@
      * lighten it toward white. Fills/borders keep using raw --team-primary.
      */
     --team-accent-text: color-mix(in srgb, var(--team-primary) 84%, #0b0e12);
+    /* The hairline BETWEEN sections, now that sections have no box around them. */
+    --section-divider: rgba(15, 23, 42, 0.12);
   }
 
   /**
@@ -88,15 +106,25 @@
    * the border + the retuned ground beneath.
    */
   .dark {
-    --surface-primary: rgba(10, 10, 11, 0.92);
+    /*
+      PURE BLACK, all three levels. These were near-blacks a few points off
+      (#0a0a0b, #0f0f11, #0d0d0f) meant to separate panels from the page by
+      value — but the page itself is #000, so every panel read as a grey slab
+      floating on black, which is the opposite of the intended look. Separation
+      now comes from the borders alone, which is enough on a black ground and
+      is how the rest of the shape language already works.
+    */
+    --surface-primary: #000000;
     --surface-primary-border: rgba(255, 255, 255, 0.09);
-    --surface-raised: rgba(15, 15, 17, 0.97);
+    --surface-raised: #000000;
     --surface-raised-border: rgba(255, 255, 255, 0.12);
+    /* Hover still needs to register, so it stays the one lifted value. */
     --surface-interactive-hover: rgba(24, 24, 27, 0.9);
-    --surface-overlay: #0d0d0f;
+    --surface-overlay: #000000;
     --surface-overlay-border: rgba(255, 255, 255, 0.12);
     /* Lighten the team color toward white so team-tinted TEXT stays legible on the dark graphite ground. */
     --team-accent-text: color-mix(in srgb, var(--team-primary) 60%, #ffffff);
+    --section-divider: rgba(255, 255, 255, 0.09);
   }
 
   /**
@@ -106,22 +134,58 @@
    * like even overhead light on a physical surface; team color stays out of the
    * ground entirely and lives only in accents.
    */
+  /**
+   * Frameless window support (Windows Control Overlay). The app has no OS title
+   * bar — Windows draws only the minimise/maximise/close buttons, as a
+   * transparent overlay over our own page — so two things have to be declared
+   * here rather than assumed:
+   *
+   *  • `--titlebar-height` reserves a strip above the masthead so those buttons
+   *    float over the page ground instead of landing on the card. It MUST match
+   *    TITLE_BAR_HEIGHT in main.ts.
+   *  • `--titlebar-gutter` is how much room the buttons themselves occupy on the
+   *    right. Chromium publishes the real figure as `env(titlebar-area-width)`
+   *    (it changes with DPI and with Windows' own button sizing), so that is
+   *    used when available; the 140px fallback is the standard three-button
+   *    width at 100% scaling, for the first paint and for non-Windows builds.
+   */
+  :root {
+    --titlebar-height: 36px;
+    --titlebar-gutter: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
+  }
+
+  /**
+   * Anything inside a drag region stops receiving clicks, so every interactive
+   * child has to opt back out. Declared as utilities rather than inline styles
+   * because `-webkit-app-region` has no Tailwind equivalent.
+   */
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /*
+    The ground is a single flat colour driven by `--ground`, which ThemeProvider
+    sets from the user's per-appearance preference. The fallbacks are the values
+    that used to be hardcoded here, so a profile with no preference saved (or a
+    first paint before React runs) looks exactly as it did.
+
+    The light theme's old three-stop gradient is gone: a gradient can't honour a
+    chosen ground without generating stops from it, and a flat colour is the
+    honest reading of "set the background to this".
+  */
   body {
     @apply font-sans antialiased text-slate-950 dark:text-slate-100;
     min-height: 100%;
-    background-color: #e8eaed;
-    background-image: linear-gradient(180deg, #f3f4f6 0%, #e8eaed 55%, #e0e3e7 100%);
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-attachment: fixed;
-    background-position: center top;
+    background-color: var(--ground, #e8eaed);
+    background-image: none;
   }
 
   .dark body {
-    /* Pure-black system base. No team-tinted glow — team color lives only in
-       accents (buttons, text, borders, the trading card), never in the ground. */
-    background-color: #000000;
-    background-image: none;
+    background-color: var(--ground, #000000);
   }
 
   #root {
@@ -301,7 +365,7 @@
    *
    * Note: clip-path clips the element's own painting, including box-shadow —
    * surfaces using these classes are deliberately flat (border-defined), which
-   * matches the reference aesthetic anyway. The app shell keeps its existing
+   * matches the flat, border-defined aesthetic anyway. The app shell keeps its existing
    * two-corner angledClip() frame (a distinct, established wrapper shape).
    */
   .corner-cut {
@@ -310,5 +374,538 @@
 
   .corner-cut-sm {
     clip-path: polygon(0 0, calc(100% - 0.5rem) 0, 100% 0.5rem, 100% 100%, 0 100%);
+  }
+
+  /**
+   * MODALS (2026-07-30). One scrim and one panel treatment for every overlay in
+   * the app, because thirteen of them had each hand-written their own and had
+   * drifted: four scrim values (60%, 75%, 80% over two different base colours),
+   * three blur radii, and half the panels rounded while the other half carried
+   * the cut corner.
+   *
+   * THE SCRIM DARKENS AND NOTHING ELSE — the same decision the command palette
+   * made. Every one of these previously stacked `backdrop-blur` on the scrim AND
+   * on the panel, which is what turned the page behind into grey mush. Dimming
+   * alone keeps the page readable underneath, so a modal reads as something laid
+   * ON your work rather than a wall replacing it.
+   *
+   * Motion is the same family as the dropdown and the palette — rise a little,
+   * scale a hair, on the app's entrance curve. A modal is a bigger surface than
+   * a dropdown, so it travels slightly further (12px against 6px) over the same
+   * duration; that reads as weight rather than as a different animation.
+   */
+  .modal-scrim {
+    background-color: rgba(0, 0, 0, 0.55);
+    animation: modal-scrim-in var(--duration-fast) var(--ease-enter);
+  }
+
+  /* Media and portrait viewers only: artwork reads better against a deeper
+     ground, and there is no page content worth keeping legible behind a
+     full-screen image. */
+  .modal-scrim-deep {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+
+  .modal-panel {
+    background-color: var(--surface-overlay);
+    border: 1px solid var(--section-divider);
+    animation: modal-panel-in var(--duration-base) var(--ease-enter);
+  }
+
+  @keyframes modal-scrim-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes modal-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /**
+   * THE COMMAND PALETTE (2026-07-30). Same motion family as the dropdown — it
+   * should feel like the same app opening a bigger version of the same idea.
+   *
+   * The scrim fades ONLY. No `backdrop-blur`: the modal shell this replaced
+   * blurred both the scrim and the panel, which is what made the page behind
+   * read as grey mush. Dimming keeps the page legible underneath, so the palette
+   * reads as a light switched on over your work rather than a wall in front of it.
+   */
+  .palette-scrim {
+    animation: palette-scrim-in var(--duration-fast) var(--ease-enter);
+  }
+
+  .palette-panel {
+    transform-origin: top center;
+    animation: palette-panel-in var(--duration-base) var(--ease-enter);
+  }
+
+  @keyframes palette-scrim-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes palette-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /**
+   * THE DROPDOWN PANEL (2026-07-29, user direction: "make it feel fluid like our
+   * side menu selector"). The panel arrives with the app's own motion rather
+   * than a generic fade: it rises 6px into place and scales from 98%, anchored
+   * at the edge it grows FROM (top when it drops down, bottom when it flips up),
+   * so it reads as unfolding out of the trigger instead of appearing over it.
+   *
+   * Deliberately short — `--duration-base` (180ms) on the app's standard ease.
+   * A dropdown you open constantly can't have a showpiece animation; it has to
+   * feel instant and still land softly. The row highlight inside is the glider
+   * (see GliderNav / ui/Select.tsx), which is what ties this to the sidebar.
+   *
+   * Reduced motion is handled globally by the clamp in the base layer.
+   */
+  .select-panel {
+    transform-origin: top center;
+    animation: select-panel-in var(--duration-base) var(--ease-enter);
+  }
+
+  .select-panel.select-panel-above {
+    transform-origin: bottom center;
+  }
+
+  @keyframes select-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .select-panel.select-panel-above {
+    animation-name: select-panel-in-above;
+  }
+
+  @keyframes select-panel-in-above {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /**
+   * SECTIONS ARE SEPARATED, NOT BOXED (2026-07-29, user direction). SurfaceCard
+   * no longer draws a border (see SurfaceCard.tsx); instead a hairline sits
+   * BETWEEN consecutive sections, so a page reads as one surface divided rather
+   * than a stack of framed rectangles.
+   *
+   * WHY THE `[class*='space-y-']` PARENT: the divider must only appear where
+   * sections are STACKED. Cards laid out side by side in a grid (Recent Games |
+   * Upcoming Games, the awards pairs) are adjacent siblings too, and a plain
+   * `.surface-card + .surface-card` rule would draw a line above the right-hand
+   * card of every pair. A vertical stack in this codebase is always a
+   * `space-y-*` container and a row is always a `grid`/`flex` + `gap-*` one, so
+   * the parent's own class is the honest signal — and it needs no per-page
+   * opt-in across the ~30 files that compose sections. A `flex-col` stack would
+   * not get dividers; none currently compose sections that way.
+   *
+   * The line sits ON the lower section's top edge rather than floating in the
+   * gap between them: `.corner-cut` is a clip-path, and clip-path clips
+   * pseudo-elements too, so anything drawn outside the card's own box is simply
+   * not painted. The card's `p-5` then reads as the rule's breathing room.
+   */
+  [class*='space-y-'] > .surface-card + .surface-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--section-divider);
+  }
+
+  /**
+   * GLIDER NAVIGATION (2026-07-29, user direction). A hairline rail with a lit
+   * segment that slides to the active item — the app's one selected-state
+   * device for navigation, replacing the solid team-colour tab fill. Geometry
+   * (`--glider-offset` / `--glider-size` / `--glider-cross`) is measured and
+   * pushed in by GliderNav.tsx, which explains why it isn't the pure-CSS
+   * radio-input version of this pattern.
+   *
+   * LIGHT AND DARK ARE DIFFERENT ON PURPOSE, the same way selection already is
+   * (see lib/selectionClass.ts):
+   *
+   * - **Dark** gets the full treatment: gold segment, a blurred bloom under it,
+   *   and a faint wash rising into the tab. Gold rather than the team colour
+   *   because the ground is pure black — a deep navy or maroon segment sinks
+   *   into it — and gold is already the dark-mode selection accent, so it
+   *   doesn't compete with the team colours the page is themed in.
+   * - **Light** drops the bloom entirely. `filter: blur()` on a colour reads as
+   *   light *emission*, which is meaningless on a white page and lands as a
+   *   smudge; emphasis comes from a crisper segment and the accent-coloured
+   *   label instead. Here the accent IS the team colour, which reads cleanly.
+   */
+  .glider-nav {
+    --glider-accent: var(--team-primary);
+    /* The contrast-corrected form for the label — a raw maize or navy is
+       unreadable as small text on the page surface. */
+    --glider-label: var(--team-accent-text);
+    --glider-rail: rgba(15, 23, 42, 0.16);
+    --glider-wash: color-mix(in srgb, var(--glider-accent) 18%, transparent);
+    --glider-bloom: 0;
+    --glider-thickness: 2px;
+    /* A mild overshoot. The reference's cubic-bezier(0.37, 1.95, 0.66, 0.56) at
+       500ms is a showpiece; this is a menu you click all day, so it keeps a hint
+       of the spring at the app's own `slow` duration (260ms). Reduced-motion is
+       already handled globally by the clamp in the base layer. */
+    --glider-ease: cubic-bezier(0.34, 1.28, 0.64, 1);
+    /*
+      The segment keeps a SOLID CORE and fades only at its ends. The reference
+      fades across the whole segment, which works there because the bloom behind
+      it carries the brightness — without a bloom (light mode, and the quiet
+      sub-nav in both) a fully-faded 1–2px line has almost no ink left in it and
+      the active tab stopped reading as active. Verified by capture.
+    */
+    --glider-core: 22%;
+    position: relative;
+  }
+
+  .dark .glider-nav {
+    --glider-accent: #e9d28c; /* gold-200 — the logo's gold, bright enough to bloom */
+    --glider-label: var(--glider-accent);
+    --glider-rail: rgba(255, 255, 255, 0.1);
+    --glider-bloom: 1;
+  }
+
+  /**
+   * The section bar and a hub's sub-nav sit ~10px apart and are deliberately
+   * pixel-aligned, so two bloomed rails would put two competing light sources
+   * on the page. The sub-nav takes the quiet variant: same language, no bloom,
+   * thinner segment, weaker wash.
+   */
+  .glider-nav[data-emphasis='quiet'] {
+    --glider-bloom: 0;
+    --glider-wash: color-mix(in srgb, var(--glider-accent) 10%, transparent);
+  }
+
+  /* Only DARK thins the quiet segment. Gold on black carries at 1px; a team
+     colour on a light ground doesn't, and the sub-nav stopped reading as having
+     a selection at all — so light keeps the full 2px and the hierarchy comes
+     from the bloom the primary bar has and this one doesn't. */
+  .dark .glider-nav[data-emphasis='quiet'] {
+    --glider-thickness: 1px;
+  }
+
+  /*
+    The track exists to CLIP the overshoot. `--glider-ease` deliberately
+    overshoots, so travelling to the last item pushes the segment past the row's
+    edge; inside a horizontally scrollable wrapper that counts as real overflow
+    and flashes a scrollbar, which steals height and makes the nav jump. The
+    items sit OUTSIDE this track, so a nav wider than its wrapper still scrolls.
+  */
+  .glider-track {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .glider-rail,
+  .glider-mark {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .glider-mark {
+    opacity: var(--glider-opacity, 0);
+  }
+
+  /* No transition until the first measurement has landed (data-ready), or the
+     glider animates in from the corner on every mount. */
+  .glider-nav[data-ready='true'] .glider-mark {
+    transition:
+      transform var(--duration-slow) var(--glider-ease),
+      width var(--duration-slow) var(--glider-ease),
+      height var(--duration-slow) var(--glider-ease),
+      bottom var(--duration-slow) var(--glider-ease),
+      opacity var(--duration-fast) linear;
+  }
+
+  .glider-mark::before,
+  .glider-mark::after {
+    content: '';
+    position: absolute;
+  }
+
+  /* The bloom: the segment's own colour, blurred, sitting under the line. */
+  .glider-mark::before {
+    background: var(--glider-accent);
+    opacity: var(--glider-bloom);
+    filter: blur(8px);
+  }
+
+  /* ── Horizontal: the rail runs along the BOTTOM edge (user direction) ── */
+  .glider-nav[data-orientation='horizontal'] .glider-rail {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--glider-rail) 50%, transparent 100%);
+  }
+
+  .glider-nav[data-orientation='horizontal'] .glider-mark {
+    bottom: var(--glider-cross, 0px);
+    left: 0;
+    height: var(--glider-thickness);
+    width: var(--glider-size, 0px);
+    transform: translateX(var(--glider-offset, 0px));
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--glider-accent) var(--glider-core),
+      var(--glider-accent) calc(100% - var(--glider-core)),
+      transparent 100%
+    );
+  }
+
+  /*
+    Anchored at the segment's own bottom edge and grown UPWARD, not centred on
+    it. Centring put ~1px of the bloom's box below the nav row, and because a
+    sub-nav wrapper is a scroll container (`overflow-x: auto` forces the y axis
+    to `auto` too), that 1px of scrollable overflow was enough to raise BOTH
+    scrollbars on a row of six tabs that fits its space with room to spare —
+    measured as clientHeight 32 vs scrollHeight 33. Spilling upward is also the
+    truer read for a bottom rail: the light falls into the tab.
+  */
+  .glider-nav[data-orientation='horizontal'] .glider-mark::before {
+    bottom: 0;
+    left: 50%;
+    width: 60%;
+    height: 300%;
+    transform: translateX(-50%);
+  }
+
+  /* The wash rises INTO the tab rather than spilling sideways — the horizontal
+     counterpart of the vertical rail's left-anchored gradient. */
+  .glider-nav[data-orientation='horizontal'] .glider-mark::after {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* Sized to fit inside the shortest row it appears in (a 32px sub-nav), so
+       the fade completes rather than being clipped mid-gradient. */
+    height: 1.75rem;
+    background: linear-gradient(0deg, var(--glider-wash) 0%, transparent 100%);
+  }
+
+  /* ── Vertical: the rail runs down the LEFT edge (the sidebar) ── */
+  .glider-nav[data-orientation='vertical'] .glider-rail {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    background: linear-gradient(180deg, transparent 0%, var(--glider-rail) 50%, transparent 100%);
+  }
+
+  .glider-nav[data-orientation='vertical'] .glider-mark {
+    top: 0;
+    left: 0;
+    width: var(--glider-thickness);
+    height: var(--glider-size, 0px);
+    transform: translateY(var(--glider-offset, 0px));
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      var(--glider-accent) var(--glider-core),
+      var(--glider-accent) calc(100% - var(--glider-core)),
+      transparent 100%
+    );
+  }
+
+  /* Same reasoning as the horizontal bloom, one axis over: the sidebar scrolls
+     vertically, so the bloom grows to the RIGHT of the spine instead of
+     straddling it and overflowing to the left. */
+  .glider-nav[data-orientation='vertical'] .glider-mark::before {
+    top: 50%;
+    left: 0;
+    width: 300%;
+    height: 60%;
+    transform: translateY(-50%);
+  }
+
+  .glider-nav[data-orientation='vertical'] .glider-mark::after {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 9rem;
+    background: linear-gradient(90deg, var(--glider-wash) 0%, transparent 100%);
+  }
+}
+
+@layer components {
+  /*
+    Hero sparks — the drift of gold across the winning side of a box score.
+
+    Built on the starfield technique from UI/Particle.md: ONE element carrying a
+    long `box-shadow` list, moved by a SINGLE transform, with a `::after` copy
+    offset by exactly one loop-span so the field wraps seamlessly. Fifty
+    particles cost two composited layers and zero DOM nodes each — the naive
+    version (one div per particle, or a canvas) would cost fifty of both, in a
+    header that re-renders whenever the box-score toggle changes.
+
+    The copy uses `box-shadow: inherit` rather than repeating the list, which
+    the reference had to do by hand. Same result, half the CSS, and the two can
+    never drift apart.
+
+    Two layers at different speeds and sizes read as depth rather than as one
+    sheet sliding past. Reduced motion is handled by the global clamp above.
+  */
+  .hero-sparks {
+    --spark: #e9d28c; /* the logo's gold — the same accent the nav glider uses */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20rem;
+    overflow: hidden;
+    /* They arrive at the outer edge and are gone well before the score column:
+       fully out by 78%, so nothing crosses into the logo/week/score stack. */
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 14%, #000 46%, transparent 78%);
+    mask-image: linear-gradient(to right, transparent 0%, #000 14%, #000 46%, transparent 78%);
+  }
+
+  /* The right-hand flank is the same field mirrored, so one animation and one
+     mask serve both sides and inward always means inward. */
+  .hero-sparks[data-side='right'] {
+    transform: scaleX(-1);
+  }
+
+  .hero-spark-field {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    background: transparent;
+    animation: hero-spark-drift 19s linear infinite;
+    box-shadow:
+      233px 138px var(--spark),
+      345px 43px var(--spark),
+      24px 161px var(--spark),
+      120px 76px var(--spark),
+      293px 40px var(--spark),
+      327px 98px var(--spark),
+      26px 179px var(--spark),
+      206px 21px var(--spark),
+      302px 152px var(--spark),
+      266px 130px var(--spark),
+      357px 8px var(--spark),
+      351px 127px var(--spark),
+      91px 121px var(--spark),
+      122px 128px var(--spark),
+      254px 105px var(--spark),
+      36px 80px var(--spark),
+      109px 147px var(--spark),
+      335px 152px var(--spark),
+      191px 38px var(--spark),
+      255px 56px var(--spark),
+      359px 39px var(--spark),
+      349px 9px var(--spark),
+      281px 71px var(--spark),
+      207px 84px var(--spark),
+      111px 88px var(--spark),
+      294px 72px var(--spark),
+      130px 153px var(--spark),
+      64px 73px var(--spark),
+      186px 103px var(--spark),
+      61px 150px var(--spark),
+      176px 23px var(--spark),
+      122px 17px var(--spark),
+      124px 27px var(--spark),
+      92px 111px var(--spark),
+      236px 161px var(--spark),
+      334px 189px var(--spark),
+      161px 138px var(--spark),
+      43px 168px var(--spark),
+      53px 70px var(--spark),
+      189px 35px var(--spark),
+      172px 174px var(--spark),
+      249px 28px var(--spark),
+      218px 13px var(--spark),
+      178px 184px var(--spark),
+      231px 191px var(--spark),
+      157px 156px var(--spark),
+      110px 101px var(--spark),
+      120px 113px var(--spark),
+      360px 78px var(--spark),
+      334px 32px var(--spark),
+      218px 115px var(--spark),
+      225px 37px var(--spark);
+  }
+
+  .hero-spark-field::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -22.5rem; /* one loop-span behind, so it feeds in as the field leaves */
+    width: inherit;
+    height: inherit;
+    background: transparent;
+    box-shadow: inherit;
+  }
+
+  .hero-spark-field[data-layer='near'] {
+    width: 2px;
+    height: 2px;
+    animation-duration: 13s;
+    opacity: 0.85;
+    box-shadow:
+      248px 62px var(--spark),
+      167px 102px var(--spark),
+      211px 177px var(--spark),
+      78px 151px var(--spark),
+      200px 174px var(--spark),
+      247px 7px var(--spark),
+      21px 156px var(--spark),
+      107px 121px var(--spark),
+      35px 112px var(--spark),
+      148px 93px var(--spark),
+      1px 174px var(--spark),
+      304px 146px var(--spark),
+      224px 49px var(--spark),
+      69px 164px var(--spark);
+  }
+
+  @keyframes hero-spark-drift {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(22.5rem);
+    }
   }
 }

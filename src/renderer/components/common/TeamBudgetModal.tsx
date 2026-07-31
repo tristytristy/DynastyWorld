@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useScrollLock } from '../../lib/useScrollLock';
 import { Button } from '../ui/Button';
 import type { TeamBudgetData, TeamBudgetFields } from '../../../shared/types';
+import { ModalOverlay } from './ModalOverlay';
+import { ModalCloseButton } from './ModalCloseButton';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -131,8 +133,8 @@ export function TeamBudgetModal({
       Math.round(draft.remainingProgramPoints) !== original.remainingProgramPoints);
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md md:items-center md:p-8"
+    <ModalOverlay
+      className="modal-scrim fixed inset-0 flex items-start justify-center overflow-y-auto p-4 md:items-center md:p-8"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -143,21 +145,14 @@ export function TeamBudgetModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${teamLabel} program budget`}
-        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-[0_60px_160px_-40px_rgba(2,6,23,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/95 md:max-h-[calc(100vh-4rem)]"
+        className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden modal-panel corner-cut md:max-h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
           <div>
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Program Budget</p>
             <h3 className="text-lg font-semibold text-slate-950 dark:text-white">{teamLabel}</h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close budget editor"
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Close
-          </button>
+          <ModalCloseButton label="budget editor" onClick={onClose} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
@@ -233,6 +228,6 @@ export function TeamBudgetModal({
           </div>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -48,6 +48,21 @@ export class DatabaseCorruptedError extends Error {
   }
 }
 
+/**
+ * Bumped every time the live handle is replaced — a fresh open, a restore from
+ * backup, an archive swapped in underneath us.
+ *
+ * Read by the snapshot cache in helpers.ts, which cannot simply be told to clear
+ * from here: helpers imports from this module, so an import the other way would
+ * be a cycle. A generation counter the reader checks is the acyclic version of
+ * the same thing, and it can't be forgotten at a new call site — replacing `db`
+ * is what invalidates, and replacing `db` is what bumps this.
+ */
+let dbEpoch = 0;
+export function getDbEpoch(): number {
+  return dbEpoch;
+}
+
 /** The live database handle. Throws if called before initDatabase() resolves. */
 export function getDb(): Database {
   if (!db) {
@@ -68,9 +83,49 @@ export function getDb(): Database {
  * from. Verified directly: pragma reads 1 before export() and 0 after.
  */
 export function persist(): void {
+  if (deferDepth > 0) {
+    pendingWrite = true;
+    return;
+  }
   const database = getDb();
   fs.writeFileSync(getDbPath(), Buffer.from(database.export()));
   database.run('PRAGMA foreign_keys = ON;');
+}
+
+// How many batches are open, and whether anything inside them asked to persist.
+let deferDepth = 0;
+let pendingWrite = false;
+
+/**
+ * Runs a bulk write as ONE flush to disk instead of one per statement.
+ *
+ * Every write goes through `run()` in helpers.ts, which calls `persist()`
+ * afterwards — and `persist()` serialises and rewrites the WHOLE database file.
+ * That is the right default for a single edit (the archive is never left
+ * un-flushed) and badly wrong for an import: `persistExtraction` performs about
+ * 25 writes, so a sync rewrote the entire archive 25 times over.
+ *
+ * The cost is invisible on a new archive and grows with the dynasty. Measured
+ * on a real 30 MB archive: a sync spent ~1.9 s in persist alone — roughly
+ * 750 MB of file writes for one sync — against ~80 ms for a single flush. It
+ * gets worse every season, which is exactly the wrong direction.
+ *
+ * Nested batches are safe (the flush happens when the outermost one ends), and
+ * the flush is in a `finally`: if the bulk operation throws part-way, whatever
+ * did land in memory is still written, so the file can't silently drift from
+ * the in-memory database.
+ */
+export function withBatchedPersist<T>(fn: () => T): T {
+  deferDepth++;
+  try {
+    return fn();
+  } finally {
+    deferDepth--;
+    if (deferDepth === 0 && pendingWrite) {
+      pendingWrite = false;
+      persist();
+    }
+  }
 }
 
 /**
@@ -336,6 +391,7 @@ export async function initDatabase(): Promise<void> {
     // the constructor, not after it (confirmed by a real corrupted-file test
     // that slipped through when they were split — see DevLog).
     db = dbFileExists ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database();
+    dbEpoch += 1; // anything cached from the previous handle is now about a different file
     db.run('PRAGMA foreign_keys = ON;');
     db.run(
       'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL);',

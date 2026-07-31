@@ -17,6 +17,7 @@
  * being allowed to resolve to a URL that 404s.
  */
 import { TEAM_3D_LOGOS, canonicalKey } from './assetMapping';
+import { programArtFor } from './programArt';
 
 const POLO_BASE_PATH = 'cfbmedia://media/coachpolos';
 
@@ -39,7 +40,12 @@ export function hasCoachPolo(teamAssetName: string | null | undefined): boolean 
  */
 export function getCoachPoloPath(teamAssetName: string | null | undefined): string | null {
   if (!teamAssetName) return null;
-  const filename = TEAM_3D_LOGOS[canonicalKey(teamAssetName)];
+  const key = canonicalKey(teamAssetName);
+  // An upload wins over the shipped library, and also over TOKENS_WITHOUT_POLO
+  // below: supplying a polo is exactly how a team that never had one gets one.
+  const uploaded = programArtFor(key, 'polo');
+  if (uploaded) return uploaded;
+  const filename = TEAM_3D_LOGOS[key];
   if (!filename) return null;
   const token = filename.replace(/\.webp$/i, '');
   if (TOKENS_WITHOUT_POLO.has(token)) return null;

@@ -90,6 +90,33 @@ export function isSeasonFinalizing(p: SyncPhase): boolean {
 }
 
 /**
+ * Is the bowl slate actually SET, i.e. does a listed bowl matchup mean anything?
+ *
+ * The save carries bowl games from the start of the season with participants
+ * already filled in — verified on a real mid-season save: an Auburn dynasty
+ * sitting at 4-4 in `RegularSeason` already listed "Week 18 · Reliaquest Bowl ·
+ * USC @ Auburn (Unplayed)". Those pairings are the game's placeholder and get
+ * rewritten once bowls are genuinely assigned, so showing them is worse than
+ * showing nothing: it tells a user their bowl before it exists, and tells them
+ * the wrong one.
+ *
+ * Real bowl assignment happens the week AFTER conference championship week.
+ * Conveniently that is exactly where the save's own week type flips: conference
+ * championship week is still `RegularSeason`, and the postseason is
+ * `NationalChampionship` (see the phase map in this file's header). So "not
+ * PreSeason and not RegularSeason" IS "bowl week has started".
+ *
+ * `null` = a season archived before phase tracking existed. Callers pair this
+ * with "…or the game has been played", so a legacy completed season still shows
+ * the bowl it actually played — the gate can only ever hide an UNPLAYED one.
+ */
+export function isBowlSlateSet(weekType: string | null | undefined): boolean {
+  if (!weekType) return false;
+  const kind = deriveSyncPhase({ currentWeekType: weekType, currentOffseasonStage: 0 }).kind;
+  return kind === 'postseason' || kind === 'offseason';
+}
+
+/**
  * The concluded season must be treated as immutable from OffSeason stage 3 on —
  * players scatter to the pool (TeamIDs change) and awards get thinned. A sync
  * here must NOT overwrite the finished season's snapshots.

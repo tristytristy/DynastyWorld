@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { Select } from '../components/ui/Select';
 import { ConferenceMark } from '../components/common/ConferenceMark';
 import { TeamLink } from '../components/common/TeamLink';
 import { getConferenceChampionshipTrophyPath } from '../lib/trophyAssetMapping';
@@ -73,14 +74,9 @@ function TeamRow({
         <div className="flex items-center gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <TeamLink teamIndex={team.teamIndex} teamName={team.teamName} nameClassName="truncate font-semibold text-slate-900 dark:text-white" />
-            {team.isDivisionLeader && (
-              <span
-                title="Division leader"
-                className="shrink-0 border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--team-accent-text)] dark:text-white"
-              >
-                ◆ Div
-              </span>
-            )}
+            {/* No division-leader badge: this table is already grouped by
+                division and sorted, so the team on top IS the leader. The chip
+                restated the row's own position back to it. */}
             {team.isConferenceChampion && conferenceChampionshipTrophyPath && (
               <img
                 src={conferenceChampionshipTrophyPath}
@@ -240,20 +236,12 @@ export function Standings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {standings.groups.length > 1 && (
-              <label className="flex items-center gap-3 border border-slate-200/80 bg-slate-50/85 px-4 py-2.5 text-sm text-slate-500 dark:border-slate-800 dark:bg-white/5 dark:text-slate-300">
-                <span>Conference</span>
-                <select
-                  value={selectedGroupId}
-                  onChange={(event) => setSelectedGroupId(event.target.value)}
-                  className="bg-transparent font-medium text-slate-900 outline-none dark:text-white"
-                >
-                  {standings.groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                value={selectedGroupId}
+                onChange={setSelectedGroupId}
+                ariaLabel="Conference"
+                options={standings.groups.map((group) => ({ value: group.id, label: group.label }))}
+              />
             )}
           </div>
         </div>
