@@ -2046,32 +2046,24 @@ export function PlayerProfileContent({
             head matches the padding below it because it IS the container's
             padding rather than the file's.
           */}
-          <div className="flex shrink-0 justify-center self-end sm:justify-start">
+          {/*
+            THE BLEED LIVES ON THIS WRAPPER, not on the portrait.
+
+            `PlayerPortrait`'s `className` is applied to the portrait <img>, and
+            the team jersey is a second <img> positioned `absolute inset-0`
+            against the wrapper span the two share. So a negative margin passed
+            through `className` shortened the span while the portrait kept its
+            own height — and the jersey, sized to the span, came up 40px short of
+            the body it is meant to register against. That is the misalignment.
+
+            Anything that changes LAYOUT belongs out here; `className` is for the
+            portrait image itself.
+          */}
+          <div className="-mb-10 flex shrink-0 justify-center self-end sm:justify-start">
             <PlayerPortrait
               player={player}
               large
               largeMaxHeight="max-h-[17rem]"
-              /*
-                17rem, NOT larger — and that ceiling is the finding.
-
-                `object-contain` scales the whole 512² image, so drawing it
-                taller to push the head toward the masthead's top edge enlarges
-                the head by the same factor. At 22rem the subject did reach the
-                top and the bottom edge then landed on his chin: a face sliced
-                mid-jaw. Size is the wrong lever for vertical position.
-
-                Getting the head to the top edge needs a TRANSLATE — shifting the
-                art up without scaling it — which is what `PlayerPortrait`'s
-                `fill` mode already does for the trading card
-                (`translateY(-23%) scale(1.08)`, derived from the shared 512²
-                composition). Applying that here wants a measured value, so this
-                keeps the size that reads cleanly and leaves the residual gap.
-
-                -mb only: the overhang belongs at the BOTTOM, where the jersey
-                runs off the edge. A matching -mt would pull the head back up
-                into the masthead's own padding and re-open the gap.
-              */
-              className="-mb-10"
               teamAssetName={heroTeamName}
             />
           </div>

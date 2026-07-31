@@ -4598,3 +4598,24 @@ uses `translateY(-23%) scale(1.08)`, a value derived from the shared 512²
 composition. The hero wants the same treatment at its own magnitude, measured
 against several portraits rather than guessed at, because a wrong value there
 crops heads.
+
+### The jersey misalignment — cause and fix (2026-07-31)
+
+Not a sizing problem. `PlayerPortrait` renders two images: the portrait `<img>`,
+which receives `className`, and the team jersey `<img>`, positioned
+`absolute inset-0` against the WRAPPER span the two share.
+
+So passing `-mb-10` through `className` put a negative margin on the portrait
+only. That shortened the wrapper by 40px while the portrait kept its own height —
+and the jersey, sized to the wrapper, came up 40px short of the body it exists to
+register against. The overlay is built to sit on a 512² portrait one-to-one, so
+any desync between the two boxes reads instantly as a broken player.
+
+Fix: the bleed moved to the hero's own wrapper `<div>`, where it belongs.
+`className` goes to the image; anything that changes LAYOUT goes on your own
+element. Measured after: portrait and jersey both 272×272 at the same top and
+left, exact.
+
+A caller warning now sits at the overlay in `PlayerPortrait` — this is a trap
+worth signposting, because the two images look independent in the JSX and the
+failure only shows up as art that doesn't line up.

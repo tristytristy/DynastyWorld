@@ -148,6 +148,12 @@ export function PlayerPortrait({
   // Portrait + jersey overlay: the jersey sits in the same box with the same
   // object-fit so the two register exactly. When filling, the wrapper spans the
   // positioned parent; otherwise it shrinks to the portrait's fixed size.
+  //
+  // CALLER WARNING: `className` lands on the portrait <img>, while the jersey is
+  // sized to the WRAPPER below. Passing anything that changes layout through it
+  // — a margin especially — shortens the wrapper without moving the portrait,
+  // and the jersey then registers against a box the body no longer fills. Put
+  // layout on your own wrapper element; keep `className` for the image.
   return (
     <span
       {...interactiveProps}
