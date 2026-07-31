@@ -317,6 +317,7 @@ export async function saveRecruitEdits(
     if (!found) return { success: false, message: 'Recruit not found in the save file.' };
 
     writeRecruitFields(found.recruit, found.player, fields);
+    invalidateFranchiseCache();
     await franchise.save(dynasty.savePath, {});
 
     const extraction = await extractAll(dynasty.savePath);
@@ -353,6 +354,7 @@ async function withRecord<TFields>(
     if (!record) return { success: false, message: 'Record not found in the save file.' };
 
     apply(record, fields);
+    invalidateFranchiseCache();
     await franchise.save(dynasty.savePath, {});
 
     const extraction = await extractAll(dynasty.savePath);
@@ -364,10 +366,54 @@ async function withRecord<TFields>(
   }
 }
 
+
+/**
+ * The parsed save file, held between READS.
+ *
+ * `openFranchiseFile` re-reads and re-parses the whole 9.6 MB save every call —
+ * measured at ~1,560 ms. That was tolerable while ratings were only read when
+ * the user opened the Attributes tab, and stopped being tolerable the moment the
+ * player profile's Overview started reading them too: every Prev/Next paid a
+ * second and a half to answer one question about one player.
+ *
+ * KEYED ON PATH + MTIME, which is what makes it safe. If the user plays a week
+ * in-game and comes back, the file's mtime has moved and the next read reopens
+ * it — the cache can never serve a stale roster. Writes bypass this entirely and
+ * clear it (see `invalidateFranchiseCache`), because a write must operate on a
+ * freshly-opened file it then saves.
+ *
+ * One entry. Holding two parsed saves to serve a user who is looking at one is
+ * not a trade worth making.
+ */
+let franchiseCache: { path: string; mtimeMs: number; franchise: Awaited<ReturnType<typeof openFranchiseFile>> } | null =
+  null;
+
+/** Dropped after any write — the on-disk file has moved on from whatever is held here. */
+export function invalidateFranchiseCache(): void {
+  franchiseCache = null;
+}
+
+/** Read-only access to the save. Never use for a write path: those must open their own copy to save back. */
+async function openFranchiseForRead(savePath: string): Promise<Awaited<ReturnType<typeof openFranchiseFile>>> {
+  let mtimeMs: number;
+  try {
+    mtimeMs = fs.statSync(savePath).mtimeMs;
+  } catch {
+    // Can't prove freshness, so don't serve a cached copy.
+    return openFranchiseFile(savePath);
+  }
+  if (franchiseCache && franchiseCache.path === savePath && franchiseCache.mtimeMs === mtimeMs) {
+    return franchiseCache.franchise;
+  }
+  const franchise = await openFranchiseFile(savePath);
+  franchiseCache = { path: savePath, mtimeMs, franchise };
+  return franchise;
+}
+
 export async function getPlayerEditData(dynastyId: string, playerId: number): Promise<PlayerEditData | null> {
   const dynasty = getDynastyById(dynastyId);
   if (!dynasty) return null;
-  const franchise = await openFranchiseFile(dynasty.savePath);
+  const franchise = await openFranchiseForRead(dynasty.savePath);
   const record = await findRecordByPresentationId(franchise, 'Player', playerId);
   if (!record) return null;
   return { id: playerId, fields: readPlayerFields(record) };
@@ -484,6 +530,7 @@ export async function saveTeamBudget(
     record.ProgramPointBudget = budget;
     record.RemainingProgramPoints = remaining;
 
+    invalidateFranchiseCache();
     await franchise.save(dynasty.savePath, {});
 
     const extraction = await extractAll(dynasty.savePath);

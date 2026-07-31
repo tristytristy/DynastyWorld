@@ -4455,3 +4455,30 @@ typecheck / lint / build clean. Two items carried forward, both documented above
 a two-season archive still needs building from successive Auburn saves before the
 multi-season paths can be exercised, and the `StatGroup` union was reconstructed
 from its call sites rather than recovered.
+
+### Player switching — a regression I caused, and the fix (2026-07-31)
+
+User reported Prev/Next feeling slower. It was, and it was mine.
+
+**Cause.** `getPlayerEditData` re-opens and re-parses the ENTIRE 9.6 MB save file
+on every call — measured at ~1,430 ms. That was tolerable while ratings were only
+read when the user opened the Attributes tab. Phase 2 put a Player DNA module on
+OVERVIEW, which reads the same thing — so every modal open and every Prev/Next
+started paying a second and a half to answer one question about one player.
+
+**Fix.** A one-entry franchise cache for READ paths, keyed on save path + file
+mtime. Play a week in-game and the mtime moves, so the next read reopens the file
+— the cache cannot serve a stale roster. Writes bypass it entirely and clear it
+(`invalidateFranchiseCache`, called before all three `franchise.save` sites),
+because a write must operate on a freshly-opened file it then saves back.
+
+**Measured after:**
+
+| | before | after |
+|---|---|---|
+| ratings read, first in session | ~1,430 ms | ~1,430 ms (unavoidable — the save must be parsed once) |
+| ratings read, every one after | ~1,430 ms | **7 ms** |
+| Prev/Next, click to new player rendered | — | **51 ms** |
+
+The win generalises: the player and recruit editors read through the same path,
+so opening an editor after the first read is now instant too.
