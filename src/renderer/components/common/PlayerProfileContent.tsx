@@ -1494,6 +1494,34 @@ export function PlayerProfileContent({
     for the new one and a late response from the old one is dropped by the
     `cancelled` flag that was already there.
   */
+  /**
+   * THIS SEASON's honors, for Overview's latest-event module — one `getAwards`
+   * rather than the all-seasons aggregate.
+   *
+   * Deferring the aggregate (Phase 7) left that module claiming "nothing
+   * recorded yet" for a player who had just won National Offensive Player of
+   * the Week, because its only honor source didn't load until Journey was
+   * opened. Overview opens by default, so the module was wrong on the one
+   * destination everybody sees. A single season's awards is ~130 KB against the
+   * aggregate's N × that, and the LATEST event is almost always this season's —
+   * so this is the cheap source that makes the module honest rather than a
+   * reason to reinstate the eager load.
+   */
+  const [currentSeasonAwards, setCurrentSeasonAwards] = useState<AwardsBySeason | null>(null);
+  useEffect(() => {
+    if (resolvedSeasonId === undefined) return;
+    let cancelled = false;
+    setCurrentSeasonAwards(null);
+    const seasonYear = seasonsList.find((s) => s.id === resolvedSeasonId)?.seasonYear;
+    if (seasonYear === undefined) return;
+    void window.api.db.getAwards(dynastyId, resolvedSeasonId).then((awards) => {
+      if (!cancelled && awards) setCurrentSeasonAwards({ seasonYear, awards });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, resolvedSeasonId, seasonsList]);
+
   const [journeyRequested, setJourneyRequested] = useState(false);
   useEffect(() => {
     if (tab === 'journey' && !journeyRequested) setJourneyRequested(true);
@@ -1945,7 +1973,12 @@ export function PlayerProfileContent({
    */
   const journeyEvents = buildJourneyEvents({
     milestones: timelineEvents,
-    honorSeasons,
+    // Once the aggregate has landed it is the fuller answer and wins; until then
+    // this season's own awards keep Overview from claiming nothing happened.
+    honorSeasons:
+      honorSeasons.length > 0
+        ? honorSeasons
+        : buildPlayerHonorSeasons(currentSeasonAwards ? [currentSeasonAwards] : [], playerId),
     teamAwards: teamAwardWins,
   });
 
@@ -1984,9 +2017,35 @@ export function PlayerProfileContent({
           horizontal gap — stretching it pushed the OVR to the far wall, so the
           number and the name it belongs to had a screen between them.
         */}
-        <div className="flex flex-col gap-4 p-3 sm:flex-row sm:items-center sm:gap-6 md:p-4">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6">
+          {/*
+            THE PORTRAIT IS FULL SIZE AGAIN, and the masthead ignores its bounds
+            — the same trick the matchup helmets use.
+
+            The problem was never the CSS padding, which was already symmetric.
+            A portrait PNG is a 512² canvas with the subject sitting low in it,
+            so a third of the top of that file is transparent. Laid out normally
+            the box reserves height for that emptiness, which is what read as a
+            fat gap above the head and a tight one below — and shrinking the
+            portrait "fixed" the gap by making the art smaller, which was the
+            wrong lever.
+
+            So: draw it big and pull the box back in with a negative vertical
+            margin, exactly as GameDetail's HelmetImg does. The overlap region is
+            only the PNG's own transparent padding, so nothing is clipped and
+            nothing collides — the hero's height now reflects the visible art
+            instead of the canvas it was exported on, and the padding above the
+            head matches the padding below it because it IS the container's
+            padding rather than the file's.
+          */}
           <div className="flex shrink-0 justify-center sm:justify-start">
-            <PlayerPortrait player={player} large largeMaxHeight="max-h-[11rem]" teamAssetName={heroTeamName} />
+            <PlayerPortrait
+              player={player}
+              large
+              largeMaxHeight="max-h-[15rem]"
+              className="-my-8"
+              teamAssetName={heroTeamName}
+            />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-3">

@@ -4545,3 +4545,33 @@ Three ways out, none of them large:
 
 The first is the most honest — it shows what it can prove cheaply and stops
 claiming nothing happened when something did.
+
+### Masthead portrait + the latest-event fix (2026-07-31)
+
+**Latest journey event is honest again.** Overview now reads THIS season's awards
+directly — one `getAwards` — instead of waiting on the all-seasons aggregate that
+Phase 7 defers to Journey. Byrum Brown's Overview reads "2026 · National
+Offensive Player of the Week · Week 2" on first open again, where it had been
+claiming nothing had happened. The aggregate still wins once it lands; this is
+only the floor. ~130 KB against N × that, on the one destination everybody opens.
+
+**The portrait is full size again, and the masthead ignores its bounds.** The
+diagnosis was the user's: a portrait PNG is a 512² canvas with the subject
+sitting low in it, so a third of the top of the file is transparent. Laid out
+normally the box reserves height for that emptiness — which is what read as a fat
+gap above the head — and shrinking the portrait "fixed" it by making the art
+smaller, which was the wrong lever entirely.
+
+So it's drawn large (15rem, 240px rendered) and the box is pulled back in with
+`-my-8`, exactly as GameDetail's HelmetImg does. The overlap region is the PNG's
+own transparent padding, so the hero's height reflects the visible art rather
+than the canvas it was exported on. Measured: hero 210px, portrait 240px,
+overhanging symmetrically 15px top and bottom.
+
+**Residual, and worth naming.** The image BOX is now symmetric, but the art
+inside it still sits low in its own canvas, so there is more clear space above
+the head than below the shoulders. The box maths is right; the file's composition
+isn't centred. The proper finish is the same trick the trading card already uses
+in `PlayerPortrait`'s `fill` mode — `translateY(-23%) scale(1.08)`, derived from
+the shared 512² composition — applied to the hero at a smaller magnitude. Not
+done here; it wants a measured value rather than a guess.
