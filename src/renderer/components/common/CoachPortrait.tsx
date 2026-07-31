@@ -57,6 +57,11 @@ export function CoachPortrait({
     );
   }
 
+  // Staff lists and the coaching tree render a portrait + polo per coach; only
+  // the `xl` hero is guaranteed on screen, so everything smaller defers until it
+  // scrolls into view. Same rule as PlayerPortrait.
+  const loadingProps = size === 'xl' ? ({ decoding: 'async' } as const) : ({ loading: 'lazy', decoding: 'async' } as const);
+
   const portraitImg = (
     <img
       src={src}
@@ -64,6 +69,7 @@ export function CoachPortrait({
       onError={() => setFailed(true)}
       className={poloSrc ? `h-full w-full ${fitClass}` : `${sizeClass} ${className} shrink-0 ${fitClass}`}
       draggable={false}
+      {...loadingProps}
     />
   );
 
@@ -85,6 +91,7 @@ export function CoachPortrait({
           event.currentTarget.style.display = 'none';
         }}
         className={`pointer-events-none absolute inset-0 h-full w-full ${fitClass}`}
+        {...loadingProps}
       />
     </span>
   );

@@ -118,6 +118,20 @@ export function PlayerPortrait({
     ? ({ transform: 'translateY(-23%) scale(1.08)', transformOrigin: '50% 0%' } as const)
     : undefined;
 
+  /**
+   * Roster and National Players render a portrait (plus its jersey overlay) for
+   * EVERY player at once — 85 on a team roster, 200 on the national gallery. Left
+   * eager, that's 600+ images fetched over cfbmedia:// in one burst before the
+   * page settles, nearly all of them far below the fold.
+   *
+   * `lazy` fixes that for exactly those cases and no others: the hero portrait
+   * (`large`) and the trading card (`fill`) stay EAGER on purpose — both are
+   * few, immediately visible, and the card is captured to PNG on export, where a
+   * not-yet-loaded image would export blank.
+   */
+  const deferLoad = !large && !fill;
+  const loadingProps = deferLoad ? ({ loading: 'lazy', decoding: 'async' } as const) : ({ decoding: 'async' } as const);
+
   const portraitImg = (
     <img
       src={src}
@@ -126,6 +140,7 @@ export function PlayerPortrait({
       className={imgClass}
       style={fillStyle}
       draggable={false}
+      {...loadingProps}
     />
   );
 
@@ -139,6 +154,7 @@ export function PlayerPortrait({
         onError={() => setCandidateIndex((current) => current + 1)}
         className={`${imgClass} ${interactiveClass}`}
         draggable={false}
+        {...loadingProps}
       />
     ) : (
       portraitImg
@@ -171,6 +187,7 @@ export function PlayerPortrait({
         }}
         className={`pointer-events-none absolute inset-0 h-full w-full ${fill ? '' : 'rounded-xl'} ${fit} object-top`}
         style={fillStyle}
+        {...loadingProps}
       />
     </span>
   );

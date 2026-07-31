@@ -48,6 +48,13 @@ export function TeamLogo({ team, size = 'md', className = '', variant }: TeamLog
       className={`${SIZE_CLASSES[size]} object-contain ${className}`}
       style={tintGold ? { filter: 'sepia(1) saturate(2.2) hue-rotate(-8deg) brightness(1.05)' } : undefined}
       draggable={false}
+      // The 3D marks are the heaviest art in the library (~240 KB each), and the
+      // 'sm' step is what every long list uses — a national roster or a full
+      // standings page asks for one per row. Those defer until they scroll into
+      // view; 'lg' is the showcase size (masthead, trading card) and stays eager
+      // so an exported card never captures a blank logo.
+      loading={size === 'lg' ? undefined : 'lazy'}
+      decoding="async"
     />
   );
 }

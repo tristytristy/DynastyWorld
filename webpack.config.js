@@ -177,11 +177,31 @@ const rendererConfig = {
           from: 'public/assets',
           to: 'assets',
           globOptions: {
-            // Historical guard from the original offline DDS→PNG workflow
-            // (no .dds files exist in the tree anymore — the library is WebP
-            // as of 2026-07-19). Kept as a harmless safety net in case source
-            // textures are ever staged here again mid-conversion.
-            ignore: ['**/*.dds', '**/*.psd'],
+            ignore: [
+              // Historical guard from the original offline DDS→PNG workflow
+              // (no .dds files exist in the tree anymore — the library is WebP
+              // as of 2026-07-19). Kept as a harmless safety net in case source
+              // textures are ever staged here again mid-conversion.
+              '**/*.dds',
+              '**/*.psd',
+              // Source-side folders with NO runtime reference anywhere in src/
+              // (verified by grep for both `assets/<folder>` and `cfbmedia://`).
+              // They live in public/assets because that's where the art is kept,
+              // but copying them into dist/ put ~42 MB of never-loaded files
+              // into every app installer. Excluded from the BUILD only — the
+              // files stay in the repo, and the image-data installer reads
+              // public/assets directly, so it is unaffected either way.
+              //   Stickers      37.5 MB — unused overlay art
+              //   GameShots      2.3 MB — a single reference screenshot
+              //   Screenshots    1.7 MB — marketing/documentation captures
+              //   coaches_added  0.1 MB — input for scripts/convert-added-portraits.js
+              //   NFL              ~0 MB — one stray logo
+              '**/public/assets/Stickers/**',
+              '**/public/assets/GameShots/**',
+              '**/public/assets/Screenshots/**',
+              '**/public/assets/coaches_added/**',
+              '**/public/assets/NFL/**',
+            ],
           },
         },
         {

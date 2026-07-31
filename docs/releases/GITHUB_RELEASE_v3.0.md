@@ -91,6 +91,8 @@ Your files are copied into the app's own storage, so moving or deleting the orig
 - **Opening a player is roughly five times faster** — a second on a busy dynasty became about two-tenths.
 - **Moving between players is near-instant.** Prev/Next now lands in about 50 ms instead of pausing to re-read your entire save file each time.
 - Destination data loads when you open that destination and stays loaded, so going back is free.
+- **Big galleries load what you're looking at, not the whole page.** A roster or national player gallery used to fetch every portrait, jersey and logo on the page at once — 600 images before it settled. Artwork below the fold now waits until you scroll to it, cutting the opening burst by about **85%** on the national gallery and **two-thirds** on your roster. Nothing looks different; it just stops doing the work you didn't ask for.
+- **The app download is ~42 MB smaller.** A handful of art folders with no reference anywhere in the app were being copied into every build. They're gone from the installer — the image library is untouched.
 
 ## 📌 Navigation
 
@@ -103,6 +105,13 @@ Your files are copied into the app's own storage, so moving or deleting the orig
 - **Conference championship and bowl venues resolve on existing dynasties** without a re-sync.
 - **Kickers, punters and thin rosters** get honest empty states instead of grids of zeros.
 - **Viewing another team's History** no longer shows your own program's record book under their name.
+- **Arrow keys in the User Manual** print as arrows instead of empty boxes.
+
+---
+
+## 📖 Documentation
+
+The **User Manual** is rewritten for 3.0 — the five-destination player profile, the card collection and card book, the Program editor, and Media's zoom-and-framing all have proper sections, and the honest-limitations list is current. It's in the app (sidebar → User Manual) and ships as a PDF.
 
 ---
 

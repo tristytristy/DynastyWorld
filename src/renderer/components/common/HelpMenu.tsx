@@ -363,9 +363,9 @@ const HELP_TOPICS: HelpTopic[] = [
           you recognize the number in the picture but not the face.
         </p>
         <p>
-          Tags do double duty: anything you tag automatically shows up on the <strong>Media tab of each tagged
-          player&apos;s bio</strong> (across every season they appear in) and in a <strong>Media section on the linked
-          game&apos;s page</strong> — no extra work needed.
+          Tags do double duty: anything you tag automatically shows up under <strong>Showcase → Media on each tagged
+          player&apos;s profile</strong> (across every season they appear in) and in a <strong>Media section on the
+          linked game&apos;s page</strong> — no extra work needed.
         </p>
         <p className="text-slate-500 dark:text-slate-400">
           Uploads land in whichever season the Season dropdown is set to — switch seasons first if you&apos;re
@@ -416,10 +416,10 @@ const HELP_TOPICS: HelpTopic[] = [
     content: (
       <>
         <p>
-          Every player profile has a <strong>Cards</strong> tab. It opens on a grid of that player&apos;s cards, three
-          to a row — click one to open it full size, or click the <strong>+</strong> to start another. A player can have
-          as many as you like; the small dot under a card marks the one that pops up when you hover their name anywhere
-          in the app.
+          Every player profile ends on <strong>Showcase</strong>, which opens on that player&apos;s cards, three to a
+          row — click one to open it full size, or click the <strong>+</strong> to start another. A player can have as
+          many as you like; the small dot under a card marks the one that pops up when you hover their name anywhere in
+          the app. (The <strong>Media</strong> half of the same switch holds every photo you&apos;ve tagged him in.)
         </p>
         <p>
           With a card open, the <strong>pencil</strong> opens its editor. <strong>Upload Photo</strong> takes a

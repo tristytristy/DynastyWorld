@@ -1,12 +1,12 @@
 {
   "app": "CFB27 Dynasty Hub Command Center",
-  "exportedAt": "2026-07-30T23:33:10.591304Z",
+  "exportedAt": "2026-07-31T19:51:39.548Z",
   "items": [
     {
       "id": "open-past-season-backfill",
       "type": "research",
       "title": "Backfill past seasons for users who join mid-dynasty",
-      "desc": "DECISION PENDING (user parked it). Research is done: a save keeps almost no history \u2014 a 2029 preseason save retains 43 games (the 2028 postseason only) and nothing from 2026-27, so there is no automatic backfill to build. Career totals and league award history do survive, and the importer already backfills \"history-only\" seasons (champion, runner-up, conference champs, award winners). What a newcomer is missing is their OWN story: record, ranking, bowl result. Recommendation: (1) surface the old-save import path first \u2014 importing any older save file backfills that season completely, free; (2) season-LEVEL entry, ~8 fields, two minutes a season; (3) per-game results later (13 rows/season); (4) push back on full box scores \u2014 one season is ~1,300 stat rows, four is ~5,000, worse than the spreadsheet users came here to escape. Settle first: typed stats need marked provenance, must never be overwritten by a later sync, and need a story for records/leaderboards. Would be the first archive data with no save behind it.",
+      "desc": "DECISION PENDING (user parked it). Research is done: a save keeps almost no history — a 2029 preseason save retains 43 games (the 2028 postseason only) and nothing from 2026-27, so there is no automatic backfill to build. Career totals and league award history do survive, and the importer already backfills \"history-only\" seasons (champion, runner-up, conference champs, award winners). What a newcomer is missing is their OWN story: record, ranking, bowl result. Recommendation: (1) surface the old-save import path first — importing any older save file backfills that season completely, free; (2) season-LEVEL entry, ~8 fields, two minutes a season; (3) per-game results later (13 rows/season); (4) push back on full box scores — one season is ~1,300 stat rows, four is ~5,000, worse than the spreadsheet users came here to escape. Settle first: typed stats need marked provenance, must never be overwritten by a later sync, and need a story for records/leaderboards. Would be the first archive data with no save behind it.",
       "tags": [
         "db",
         "save"
@@ -27,7 +27,7 @@
       "id": "open-venue-override-editor",
       "type": "feature",
       "title": "User-editable neutral / championship venue overrides",
-      "desc": "DECISION PENDING (user parked it). NOT needed for FBS conference championships or named bowls \u2014 those resolve already, on old imports too. It covers what the built-in tables cannot know: teambuilder and modded schools, custom conferences, a stadium EA renames mid-cycle, a championship moved in-game in a PAST season (only the extracted venue id captures a move, and old seasons have no id), and the 4 unnamed CFP ids. Infrastructure exists: StadiumDataProvider already has defaults + localStorage overrides + per-entry reset, and StadiumDatabaseMenu the UI \u2014 this is a second tab there, not new plumbing.",
+      "desc": "DECISION PENDING (user parked it). NOT needed for FBS conference championships or named bowls — those resolve already, on old imports too. It covers what the built-in tables cannot know: teambuilder and modded schools, custom conferences, a stadium EA renames mid-cycle, a championship moved in-game in a PAST season (only the extracted venue id captures a move, and old seasons have no id), and the 4 unnamed CFP ids. Infrastructure exists: StadiumDataProvider already has defaults + localStorage overrides + per-entry reset, and StadiumDatabaseMenu the UI — this is a second tab there, not new plumbing.",
       "tags": [
         "ui",
         "editor"
@@ -48,7 +48,7 @@
       "id": "open-cfp-venue-ids",
       "type": "feature",
       "title": "Name the 4 remaining CFP venue ids",
-      "desc": "Four venue ids appear only on CFP quarterfinals/semifinals (plus one week-0 neutral opener) and are deliberately unmapped: those rounds carry a BLANK bowl AssetName, so nothing in the save identifies the venue, and a guess would render a wrong stadium with total confidence. They fall back to the honest \"Neutral Site\" badge. Resolving needs a save where those games land at a venue that also appears somewhere identifiable \u2014 the same cross-validation that confirmed Mercedes-Benz and Ford Field. One line each in lib/neutralVenues.ts.",
+      "desc": "Four venue ids appear only on CFP quarterfinals/semifinals (plus one week-0 neutral opener) and are deliberately unmapped: those rounds carry a BLANK bowl AssetName, so nothing in the save identifies the venue, and a guess would render a wrong stadium with total confidence. They fall back to the honest \"Neutral Site\" badge. Resolving needs a save where those games land at a venue that also appears somewhere identifiable — the same cross-validation that confirmed Mercedes-Benz and Ford Field. One line each in lib/neutralVenues.ts.",
       "tags": [
         "ui"
       ],
@@ -87,8 +87,8 @@
     {
       "id": "open-development-leaders",
       "type": "feature",
-      "title": "Player development \u2014 program-wide Most Improved / Breakout leaders",
-      "desc": "The per-player development chart already ships in the player modal (getPlayerDevelopment walks each season's leaguewide roster by PresentationId). What is still open from the original idea: program-wide Most Improved and Breakout leaderboards, and a recruiting-star vs final-overall view \u2014 i.e. the aggregate layer over the per-player curve that already exists.",
+      "title": "Player development — program-wide Most Improved / Breakout leaders",
+      "desc": "The per-player development chart already ships in the player modal (getPlayerDevelopment walks each season's leaguewide roster by PresentationId). What is still open from the original idea: program-wide Most Improved and Breakout leaderboards, and a recruiting-star vs final-overall view — i.e. the aggregate layer over the per-player curve that already exists.",
       "tags": [
         "ui",
         "db"
@@ -129,8 +129,8 @@
     {
       "id": "open-modded-save-offset",
       "type": "research",
-      "title": "Modded-save support (year-shifted saves) \u2014 decision pending",
-      "desc": "Root cause found and both fixes tested on copies: CurrentSeasonYear was moved (e.g. 2007) while BaseCalendarYear stayed at 2026, so the relative season index went negative and no games/stats imported. Testing showed a residual gap in the app-side index-only fix (currentYearSummary matching), so the recommendation is to normalise the BASE year rather than the index. Chosen direction was to ask the mod author to shift BaseCalendarYear by the same delta \u2014 decision still open on whether to also handle it app-side.",
+      "title": "Modded-save support (year-shifted saves) — decision pending",
+      "desc": "Root cause found and both fixes tested on copies: CurrentSeasonYear was moved (e.g. 2007) while BaseCalendarYear stayed at 2026, so the relative season index went negative and no games/stats imported. Testing showed a residual gap in the app-side index-only fix (currentYearSummary matching), so the recommendation is to normalise the BASE year rather than the index. Chosen direction was to ask the mod author to shift BaseCalendarYear by the same delta — decision still open on whether to also handle it app-side.",
       "tags": [
         "save"
       ],
@@ -150,7 +150,7 @@
       "id": "open-record-book-chase",
       "type": "feature",
       "title": "School record book chase (Yearly analytics)",
-      "desc": "Surface how close current players are to the program's own record book entries \u2014 an active chase rather than a static list.",
+      "desc": "Surface how close current players are to the program's own record book entries — an active chase rather than a static list.",
       "tags": [
         "ncaa"
       ],
@@ -189,7 +189,7 @@
     {
       "id": "open-recruits-2b",
       "type": "feature",
-      "title": "Recruits Phase 2 Step 2b \u2014 on-board recruiting actions",
+      "title": "Recruits Phase 2 Step 2b — on-board recruiting actions",
       "desc": "Next step in the recruiting write path.",
       "tags": [
         "recr",
@@ -210,7 +210,7 @@
     {
       "id": "open-recruits-3",
       "type": "feature",
-      "title": "Recruits Phase 3 \u2014 recruit regeneration + regional name generation",
+      "title": "Recruits Phase 3 — recruit regeneration + regional name generation",
       "desc": "Later phase of the recruiting work.",
       "tags": [
         "recr"
@@ -230,7 +230,7 @@
     {
       "id": "open-recruits-board-addremove",
       "type": "feature",
-      "title": "Board add/remove \u2014 SHELVED",
+      "title": "Board add/remove — SHELVED",
       "desc": "SHELVED by user decision: crashes the game, not safely feasible. Kept as a record so it is not re-attempted.",
       "tags": [
         "recr"
@@ -251,7 +251,7 @@
       "id": "open-storage-bloat",
       "type": "bug",
       "title": "Reclaim ~11GB regenerable / archival bloat",
-      "desc": "Audit follow-up \u2014 regenerable and archival data taking roughly 11GB that could be pruned or regenerated on demand.",
+      "desc": "Audit follow-up — regenerable and archival data taking roughly 11GB that could be pruned or regenerated on demand.",
       "tags": [
         "perf",
         "db"
@@ -292,7 +292,7 @@
       "id": "open-record-book-context",
       "type": "research",
       "title": "School record book has no opponent/score context (save limitation)",
-      "desc": "STILL TRUE, unlike the other three limitation entries. The save's single-game record table carries only player/position/year/value \u2014 no opponent, week or final score to join against, so a record entry can never say who it came against. Listed as research in case another table turns out to carry it.",
+      "desc": "STILL TRUE, unlike the other three limitation entries. The save's single-game record table carries only player/position/year/value — no opponent, week or final score to join against, so a record entry can never say who it came against. Listed as research in case another table turns out to carry it.",
       "tags": [
         "ncaa",
         "save"
@@ -306,6 +306,27 @@
       "images": [],
       "createdAt": "2026-07-30T23:33:10.591304Z",
       "updatedAt": "2026-07-30T23:33:10.591304Z",
+      "completedAt": null,
+      "notes": ""
+    },
+    {
+      "id": "open-logo-thumbnail-variant",
+      "type": "feature",
+      "title": "Ship a small 3d_logos variant for list rows",
+      "desc": "Found while auditing load time for 3.0. The 3D team marks average ~240 KB each (85 MB / 356 files) and are the single heaviest thing the app fetches, but 28 of the 33 TeamLogo usages are the `sm` step, which renders at 32px. A national player list or a standings page therefore pulls ~13 MB of full-resolution art to draw thumbnails. Lazy-loading (shipped in 3.0) fixed the offscreen half of this; the visible rows still pay full price. Fix is a generated 64px WebP variant beside each mark plus a size-aware getLogoPath — mechanical, but it changes the image pack, so it wants its own release rather than riding along with 3.0.",
+      "tags": [
+        "perf",
+        "assets"
+      ],
+      "importance": "med",
+      "assignee": "",
+      "version": "",
+      "status": "backlog",
+      "pageId": "global",
+      "subId": null,
+      "images": [],
+      "createdAt": "2026-07-31T19:51:39.548Z",
+      "updatedAt": "2026-07-31T19:51:39.548Z",
       "completedAt": null,
       "notes": ""
     }

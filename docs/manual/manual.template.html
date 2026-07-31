@@ -141,7 +141,12 @@
   .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 0.32in; height: 0.32in; background: var(--black); color: var(--gold); font-weight: 700; font-size: 10pt; display: flex; align-items: center; justify-content: center; }
   .steps li:not(:last-child)::after { content: ''; position: absolute; left: calc(0.16in - 1px); top: 0.32in; bottom: 0; width: 2px; background: var(--hairline); }
 
-  .kbd { font-family: 'Inter', monospace; font-weight: 600; font-size: 9pt; background: #fff; border: 1px solid var(--hairline); border-bottom-width: 2px; padding: 1px 6px; }
+  /* 'Segoe UI' before the generic fallback on purpose: the embedded Inter is a
+     LATIN subset with no arrow glyphs, so a keycap like ← used to render as an
+     empty box (the generic `monospace` fallback didn't cover it either). Keeping
+     a real UI font in the stack lets the arrow resolve, and Chromium embeds the
+     glyph it actually used into the PDF, so the export stays self-contained. */
+  .kbd { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; font-weight: 600; font-size: 9pt; background: #fff; border: 1px solid var(--hairline); border-bottom-width: 2px; padding: 1px 6px; }
 
   .fnav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.1in 0 0.16in; }
   .chip { font-size: 8.5pt; font-weight: 600; padding: 3px 9px; background: #fff; border: 1px solid var(--hairline); color: #46433C; }
@@ -224,10 +229,10 @@
     <a class="toc-item" href="#sec-03"><span class="toc-num">03</span><span><span class="toc-title">How It's Organized</span><span class="toc-desc">The five hubs and the season picker</span></span></a>
     <a class="toc-item" href="#sec-04"><span class="toc-num">04</span><span><span class="toc-title">The Dashboard</span><span class="toc-desc">Your dynasties and their controls</span></span></a>
     <a class="toc-item" href="#sec-05"><span class="toc-num">05</span><span><span class="toc-title">Coach Hub</span><span class="toc-desc">Your coach's career, staff, and timeline</span></span></a>
-    <a class="toc-item" href="#sec-06"><span class="toc-num">06</span><span><span class="toc-title">Team Hub</span><span class="toc-desc">Your program, season by season</span></span></a>
+    <a class="toc-item" href="#sec-06"><span class="toc-num">06</span><span><span class="toc-title">Team Hub</span><span class="toc-desc">Your program, the player profile, cards &amp; program art</span></span></a>
     <a class="toc-item" href="#sec-07"><span class="toc-num">07</span><span><span class="toc-title">NCAA Hub</span><span class="toc-desc">The whole nation — including every player</span></span></a>
     <a class="toc-item" href="#sec-08"><span class="toc-num">08</span><span><span class="toc-title">Recruit Hub</span><span class="toc-desc">Your board and the national pool</span></span></a>
-    <a class="toc-item" href="#sec-09"><span class="toc-num">09</span><span><span class="toc-title">Media Hub</span><span class="toc-desc">Screenshots &amp; clips — batch-tag, reorder, drag-drop</span></span></a>
+    <a class="toc-item" href="#sec-09"><span class="toc-num">09</span><span><span class="toc-title">Media Hub</span><span class="toc-desc">Screenshots &amp; clips — tag, reorder, zoom &amp; frame</span></span></a>
     <a class="toc-item" href="#sec-10"><span class="toc-num">10</span><span><span class="toc-title">Editing Players &amp; Coaches</span><span class="toc-desc">The one place the app writes to your save</span></span></a>
     <a class="toc-item" href="#sec-11"><span class="toc-num">11</span><span><span class="toc-title">Preferences &amp; Tools</span><span class="toc-desc">Make it look and feel the way you want</span></span></a>
     <a class="toc-item" href="#sec-12"><span class="toc-num">12</span><span><span class="toc-title">Experimental Features</span><span class="toc-desc">Powerful tools — and how they stay safe</span></span></a>
@@ -341,6 +346,7 @@
 
   <h3 class="sub">Getting around</h3>
   <p>The <strong>top tabs</strong> switch between sections — Coach, Program, NCAA, Recruiting, Media. Inside each, a row of smaller tabs picks the page, and paired pages (Roster/Transfers, Schedule/Rivalries, Statistics/Analytics, Season Awards/Weekly Honors) share one tab with a switch above them. The <strong>left sidebar</strong> lists your dynasties — switch programs with one click. <strong>Preferences</strong>, the <strong>User Manual</strong> and <strong>About</strong> sit as icons in the top-right corner of the window, beside the minimise button.</p>
+  <p><strong>The menus stay put.</strong> Section tabs, team tabs and the season switcher are pinned to the top of the window, so a long page — a full roster, a national player list — no longer means scrolling back to the top just to change year or tab. They're always where you left them.</p>
 
   <h3 class="sub">Browsing another team</h3>
   <p>On any team page a <strong>team dropdown</strong> sits at the right of the sub-tabs — pick any program in the country and the page redraws for them. Faster still: hold <strong>Shift</strong> and tap <strong>&larr;</strong> or <strong>&rarr;</strong> to step through the list one team at a time. It loops, so holding Shift and tapping &rarr; from the last team brings you back to your own.</p>
@@ -423,7 +429,7 @@
   <p>The season at a glance: record, conference record, poll ranks, recruiting-class rank, prestige, roster size, and average overall — plus recent and upcoming games, top players, and any trophies won.</p>
 
   <h4 class="mini">Roster <span class="muted">— with a Roster | Transfers toggle</span></h4>
-  <p>Every player on your team. Search by name, filter by unit, position, or class, and sort by any column. Switch between a compact <strong>List</strong> and a visual <strong>Gallery</strong>. Click any player to open their full profile — including their shareable <strong>Trading Card</strong> (below); on the current season, a pencil lets you edit them. Flip to <strong>Transfers</strong> for who came and who left, season over season: incoming and outgoing moves (each tagged with the reason), plus a <strong>&ldquo;Left the program&rdquo;</strong> list of players who went to the NFL (with projected round) or graduated. Departure details fill in once you sync during the offseason&apos;s &ldquo;Players Leaving&rdquo; step.</p>
+  <p>Every player on your team. Search by name, filter by unit, position, or class, and sort by any column. Switch between a compact <strong>List</strong> and a visual <strong>Gallery</strong>. Click any player to open their full profile (below); on the current season, a pencil lets you edit them. Flip to <strong>Transfers</strong> for who came and who left, season over season: incoming and outgoing moves (each tagged with the reason), plus a <strong>&ldquo;Left the program&rdquo;</strong> list of players who went to the NFL (with projected round) or graduated. Departure details fill in once you sync during the offseason&apos;s &ldquo;Players Leaving&rdquo; step.</p>
 
   <h4 class="mini">Schedule <span class="muted">— with a Schedule | Rivalries toggle</span></h4>
   <p>Your full slate — opponents, ranks, home/away, results, and running record. Conference games, rivalries, and bowls are marked, and each row opens the game's box score. Flip to <strong>Rivalries</strong> for your all-time head-to-head series record against every opponent you've faced across synced seasons — series wins, streaks, and average margin.</p>
@@ -437,11 +443,58 @@
   <h4 class="mini">History</h4>
   <p>Your program's trophy case and season-by-season résumé — the long view of the whole dynasty. <span class="muted">(Your season photos &amp; clips now live in their own <strong>Media Hub</strong> — Section 09.)</span></p>
 
-  <h3 class="sub">Player trading cards</h3>
-  <p>Open any player and choose the <strong>Card</strong> tab for a clean, shareable trading card — themed to that player's real team colors, with their portrait, overall, position, and jersey number. It stays uncluttered by default; roll over it for <strong>Edit</strong> and <strong>Export</strong>. <strong>Export</strong> saves it as a PNG. <strong>Edit</strong> lets you drop in your own photo (browse a file, or reuse a shot you've already tagged to them in the Media Hub), then zoom and drag to frame it, and pick which stats headline the bottom.</p>
+  <h3 class="sub">The player profile</h3>
+  <p class="lead">Click any player, anywhere in the app, and you get a workspace built around five questions rather than a wall of tabs. Move between them with the menu at the top; <span class="kbd">←</span> and <span class="kbd">→</span> step to the previous or next player without closing anything.</p>
+  <div class="fnav">
+    <span class="chip"><span class="g">▸</span> Overview</span><span class="chip"><span class="g">▸</span> Performance</span><span class="chip"><span class="g">▸</span> Ratings</span><span class="chip"><span class="g">▸</span> Journey</span><span class="chip"><span class="g">▸</span> Showcase</span>
+  </div>
+
+  <h4 class="mini">Overview <span class="muted">— who is this player</span></h4>
+  <p>The short answer, in one screen: his profile and his development on top, a snapshot of the season and his <strong>Player DNA</strong> beneath, and his latest career event across the foot. The header owns his identity — number, team, position, class, name, overall — so nothing is repeated twice.</p>
+
+  <h4 class="mini">Performance <span class="muted">— how is he playing</span></h4>
+  <p>A <strong>This Season | Career | Games</strong> switch, ordered by how quickly each part answers: the headline numbers, then his recent form, then the full statistical line, then the game-by-game log. <strong>Any row in the game log opens that game's box score.</strong> Recent form and Best Game appear only once there's more than one game to compare — one game isn't a trend, and it isn't a &ldquo;best&rdquo; either.</p>
+
+  <h4 class="mini">Ratings <span class="muted">— how good is he</span></h4>
+  <p>Opens with <strong>Player DNA</strong>: his biggest strength, his weakest link, and what to develop next — drawn from the ratings that actually matter at his position, not a generic average. Below that are the rating groups relevant to that position, with <strong>View all ratings</strong> holding the complete list.</p>
+
+  <h4 class="mini">Journey <span class="muted">— what has happened to him</span></h4>
+  <p>One chronological career story instead of four separate lists. Milestones, national awards, All-America selections, weekly honors, team awards and your own notes all interleave into a single timeline, filtered by <strong>All · Milestones · Honors · Notes</strong>.</p>
+
+  <h4 class="mini">Showcase <span class="muted">— what you've made of him</span></h4>
+  <p>Everything you authored about this player, on a <strong>Cards | Media</strong> switch: the trading cards you built, and the photos you tagged him in.</p>
+
+  <h3 class="sub">Trading cards &amp; the card book</h3>
+  <p>Showcase opens on that player's cards, <strong>three to a row</strong>. Click one to open it full size and use <span class="kbd">←</span> <span class="kbd">→</span> to walk the set; click <strong>+</strong> to start another. A player can have as many as you like, and the small dot under a card marks the one that pops up when you hover his name anywhere in the app.</p>
+  <p>Everything for a card lives <em>with</em> that card, in the expanded view — so there's no wrong card to hit:</p>
+  <ul class="clean">
+    <li><strong>The pencil</strong> opens its editor. <strong>Upload Photo</strong> takes a screenshot from your computer; <strong>Media Photo</strong> reuses anything already tagged to him in the Media Hub. Drag the photo to frame it and use <strong>Zoom</strong> to fill the card.</li>
+    <li><strong>Show on card</strong> turns the overall, the name, the profile line, the stat row and the team logo on or off — so a clean photo-and-name card is one click away. The card keeps that look everywhere: the grid, the hover preview and the exported PNG.</li>
+    <li><strong>One game, or the whole year.</strong> The stat line can come from the season or from a single game — pick it from the dropdown and the card celebrates that Saturday instead. Choose up to four stats to run across the bottom.</li>
+    <li><strong>The star</strong> adds the card to your <strong>card book</strong> (the book icon in the top bar), which collects every starred card in the dynasty, a page per season. <strong>Export</strong> saves a card as a PNG.</li>
+  </ul>
+  <div class="callout tip">
+    <div class="lbl">A card is a printed moment</div>
+    <p>The year, the school and the profile line lock in the moment you make a card. Nothing later — a transfer, a class change, a re-sync — quietly reprints an old card as this season. That's also why cards don't change when you switch years, and why a card's stat line can only be re-picked from the season it was made in.</p>
+  </div>
   <div class="callout tip">
     <div class="lbl">Peek without clicking</div>
     <p>Rest your cursor on a player's name and their card pops up as a quick preview. You can turn this on or off — and set how long to wait — under <strong>Preferences → Player card preview</strong>.</p>
+  </div>
+
+  <h3 class="sub">Program editor <span class="muted">— for imported teams</span></h3>
+  <p>A Teambuilder school imports over a real school's slot: your team keeps that slot, but its name, colours and art token are all new. The app ships artwork for the real schools, not for one it has never seen — so an imported program shows a placeholder logo, a generic helmet, and no uniform or coach polo.</p>
+  <p><strong>Program editor</strong>, on your Team Hub just above <strong>Program budget</strong>, is where you fix that. <strong>Identity</strong> sets your stadium name and city, which then show on your schedule and on every game's info page. <strong>Artwork</strong> takes four uploads:</p>
+  <ul class="clean">
+    <li><strong>Program logo</strong> — 1024 × 1024, transparent</li>
+    <li><strong>Helmet</strong> — 1024 × 1024, transparent, facing left (the other side is mirrored for you)</li>
+    <li><strong>Uniform</strong> — 512 × 512, sits over a player portrait</li>
+    <li><strong>Coach polo</strong> — 512 × 512, sits over a coach portrait</li>
+  </ul>
+  <p>Four uploads dress a team completely, and the art then appears everywhere team art appears — mastheads, matchup graphics, roster portraits, coach cards and trading cards. The uniform and polo are the fussy ones: they lay directly on top of a portrait, so the collar and shoulders have to line up or every player will look slightly off. Upload, check a few players, adjust.</p>
+  <div class="callout">
+    <div class="lbl">Nothing is written to your save</div>
+    <p>Your files are copied into the app's own storage, so moving or deleting the originals won't break anything. Remove an upload and the built-in artwork comes back. Edits belong to <strong>that dynasty only</strong> — an imported team that happens to share a name with a real school never changes that school in your other saves.</p>
   </div>
   <div class="footer-note"><span>06 · Team Hub</span><span>DynastyOS · v__VERSION__</span></div>
 </section>
@@ -508,6 +561,14 @@
     <li>Move through the viewer with the on-screen arrows or your keyboard's <span class="kbd">←</span> <span class="kbd">→</span> keys.</li>
   </ol>
 
+  <h3 class="sub">Zoom, pan &amp; framing</h3>
+  <p>An open photo <strong>zooms</strong>. Drag the slider at the bottom-left, or scroll the wheel over the picture, to go in up to <strong>5×</strong> — then drag the photo itself to move around it. <strong>Double-click</strong> snaps back to fit.</p>
+  <p>Found a crop you like? <strong>Save framing</strong> keeps it: the photo opens that way every time, and its thumbnail shows the same crop. <strong>Reset</strong> gives the whole picture back.</p>
+  <div class="callout tip">
+    <div class="lbl">Your file is never touched</div>
+    <p>Framing is only a note about how to <em>show</em> the photo — the full original is always there underneath. That's also why a trading card is unaffected: putting a media photo on a card takes its own copy with its own zoom, so the same shot can be cropped one way in your gallery and framed completely differently on the card. Changing either one never touches the other.</p>
+  </div>
+
   <h3 class="sub">Organizing &amp; batch edits</h3>
   <ul class="clean">
     <li><strong>Reorder by dragging.</strong> Uploaded out of order? Drag any photo to a new spot and the order sticks.</li>
@@ -518,7 +579,7 @@
 
   <div class="callout tip">
     <div class="lbl">Tags do double duty</div>
-    <p>Anything you tag automatically appears on the <strong>Media tab of each tagged player's profile</strong> and in a <strong>Media section on the linked game's page</strong> — no extra work. A tagged photo can also be reused as that player's <strong>Trading Card</strong> image (Section 06). Supported files: PNG, JPG, WebP, GIF images and MP4 / WebM video.</p>
+    <p>Anything you tag automatically appears under <strong>Showcase → Media on each tagged player's profile</strong> (across every season they appear in) and in a <strong>Media section on the linked game's page</strong> — no extra work. A tagged photo can also be reused as that player's <strong>trading card</strong> image (Section 06). Uploads land in whichever season the Season dropdown is set to, so switch seasons first if you're backfilling older memories. Supported files: PNG, JPG, WebP, GIF images and MP4 / WebM video.</p>
   </div>
   <div class="footer-note"><span>09 · Media Hub</span><span>DynastyOS · v__VERSION__</span></div>
 </section>
@@ -624,6 +685,9 @@
     <li><strong>Full-league box scores need a fresh sync.</strong> The Game Information box score now works for <em>every</em> game in the country — both teams' player stats for your games and any other matchup (see NCAA Hub → Scores). This lights up for seasons synced with this version onward; seasons archived earlier keep just your own games' detail, because the league-wide box scores weren't captured at the time.</li>
     <li><strong>Poll history.</strong> Rankings reflect the current week at the moment you sync — there's no week-by-week trend from before the app started tracking your dynasty.</li>
     <li><strong>History-Only seasons stay that way.</strong> A skipped season can't become a full one after the fact; the underlying roster and stats no longer exist in the save.</li>
+    <li><strong>The development curve builds one season at a time.</strong> A save file only ever carries the current season's roster, so a single import gives you one full season of a player's arc. Sync each year and the curve fills in behind you — there's no way to recover the years before you started.</li>
+    <li><strong>Ratings come from the live save.</strong> That means they're only available for the current season's roster. Open a past-season profile and it says so plainly rather than guessing at numbers that were never archived.</li>
+    <li><strong>Program editor covers your own program.</strong> Other imported teams in the same save still fall back to placeholder artwork for now.</li>
   </ul>
   <p class="muted">These are the honest edges of what the save file makes possible today.</p>
   <div class="callout tip">
