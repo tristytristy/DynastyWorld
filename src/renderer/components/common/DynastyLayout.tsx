@@ -130,7 +130,22 @@ function DynastyNav({ id }: { id: string }) {
       cancels that difference HERE rather than reducing the shell's padding,
       which would move every page's content, not just this bar.
     */
-    <nav className="-mt-5 border-b border-[color:var(--section-divider)] pb-2">
+    /*
+      STICKY (user direction). The scroll container is <main> in app.tsx, and
+      these rows lived inside it — so on a long page (History, Statistics) the
+      section nav and the season switcher scrolled away and changing either
+      meant scrolling all the way back up.
+
+      `-mt-5` cancels main's `p-5` above it, so `top-0` alone would leave the row
+      floating with the padding still showing through beneath it. The negative
+      margin is kept and the background is opaque, so content passes UNDER the
+      row rather than beside it. The background matches the panel it sits on
+      (`bg-black` in dark is the panel's own value; white in light is a hair
+      brighter than its `white/82` but doesn't ghost the text scrolling beneath,
+      which a translucent row would). z-30 clears page content without reaching
+      the modal layers, which live in their own stacking context at <body>.
+    */
+    <nav className="sticky top-0 z-30 -mt-5 border-b border-[color:var(--section-divider)] bg-white dark:bg-black pb-2 pt-5">
       <div className="flex flex-wrap items-center gap-1.5">
         {/* The glider spans the TABS only — the season switcher and search that
             follow are controls, not destinations, so the rail must not run under

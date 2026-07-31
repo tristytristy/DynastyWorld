@@ -275,6 +275,23 @@ export function History() {
         </SurfaceCard>
       )}
 
+      {/*
+        USER-PROGRAM ONLY. Everything below — the coach era, the record book, the
+        timeline — comes from `getHistory(dynastyId)`, which takes no team index
+        and always returns the user's own program. While another team was
+        selected the masthead correctly switched to their name and then this
+        rendered underneath it anyway, so Auburn's record book appeared under an
+        Akron header attributed to Akron. Wrong data stated as fact is worse than
+        missing data, so it is gated until `getHistory` can take a team.
+
+        The fix is available rather than blocked: `extract-teams.ts` already reads
+        `Team.{Career,Season,Game}StatRecords` into `TeamData.schoolRecords` for
+        EVERY team, so each school's own record book is sitting in the snapshot
+        unused. Teaching `getHistory` to take a team index and read from there
+        makes this section real for anyone, at which point this gate comes out.
+      */}
+      {!viewedLeagueTeamName && (
+        <>
       <div>
         <p className="type-eyebrow text-[var(--team-accent-text)]">History During This Save</p>
         <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
@@ -437,6 +454,8 @@ export function History() {
           </div>
         )}
       </SurfaceCard>
+        </>
+      )}
     </div>
   );
 }

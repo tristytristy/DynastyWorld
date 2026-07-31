@@ -4482,3 +4482,31 @@ because a write must operate on a freshly-opened file it then saves back.
 
 The win generalises: the player and recruit editors read through the same path,
 so opening an editor after the first read is now instant too.
+
+### Sticky navigation + History team gating (2026-07-31)
+
+**Both nav rows now pin.** The scroll container is `<main>` in app.tsx and the
+nav rows lived inside it, so on a long page (History, Statistics) the section
+tabs, the team tabs and the season switcher all scrolled out of reach — changing
+any of them meant scrolling back to the top. The section nav pins at `top-0`
+(keeping its `-mt-5` so it doesn't float above main's padding) and the Team Hub
+sub-nav at `top-[4rem]` beneath it. Measured: section row holds at 73px through a
+1,200px scroll, sub-nav at 137px, 1px overlap with the section row painting over
+it (z-30 vs z-20) — flush rather than a hairline of content showing through.
+Backgrounds match the panel (`bg-black` in dark is the panel's own value) so text
+passes under rather than ghosting through.
+
+**History stopped attributing the user's records to another school.** With Akron
+selected the masthead correctly said Akron — and then the Golesh era block and
+Auburn's record book rendered underneath it, so Stan White and Pat Sullivan
+appeared as Akron records. `getHistory(dynastyId)` takes no team index and always
+returns the user's own program; the page swapped the title without gating the
+body. Those sections are now hidden when another team is viewed, which is what
+the page's own copy already claimed ("tracked for your own program only").
+
+**This is a stopgap and the real fix is cheap.** `extract-teams.ts` already reads
+`Team.{Career,Season,Game}StatRecords` into `TeamData.schoolRecords` for EVERY
+team, so each school's own record book is sitting in the snapshot unused.
+Teaching `getHistory` to take a team index and read from there makes the section
+real for any school, at which point the gate comes out. Wrong data stated as
+fact is worse than missing data — that's the only reason to ship the gate first.

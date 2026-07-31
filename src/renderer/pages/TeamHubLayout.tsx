@@ -38,7 +38,14 @@ export function TeamHubLayout() {
   return (
     <div className="space-y-5">
       {/* Sub-nav + team selector on one row — the selector carries team identity across every tab. */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/*
+        STICKY, BELOW the section nav. The section row above pins at top-0 and is
+        ~64px tall, so this offsets by that much and the two stack instead of
+        overlapping. Without it the History and Statistics pages scrolled the
+        team tabs and the team switcher out of reach — which is where the user
+        actually needs them on a long page.
+      */}
+      <div className="sticky top-[4rem] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between">
         {/*
           The bordered, filled strip is gone: the glider's own rail is what
           groups these tabs now, and a box around them as well read as two
