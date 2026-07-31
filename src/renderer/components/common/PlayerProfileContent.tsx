@@ -2017,7 +2017,15 @@ export function PlayerProfileContent({
           horizontal gap — stretching it pushed the OVR to the far wall, so the
           number and the name it belongs to had a screen between them.
         */}
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6">
+        {/*
+          items-END, not items-center. The portrait is anchored to the masthead's
+          floor and drawn TALLER than the row, so the subject rises to the top
+          edge and the torso bleeds off the bottom — a player standing in the
+          frame rather than a cut-out floating in it. Centring fought this: it
+          re-split the PNG's transparent top evenly above and below, which is
+          what left a gap over the head AND a hard slice through the jersey.
+        */}
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:gap-6">
           {/*
             THE PORTRAIT IS FULL SIZE AGAIN, and the masthead ignores its bounds
             — the same trick the matchup helmets use.
@@ -2038,16 +2046,36 @@ export function PlayerProfileContent({
             head matches the padding below it because it IS the container's
             padding rather than the file's.
           */}
-          <div className="flex shrink-0 justify-center sm:justify-start">
+          <div className="flex shrink-0 justify-center self-end sm:justify-start">
             <PlayerPortrait
               player={player}
               large
-              largeMaxHeight="max-h-[15rem]"
-              className="-my-8"
+              largeMaxHeight="max-h-[17rem]"
+              /*
+                17rem, NOT larger — and that ceiling is the finding.
+
+                `object-contain` scales the whole 512² image, so drawing it
+                taller to push the head toward the masthead's top edge enlarges
+                the head by the same factor. At 22rem the subject did reach the
+                top and the bottom edge then landed on his chin: a face sliced
+                mid-jaw. Size is the wrong lever for vertical position.
+
+                Getting the head to the top edge needs a TRANSLATE — shifting the
+                art up without scaling it — which is what `PlayerPortrait`'s
+                `fill` mode already does for the trading card
+                (`translateY(-23%) scale(1.08)`, derived from the shared 512²
+                composition). Applying that here wants a measured value, so this
+                keeps the size that reads cleanly and leaves the residual gap.
+
+                -mb only: the overhang belongs at the BOTTOM, where the jersey
+                runs off the edge. A matching -mt would pull the head back up
+                into the masthead's own padding and re-open the gap.
+              */
+              className="-mb-10"
               teamAssetName={heroTeamName}
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 self-center">
             <div className="flex items-center gap-3">
               <span className="corner-cut-sm inline-flex h-10 min-w-[2.6rem] items-center justify-center bg-[var(--team-primary)] px-3 font-display text-lg font-bold text-[var(--team-on-primary)]">
                 {player.jerseyNumber}
@@ -2090,11 +2118,10 @@ export function PlayerProfileContent({
               owns the supporting bio.
             */}
           </div>
-          {/* Snug against the name, NOT pinned to the far edge: the number and
-              the player it belongs to read as one unit. Trailing space at the
-              right of a wide bar is quieter than a void between two things that
-              belong together. */}
-          <div className="shrink-0 sm:pl-2 sm:text-left">
+          {/* Far right (user direction, reverted from the snug placement): the
+              OVR anchors the opposite end of the bar, which is how it read
+              before and how a scoreboard reads. */}
+          <div className="shrink-0 self-center text-center sm:ml-auto sm:pr-4">
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Overall</p>
             <p className="type-stat-xl mt-1 text-slate-950 dark:text-white">{player.overallRating}</p>
           </div>

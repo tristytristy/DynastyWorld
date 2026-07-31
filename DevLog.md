@@ -4575,3 +4575,26 @@ isn't centred. The proper finish is the same trick the trading card already uses
 in `PlayerPortrait`'s `fill` mode — `translateY(-23%) scale(1.08)`, derived from
 the shared 512² composition — applied to the hero at a smaller magnitude. Not
 done here; it wants a measured value rather than a guess.
+
+### Masthead, second pass — OVR right, jersey bleeds, and where this stopped (2026-07-31)
+
+**`items-end`, not `items-center`.** The portrait is anchored to the masthead's
+floor and drawn taller than the row, so the torso bleeds off the bottom instead
+of being sliced. Centring was the cause of the broken look: it re-split the PNG's
+transparent top evenly above and below the box, which left a gap over the head
+AND a hard cut through the jersey. The OVR went back to the far right where it
+was, with the identity column stretching to push it there.
+
+**A finding worth keeping: SIZE IS THE WRONG LEVER for vertical position.**
+Trying to get the head to the masthead's top edge by drawing the portrait taller
+(22rem) worked and simultaneously ruined it — `object-contain` scales the whole
+512² image, so the head grew by the same factor and the bottom edge then landed
+on the chin. A face sliced mid-jaw. Reverted to 17rem, which reads cleanly.
+
+**So the "player reaches the top" ask is NOT delivered**, and it needs a
+translate rather than a resize: shift the art up without scaling it. The app
+already does exactly this for the trading card — `PlayerPortrait`'s `fill` mode
+uses `translateY(-23%) scale(1.08)`, a value derived from the shared 512²
+composition. The hero wants the same treatment at its own magnitude, measured
+against several portraits rather than guessed at, because a wrong value there
+crops heads.
