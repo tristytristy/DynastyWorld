@@ -100,7 +100,14 @@ export function StatisticsTable<TLine>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
+    /*
+      `max-h` + `overflow-auto` gives the header below a scrollport of its own.
+      Without it (this was `overflow-x-auto` only) the sticky header pinned
+      against the PAGE, which puts it at the same place as the section nav —
+      and that nav wins on z-index, so the column headers disappeared behind it
+      partway down a long table. Same pattern as Rivalries / National Recruits.
+    */
+    <div className="max-h-[70vh] overflow-auto border border-slate-200/80 dark:border-slate-800">
       <table className="w-full min-w-[720px] text-sm">
         <thead className={`sticky top-0 z-10 ${GRADIENT_TEAM_BLOCK} font-display text-[var(--team-on-primary)]`}>
           <tr>

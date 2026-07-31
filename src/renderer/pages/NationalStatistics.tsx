@@ -79,8 +79,16 @@ function NationalTeamTable({ rows, mode }: { rows: NationalTeamStatRow[]; mode: 
   };
 
   return (
-    <SurfaceCard className="p-0">
-      <div className="overflow-x-auto">
+    <SurfaceCard className="overflow-hidden p-0">
+      {/*
+        The table scrolls INSIDE its own card (`max-h` + `overflow-auto`), which
+        is what makes the sticky header below work. With only `overflow-x-auto`
+        here the header had no vertical scrollport of its own, so it pinned
+        against the PAGE instead and slid under the section nav — which pins at
+        the same place with a higher z-index. Rivalries and National Recruits
+        already use this pattern; this matches them.
+      */}
+      <div className="max-h-[70vh] overflow-auto">
         <table className="w-full min-w-[860px] text-sm">
           <thead className="sticky top-0 z-10 bg-[var(--team-primary)] font-display text-[var(--team-on-primary)]">
             <tr>
@@ -189,8 +197,13 @@ export function NationalStatistics() {
         description="Team and player leaderboards across all of FBS for the selected season — click any team or player to dig in."
       />
 
-      {/* Sticky controls — mode switch + total/per-game, shared by both views. */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white/90 px-4 py-3 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.55)] backdrop-blur-md dark:border-white/10 dark:bg-[#0d0d10]/90">
+      {/*
+        Sticky controls — mode switch + total/per-game, shared by both views.
+        Offsets by `--section-nav-h` and stays opaque for the same reasons as the
+        Team Statistics bar: `top-0` now lands under the pinned section nav, and
+        a translucent pinned row ghosts the page scrolling beneath it.
+      */}
+      <div className="sticky top-[var(--pinned-top,4.4375rem)] z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#0d0d10]">
         <SegmentedControl<View>
           value={view}
           onChange={setView}

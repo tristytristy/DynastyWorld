@@ -537,9 +537,22 @@ export function Statistics() {
         mark={{ kind: 'helmet', teamAssetName: viewedTeamName ?? overview.teamName }}
       />
 
-      {/* Sticky controls — mode switcher + shared filters that drive both views.
-          Restrained treatment (§4): fine border, subtle depth, no floating panel. */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white/90 px-4 py-3 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.55)] backdrop-blur-md dark:border-white/10 dark:bg-[#0d0d10]/90">
+      {/*
+        Sticky controls — mode switcher + shared filters that drive both views.
+        Restrained treatment (§4): fine border, subtle depth, no floating panel.
+
+        Offsets by `--section-nav-h` rather than pinning at `top-0`. This row
+        predates the section nav being pinned, and `top-0` now resolves to the
+        very top of the panel — exactly where that nav sits at z-30, so on a
+        season with enough stats to scroll, this bar pinned itself underneath it
+        and vanished. Same rule as the Team Hub sub-nav: stack beneath the row
+        above, measured from what it actually is.
+
+        Opaque, and no `backdrop-blur`: a pinned row has page content sliding
+        under it, and a translucent one ghosts that text through itself. The
+        section nav settled this convention; this row now follows it.
+      */}
+      <div className="sticky top-[var(--pinned-top,4.4375rem)] z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#0d0d10]">
         <SegmentedControl<'team' | 'player'>
           value={view}
           onChange={setView}

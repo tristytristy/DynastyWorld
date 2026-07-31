@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Outlet, Link, useParams, useLocation } from 'react-router-dom';
 import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { GliderNav, gliderItemClass } from '../components/ui/GliderNav';
@@ -28,6 +29,37 @@ const TABS: { to: string; label: string; paths: string[] }[] = [
 export function TeamHubLayout() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
+
+  /*
+    THE PINNED STACK. Rows that pin to the top of the page are cumulative: the
+    section nav is first, this sub-nav sits under it, and a page inside Team Hub
+    (Statistics has a filter bar) has to clear BOTH. Each row hard-coding its own
+    offset is how they end up overlapping — which is exactly what happened when
+    the Statistics bar and this row both pinned at the section nav's height.
+
+    So there is one number, `--pinned-top`, meaning "the first Y a page may pin
+    at". DynastyLayout's `--section-nav-h` is the floor; this row adds its own
+    measured height on top while Team Hub is mounted, and restores the floor on
+    the way out so the NCAA and Recruit hubs (no sub-nav) aren't offset by a row
+    that isn't there.
+  */
+  const subNavRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = subNavRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty('--pinned-top', `calc(var(--section-nav-h, 4.4375rem) + ${el.getBoundingClientRect().height}px)`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--pinned-top');
+    };
+  }, []);
+
+  // After the hooks: they must run in the same order on every render, and this
+  // component can bail out when the route has no dynasty id.
   if (!id) return null;
 
   // Flat URLs, so highlight by membership. Merged tabs (Roster, Schedule,
@@ -50,7 +82,10 @@ export function TeamHubLayout() {
         to two lines at a narrow width. The fallback matches the row's current
         height and only applies if this ever renders outside DynastyLayout.
       */}
-      <div className="sticky top-[var(--section-nav-h,4.4375rem)] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between">
+      <div
+        ref={subNavRef}
+        className="sticky top-[var(--section-nav-h,4.4375rem)] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between"
+      >
         {/*
           The bordered, filled strip is gone: the glider's own rail is what
           groups these tabs now, and a box around them as well read as two
