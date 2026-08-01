@@ -37,6 +37,18 @@ export function GearIcon({ className }: { className?: string }) {
   );
 }
 
+/** A keyboard — the shortcuts editor. Keys as dashes rather than a grid of squares: at 18px a real key grid turns into noise. */
+export function KeyboardIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+      <path d="M6 9.5h.01M9.5 9.5h.01M13 9.5h.01M16.5 9.5h.01" />
+      <path d="M6 12.75h.01M9.5 12.75h.01M13 12.75h.01M16.5 12.75h.01" />
+      <path d="M8 15.75h8" />
+    </Icon>
+  );
+}
+
 export function BookIcon({ className }: { className?: string }) {
   return (
     <Icon className={className}>

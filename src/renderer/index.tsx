@@ -10,6 +10,7 @@ import { PlayerHoverProvider } from './data/PlayerHoverProvider';
 import { TeamModalProvider } from './data/TeamModalProvider';
 import { EditorModalProvider } from './data/EditorModalProvider';
 import { RecruitModalProvider } from './data/RecruitModalProvider';
+import { ShortcutsProvider } from './data/ShortcutsProvider';
 import { GameModalProvider } from './data/GameModalProvider';
 import { RecruitingExperienceProvider } from './data/RecruitingExperienceProvider';
 import { ConfirmDialogProvider } from './data/ConfirmDialogProvider';
@@ -47,7 +48,11 @@ createRoot(container).render(
             <EditorModalProvider>
               <GameModalProvider>
                 <HashRouter>
-                  <App />
+                  {/* Inside the router on purpose: a shortcut navigates, and
+                      useNavigate has to have a router above it. */}
+                  <ShortcutsProvider>
+                    <App />
+                  </ShortcutsProvider>
                 </HashRouter>
               </GameModalProvider>
             </EditorModalProvider>

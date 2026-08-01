@@ -2,7 +2,8 @@ import { DynastyOSWordmark } from './DynastyOSWordmark';
 import { PreferencesMenu } from './PreferencesMenu';
 import { UserManualMenu } from './UserManualMenu';
 import { AboutMenu } from './AboutMenu';
-import { BookIcon, GearIcon, InnerActivityIcon } from './ToolbarIcons';
+import { ShortcutsMenu } from './ShortcutsMenu';
+import { BookIcon, GearIcon, InnerActivityIcon, KeyboardIcon } from './ToolbarIcons';
 
 /**
  * Tool triggers in the title bar: the icon only, no chip or border, so they
@@ -72,6 +73,7 @@ export function Navbar() {
       */}
       <div className="ml-auto flex items-center gap-1">
         <PreferencesMenu triggerClassName={TITLEBAR_ICON_BUTTON} icon={<GearIcon className="h-[18px] w-[18px]" />} />
+        <ShortcutsMenu triggerClassName={TITLEBAR_ICON_BUTTON} icon={<KeyboardIcon className="h-[18px] w-[18px]" />} />
         <UserManualMenu triggerClassName={TITLEBAR_ICON_BUTTON} icon={<BookIcon className="h-[18px] w-[18px]" />} />
         <AboutMenu triggerClassName={TITLEBAR_ICON_BUTTON} icon={<InnerActivityIcon className="h-[18px] w-[18px]" />} />
         <span aria-hidden className="ml-1.5 h-4 w-px bg-slate-300 dark:bg-white/15" />
