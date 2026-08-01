@@ -1,6 +1,6 @@
 {
   "app": "CFB27 Dynasty Hub Command Center",
-  "exportedAt": "2026-07-31T19:51:39.548Z",
+  "exportedAt": "2026-08-01T04:24:41.819Z",
   "items": [
     {
       "id": "open-past-season-backfill",
@@ -329,6 +329,67 @@
       "updatedAt": "2026-07-31T19:51:39.548Z",
       "completedAt": null,
       "notes": ""
+    },
+    {
+      "assignee": "",
+      "version": "",
+      "pageId": "global",
+      "subId": null,
+      "images": [],
+      "createdAt": "2026-08-01T04:24:41.819Z",
+      "updatedAt": "2026-08-01T04:24:41.819Z",
+      "completedAt": null,
+      "notes": "",
+      "id": "open-history-prewindow-seasons",
+      "type": "research",
+      "title": "Season-by-season history only starts at the dynasty",
+      "desc": "TeamHistoricSeriesYear fills from the dynasty first season forward — on a year-1 save all 108 slots exist but read 0-0, so a program page shows complete all-time totals and a record book stretching to the 1960s beside a season table with one row. The all-time block already carries the real aggregate, so the gap is itemisation, not data. Worth checking whether any other table holds pre-dynasty season rows before deciding this is a hard limit.",
+      "tags": [
+        "db",
+        "save"
+      ],
+      "importance": "med",
+      "status": "backlog"
+    },
+    {
+      "assignee": "",
+      "version": "",
+      "pageId": "global",
+      "subId": null,
+      "images": [],
+      "createdAt": "2026-08-01T04:24:41.819Z",
+      "updatedAt": "2026-08-01T04:24:41.819Z",
+      "completedAt": null,
+      "notes": "",
+      "id": "open-postseason-marks-unverified",
+      "type": "bug",
+      "title": "Bowl / playoff / conf-championship marks on Scores are unverified",
+      "desc": "The Scores game mark picks bowl, playoff-round and conference-championship art ahead of the conference logo. The conference path is proven on real data (54 rendering) and the others share it, but no test save has a completed postseason, so the bowl/playoff/championship branches have never been seen. Eyeball at week 16 and again in the bowls.",
+      "tags": [
+        "ui"
+      ],
+      "importance": "med",
+      "status": "todo"
+    },
+    {
+      "assignee": "",
+      "version": "",
+      "pageId": "global",
+      "subId": null,
+      "images": [],
+      "createdAt": "2026-08-01T04:24:41.819Z",
+      "updatedAt": "2026-08-01T04:24:41.819Z",
+      "completedAt": null,
+      "notes": "",
+      "id": "open-kp-fs-ovr-weights",
+      "type": "research",
+      "title": "Derive CFB 27 OVR weights for K, P and FS",
+      "desc": "The 2026 PORC weights reproduce 99.97% of players but fail for kickers, punters and free safeties (7-20% exact). Refitting only the scaling bounds does not rescue them, so the weights themselves changed in 27. Recovering them means solving ~15 unknowns per combo from roster data (constrained least squares / integer search) — tractable but its own project. Those positions currently decline rather than guess.",
+      "tags": [
+        "db"
+      ],
+      "importance": "low",
+      "status": "backlog"
     }
   ]
 }
