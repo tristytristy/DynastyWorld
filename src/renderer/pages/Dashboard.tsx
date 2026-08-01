@@ -34,6 +34,7 @@ const STEP_LABELS: Record<ExtractionStep, string> = {
   gamelog: 'Game logs',
   trophies: 'Trophies',
   rivalries: 'Rivalries',
+  teamHistory: 'Program history',
   awards: 'Awards',
 };
 

@@ -202,6 +202,9 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     saveSnapshotCompressed(season.id, 'gamelog', gamelog);
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
     saveSnapshot(season.id, 'rivalries', extraction.rivalries);
+    // 138 programs x (all-time totals + up to 108 seasons + two record books) —
+    // leaguewide and repetitive, so compressed like the other league snapshots.
+    saveSnapshotCompressed(season.id, 'teamHistory', extraction.teamHistory);
     saveSnapshot(season.id, 'awards', extraction.awards);
     // Departures are only present at OffSeason stage 2 — write-once so a later
     // (or earlier) sync with an empty list never clobbers a captured one.

@@ -21,6 +21,7 @@ import {
   type YearSummaryData,
 } from './extract-league-history';
 import { extractRivalries, type RivalryData } from './extract-rivalries';
+import { extractTeamHistory, type TeamHistoryData } from './extract-team-history';
 import { extractAwards, type AwardsData } from './extract-awards';
 import { extractDepartures, type DepartureData } from './extract-departures';
 import type { ExtractionStep, ExtractionStepStatus } from '../shared/types';
@@ -45,6 +46,8 @@ export interface ExtractionData {
   gamelog: PlayerGameLogEntry[];
   conferenceChampionship: ConferenceChampionshipData[];
   rivalries: RivalryData[];
+  /** Real program history for EVERY school — all-time totals, year-by-year seasons and the record book. See extract-team-history.ts. */
+  teamHistory: TeamHistoryData[];
   awards: AwardsData;
   /** Who left the league this offseason + why (NFL declaration w/ projected round, or transfer reason). Empty except at OffSeason stage 2. See extract-departures.ts. */
   departures: DepartureData[];
@@ -124,6 +127,10 @@ export async function extractAll(
 
   onProgress?.('rivalries', 'start');
   const rivalries = await extractRivalries(franchise, userTeam.teamIndex);
+
+  onProgress?.('teamHistory', 'start');
+  const teamHistory = await extractTeamHistory(franchise);
+  onProgress?.('teamHistory', 'done');
   onProgress?.('rivalries', 'done');
 
   onProgress?.('awards', 'start');
@@ -160,6 +167,7 @@ export async function extractAll(
     gamelog,
     conferenceChampionship,
     rivalries,
+    teamHistory,
     awards,
     departures,
     userTeam,

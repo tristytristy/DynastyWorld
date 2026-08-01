@@ -6,6 +6,7 @@ import { StatTile } from '../components/ui/StatTile';
 import { PageMasthead } from '../components/common/PageMasthead';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { TeamLink } from '../components/common/TeamLink';
+import { ProgramHistory } from '../components/common/ProgramHistory';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { formatAwardLabel } from '../lib/awardFormat';
 import type {
@@ -220,6 +221,16 @@ export function History() {
     );
   }
 
+  /*
+    Whose history to show. `viewedTeamIndex` is null while you're on your OWN
+    program — the switcher only sets it for a browsed school — so fall back to
+    resolving the user's team by name out of the league list. Without that, the
+    one team whose history matters most to the user would be the only one
+    without any.
+  */
+  const programTeamIndex =
+    viewedTeamIndex ?? leagueTeams?.find((t) => t.displayName === history.teamName)?.teamIndex ?? null;
+
   // Named after the user's coach, not the school: this section spans their
   // whole career in this save, including any schools they've since left.
   const eraName = coachEraName(history.headCoachName);
@@ -229,16 +240,18 @@ export function History() {
       <PageMasthead
         eyebrow="Program History"
         title={viewedLeagueTeamName ?? history.teamName}
-        subtitle={viewedLeagueTeamName ? 'Championships on record' : 'The program story and record book'}
-        description={
-          viewedLeagueTeamName
-            ? 'From the league history the save itself tracks — national and conference titles by year. The full record book and timeline are tracked for your own program only.'
-            : "The program's history, with or without you as the coach — school records from the save's own book, plus the timeline, milestones, and league titles that accumulate across the archive."
-        }
+        subtitle="The whole program, on the record"
+        description="Every school's real history — the all-time résumé and record book the save has always carried, plus the season-by-season table that fills in as your dynasty plays."
+
         /* Gold: the page is the trophy case, so the celebratory variant is the
            honest choice here rather than a general appearance decision. */
         mark={{ kind: 'logo', teamAssetName: viewedLeagueTeamName ?? history.teamName, variant: 'gold' }}
       />
+
+      {/* Works for ANY school — the reason this page stopped being empty for a
+          browsed program. Rendered above the user-only sections below, which
+          only ever had anything to say about the team being coached. */}
+      <ProgramHistory dynastyId={id} teamIndex={programTeamIndex} />
 
       {viewedLeagueTeamName && (
         <SurfaceCard>

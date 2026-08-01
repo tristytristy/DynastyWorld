@@ -68,6 +68,7 @@ import { getLeagueScores } from '../../database/getLeagueScores';
 import { getNationalTeamStats } from '../../database/getNationalTeamStats';
 import { getNationalStatLeaders } from '../../database/getNationalStatLeaders';
 import { getNationalRecruits, getRecruitById } from '../../database/getNationalRecruits';
+import { getTeamHistory } from '../../database/getTeamHistory';
 import { getNcaaRecords } from '../../database/getNcaaRecords';
 import { getDynastyTrends } from '../../database/getDynastyTrends';
 import { getSeasonAnalytics } from '../../database/getSeasonAnalytics';
@@ -365,6 +366,10 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(IPC.db.getLeagueTeamHonors, async (_event, dynastyId: string, teamIndex: number, seasonId?: number) => {
     return getLeagueTeamHonors(dynastyId, teamIndex, seasonId) ?? null;
+  });
+
+  ipcMain.handle(IPC.db.getTeamHistory, async (_event, dynastyId: string, teamIndex: number, seasonId?: number) => {
+    return getTeamHistory(dynastyId, teamIndex, seasonId) ?? null;
   });
 
   ipcMain.handle(IPC.db.getRecruitById, async (_event, dynastyId: string, playerId: number, seasonId?: number) => {

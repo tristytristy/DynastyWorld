@@ -22,6 +22,12 @@ export interface FranchiseTable {
   header: { recordCapacity: number };
   records: FranchiseRecord[];
   readRecords(attributes?: string[]): Promise<void>;
+  /**
+   * Present on normal tables, ABSENT on the `Foo[]` array containers — those
+   * hold numbered reference fields instead and are read off the record itself.
+   * Optional here so a caller has to acknowledge which kind it's holding.
+   */
+  schema?: { attributes: { name: string }[] };
 }
 
 /** The shape of the library instance this module reaches into — everything else treats it as opaque. */

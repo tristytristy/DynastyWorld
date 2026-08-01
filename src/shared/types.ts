@@ -1,3 +1,11 @@
+import type {
+  TeamAllTimeData,
+  TeamHistorySeasonData,
+  TeamStatRecordData,
+} from '../extractors/extract-team-history';
+
+export type { TeamAllTimeData, TeamHistorySeasonData, TeamStatRecordData };
+
 import type { PortraitBuild, PortraitSkinTone, PortraitType } from './portraitTaxonomy';
 
 export interface SaveFileInfo {
@@ -858,6 +866,23 @@ export interface LeagueScoreGame {
  */
 export interface ResultsHold {
   week: number | null;
+}
+
+/**
+ * One program's full history — the payload behind the History page for ANY
+ * school. Mirrors extract-team-history.ts's shapes; `allTime` and the record
+ * books are real pre-loaded history that the dynasty writes into, while
+ * `seasons` only covers years this dynasty has played.
+ */
+export interface TeamHistoryView {
+  teamIndex: number;
+  teamName: string;
+  yearSchoolEstablished: number;
+  yearProgramStarted: number;
+  allTime: TeamAllTimeData | null;
+  seasons: TeamHistorySeasonData[];
+  careerRecords: TeamStatRecordData[];
+  seasonRecords: TeamStatRecordData[];
 }
 
 /** The national Scores page payload — every league game, plus which week (if any) is being withheld. */
@@ -2287,6 +2312,7 @@ export const EXTRACTION_STEPS = [
   'gamelog',
   'trophies',
   'rivalries',
+  'teamHistory',
   'awards',
 ] as const;
 export type ExtractionStep = (typeof EXTRACTION_STEPS)[number];
@@ -2544,6 +2570,8 @@ export interface DynastyApi {
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
     getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;
+    /** One program's all-time résumé, season-by-season history and record book. Null for seasons synced before this shipped. */
+    getTeamHistory: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<TeamHistoryView | null>;
     /** One prospect by player id, or null when the id is not a recruit — the test that routes an open to the recruit view instead of the player workspace. */
     getRecruitById: (dynastyId: string, playerId: number, seasonId?: number) => Promise<NationalRecruit | null>;
     getNcaaRecords: (
