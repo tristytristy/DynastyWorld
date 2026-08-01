@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { PlayerNote } from '../../../shared/types';
 import { useConfirm } from '../../data/ConfirmDialogProvider';
+import { Button } from '../ui/Button';
 
 const TITLE_LIST_ID = 'player-note-title-suggestions';
 
@@ -11,6 +13,100 @@ function formatWhen(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * DECLARED AT MODULE SCOPE, and it has to stay that way.
+ *
+ * This form used to be defined inside PlayerNotesTab. The draft text lives in
+ * that component's state, so every keystroke re-rendered it — and because a
+ * nested function declaration produces a NEW function identity each time, React
+ * saw a different component type, threw the old subtree away and mounted a fresh
+ * one. The <input> being typed into was destroyed and rebuilt on every
+ * character, so focus and the caret went with it: you got one letter, then had
+ * to click back in. Hoisting it out keeps the element identity stable across
+ * renders, which is the whole fix.
+ *
+ * Everything it needs arrives as props for the same reason — closing over the
+ * parent's state would put the declaration back inside.
+ */
+function NoteForm({
+  title,
+  body,
+  onTitleChange,
+  onBodyChange,
+  onSave,
+  onCancel,
+  saving,
+  canSave,
+  isNew,
+}: {
+  title: string;
+  body: string;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  canSave: boolean;
+  isNew: boolean;
+}) {
+  /*
+    Keyboard, so writing a note never needs the mouse: Ctrl/Cmd+Enter commits
+    from either field, Escape backs out. Escape stops propagating on purpose —
+    the player modal closes on Escape, and losing the whole profile when you
+    meant to abandon a note is the wrong outcome.
+  */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      onSave();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
+    }
+  };
+
+  return (
+    <div className="border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-white/5">
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => onTitleChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder="Title (e.g. Injury history, Position change)"
+        list={TITLE_LIST_ID}
+        spellCheck={false}
+        aria-label="Note title"
+        // Opening the form puts the caret where you'd start typing anyway.
+        autoFocus
+        className={inputClass}
+      />
+      <textarea
+        value={body}
+        onChange={(e) => onBodyChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        rows={5}
+        placeholder="Write your note..."
+        aria-label="Note body"
+        className={`${inputClass} mt-2 resize-y`}
+      />
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="primary" onClick={onSave} disabled={!canSave || saving}>
+          {saving ? 'Saving…' : isNew ? 'Add note' : 'Save'}
+        </Button>
+        <Button variant="tertiary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <span className="ml-auto text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+          {navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+Enter to save
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -89,48 +185,6 @@ export function PlayerNotesTab({ dynastyId, playerId }: { dynastyId: string; pla
     }
   }
 
-  function NoteForm() {
-    return (
-      <div className="border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-white/5">
-        <input
-          type="text"
-          value={draftTitle}
-          onChange={(e) => setDraftTitle(e.target.value)}
-          placeholder="Title (e.g. Injury history, Position change)"
-          list={TITLE_LIST_ID}
-          spellCheck={false}
-          aria-label="Note title"
-          className={inputClass}
-        />
-        <textarea
-          value={draftBody}
-          onChange={(e) => setDraftBody(e.target.value)}
-          rows={5}
-          placeholder="Write your note..."
-          aria-label="Note body"
-          className={`${inputClass} mt-2 resize-y`}
-        />
-        <div className="mt-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={save}
-            disabled={!canSave || saving}
-            className="bg-[var(--team-primary)] px-4 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : editingId === 'new' ? 'Add note' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={cancel}
-            className="px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (notes === undefined) {
     return <p className="text-sm text-slate-500 dark:text-slate-400">Loading notes...</p>;
   }
@@ -148,17 +202,25 @@ export function PlayerNotesTab({ dynastyId, playerId }: { dynastyId: string; pla
           Notes {notes.length > 0 ? `(${notes.length})` : ''}
         </p>
         {editingId !== 'new' && (
-          <button
-            type="button"
-            onClick={startNew}
-            className="corner-cut-sm border border-[var(--team-primary)]/60 bg-[var(--team-primary)]/[0.08] px-3 py-1.5 text-sm font-semibold text-[var(--team-primary)] transition hover:bg-[var(--team-primary)]/[0.16]"
-          >
+          <Button variant="primary" compact onClick={startNew}>
             + Add note
-          </button>
+          </Button>
         )}
       </div>
 
-      {editingId === 'new' && <NoteForm />}
+      {editingId === 'new' && (
+        <NoteForm
+          title={draftTitle}
+          body={draftBody}
+          onTitleChange={setDraftTitle}
+          onBodyChange={setDraftBody}
+          onSave={save}
+          onCancel={cancel}
+          saving={saving}
+          canSave={canSave}
+          isNew={editingId === 'new'}
+        />
+      )}
 
       {notes.length === 0 && editingId !== 'new' ? (
         <div className="border border-dashed border-slate-300/80 px-5 py-10 text-center dark:border-slate-700">
@@ -171,7 +233,18 @@ export function PlayerNotesTab({ dynastyId, playerId }: { dynastyId: string; pla
         <div className="space-y-3">
           {notes.map((note) =>
             editingId === note.id ? (
-              <NoteForm key={note.id} />
+              <NoteForm
+                key={note.id}
+                title={draftTitle}
+                body={draftBody}
+                onTitleChange={setDraftTitle}
+                onBodyChange={setDraftBody}
+                onSave={save}
+                onCancel={cancel}
+                saving={saving}
+                canSave={canSave}
+                isNew={false}
+              />
             ) : (
               <div key={note.id} className="border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-white/5">
                 <div className="flex items-start justify-between gap-3">
