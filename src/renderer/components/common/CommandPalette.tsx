@@ -9,6 +9,7 @@ import { TeamLogo } from './TeamLogo';
 import { useModalLayer } from '../../lib/modalLayer';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useTeamModal } from '../../data/TeamModalProvider';
+import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
 import { spaceCamelCase } from './CoachCard';
 import type { GlobalSearchResults } from '../../../shared/types';
 
@@ -126,6 +127,9 @@ export function CommandPalette({ triggerClassName }: { triggerClassName?: string
   const navigate = useNavigate();
   const { openPlayerModal } = usePlayerModal();
   const { openTeamModal } = useTeamModal();
+  // The same lock set the Recruit Hub uses, so a prospect revealed there is
+  // revealed here and nowhere else leaks the rating.
+  const { ovr } = useRecruitingExperience();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -254,11 +258,23 @@ export function CommandPalette({ triggerClassName }: { triggerClassName?: string
     if (results.players.length) {
       out.push({
         title: 'Players',
+        /*
+          A recruit row is not a player row. Prospects share the league roster
+          this searches, so without the `isRecruit` split they listed as ordinary
+          players on a placeholder team ("FCS West") with their overall rating
+          printed in the trailing slot — which is the Recruit Hub's hidden-ratings
+          rule bypassed entirely, from a box that is two keystrokes away.
+
+          So: say "Recruit" rather than a school they haven't got, and withhold
+          the rating unless that prospect has actually been revealed (the same
+          `ovr` lock set the Recruit Hub reads, so revealing in one place is
+          honoured in the other).
+        */
         items: results.players.map<PaletteItem>((p) => ({
           id: `player-${p.id}`,
           label: `${p.firstName} ${p.lastName}`,
-          sublabel: `${p.position} · ${p.teamName}`,
-          trailing: `${p.overallRating} OVR`,
+          sublabel: p.isRecruit ? `${p.position} · Recruit` : `${p.position} · ${p.teamName ?? 'Free agent'}`,
+          trailing: p.isRecruit && !ovr.isUnlocked(p.id) ? 'OVR hidden' : `${p.overallRating} OVR`,
           icon: <PlayerPortrait player={p} size="sm" className="!h-8 !w-8 shrink-0" />,
           run: () => {
             remember(q);
@@ -270,7 +286,7 @@ export function CommandPalette({ triggerClassName }: { triggerClassName?: string
               {
                 name: `${p.firstName} ${p.lastName}`,
                 position: p.position,
-                teamDisplayName: p.teamName,
+                teamDisplayName: p.teamName ?? '',
                 portraitAssetName: p.portraitAssetName,
               },
               p.teamIndex,
@@ -316,7 +332,9 @@ export function CommandPalette({ triggerClassName }: { triggerClassName?: string
     }
 
     return out;
-  }, [dynastyId, query, results, recents, go, openPlayerModal, openTeamModal, close]);
+    // `ovr` belongs here: revealing a prospect has to re-render the rows so the
+    // hidden rating actually appears without retyping the search.
+  }, [dynastyId, query, results, recents, go, openPlayerModal, openTeamModal, close, ovr]);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 

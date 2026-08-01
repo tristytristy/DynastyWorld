@@ -32,21 +32,29 @@ createRoot(container).render(
       <RecruitingExperienceProvider>
        <StadiumDataProvider>
         <ConfirmDialogProvider>
-         <PlayerModalProvider>
-          <PlayerHoverProvider>
-          <TeamModalProvider>
-           <EditorModalProvider>
-            <RecruitModalProvider>
+         {/*
+           RecruitModalProvider sits ABOVE PlayerModalProvider on purpose. Opening
+           a player has to be able to hand off to the recruit view when the id
+           turns out to be a prospect (recruits share the roster and would
+           otherwise get the full player workspace), and a provider can only read
+           context from above it. It holds nothing but state, so nothing between
+           the two is lost by lifting it.
+         */}
+         <RecruitModalProvider>
+          <PlayerModalProvider>
+           <PlayerHoverProvider>
+           <TeamModalProvider>
+            <EditorModalProvider>
               <GameModalProvider>
                 <HashRouter>
                   <App />
                 </HashRouter>
               </GameModalProvider>
-            </RecruitModalProvider>
-           </EditorModalProvider>
-          </TeamModalProvider>
-          </PlayerHoverProvider>
-         </PlayerModalProvider>
+            </EditorModalProvider>
+           </TeamModalProvider>
+           </PlayerHoverProvider>
+          </PlayerModalProvider>
+         </RecruitModalProvider>
         </ConfirmDialogProvider>
        </StadiumDataProvider>
       </RecruitingExperienceProvider>

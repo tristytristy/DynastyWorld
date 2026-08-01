@@ -1,6 +1,7 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getSeasonById, getSnapshot } from './helpers';
 import { getAllLeaguePlayers } from './getLeagueRoster';
+import { getRecruitIds } from './getNationalRecruits';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GlobalSearchResults } from '../shared/types';
@@ -31,20 +32,46 @@ export function globalSearch(dynastyId: string, query: string, seasonId?: number
     .slice(0, 8)
     .map((t) => ({ teamIndex: t.teamIndex, displayName: t.displayName, conferenceName: t.conferenceName ?? null }));
 
+  /*
+    PROSPECTS ARE NOT PLAYERS, AND SEARCH HAS TO SAY SO.
+
+    Recruits sit in the same league roster this searches, on the FCS/placeholder
+    team index — so a search for a common surname returned high-school prospects
+    labelled as "FCS West" players, ranked by an overall rating the Recruit Hub
+    deliberately keeps hidden until you reveal it. That is a hole straight
+    through the hidden-ratings design: anyone could read a prospect's OVR out of
+    the search box without ever touching Reveal.
+
+    Marking them here rather than dropping them keeps the useful half — you can
+    still find a prospect by name. The renderer uses `isRecruit` to label the row
+    "Recruit" instead of a fake team, to withhold the rating unless it has been
+    revealed, and to open the recruit view rather than the player workspace.
+
+    Identity comes from the recruit pool, NOT from the team index: 255 is a
+    shared bucket that also holds non-prospect placeholder entities.
+  */
+  const recruitIds = new Set(getRecruitIds(dynastyId, season.id) ?? []);
+
   const players = (getAllLeaguePlayers(dynastyId, season.id) ?? [])
     .filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(q))
     .sort((a, b) => b.overallRating - a.overallRating)
     .slice(0, 12)
-    .map((p) => ({
-      id: p.id,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      position: p.position,
-      teamName: p.teamDisplayName,
-      teamIndex: p.teamIndex,
-      overallRating: p.overallRating,
-      portraitAssetName: p.portraitAssetName,
-    }));
+    .map((p) => {
+      const isRecruit = recruitIds.has(p.id);
+      return {
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        position: p.position,
+        // A prospect has no program yet; the placeholder bucket's name ("FCS
+        // West") is not one, and printing it reads as a real school.
+        teamName: isRecruit ? null : p.teamDisplayName,
+        teamIndex: p.teamIndex,
+        overallRating: p.overallRating,
+        portraitAssetName: p.portraitAssetName,
+        isRecruit,
+      };
+    });
 
   const coaches = (getSnapshot<CoachData[]>(season.id, 'coaches') ?? [])
     .filter(

@@ -1473,16 +1473,24 @@ export interface PlayerDevelopmentSeason {
   teamName: string | null;
 }
 
-/** One player hit in the global search. `id` opens the player modal; `teamIndex` themes it. */
+/** One player hit in the global search. `id` opens a profile; `teamIndex` themes it. */
 export interface GlobalSearchPlayer {
   id: number;
   firstName: string;
   lastName: string;
   position: string;
-  teamName: string;
+  /** Null for a recruit — a prospect has no program yet, and the placeholder bucket's name is not one. */
+  teamName: string | null;
   teamIndex: number;
   overallRating: number;
   portraitAssetName: string | null;
+  /**
+   * True when this id belongs to the season's recruit pool. Recruits share the
+   * league roster this searches, so without this they appear as ordinary
+   * players: the row must label them "Recruit", withhold the rating until it is
+   * revealed, and open the recruit view rather than the player workspace.
+   */
+  isRecruit: boolean;
 }
 
 /** One coach hit — clicking jumps to their team's card (no standalone coach modal). */
