@@ -14,6 +14,7 @@
     "package": "npm run clean && npm run build:prod && electron-builder",
     "package:assets": "node build/compile-assets-installer.js",
     "typecheck": "tsc --noEmit",
+    "check:refs": "node scripts/check-references.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "manual": "electron docs/manual/make-manual-pdf.js",
