@@ -332,8 +332,18 @@ function PerformerCard({
   const teamColor = colors['--team-primary'];
   const labelColor = teamTextColor(colors, appearance);
 
+  /*
+    `basis-0` splits the leftover space evenly; `min-w-[4.5rem]` is what stops
+    the labels being cut off.
+
+    Measured in the modal, where these two cards sit side by side: the column
+    came to 51px and the labels want up to 70px. The multi-word ones survived
+    that ("Rush Yds" wraps onto two lines), which is why the clipping only ever
+    showed on the single words — TACKLES at 62px and SACKS have nowhere to
+    break, so they ran straight off the card. 4.5rem clears the widest of them.
+  */
   const Callout = ({ stat, align }: { stat: PerformerStat; align: 'left' | 'right' }) => (
-    <div className={`flex flex-1 flex-col ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
+    <div className={`flex min-w-[4.5rem] flex-1 basis-0 flex-col ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
       <span className="type-stat-md text-slate-950 dark:text-white">{stat.value}</span>
       <span className="type-eyebrow" style={{ color: labelColor }}>{stat.label}</span>
       <span className="mt-1.5 h-px w-8 bg-slate-300 dark:bg-white/20" />
@@ -348,9 +358,29 @@ function PerformerCard({
       style={{ '--team-primary': teamColor } as unknown as CSSProperties}
     >
       <p className="type-eyebrow text-slate-400 dark:text-slate-500">{teamName} — Star of the game</p>
+      {/*
+        The height cap goes through `largeMaxHeight`, NOT `className`. Both land
+        on the same <img>, so passing `max-h-[15rem]` as a class just put two
+        max-heights on one element and let CSS source order decide — the
+        component's own `max-h-[22rem]` won, and the portrait rendered 352px
+        instead of the 240px this card asked for. That extra 112px came straight
+        out of the two stat columns.
+
+        The portrait is also the element that gives way now: `min-w-0` lets it
+        shrink so the callouts keep the width their labels need, rather than the
+        labels being pushed off the card. It's the right one to yield — a
+        slightly narrower portrait reads fine, a half-printed "TACKLES" doesn't.
+      */}
       <div className="mt-2 flex items-center justify-center gap-2">
         <Callout stat={stats[0]} align="right" />
-        <PlayerPortrait player={{ firstName, lastName, portraitAssetName }} large className="max-h-[15rem]" teamAssetName={teamName} />
+        <div className="flex min-w-0 shrink justify-center">
+          <PlayerPortrait
+            player={{ firstName, lastName, portraitAssetName }}
+            large
+            largeMaxHeight="max-h-[15rem]"
+            teamAssetName={teamName}
+          />
+        </div>
         <Callout stat={stats[1]} align="left" />
       </div>
       <div className="mt-3 flex items-center gap-2 px-3 py-2" style={{ backgroundColor: teamColor, color: colors['--team-on-primary'] }}>
