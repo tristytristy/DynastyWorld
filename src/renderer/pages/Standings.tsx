@@ -23,7 +23,7 @@ function ConferenceLogoTile({
   label: string;
 }) {
   return (
-    <div className="flex h-full min-h-[10.5rem] rounded-xl border border-transparent bg-transparent p-0">
+    <div className="flex h-[5.25rem] border border-transparent bg-transparent p-0">
       <div className="flex flex-1 items-center justify-center">
         {conferenceName ? (
           <ConferenceMark
@@ -42,12 +42,12 @@ function ConferenceLogoTile({
 
 function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex h-full min-h-[10.5rem] flex-col rounded-xl border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-white/5">
+    <div className="flex h-[5.25rem] flex-col border border-slate-200/80 bg-slate-50/85 px-4 py-3 dark:border-slate-800 dark:bg-white/5">
       <p className="type-eyebrow text-slate-400 dark:text-slate-500">
         {label}
       </p>
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-center text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{value}</p>
+        <p className="text-center text-xl font-semibold tracking-tight text-slate-950 dark:text-white">{value}</p>
       </div>
     </div>
   );
@@ -222,17 +222,7 @@ export function Standings() {
     <div className="space-y-6">
       <SurfaceCard>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-              Standings
-            </p>
-            <h2 className="mt-2 font-display text-page-title font-bold text-slate-950 dark:text-white">
-              See where {standings.teamName} sits in the conference race.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              View every conference table from one import, with your current season front and center and cleaner aggregate context above the board.
-            </p>
-          </div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Standings</p>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {standings.groups.length > 1 && (

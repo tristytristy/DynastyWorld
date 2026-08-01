@@ -8,6 +8,9 @@ import { TeamLogo } from './TeamLogo';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
 import { CommandPalette } from './CommandPalette';
+import { TEAM_TABS } from '../../pages/TeamHubLayout';
+import { NCAA_TABS } from '../../pages/NcaaHubLayout';
+import { RECRUIT_TABS } from '../../pages/RecruitHubLayout';
 import { TeamProfileModal } from './TeamProfileModal';
 import type { DynastyTheme } from '../../../shared/types';
 
@@ -21,12 +24,25 @@ const NAV_SEARCH_TRIGGER_CLASS =
 // The top nav is three sections (IA reorg 2026-07-19). Team and league pages
 // keep flat URLs (pathless layout shells), so a section highlights by
 // membership, not URL prefix.
-const TEAM_PATHS = new Set([
-  'team-hub', 'roster', 'schedule', 'rivalries', 'statistics', 'trends', 'transfers',
-  'team-awards', 'weekly-honors', 'history',
-]);
-const LEAGUE_PATHS = new Set(['ncaa-hub', 'standings', 'annual-awards', 'all-america']);
-const RECRUIT_PATHS = new Set(['recruiting', 'recruits']);
+/*
+  WHICH TOP-LEVEL SECTION A PAGE BELONGS TO — derived from each hub's own tab
+  list, not a second hand-kept copy.
+
+  These were literal sets, and they drifted: `scores`, `national-stats`,
+  `players` and `ncaa-records` were never added to the NCAA set, so opening any
+  of those four fell through to the default and lit up "Coach" in the main nav
+  while you were plainly in the NCAA hub. `watchlist` had the same problem under
+  Recruiting. Deriving from the lists the sub-navs already render means adding a
+  page to a hub cannot leave the section nav behind again.
+
+  The pair routes (Roster|Transfers, Schedule|Rivalries, …) contribute both of
+  their paths, which is why Team uses `paths` rather than `to`.
+*/
+const stripSlash = (path: string) => path.replace(/^\//, '');
+
+const TEAM_PATHS = new Set(TEAM_TABS.flatMap((tab) => tab.paths).filter(Boolean));
+const LEAGUE_PATHS = new Set(NCAA_TABS.map((tab) => stripSlash(tab.to)));
+const RECRUIT_PATHS = new Set(RECRUIT_TABS.map((tab) => stripSlash(tab.to)));
 const MEDIA_PATHS = new Set(['media']);
 
 function SeasonSwitcher() {

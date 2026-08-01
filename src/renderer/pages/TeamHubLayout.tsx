@@ -1,13 +1,13 @@
-import { useEffect, useRef } from 'react';
 import { Outlet, Link, useParams, useLocation } from 'react-router-dom';
 import { TeamSwitcher } from '../components/common/TeamSwitcher';
 import { GliderNav, gliderItemClass } from '../components/ui/GliderNav';
+import { PINNED_SUB_NAV_CLASS, usePinnedSubNav } from '../lib/pinnedSubNav';
 
 /**
  * The tabs in render order — the glider is driven by position, and each tab
  * highlights for every route in its pair (merged tabs, see below).
  */
-const TABS: { to: string; label: string; paths: string[] }[] = [
+export const TEAM_TABS: { to: string; label: string; paths: string[] }[] = [
   { to: 'team-hub', label: 'Overview', paths: ['team-hub', ''] },
   // Labelled "Team" rather than "Roster": the tab holds the Roster|Transfers
   // pair, so naming it after one half read as a broken link to the other.
@@ -30,33 +30,10 @@ export function TeamHubLayout() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
 
-  /*
-    THE PINNED STACK. Rows that pin to the top of the page are cumulative: the
-    section nav is first, this sub-nav sits under it, and a page inside Team Hub
-    (Statistics has a filter bar) has to clear BOTH. Each row hard-coding its own
-    offset is how they end up overlapping — which is exactly what happened when
-    the Statistics bar and this row both pinned at the section nav's height.
-
-    So there is one number, `--pinned-top`, meaning "the first Y a page may pin
-    at". DynastyLayout's `--section-nav-h` is the floor; this row adds its own
-    measured height on top while Team Hub is mounted, and restores the floor on
-    the way out so the NCAA and Recruit hubs (no sub-nav) aren't offset by a row
-    that isn't there.
-  */
-  const subNavRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = subNavRef.current;
-    if (!el) return;
-    const root = document.documentElement;
-    const publish = () => root.style.setProperty('--pinned-top', `calc(var(--section-nav-h, 4.4375rem) + ${el.getBoundingClientRect().height}px)`);
-    publish();
-    const observer = new ResizeObserver(publish);
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty('--pinned-top');
-    };
-  }, []);
+  // The shared hub-sub-nav behaviour: pin under the section bar and publish
+  // this row's height so a page that also pins stacks beneath it. Every hub uses
+  // the same hook, so they all behave the way this one always did.
+  const subNavRef = usePinnedSubNav<HTMLDivElement>();
 
   // After the hooks: they must run in the same order on every render, and this
   // component can bail out when the route has no dynasty id.
@@ -65,7 +42,7 @@ export function TeamHubLayout() {
   // Flat URLs, so highlight by membership. Merged tabs (Roster, Schedule,
   // Statistics, Honors) stay active across either page in their pair.
   const sub = location.pathname.split(`/dynasty/${id}`)[1]?.replace(/^\//, '').split('/')[0] ?? 'team-hub';
-  const activeIndex = TABS.findIndex((entry) => entry.paths.includes(sub));
+  const activeIndex = TEAM_TABS.findIndex((entry) => entry.paths.includes(sub));
 
   return (
     <div className="space-y-5">
@@ -84,16 +61,7 @@ export function TeamHubLayout() {
       */}
       <div
         ref={subNavRef}
-        /*
-          z-25, ABOVE the pages beneath it (z-20). The pinned rows form a stack —
-          section nav 30, this 25, a page's own bar 20 — and the order has to be
-          expressed in z-index, not left to geometry. Both this and the
-          Statistics filter bar were z-20, so DOM order decided the winner, and
-          the page's bar (rendered later) painted over this one the moment the
-          two touched. Ranking them means the row above always survives, even
-          for the frame after a resize when --pinned-top is momentarily stale.
-        */
-        className="sticky top-[var(--section-nav-h,4.4375rem)] z-[25] -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between"
+        className={`${PINNED_SUB_NAV_CLASS} -mx-1 flex flex-col gap-3 px-1 py-2 lg:flex-row lg:items-center lg:justify-between`}
       >
         {/*
           The bordered, filled strip is gone: the glider's own rail is what
@@ -111,7 +79,7 @@ export function TeamHubLayout() {
             ariaLabel="Team Hub sections"
             itemsClassName="gap-1.5"
           >
-            {TABS.map((entry) => (
+            {TEAM_TABS.map((entry) => (
               <Link
                 key={entry.to}
                 to={`/dynasty/${id}/${entry.to}`}

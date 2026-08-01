@@ -1,8 +1,9 @@
 import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import { GliderNav, gliderItemClass, matchTabIndex } from '../components/ui/GliderNav';
+import { PINNED_SUB_NAV_CLASS, usePinnedSubNav } from '../lib/pinnedSubNav';
 
-/** Render order — the glider is positional, so the list is the source of truth. */
-const TABS: { to: string; label: string }[] = [
+/** Render order — the glider is positional, and DynastyLayout derives section membership from this same list. */
+export const RECRUIT_TABS: { to: string; label: string }[] = [
   { to: '/recruiting', label: 'My Board' },
   { to: '/recruits', label: 'National Recruits' },
   { to: '/watchlist', label: 'Watchlist' },
@@ -18,10 +19,12 @@ const TABS: { to: string; label: string }[] = [
 export function RecruitHubLayout() {
   const { id } = useParams<{ id: string }>();
   const { pathname } = useLocation();
+  // Before the early return: hooks must run in the same order every render.
+  const subNavRef = usePinnedSubNav<HTMLDivElement>();
   if (!id) return null;
 
   const base = `/dynasty/${id}`;
-  const activeIndex = matchTabIndex(pathname, base, TABS);
+  const activeIndex = matchTabIndex(pathname, base, RECRUIT_TABS);
 
   return (
     <div className="space-y-5">
@@ -32,9 +35,9 @@ export function RecruitHubLayout() {
         </h2>
       </div>
 
-      <div className="overflow-x-auto">
+      <div ref={subNavRef} className={`${PINNED_SUB_NAV_CLASS} -mx-1 overflow-x-auto px-1 py-2`}>
         <GliderNav activeIndex={activeIndex} emphasis="quiet" ariaLabel="Recruit Hub sections" itemsClassName="gap-1.5">
-          {TABS.map((tab, index) => (
+          {RECRUIT_TABS.map((tab, index) => (
             <Link
               key={tab.to}
               to={`${base}${tab.to}`}
