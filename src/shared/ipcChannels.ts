@@ -48,6 +48,7 @@ export const IPC = {
     getLeagueTeamSchedule: 'db:getLeagueTeamSchedule',
     getLeagueTeamHonors: 'db:getLeagueTeamHonors',
     getNationalRecruits: 'db:getNationalRecruits',
+    getRecruitById: 'db:getRecruitById',
     getNcaaRecords: 'db:getNcaaRecords',
     getDynastyTrends: 'db:getDynastyTrends',
     getSeasonAnalytics: 'db:getSeasonAnalytics',

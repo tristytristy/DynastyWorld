@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { RecruitBoardEntry } from '../../shared/types';
+import type { RecruitProfileSubject } from '../../shared/types';
 
 interface RecruitModalContextValue {
   dynastyId: string | null;
-  recruit: RecruitBoardEntry | null;
+  recruit: RecruitProfileSubject | null;
   /** Whether the recruiting board's own season is the dynasty's current (live) season — RecruitProfileModal is mounted at the app root, outside SelectedSeasonProvider's scope, so this can't be recomputed there and is passed through instead, same reasoning as dynastyId. */
   canEdit: boolean;
-  openRecruitModal: (dynastyId: string, recruit: RecruitBoardEntry, canEdit: boolean) => void;
+  openRecruitModal: (dynastyId: string, recruit: RecruitProfileSubject, canEdit: boolean) => void;
   closeRecruitModal: () => void;
 }
 
@@ -24,10 +24,10 @@ const RecruitModalContext = createContext<RecruitModalContextValue | null>(null)
  */
 export function RecruitModalProvider({ children }: { children: ReactNode }) {
   const [dynastyId, setDynastyId] = useState<string | null>(null);
-  const [recruit, setRecruit] = useState<RecruitBoardEntry | null>(null);
+  const [recruit, setRecruit] = useState<RecruitProfileSubject | null>(null);
   const [canEdit, setCanEdit] = useState(false);
 
-  const openRecruitModal = useCallback((id: string, entry: RecruitBoardEntry, editable: boolean) => {
+  const openRecruitModal = useCallback((id: string, entry: RecruitProfileSubject, editable: boolean) => {
     setDynastyId(id);
     setRecruit(entry);
     setCanEdit(editable);

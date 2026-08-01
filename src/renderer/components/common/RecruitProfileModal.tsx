@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useScrollLock } from '../../lib/useScrollLock';
 import { useRecruitModal } from '../../data/RecruitModalProvider';
+import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
+import { LockPill } from '../ui/LockPill';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { TeamLogo } from './TeamLogo';
 import { PlayerPortrait } from './PlayerPortrait';
 import { EditButton } from './CoachCard';
-import type { RecruitBoardEntry, RecruitBoardStage } from '../../../shared/types';
+import type { RecruitProfileSubject, RecruitBoardStage } from '../../../shared/types';
 import { ModalOverlay } from './ModalOverlay';
 import { ModalCloseButton } from './ModalCloseButton';
 
@@ -73,11 +75,12 @@ function RecruitModalContent({
   dynastyId,
   canEdit,
 }: {
-  recruit: RecruitBoardEntry;
+  recruit: RecruitProfileSubject;
   dynastyId: string | null;
   canEdit: boolean;
 }) {
   const { openPlayerEditor } = useEditorModal();
+  const { ovr } = useRecruitingExperience();
   const showSignedSchool = (recruit.stage === 'signed' || recruit.stage === 'lost') && recruit.signedTeamDisplayName;
   const recruitLabel = `${recruit.firstName} ${recruit.lastName}`;
 
@@ -122,13 +125,30 @@ function RecruitModalContent({
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/85 px-5 py-4 dark:border-slate-800 dark:bg-white/5">
+        {/*
+          LOCKED BY DEFAULT, exactly like the Recruit Hub. A prospect's overall
+          is hidden until it is revealed — you scout on rank, stars and film.
+          This panel printed it unguarded, which would have made it a way around
+          the very rule the rest of the recruiting UI enforces the moment
+          anything started opening it.
+
+          Same shared lock set (`useRecruitingExperience`), so revealing here
+          reveals in the Recruit Hub and the search rows too, and Preferences'
+          "Reveal all recruit ratings" unlocks all three at once.
+        */}
+        <div className="border border-slate-200/80 bg-slate-50/85 px-5 py-4 dark:border-slate-800 dark:bg-white/5">
           <p className="text-right type-eyebrow text-slate-400 dark:text-slate-500">
             Overall
           </p>
-          <p className="mt-2 flex items-center justify-center type-stat-lg text-slate-950 dark:text-white">
-            {recruit.overallRating}
-          </p>
+          {ovr.isUnlocked(recruit.playerId) ? (
+            <p className="mt-2 flex items-center justify-center type-stat-lg text-slate-950 dark:text-white">
+              {recruit.overallRating}
+            </p>
+          ) : (
+            <div className="mt-2 flex justify-center">
+              <LockPill unlocked={false} onClick={() => ovr.unlockForRecruit(recruit.playerId)} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -147,28 +167,37 @@ function RecruitModalContent({
         <BioTile label="Class" value={formatClassYear(recruit.classYear)} />
       </div>
 
-      <div className="rounded-xl border border-slate-200/80 bg-slate-50/85 p-5 dark:border-slate-800 dark:bg-white/5">
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Status</p>
-        <div className="mt-3 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-lg font-semibold text-slate-950 dark:text-white">{STAGE_LABEL[recruit.stage]}</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{STAGE_DETAIL[recruit.stage]}</p>
-            {recruit.committedWeekNumber > 0 && (
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Committed week {recruit.committedWeekNumber}</p>
+      {/*
+        BOARD-ONLY. "Status" is your relationship with this prospect -- watching,
+        offered, committed, signed -- so it exists only for someone on your
+        board. Opened from search, a national prospect has no such relationship,
+        and the block is omitted rather than drawn empty or guessed at from the
+        league-wide stage, which means something different.
+      */}
+      {recruit.stage && (
+        <div className="border border-slate-200/80 bg-slate-50/85 p-5 dark:border-slate-800 dark:bg-white/5">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Status</p>
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-lg font-semibold text-slate-950 dark:text-white">{STAGE_LABEL[recruit.stage]}</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{STAGE_DETAIL[recruit.stage]}</p>
+              {(recruit.committedWeekNumber ?? 0) > 0 && (
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Committed week {recruit.committedWeekNumber}</p>
+              )}
+            </div>
+            {showSignedSchool && recruit.signedTeamDisplayName && (
+              <div className="flex shrink-0 flex-col items-center gap-2">
+                <TeamLogo
+                  team={{ assetName: recruit.signedTeamDisplayName, label: recruit.signedTeamDisplayName }}
+                  size="lg"
+                  variant={recruit.stage === 'signed' ? 'gold' : undefined}
+                />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{recruit.signedTeamDisplayName}</span>
+              </div>
             )}
           </div>
-          {showSignedSchool && recruit.signedTeamDisplayName && (
-            <div className="flex shrink-0 flex-col items-center gap-2">
-              <TeamLogo
-                team={{ assetName: recruit.signedTeamDisplayName, label: recruit.signedTeamDisplayName }}
-                size="lg"
-                variant={recruit.stage === 'signed' ? 'gold' : undefined}
-              />
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{recruit.signedTeamDisplayName}</span>
-            </div>
-          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

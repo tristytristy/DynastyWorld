@@ -2020,6 +2020,22 @@ export interface PlayerDeparture {
   reason: string | null;
 }
 
+/**
+ * What the recruit view renders, from either source.
+ *
+ * A prospect can be opened two ways: off the user's own board (RecruitBoardEntry)
+ * or from anywhere its id turns up — search, a routed player-modal open — where
+ * only the league-wide record exists (NationalRecruit). The league-wide record
+ * already carries almost everything the panel shows: ranks, commit score, school
+ * interest, offers, dealbreaker, ideal pitch, stage, ratings. The board adds
+ * exactly four things that only mean anything for a prospect you're recruiting —
+ * your favourite mark, YOUR nil offer, the week they committed, who they signed
+ * with — so those are the only optional fields here, and the view omits each one
+ * it hasn't got rather than drawing an empty row.
+ */
+export type RecruitProfileSubject = NationalRecruit &
+  Partial<Pick<RecruitBoardEntry, 'isFavorite' | 'currentNilOffer' | 'committedWeekNumber' | 'signedTeamDisplayName' | 'stage'>>;
+
 export interface RecruitBoardEntry {
   playerId: number;
   firstName: string;
@@ -2506,6 +2522,8 @@ export interface DynastyApi {
     getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
     getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
     getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;
+    /** One prospect by player id, or null when the id is not a recruit — the test that routes an open to the recruit view instead of the player workspace. */
+    getRecruitById: (dynastyId: string, playerId: number, seasonId?: number) => Promise<NationalRecruit | null>;
     getNcaaRecords: (
       dynastyId: string,
       seasonId?: number,

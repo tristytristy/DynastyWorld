@@ -3,6 +3,7 @@ import { availablePositionGroups, matchesPositionFilter } from '../lib/positionG
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { LockIcon, LockPill } from '../components/ui/LockPill';
 import { Select } from '../components/ui/Select';
 import { StatTile } from '../components/ui/StatTile';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
@@ -108,35 +109,6 @@ function StatBar({ label, value, max = 99, accent }: { label: React.ReactNode; v
   );
 }
 
-function LockIcon({ locked }: { locked: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="4" y="11" width="16" height="10" rx="1" />
-      {locked
-        ? <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-        : <path d="M8 11V7a4 4 0 0 1 7.4-2" />}
-    </svg>
-  );
-}
-
-/** A compact lock/reveal pill — the shared control for the OVR and athletic reveals. */
-function LockPill({ unlocked, onClick, revealLabel = 'Reveal' }: { unlocked: boolean; onClick: () => void; revealLabel?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
-        unlocked
-          ? 'border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] text-[var(--team-accent-text)] dark:text-white'
-          : 'border-slate-300/80 bg-slate-100/70 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white'
-      }`}
-      aria-label={unlocked ? 'Hide' : revealLabel}
-    >
-      <LockIcon locked={!unlocked} />
-      {unlocked ? 'Hide' : revealLabel}
-    </button>
-  );
-}
 
 function RecruitPanel({
   recruit,
