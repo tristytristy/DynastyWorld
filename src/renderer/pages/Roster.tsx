@@ -2,6 +2,9 @@ import type { HTMLAttributes, MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
+import { ToggleSwitch } from '../components/ui/ToggleSwitch';
+import { TeamLogo } from '../components/common/TeamLogo';
+import { Button } from '../components/ui/Button';
 import { EditButton } from '../components/common/CoachCard';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { StatTile } from '../components/ui/StatTile';
@@ -206,6 +209,8 @@ export function Roster() {
   const [sortKey, setSortKey] = useState<SortKey>('position');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [view, setView] = useState<ViewMode>('list');
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
   const viewedTeamName =
@@ -254,6 +259,26 @@ export function Roster() {
   }, [roster, search, positionFilter, classFilter, unitFilter]);
 
   const sorted = useMemo(() => sortPlayers(filtered, sortKey, sortDir), [filtered, sortKey, sortDir]);
+
+  /*
+    Exports whatever this page is showing: the viewed team (or the user's own
+    when the switcher is untouched) at the selected season. The main process
+    merges the archived profiles with ratings read live from the save and picks
+    the file location, so there is nothing to assemble here.
+  */
+  async function exportXml() {
+    if (!id || exporting) return;
+    setExporting(true);
+    try {
+      const result = await window.api.export.rosterToXml(id, viewedTeamIndex, seasonId);
+      // A cancelled save dialog is not a failure worth shouting about.
+      if (result.message && result.message !== 'Export canceled.') {
+        setExportMessage({ text: result.message, ok: result.success });
+      }
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const classBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -405,32 +430,43 @@ export function Roster() {
             >
               {sortDir === 'asc' ? 'Ascending' : 'Descending'}
             </button>
-            <div className="flex border border-slate-200/80 bg-slate-50/85 p-1 dark:border-slate-800 dark:bg-white/5">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                className={`px-4 py-2 text-sm font-medium transition ${
-                  view === 'list'
-                    ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-                    : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-white/10'
-                }`}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('gallery')}
-                className={`px-4 py-2 text-sm font-medium transition ${
-                  view === 'gallery'
-                    ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-                    : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-white/10'
-                }`}
-              >
-                Gallery
-              </button>
-            </div>
+            {/* The app's two-state switch with the team's gold mark, same as
+                Roster|Transfers above it and Team|Player on Statistics — this
+                was the last bespoke pair of pills left on the page. */}
+            <ToggleSwitch<ViewMode>
+              value={view}
+              onChange={setView}
+              left={{ value: 'list', label: 'LIST' }}
+              right={{ value: 'gallery', label: 'GALLERY' }}
+              ariaLabel="List or gallery view"
+              knob={
+                hoverTeamName ? (
+                  <TeamLogo
+                    team={{ assetName: hoverTeamName, label: hoverTeamName }}
+                    size="sm"
+                    variant="gold"
+                    className="h-[35px] w-[35px]"
+                  />
+                ) : undefined
+              }
+            />
           </div>
         </div>
+
+        {/* Under the view switch, because it exports what this page IS — the
+            team currently in view, at the season currently selected. */}
+        <div className="mt-3 flex justify-end">
+          <Button variant="secondary" compact onClick={exportXml} disabled={exporting || !roster?.length}>
+            {exporting ? 'Exporting…' : 'Export XML'}
+          </Button>
+        </div>
+        {exportMessage && (
+          <p
+            className={`mt-2 text-right text-xs ${exportMessage.ok ? 'text-slate-500 dark:text-slate-400' : 'text-red-600 dark:text-red-400'}`}
+          >
+            {exportMessage.text}
+          </p>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           {classBreakdown.map(({ cls, count }) => (

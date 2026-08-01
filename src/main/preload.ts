@@ -110,6 +110,8 @@ const api: DynastyApi = {
     pickCardFolder: () => ipcRenderer.invoke(IPC.export.pickCardFolder),
     playerCardToFolder: (folderPath, fileName, rect) =>
       ipcRenderer.invoke(IPC.export.playerCardToFolder, folderPath, fileName, rect),
+    rosterToXml: (dynastyId, teamIndex, seasonId) =>
+      ipcRenderer.invoke(IPC.export.rosterToXml, dynastyId, teamIndex, seasonId),
   },
   editor: {
     backupSaveFile: (dynastyId) => ipcRenderer.invoke(IPC.editor.backupSaveFile, dynastyId),

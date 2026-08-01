@@ -2631,6 +2631,13 @@ export interface DynastyApi {
       fileName: string,
       rect: { x: number; y: number; width: number; height: number },
     ) => Promise<ExportResult>;
+    /**
+     * One team's roster as XML — the archived player record plus every rating.
+     * `teamIndex` null means the user's own team. Ratings come from the live
+     * save, so a past season (or a missing save) exports profiles only and the
+     * file says why.
+     */
+    rosterToXml: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<ExportResult>;
   };
   editor: {
     backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;

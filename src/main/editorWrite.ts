@@ -420,6 +420,46 @@ export async function getPlayerEditData(dynastyId: string, playerId: number): Pr
   return { id: playerId, fields: readPlayerFields(record) };
 }
 
+/**
+ * Ratings for MANY players in one pass — what the roster XML export needs.
+ *
+ * `getPlayerEditData` scans the Player table to find one record, which is right
+ * for an editor opening one player. Asking it for eighty-five would scan the
+ * table eighty-five times. This walks it ONCE and picks up every id asked for.
+ *
+ * Returns only the ids it found. A player in the archive but not in the save is
+ * normal — a past season's roster no longer exists in a current save file — and
+ * the caller reports that rather than inventing zeros.
+ */
+export async function getPlayerRatingsBatch(
+  dynastyId: string,
+  playerIds: number[],
+): Promise<Map<number, PlayerEditFields>> {
+  const out = new Map<number, PlayerEditFields>();
+  const dynasty = getDynastyById(dynastyId);
+  if (!dynasty || playerIds.length === 0) return out;
+
+  const franchise = await openFranchiseForRead(dynasty.savePath);
+  const table = getLargestTable(franchise, 'Player');
+  await table.readRecords();
+
+  const wanted = new Set(playerIds);
+  for (let i = 0; i < table.header.recordCapacity; i++) {
+    let record: FranchiseRecord;
+    try {
+      record = table.records[i];
+    } catch {
+      continue;
+    }
+    if (!record || record.isEmpty) continue;
+    const id = Number(record.PresentationId);
+    if (!wanted.has(id) || out.has(id)) continue;
+    out.set(id, readPlayerFields(record));
+    if (out.size === wanted.size) break;
+  }
+  return out;
+}
+
 export function savePlayerEdits(
   dynastyId: string,
   playerId: number,

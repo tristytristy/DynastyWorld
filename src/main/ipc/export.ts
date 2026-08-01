@@ -10,6 +10,10 @@ import { getAwards } from '../../database/getAwards';
 import { getSchedule } from '../../database/getSchedule';
 import { buildHistoryExportHtml } from '../htmlExport';
 import { buildYearbookHtml } from '../yearbookExport';
+import { buildRosterXml } from '../rosterXmlExport';
+import { getRoster } from '../../database/getRoster';
+import { getLeagueTeamRoster } from '../../database/getLeagueRoster';
+import { getPlayerRatingsBatch } from '../editorWrite';
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Dynasty';
@@ -141,6 +145,77 @@ export function registerExportHandlers(): void {
   // Bulk card export: the folder is chosen ONCE and then written to without
   // further prompting. Twenty cards through the save dialog above would be
   // twenty dialogs, which is not an export so much as a punishment.
+  /**
+   * A team's roster as XML.
+   *
+   * Profiles come from the archive (always present, any season); ratings come
+   * from the live save, because they are not archived. The two are merged per
+   * player, and when the save can't supply them the file still exports with a
+   * note explaining it rather than a roster of zeros.
+   *
+   * Ratings are read in ONE pass over the Player table. Reusing the editor's
+   * single-player lookup would have rescanned it once per player — eighty-five
+   * scans for an eighty-five-man roster.
+   */
+  ipcMain.handle(
+    IPC.export.rosterToXml,
+    async (_event, dynastyId: string, teamIndex: number | null, seasonId?: number): Promise<ExportResult> => {
+      const dynasty = getDynastyById(dynastyId);
+      if (!dynasty) return { success: false, message: 'Dynasty not found.' };
+
+      // Fetched once and reused — the browsed-team lookup walks a leaguewide
+      // snapshot, so calling it twice to get the name as well is real work.
+      const browsed = teamIndex === null ? null : getLeagueTeamRoster(dynastyId, teamIndex, seasonId);
+      const players = teamIndex === null ? getRoster(dynastyId, seasonId) : (browsed?.players ?? null);
+      if (!players || players.length === 0) {
+        return { success: false, message: 'No roster is available for this team and season.' };
+      }
+
+      const season = seasonId !== undefined ? getSeasonById(seasonId) : null;
+      const teamName = teamIndex === null ? (dynasty.teamName ?? 'Roster') : (browsed?.displayName ?? 'Roster');
+
+      let ratingsByPlayer: Awaited<ReturnType<typeof getPlayerRatingsBatch>> = new Map();
+      let ratingsNote: string | null = null;
+      try {
+        ratingsByPlayer = await getPlayerRatingsBatch(dynastyId, players.map((p) => p.id));
+        const missing = players.length - ratingsByPlayer.size;
+        if (ratingsByPlayer.size === 0) {
+          ratingsNote =
+            'Ratings omitted: none of these players are in the current save file. Individual ratings are not archived, so they are only available for the season the save is on.';
+        } else if (missing > 0) {
+          ratingsNote = `Ratings omitted for ${missing} of ${players.length} players — they are no longer in the current save file.`;
+        }
+      } catch {
+        ratingsNote =
+          'Ratings omitted: the save file for this dynasty could not be read. Profiles below are from the archive and are unaffected.';
+      }
+
+      const xml = buildRosterXml(players, {
+        teamName,
+        seasonYear: season?.seasonYear ?? 0,
+        ratingsByPlayer,
+        ratingsNote,
+      });
+
+      const result = await dialog.showSaveDialog({
+        title: 'Export Roster',
+        defaultPath: `${sanitizeFilename(teamName)} Roster${season ? ` ${season.seasonYear}` : ''}.xml`,
+        filters: [{ name: 'XML File', extensions: ['xml'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { success: false, message: 'Export canceled.' };
+      }
+
+      await fs.writeFile(result.filePath, xml, 'utf-8');
+      const withRatings = ratingsByPlayer.size;
+      return {
+        success: true,
+        message: `Exported ${players.length} players${withRatings > 0 ? ` (${withRatings} with full ratings)` : ' — profiles only'}.`,
+        filePath: result.filePath,
+      };
+    },
+  );
+
   ipcMain.handle(IPC.export.pickCardFolder, async (): Promise<string | null> => {
     // Same family as the SCREENSHOT_* hooks in main.ts: a native folder dialog
     // can't be driven from a verification run, and the export LOOP behind it —

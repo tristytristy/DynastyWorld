@@ -84,6 +84,7 @@ export const IPC = {
     playerCardToPng: 'export:playerCardToPng',
     pickCardFolder: 'export:pickCardFolder',
     playerCardToFolder: 'export:playerCardToFolder',
+    rosterToXml: 'export:rosterToXml',
   },
   editor: {
     backupSaveFile: 'editor:backupSaveFile',
