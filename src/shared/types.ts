@@ -833,6 +833,21 @@ export interface LeagueScoreGame {
   homeScore: number | null;
   awayScore: number | null;
   bowlName: string | null;
+  /** Stable bowl identity for logo matching; null outside the postseason. */
+  bowlAssetName: string | null;
+  isBowlGame: boolean;
+  isNationalChampionship: boolean;
+  homeConference: string | null;
+  awayConference: string | null;
+  /**
+   * Media-poll rank, or null when unranked. This is the poll AS OF THE SYNC —
+   * a save holds only the current poll, with no week-by-week history to join
+   * against — so on a finished season it is the final poll, and mid-season it
+   * is simply "who is ranked now". The scoreboard's Upsets filter says as much
+   * rather than implying the number was live at kickoff.
+   */
+  homeRank: number | null;
+  awayRank: number | null;
 }
 
 /**

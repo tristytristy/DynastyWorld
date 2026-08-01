@@ -221,7 +221,6 @@ export function Transfers() {
       <PageMasthead
         eyebrow="Transfer Portal"
         title={focusTeamName ?? 'Transfer Portal'}
-        subtitle="Who came and went"
         description="Detected by comparing each season's full league roster to the last — players who changed schools between seasons. Only this app keeps the per-season league history that makes this possible."
         mark={{ kind: 'logo', teamAssetName: focusTeamName ?? '' }}
       />
