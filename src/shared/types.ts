@@ -82,6 +82,13 @@ export interface PlayerEditFields {
   firstName: string;
   lastName: string;
   position: string;
+  /**
+   * Player.PlayerType, the raw enum name ("QB_FieldGeneral"). READ-ONLY — the
+   * editor does not change a player's archetype; this is carried so the live
+   * overall calculator can pick the right weight vector, which is keyed on
+   * (position, archetype). See shared/overallRating.ts.
+   */
+  playerType: string;
   schoolYear: string;
   redshirtStatus: string;
   jerseyNumber: number;

@@ -64,6 +64,7 @@ function readPlayerFields(r: FranchiseRecord): PlayerEditFields {
     firstName: String(r.FirstName),
     lastName: String(r.LastName),
     position: String(r.Position),
+    playerType: String(r.PlayerType),
     schoolYear: String(r.SchoolYear),
     redshirtStatus: String(r.RedshirtStatus),
     jerseyNumber: Number(r.JerseyNum),

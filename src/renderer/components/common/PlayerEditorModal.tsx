@@ -22,6 +22,7 @@ import {
 } from '../../lib/playerEditorOptions';
 import { PortraitPicker } from './PortraitPicker';
 import { Button } from '../ui/Button';
+import { calculateOverall } from '../../../shared/overallRating';
 import type { PlayerEditFields, RecruitEditFields } from '../../../shared/types';
 import { ModalOverlay } from './ModalOverlay';
 import { ModalCloseButton } from './ModalCloseButton';
@@ -281,10 +282,78 @@ function ProfileTab({ draft, update }: { draft: PlayerEditFields; update: (patch
   );
 }
 
+/**
+ * Live overall, recalculated from the ratings as they're edited.
+ *
+ * OVR used to be a plain number field you typed yourself, which meant dropping a
+ * receiver's speed by fifteen left an overall that no longer described him. It's
+ * derived now, using the game's own per-archetype weights (see
+ * shared/overallRating.ts) — so the number moves with the edit and matches what
+ * the game would have produced.
+ *
+ * It DOESN'T apply itself. The panel shows what the ratings now come to and
+ * leaves the write to a deliberate click, because whether the game recalculates
+ * OverallRating on load is not something a file round-trip can prove, and
+ * silently rewriting a field on every keystroke is the wrong default for a tool
+ * that edits a real save.
+ */
+function CalculatedOverall({
+  draft,
+  update,
+}: {
+  draft: PlayerEditFields;
+  update: (patch: Partial<PlayerEditFields>) => void;
+}) {
+  const stored = draft.ratings.ovr ?? 0;
+  const { overall, reason } = calculateOverall(draft.ratings, draft.position, draft.playerType);
+
+  if (overall === null) {
+    return (
+      <div className="border border-slate-200/80 bg-slate-50/85 px-4 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-white/5 dark:text-slate-400">
+        <span className="font-semibold text-slate-700 dark:text-slate-200">Overall stays manual for this player. </span>
+        {reason === 'unsupported-position'
+          ? 'Kickers, punters and free safeties are the positions whose formula changed in CFB 27 — ours reproduces the game less than a fifth of the time there, so it declines rather than showing a confident wrong number.'
+          : 'No overall formula matches this position and archetype, so the stored value is left exactly as it is.'}
+      </div>
+    );
+  }
+
+  const delta = overall - stored;
+  const inSync = delta === 0;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 border border-slate-200/80 bg-slate-50/85 px-4 py-3 dark:border-slate-800 dark:bg-white/5">
+      <div className="flex items-center gap-5">
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">These ratings come to</p>
+          <p className="font-display text-3xl font-bold tabular-nums text-slate-950 dark:text-white">{overall}</p>
+        </div>
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Saved overall</p>
+          <p className="font-display text-3xl font-bold tabular-nums text-slate-400 dark:text-slate-500">{stored}</p>
+        </div>
+        {!inSync && (
+          <p className="text-sm font-semibold text-[var(--team-accent-text)]">
+            {delta > 0 ? `+${delta}` : delta}
+          </p>
+        )}
+      </div>
+      {inSync ? (
+        <p className="text-sm text-slate-400 dark:text-slate-500">Overall matches these ratings.</p>
+      ) : (
+        <Button variant="primary" onClick={() => update({ ratings: { ...draft.ratings, ovr: overall } })}>
+          Set overall to {overall}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function RatingsTab({ draft, update }: { draft: PlayerEditFields; update: (patch: Partial<PlayerEditFields>) => void }) {
   return (
     <div className="space-y-5">
       <WarningBanner>Overall rating may be recalculated by the game after the dynasty file is loaded back in.</WarningBanner>
+      <CalculatedOverall draft={draft} update={update} />
       {RATING_SECTIONS.map((section) => (
         <div key={section.title}>
           <h4 className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{section.title}</h4>
@@ -298,7 +367,7 @@ function RatingsTab({ draft, update }: { draft: PlayerEditFields; update: (patch
                   max={f.max}
                   value={draft.ratings[f.key] ?? 0}
                   onChange={(e) => update({ ratings: { ...draft.ratings, [f.key]: Number(e.target.value) } })}
-                  className="mt-1 w-full rounded-md border border-slate-200/80 bg-white/85 px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
+                  className="mt-1 w-full border border-slate-200/80 bg-white/85 px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
                 />
               </div>
             ))}
