@@ -24,7 +24,8 @@ import { PlayerComparison, type ComparablePlayer } from '../components/common/Pl
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { Button } from '../components/ui/Button';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { ToggleSwitch } from '../components/ui/ToggleSwitch';
+import { TeamLogo } from '../components/common/TeamLogo';
 import {
   filterTeamGames,
   aggregateTeamGames,
@@ -528,6 +529,19 @@ export function Statistics() {
   // TeamStats-only path; what's gained is filterability + honest 3rd-down-allowed.
   const teamAggregate = aggregateTeamGames(filteredGames);
 
+  // The gold mark that rides in both switches below. Built once and shared:
+  // it's the same team either side of either choice, so two elements would be
+  // two chances for them to drift apart.
+  const switchTeamName = viewedTeamName ?? overview.teamName;
+  const knob = switchTeamName ? (
+    <TeamLogo
+      team={{ assetName: switchTeamName, label: switchTeamName }}
+      size="sm"
+      variant="gold"
+      className="h-[35px] w-[35px]"
+    />
+  ) : undefined;
+
   return (
     <div className="space-y-6">
       <PageMasthead
@@ -552,16 +566,36 @@ export function Statistics() {
         under it, and a translucent one ghosts that text through itself. The
         section nav settled this convention; this row now follows it.
       */}
-      <div className="sticky top-[var(--pinned-top,4.4375rem)] z-20 flex flex-wrap items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#0d0d10]">
-        <SegmentedControl<'team' | 'player'>
-          value={view}
-          onChange={setView}
-          ariaLabel="Statistics mode"
-          options={[
-            { value: 'team', label: 'Team Stats' },
-            { value: 'player', label: 'Player Stats' },
-          ]}
-        />
+      {/* One knob element for both switches — the viewed team's gold mark, the
+          same treatment PairLayout uses above them on this very page. */}
+      <div className="sticky top-[var(--pinned-top,4.4375rem)] z-20 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border border-slate-200/70 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#0d0d10]">
+        {/*
+          Both switches together on the left, in the order you'd reach for them:
+          WHOSE numbers, then HOW they're counted. They were a segmented control
+          and a segmented control at opposite ends of the row, which made a pair
+          of related choices look like two unrelated ones — and used a costume
+          the app reserves for something else besides. A two-state choice is a
+          switch here, the same one the Roster|Transfers pair uses, gold mark and
+          all, so the same interaction looks the same wherever it appears.
+        */}
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
+          <ToggleSwitch<'team' | 'player'>
+            value={view}
+            onChange={setView}
+            left={{ value: 'team', label: 'TEAM' }}
+            right={{ value: 'player', label: 'PLAYER' }}
+            ariaLabel="Team or player statistics"
+            knob={knob}
+          />
+          <ToggleSwitch<StatMode>
+            value={mode}
+            onChange={setMode}
+            left={{ value: 'season', label: 'SEASON' }}
+            right={{ value: 'per-game', label: 'PER GAME' }}
+            ariaLabel="Season totals or per game"
+            knob={knob}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
             value={gameType}
@@ -576,16 +610,6 @@ export function Statistics() {
             options={[
               { value: 'all', label: 'All Opponents' },
               ...opponents.map((opp) => ({ value: opp, label: `vs ${opp}` })),
-            ]}
-          />
-          <SegmentedControl<StatMode>
-            value={mode}
-            onChange={setMode}
-            ariaLabel="Totals or per game"
-            size="sm"
-            options={[
-              { value: 'season', label: 'Season Total' },
-              { value: 'per-game', label: 'Per Game' },
             ]}
           />
         </div>

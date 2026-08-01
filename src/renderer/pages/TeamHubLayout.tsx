@@ -84,7 +84,16 @@ export function TeamHubLayout() {
       */}
       <div
         ref={subNavRef}
-        className="sticky top-[var(--section-nav-h,4.4375rem)] z-20 -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between"
+        /*
+          z-25, ABOVE the pages beneath it (z-20). The pinned rows form a stack —
+          section nav 30, this 25, a page's own bar 20 — and the order has to be
+          expressed in z-index, not left to geometry. Both this and the
+          Statistics filter bar were z-20, so DOM order decided the winner, and
+          the page's bar (rendered later) painted over this one the moment the
+          two touched. Ranking them means the row above always survives, even
+          for the frame after a resize when --pinned-top is momentarily stale.
+        */
+        className="sticky top-[var(--section-nav-h,4.4375rem)] z-[25] -mx-1 flex flex-col gap-3 bg-white px-1 py-2 dark:bg-black lg:flex-row lg:items-center lg:justify-between"
       >
         {/*
           The bordered, filled strip is gone: the glider's own rail is what

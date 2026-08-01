@@ -13,7 +13,8 @@ import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import {
-  CLASS_ORDER,
+  classFilterOptions,
+  classFilterValue,
   POSITION_ORDER,
   abbreviateClass,
   classSortIndex,
@@ -156,7 +157,7 @@ function PlayerCard({ player, onOpen, onEdit, teamAssetName, nameHoverProps }: {
             </p>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span>
-                {player.position} | {abbreviateClass(player.schoolYear)}
+                {player.position} | {abbreviateClass(player.schoolYear, player.redshirtStatus)}
               </span>
             </p>
           </div>
@@ -245,7 +246,7 @@ export function Roster() {
     const query = search.trim().toLowerCase();
     return roster.filter((player) => {
       if (positionFilter && player.position !== positionFilter) return false;
-      if (classFilter && player.schoolYear !== classFilter) return false;
+      if (classFilter && classFilterValue(player.schoolYear, player.redshirtStatus) !== classFilter) return false;
       if (unitFilter && unitForPosition(player.position) !== unitFilter) return false;
       if (query && !`${player.firstName} ${player.lastName}`.toLowerCase().includes(query)) return false;
       return true;
@@ -257,9 +258,9 @@ export function Roster() {
   const classBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
     for (const player of roster ?? []) {
-      counts.set(player.schoolYear, (counts.get(player.schoolYear) ?? 0) + 1);
+      counts.set(classFilterValue(player.schoolYear, player.redshirtStatus), (counts.get(classFilterValue(player.schoolYear, player.redshirtStatus)) ?? 0) + 1);
     }
-    return CLASS_ORDER.map((cls) => ({ cls, count: counts.get(cls) ?? 0 })).filter((item) => item.count > 0);
+    return classFilterOptions(roster ?? []).map((cls) => ({ cls, count: counts.get(cls) ?? 0 })).filter((item) => item.count > 0);
   }, [roster]);
 
   const averageOverall = useMemo(() => {
@@ -383,7 +384,10 @@ export function Roster() {
               onChange={setClassFilter}
               ariaLabel="Class"
               className="w-full"
-              options={[{ value: '', label: 'All classes' }, ...CLASS_ORDER.map((cls) => ({ value: cls, label: cls }))]}
+              options={[
+                { value: '', label: 'All classes' },
+                ...classFilterOptions(roster ?? []).map((cls) => ({ value: cls, label: cls })),
+              ]}
             />
           </div>
 
@@ -519,7 +523,7 @@ export function Roster() {
                     </td>
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{formatHeight(player.heightInches)}</td>
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{player.weightPounds}</td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{abbreviateClass(player.schoolYear)}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{abbreviateClass(player.schoolYear, player.redshirtStatus)}</td>
                     <td className="proportional-nums px-4 py-3 font-semibold text-slate-900 dark:text-white">{player.overallRating}</td>
                     <td className="proportional-nums px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{formatNil(player.nilCompensation ?? 0)}</td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{player.hometown}, {player.homeState}</td>

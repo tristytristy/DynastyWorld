@@ -12,7 +12,8 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useEditorModal } from '../data/EditorModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import {
-  CLASS_ORDER,
+  classFilterOptions,
+  classFilterValue,
   POSITION_ORDER,
   abbreviateClass,
   classSortIndex,
@@ -148,7 +149,7 @@ function PlayerCard({ player, onOpen, onEdit }: { player: NationalPlayer; onOpen
             </p>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span>
-                {player.position} | {abbreviateClass(player.schoolYear)}
+                {player.position} | {abbreviateClass(player.schoolYear, player.redshirtStatus)}
               </span>
             </p>
             <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -238,7 +239,7 @@ export function NationalPlayers() {
       if (conferenceFilter && player.conferenceName !== conferenceFilter) return false;
       if (teamFilter && player.teamDisplayName !== teamFilter) return false;
       if (positionFilter && player.position !== positionFilter) return false;
-      if (classFilter && player.schoolYear !== classFilter) return false;
+      if (classFilter && classFilterValue(player.schoolYear, player.redshirtStatus) !== classFilter) return false;
       if (unitFilter && unitForPosition(player.position) !== unitFilter) return false;
       if (query && !`${player.firstName} ${player.lastName}`.toLowerCase().includes(query)) return false;
       return true;
@@ -391,7 +392,10 @@ export function NationalPlayers() {
               onChange={setClassFilter}
               ariaLabel="Class"
               className="w-full"
-              options={[{ value: '', label: 'All classes' }, ...CLASS_ORDER.map((cls) => ({ value: cls, label: cls }))]}
+              options={[
+                { value: '', label: 'All classes' },
+                ...classFilterOptions(players ?? []).map((cls) => ({ value: cls, label: cls })),
+              ]}
             />
           </div>
 
@@ -525,7 +529,7 @@ export function NationalPlayers() {
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{player.position}</td>
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{formatHeight(player.heightInches)}</td>
                     <td className="proportional-nums px-4 py-3 text-slate-500 dark:text-slate-400">{player.weightPounds}</td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{abbreviateClass(player.schoolYear)}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{abbreviateClass(player.schoolYear, player.redshirtStatus)}</td>
                     <td className="proportional-nums px-4 py-3 font-semibold text-slate-900 dark:text-white">{player.overallRating}</td>
                   </tr>
                 ))}
