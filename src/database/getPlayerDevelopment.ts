@@ -1,8 +1,38 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getSeasonsByDynasty, getSnapshot } from './helpers';
+import { findSamePlayer, type PlayerIdentityFields } from '../shared/playerIdentity';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { TeamData } from '../extractors/extract-teams';
 import type { PlayerDevelopmentSeason } from '../shared/types';
+
+/**
+ * WHICH occupant of a recycled id we are being asked about.
+ *
+ * `playerId` alone is ambiguous across seasons — see shared/playerIdentity.ts —
+ * so a career view has to fix the person before it can walk the years. The
+ * caller passes the season it is rendering the player from; that row becomes the
+ * reference every other season is compared against.
+ *
+ * Without an anchor this falls back to the NEWEST season holding the id, which
+ * is right for the common case (a current player) and wrong for a historical one
+ * whose id has since been reissued — which is exactly why the anchor exists and
+ * why the player modal passes it.
+ */
+export function referencePlayer(
+  seasons: { id: number; seasonYear: number }[],
+  playerId: number,
+  anchorSeasonId?: number,
+): PlayerIdentityFields | undefined {
+  const search = anchorSeasonId !== undefined
+    ? [...seasons].sort((a, b) => (a.id === anchorSeasonId ? -1 : b.id === anchorSeasonId ? 1 : 0))
+    : [...seasons].sort((a, b) => b.seasonYear - a.seasonYear);
+  for (const season of search) {
+    const league = getSnapshot<LeagueRosterData>(season.id, 'leagueRoster');
+    const hit = league?.players.find((p) => p.id === playerId);
+    if (hit) return hit;
+  }
+  return undefined;
+}
 
 /**
  * A player's rating arc across every synced season — the payoff of syncing
@@ -29,15 +59,22 @@ import type { PlayerDevelopmentSeason } from '../shared/types';
  * ends of the arc disappear together, and the line now covers exactly the years
  * he was on somebody's roster.
  */
-export function getPlayerDevelopment(dynastyId: string, playerId: number): PlayerDevelopmentSeason[] {
+export function getPlayerDevelopment(
+  dynastyId: string,
+  playerId: number,
+  anchorSeasonId?: number,
+): PlayerDevelopmentSeason[] {
   const seasons = getSeasonsByDynasty(dynastyId)
     .filter((s) => s.hasFullData)
     .sort((a, b) => a.seasonYear - b.seasonYear);
 
+  const reference = referencePlayer(seasons, playerId, anchorSeasonId);
+  if (!reference) return [];
+
   const out: PlayerDevelopmentSeason[] = [];
   for (const season of seasons) {
     const league = getSnapshot<LeagueRosterData>(season.id, 'leagueRoster');
-    const player = league?.players.find((p) => p.id === playerId);
+    const player = findSamePlayer(league?.players, reference);
     if (!player) continue;
     if (player.teamIndex === FCS_POOL_TEAM_INDEX) continue;
     const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];

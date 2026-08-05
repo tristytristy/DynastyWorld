@@ -100,27 +100,50 @@ must match the version in `package.json`:
 
 | Asset | Why |
 | --- | --- |
-| `DynastyOS Setup <version>.exe` | the installer the updater downloads |
+| `DynastyOS-Setup-<version>.exe` | the installer the updater downloads |
 | `latest.yml` | **the update feed** — without it the app finds nothing |
-| `DynastyOS Setup <version>.exe.blockmap` | lets the updater fetch only changed chunks |
+| `DynastyOS-Setup-<version>.exe.blockmap` | lets the updater fetch only changed chunks |
+
+### The filename is not cosmetic — it broke 4.2.0
+
+`latest.yml` names the installer it expects, and the name must match **exactly**.
+Builds are hyphenated (`artifactName` in `electron-builder.js`) precisely so this
+cannot drift, because the two upload paths disagree about spaces: electron-builder
+converts them to **hyphens**, while GitHub's web uploader converts them to
+**periods**. 4.2.0 shipped with `DynastyOS.Setup.4.2.0.exe` attached against a feed
+asking for `DynastyOS-Setup-4.2.0.exe`; every update check 404'd and the app
+reported *"No update information has been published yet"* — which reads as a
+missing feed and was really a missing binary. If you ever see that message, check
+the asset name on the release **before** suspecting the feed.
+
+Renaming the file is enough to fix it; the checksum is unaffected.
 
 ```bash
-# option A — let electron-builder create and upload the release
-setx GH_TOKEN "<a token with repo scope>"     # once, in your own shell only
+# option A — let electron-builder create and upload the release (preferred)
 npx electron-builder --publish always
+# Uploads to a DRAFT (publish.releaseType), so nothing reaches users until you
+# press Publish on the release page. Reads GH_TOKEN from the environment.
 
 # option B — build locally, upload by hand
 npx electron-builder                          # then attach all three assets
 gh release create v4.0.1 \
-  "release/DynastyOS Setup 4.0.1.exe" \
-  "release/DynastyOS Setup 4.0.1.exe.blockmap" \
-  "release/latest.yml" \
+  release/DynastyOS-Setup-4.0.1.exe \
+  release/DynastyOS-Setup-4.0.1.exe.blockmap \
+  release/latest.yml \
   --title "DynastyOS 4.0.1" --notes-file docs/releases/GITHUB_RELEASE_v4.0.1.md
 ```
 
-Publish it as a **normal release** — the app is configured with
-`releaseType: 'release'`, so drafts and prereleases are deliberately invisible
-to installed copies.
+Publishing creates a **draft**. Drafts are invisible to installed copies — not
+because of `releaseType` (electron-updater never reads that field) but because
+GitHub's `releases.atom`, which the updater polls, cannot list a draft. Press
+Publish when the notes are ready and it goes live. Prereleases are a separate
+question, gated on `allowPrerelease` (default false).
+
+**Set `GH_TOKEN` as a user environment variable, not in a shell you might screenshot.**
+A fine-grained token scoped to this one repository with `Contents: Read and write`
+is enough. Note that such a token can publish an installer that every existing
+copy will download and install automatically — treat it like a signing key, not
+like a config value.
 
 > The GH_TOKEN is only ever used on the machine doing the publishing. It is
 > never read by the app, never bundled, and never needed by a user.

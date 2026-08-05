@@ -39,6 +39,7 @@ import { Media } from './pages/Media';
 import { PlayerProfileModal } from './components/common/PlayerProfileModal';
 import { GameDetailModal } from './components/common/GameDetailModal';
 import { ProgramArtProvider } from './data/ProgramArtProvider';
+import { CustomRivalsProvider } from './data/CustomRivalsProvider';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
 import { UpdateNotice } from './components/common/UpdateNotice';
@@ -75,6 +76,10 @@ export function App() {
       ability to move the window or reach settings until you scroll back up.
     */
     <ProgramArtProvider>
+    {/* Alongside the art provider and for the same reason: a rivalry mark is
+        drawn on the Schedule, in Scores, and in the Game Info modal, and that
+        modal is mounted outside the dynasty route. Same route-match trick. */}
+    <CustomRivalsProvider>
     <div className="relative h-full overflow-hidden">
       {/* Phase 10: the blue/cyan aurora beams that used to sit behind the shell
           were removed — they read as "glow" against the analog-matte direction.
@@ -238,6 +243,7 @@ export function App() {
       <EditorModalHost />
       <UpdateNotice />
     </div>
+    </CustomRivalsProvider>
     </ProgramArtProvider>
   );
 }

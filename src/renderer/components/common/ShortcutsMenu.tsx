@@ -3,17 +3,25 @@ import type { ReactNode } from 'react';
 import { CenteredModalPanel } from './CenteredModalPanel';
 import { Button } from '../ui/Button';
 import { useShortcuts } from '../../data/ShortcutsProvider';
-import { comboFromEvent, formatCombo, isBindableCombo } from '../../lib/shortcutPrefs';
+import { BUILT_IN_SHORTCUTS, comboFromEvent, formatCombo, isBindableCombo } from '../../lib/shortcutPrefs';
 import { SHORTCUT_TARGETS, shortcutTargetsByGroup } from '../../lib/shortcutTargets';
 
 /**
  * The shortcut editor.
  *
- * Every destination in the app is listed, and none of them arrive with a key.
- * Which page deserves a shortcut is a question about how someone plays, so the
- * app offers the list and the user spends the keys — rather than shipping
- * defaults that are wrong for most people and occupy combinations they'd
- * rather have themselves.
+ * THREE KINDS OF ROW, and the panel is honest about which is which:
+ *
+ *   • BUILT IN — Ctrl+K, Escape, the team arrows. Live since long before this
+ *     panel existed and not rebindable, and until now not written down
+ *     ANYWHERE, so the only way to learn them was to press them by accident.
+ *     Listing them locked is the point: a shortcut you can't discover may as
+ *     well not exist, and someone who tried to bind Ctrl+K got a refusal
+ *     naming a shortcut they had never seen.
+ *   • DEFAULTED — dark/light on Ctrl+Shift+Z. Arrives working, says so, and
+ *     can be moved or taken away like anything else.
+ *   • UNBOUND — every destination. Which page deserves a key is a question
+ *     about how someone plays, so the app offers the list and the user spends
+ *     the keys.
  *
  * Recording is the whole interaction: press the row's key field, then press the
  * combination you want. There is no text box to type "Ctrl+Shift+R" into,
@@ -21,7 +29,7 @@ import { SHORTCUT_TARGETS, shortcutTargetsByGroup } from '../../lib/shortcutTarg
  */
 export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: string; icon?: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const { bindings, bind, unbind, clearAll, targetHolding, setCapturing } = useShortcuts();
+  const { comboFor, bind, unbind, clearAll, boundCount, isCustomised, targetHolding, setCapturing } = useShortcuts();
   /** Which row is listening for a keypress, if any. */
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
@@ -78,8 +86,6 @@ export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: s
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [recordingId, bind, targetHolding]);
 
-  const assignedCount = Object.keys(bindings).length;
-
   return (
     <>
       <button
@@ -106,13 +112,13 @@ export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: s
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-[30rem] text-sm text-slate-500 dark:text-slate-400">
-              Nothing is bound to start with — the keys are yours to spend. Click a shortcut field and press the
+              Dark / light mode arrives on a key; the rest are yours to spend. Click a shortcut field and press the
               combination you want. It needs <strong>Ctrl</strong>, <strong>Alt</strong> or <strong>Cmd</strong>,
               or a function key.
             </p>
-            {assignedCount > 0 && (
+            {isCustomised && (
               <Button variant="tertiary" compact onClick={clearAll}>
-                Clear all ({assignedCount})
+                Reset to defaults
               </Button>
             )}
           </div>
@@ -123,19 +129,59 @@ export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: s
             </p>
           )}
 
+          {/*
+            THE LOCKED LIST GOES FIRST, because it answers the question someone
+            opens this panel with — "what already does something?" — before the
+            catalogue of things that don't yet.
+          */}
+          <div>
+            <p className="type-eyebrow mb-2 text-slate-400 dark:text-slate-500">Built in</p>
+            <div className="space-y-1">
+              {BUILT_IN_SHORTCUTS.map((entry) => (
+                <div
+                  key={entry.label}
+                  className="flex items-center justify-between gap-3 border border-dashed border-slate-200/80 px-3 py-2 dark:border-slate-800"
+                >
+                  <span className="text-sm text-slate-500 dark:text-slate-400">{entry.label}</span>
+                  <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    {entry.combos.map(formatCombo).join('  ·  ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              These are fixed — they cannot be changed or reassigned.
+            </p>
+          </div>
+
           {shortcutTargetsByGroup().map(({ group, targets }) => (
             <div key={group}>
               <p className="type-eyebrow mb-2 text-slate-400 dark:text-slate-500">{group}</p>
               <div className="space-y-1">
                 {targets.map((target) => {
-                  const combo = bindings[target.id];
+                  const combo = comboFor(target.id);
                   const isRecording = recordingId === target.id;
+                  // A default that is currently in force earns a quiet marker,
+                  // so "why does this one already work?" answers itself.
+                  const onDefault = combo !== null && combo === target.defaultCombo;
                   return (
                     <div
                       key={target.id}
                       className="flex items-center justify-between gap-3 border border-slate-200/80 bg-slate-50/85 px-3 py-2 dark:border-slate-800 dark:bg-white/5"
                     >
-                      <span className="text-sm text-slate-700 dark:text-slate-200">{target.label}</span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                          {target.label}
+                          {onDefault && (
+                            <span className="shrink-0 border border-slate-300/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                              Default
+                            </span>
+                          )}
+                        </span>
+                        {target.kind === 'action' && (
+                          <span className="mt-0.5 block text-xs text-slate-400 dark:text-slate-500">{target.hint}</span>
+                        )}
+                      </span>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <button
                           type="button"
@@ -167,6 +213,19 @@ export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: s
                             Clear
                           </button>
                         )}
+                        {/* A default the user cleared or moved needs a way back
+                            that doesn't cost them every other binding they set
+                            — "Reset to defaults" at the top is all-or-nothing. */}
+                        {!combo && !isRecording && target.defaultCombo && (
+                          <button
+                            type="button"
+                            onClick={() => bind(target.id, target.defaultCombo as string)}
+                            className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 transition hover:text-[var(--team-accent-text)] dark:text-slate-500"
+                            aria-label={`Restore the default shortcut for ${target.label}`}
+                          >
+                            Restore
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -177,7 +236,7 @@ export function ShortcutsMenu({ triggerClassName, icon }: { triggerClassName?: s
 
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Shortcuts to a page inside a dynasty do nothing on the Dashboard, where there is no dynasty to open it
-            for. They never fire while you are typing — {SHORTCUT_TARGETS.length} destinations available.
+            for. They never fire while you are typing — {boundCount} of {SHORTCUT_TARGETS.length} bound.
           </p>
         </div>
       </CenteredModalPanel>

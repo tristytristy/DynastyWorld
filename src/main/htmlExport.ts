@@ -1,3 +1,4 @@
+import { formatKnownRecord } from '../shared/programHistory';
 import type { ProgramHistoryOverview, ProgramHistoryRecordHolder } from '../shared/types';
 
 /**
@@ -124,8 +125,8 @@ export function buildHistoryExportHtml(
       (season) => `
       <tr>
         <td class="strong">${season.seasonYear}</td>
-        <td>${formatRecord(season.wins, season.losses)}</td>
-        <td>${formatRecord(season.conferenceWins, season.conferenceLosses)}</td>
+        <td>${formatKnownRecord(season.wins, season.losses)}</td>
+        <td>${formatKnownRecord(season.conferenceWins, season.conferenceLosses)}</td>
         <td>${escapeHtml(season.headCoachName ?? 'Unknown')}</td>
         <td>${formatRank(season.mediaRank)}</td>
         <td>${formatRank(season.coachesRank)}</td>

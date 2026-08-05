@@ -1,3 +1,4 @@
+import { syncedSeasons, formatKnownRecord } from '../../../shared/programHistory';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { TeamLogo } from '../../components/common/TeamLogo';
@@ -32,10 +33,11 @@ function CareerSplits({
 
   const bySchool = useMemo(() => {
     const map = new Map<string, { wins: number; losses: number; seasons: number }>();
-    for (const s of seasons) {
+    // Totals per school — synced only. See shared/programHistory.ts.
+    for (const s of syncedSeasons(seasons)) {
       const row = map.get(s.teamName) ?? { wins: 0, losses: 0, seasons: 0 };
-      row.wins += s.wins;
-      row.losses += s.losses;
+      row.wins += s.wins ?? 0;
+      row.losses += s.losses ?? 0;
       row.seasons += 1;
       map.set(s.teamName, row);
     }
@@ -44,12 +46,13 @@ function CareerSplits({
 
   const byRole = useMemo(() => {
     const map = new Map<string, { wins: number; losses: number; seasons: number }>();
-    for (const s of seasons) {
+    // Totals per role — synced only.
+    for (const s of syncedSeasons(seasons)) {
       const role = userPositionByYear.get(s.seasonYear);
       if (!role) continue;
       const row = map.get(role) ?? { wins: 0, losses: 0, seasons: 0 };
-      row.wins += s.wins;
-      row.losses += s.losses;
+      row.wins += s.wins ?? 0;
+      row.losses += s.losses ?? 0;
       row.seasons += 1;
       map.set(role, row);
     }
@@ -57,9 +60,13 @@ function CareerSplits({
   }, [seasons, userPositionByYear]);
 
   const highs = useMemo(() => {
-    const played = seasons.filter((s) => s.wins + s.losses > 0);
+    // syncedSeasons first: a typed-in year has no verified record to be the
+    // program's best, and its wins may be null. See shared/programHistory.ts.
+    const played = syncedSeasons(seasons).filter((s) => (s.wins ?? 0) + (s.losses ?? 0) > 0);
     if (played.length === 0) return null;
-    const best = played.reduce((a, b) => (b.wins > a.wins || (b.wins === a.wins && b.losses < a.losses) ? b : a));
+    const best = played.reduce((a, b) =>
+      (b.wins ?? 0) > (a.wins ?? 0) || ((b.wins ?? 0) === (a.wins ?? 0) && (b.losses ?? 0) < (a.losses ?? 0)) ? b : a,
+    );
     const ranked = played.filter((s) => s.mediaRank !== null && s.mediaRank > 0);
     const bestRank = ranked.length ? ranked.reduce((a, b) => (b.mediaRank! < a.mediaRank! ? b : a)) : null;
     return { best, bestRank };
@@ -217,10 +224,12 @@ export function CoachCareer() {
             {userCoach ? `${userCoach.firstName} ${userCoach.lastName}` : overview.teamName}&apos;s coaching journey
           </h3>
           {(() => {
-            const rs = history.seasons;
+            // TOTALS, so synced only — user-typed seasons appear on the
+            // timeline but never inside a number. See shared/programHistory.ts.
+            const rs = syncedSeasons(history.seasons);
             const schools = [...new Map(rs.map((s) => [s.teamName, s.teamName])).keys()];
-            const trackedWins = rs.reduce((sum, s) => sum + s.wins, 0);
-            const trackedLosses = rs.reduce((sum, s) => sum + s.losses, 0);
+            const trackedWins = rs.reduce((sum, s) => sum + (s.wins ?? 0), 0);
+            const trackedLosses = rs.reduce((sum, s) => sum + (s.losses ?? 0), 0);
             const natTitles = rs.filter((s) => s.nationalChampion).length;
             const confTitles = rs.filter((s) => s.conferenceChampion).length;
             return (
@@ -312,7 +321,7 @@ export function CoachCareer() {
                       )}
                     </div>
                     <span className="proportional-nums font-semibold text-slate-700 dark:text-slate-200">
-                      {recordLine(season.wins, season.losses)}
+                      {formatKnownRecord(season.wins, season.losses)}
                     </span>
                   </div>
                 </li>

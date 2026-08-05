@@ -1,5 +1,7 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getSeasonsByDynasty, getSnapshot } from './helpers';
+import { findSamePlayer } from '../shared/playerIdentity';
+import { referencePlayer } from './getPlayerDevelopment';
 import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { TeamData } from '../extractors/extract-teams';
 import type { PlayerStatSeason } from '../shared/types';
@@ -33,16 +35,25 @@ import type { PlayerStatSeason } from '../shared/types';
  * untracked years. The UI should show the shortfall rather than imply the rows
  * are the whole story.
  */
-export function getPlayerStatHistory(dynastyId: string, playerId: number): PlayerStatSeason[] {
+export function getPlayerStatHistory(
+  dynastyId: string,
+  playerId: number,
+  anchorSeasonId?: number,
+): PlayerStatSeason[] {
   const seasons = getSeasonsByDynasty(dynastyId)
     .filter((season) => season.hasFullData)
     .sort((a, b) => a.seasonYear - b.seasonYear);
+
+  // Ids are recycled between seasons, so the person has to be fixed before the
+  // years can be walked — see shared/playerIdentity.ts.
+  const reference = referencePlayer(seasons, playerId, anchorSeasonId);
+  if (!reference) return [];
 
   const out: PlayerStatSeason[] = [];
 
   for (const season of seasons) {
     const league = getSnapshot<LeagueRosterData>(season.id, 'leagueRoster');
-    const player = league?.players.find((entry) => entry.id === playerId);
+    const player = findSamePlayer(league?.players, reference);
     if (!player) continue;
     if (player.teamIndex === FCS_POOL_TEAM_INDEX) continue;
 
@@ -54,7 +65,11 @@ export function getPlayerStatHistory(dynastyId: string, playerId: number): Playe
     // A player with no production that season has no stat line at all — that's
     // a real absence (he didn't play), not missing data, so the season is left
     // out rather than shown as a row of zeroes.
-    const line = league?.stats.find((entry) => entry.playerId === playerId);
+    // `player.id` rather than the caller's `playerId`: within ONE season an id
+    // is unique and authoritative, and this is the row we just resolved. They
+    // are the same number today — using the resolved row keeps it that way if
+    // identity ever has to survive an id change too.
+    const line = league?.stats.find((entry) => entry.playerId === player.id);
     if (!line?.season) continue;
 
     out.push({

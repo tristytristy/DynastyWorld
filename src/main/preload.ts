@@ -44,12 +44,12 @@ const api: DynastyApi = {
     getKickingStats: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getKickingStats, dynastyId, seasonId),
     getGameLog: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getGameLog, dynastyId, seasonId),
-    getPlayerGameLog: (dynastyId, playerId, seasonId) =>
-      ipcRenderer.invoke(IPC.db.getPlayerGameLog, dynastyId, playerId, seasonId),
+    getPlayerGameLog: (dynastyId, playerId, seasonId, anchorSeasonId) =>
+      ipcRenderer.invoke(IPC.db.getPlayerGameLog, dynastyId, playerId, seasonId, anchorSeasonId),
     getGameDetail: (dynastyId, gameId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getGameDetail, dynastyId, gameId, seasonId),
-    getTeamTrophies: (dynastyId, seasonId) =>
-      ipcRenderer.invoke(IPC.db.getTeamTrophies, dynastyId, seasonId),
+    getTeamTrophies: (dynastyId, seasonId, teamIndex) =>
+      ipcRenderer.invoke(IPC.db.getTeamTrophies, dynastyId, seasonId, teamIndex),
     getSchedule: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getSchedule, dynastyId, seasonId),
     getStandings: (dynastyId, seasonId) =>
@@ -94,10 +94,10 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.db.getDepartures, dynastyId, teamIndex, seasonId),
     globalSearch: (dynastyId, query, seasonId) =>
       ipcRenderer.invoke(IPC.db.globalSearch, dynastyId, query, seasonId),
-    getPlayerDevelopment: (dynastyId, playerId) =>
-      ipcRenderer.invoke(IPC.db.getPlayerDevelopment, dynastyId, playerId),
-    getPlayerStatHistory: (dynastyId, playerId) =>
-      ipcRenderer.invoke(IPC.db.getPlayerStatHistory, dynastyId, playerId),
+    getPlayerDevelopment: (dynastyId, playerId, anchorSeasonId) =>
+      ipcRenderer.invoke(IPC.db.getPlayerDevelopment, dynastyId, playerId, anchorSeasonId),
+    getPlayerStatHistory: (dynastyId, playerId, anchorSeasonId) =>
+      ipcRenderer.invoke(IPC.db.getPlayerStatHistory, dynastyId, playerId, anchorSeasonId),
     getCoachHall: (dynastyId) => ipcRenderer.invoke(IPC.db.getCoachHall, dynastyId),
     getHallEligible: (dynastyId) => ipcRenderer.invoke(IPC.db.getHallEligible, dynastyId),
     getLegendStatus: (dynastyId, playerId) =>
@@ -112,6 +112,8 @@ const api: DynastyApi = {
     getDynastyTheme: (dynastyId) => ipcRenderer.invoke(IPC.db.getDynastyTheme, dynastyId),
     getTeamTheme: (dynastyId, teamName, seasonId) =>
       ipcRenderer.invoke(IPC.db.getTeamTheme, dynastyId, teamName, seasonId),
+    getSaveRivals: (dynastyId, teamIndex, seasonId) =>
+      ipcRenderer.invoke(IPC.db.getSaveRivals, dynastyId, teamIndex, seasonId),
     getSeasonTheme: (dynastyId, seasonId) =>
       ipcRenderer.invoke(IPC.db.getSeasonTheme, dynastyId, seasonId),
     getTeamAwardDefinitions: () => ipcRenderer.invoke(IPC.db.getTeamAwardDefinitions),
@@ -237,6 +239,13 @@ const api: DynastyApi = {
     clearArt: (dynastyId, teamIndex, teamNameKey, slot) =>
       ipcRenderer.invoke(IPC.program.clearArt, dynastyId, teamIndex, teamNameKey, slot),
   },
+  rivals: {
+    list: (dynastyId) => ipcRenderer.invoke(IPC.rivals.list, dynastyId),
+    save: (dynastyId, input) => ipcRenderer.invoke(IPC.rivals.save, dynastyId, input),
+    remove: (dynastyId, pairKey) => ipcRenderer.invoke(IPC.rivals.remove, dynastyId, pairKey),
+    pickLogo: (dynastyId, pairKey) => ipcRenderer.invoke(IPC.rivals.pickLogo, dynastyId, pairKey),
+    clearLogo: (dynastyId, pairKey) => ipcRenderer.invoke(IPC.rivals.clearLogo, dynastyId, pairKey),
+  },
   media: {
     pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
     addFiles: (dynastyId, seasonId, filePaths) =>
@@ -259,6 +268,12 @@ const api: DynastyApi = {
     chooseLibraryFolder: () => ipcRenderer.invoke(IPC.media.chooseLibraryFolder),
     resetLibraryFolder: () => ipcRenderer.invoke(IPC.media.resetLibraryFolder),
     openLibraryFolder: () => ipcRenderer.invoke(IPC.media.openLibraryFolder),
+  },
+  manualSeasons: {
+    list: (dynastyId) => ipcRenderer.invoke(IPC.manualSeasons.list, dynastyId),
+    save: (dynastyId, seasons) => ipcRenderer.invoke(IPC.manualSeasons.save, dynastyId, seasons),
+    gap: (dynastyId) => ipcRenderer.invoke(IPC.manualSeasons.gap, dynastyId),
+    markPromptSeen: (dynastyId) => ipcRenderer.invoke(IPC.manualSeasons.markPromptSeen, dynastyId),
   },
   notes: {
     list: (dynastyId, playerId) => ipcRenderer.invoke(IPC.notes.list, dynastyId, playerId),

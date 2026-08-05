@@ -1186,8 +1186,22 @@ function LegendsPool({
       open
       onClose={onClose}
       widthRem={52}
-      eyebrow="All-Time Legends"
-      title={`${hall.entries.length} honoured across ${hall.coachName ? `${hall.coachName}’s` : 'this'} career`}
+      /*
+        NO COACH NAME HERE EITHER (user direction). This read "N honoured across
+        <coach>'s career" and named the wrong coach — the same fault already
+        fixed on the page header above (2026-08-03), for the same reason: the
+        Hall spans a whole career across whatever schools and coaches it
+        touched, so no single name is right for it, and in a multi-coach archive
+        the one it picked was simply wrong.
+
+        The header now mirrors the page it belongs to — eyebrow, then the same
+        h1 — and the count is already on the button that opens this panel, so
+        nothing was lost with the sentence. `title` stays set rather than
+        omitted because omitting it drops the panel's whole chrome, including
+        its accessible label and close button.
+      */
+      eyebrow="Hall of Champions"
+      title="All-Time Legends"
     >
       <input
         type="text"

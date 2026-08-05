@@ -1794,6 +1794,64 @@ export interface LeagueTeamHonors {
 }
 
 /** One media-gallery item (schema v6) — user-uploaded image/video with optional game + player links. Metadata only; the file lives under <userData>/media/<dynastyId>/. */
+/**
+ * A season the user typed in from their own records (schema v19) — the only
+ * human-sourced numbers in the app.
+ *
+ * EVERY VALUE IS NULLABLE and null means UNKNOWN, never zero. A user who can't
+ * remember their 2031 conference record leaves it blank, and the timeline shows
+ * a dash rather than inventing 0-0.
+ *
+ * These never enter a computed total. See database/manualSeasons.ts for why
+ * they live in their own table rather than as a flag on a season.
+ */
+export interface ManualSeason {
+  seasonYear: number;
+  teamName: string | null;
+  wins: number | null;
+  losses: number | null;
+  conferenceWins: number | null;
+  conferenceLosses: number | null;
+  /** Free text — handwritten notes are least consistent here, so nothing is forced into a taxonomy. */
+  bowlName: string | null;
+  bowlResult: 'W' | 'L' | null;
+  conferenceChampion: boolean;
+  nationalChampion: boolean;
+  playoffAppearance: boolean;
+  finalRank: number | null;
+  headCoachName: string | null;
+  note: string | null;
+}
+
+/** Whether a dynasty has seasons the app never saw, and which years those are. */
+export interface ManualSeasonGap {
+  earliestSyncedYear: number | null;
+  latestSyncedYear: number | null;
+  syncedYearCount: number;
+  /** The user coach's own `yearsCoaching` — the dynasty's true age, from the save. */
+  coachSeasonCount: number;
+  /**
+   * Seasons the SAVE's own history already covers (Team.TeamSeriesHistory),
+   * with their values. Shown in the editor PREFILLED and LOCKED — visible so it
+   * is clear they are handled, filled so the lock reads as "already known"
+   * rather than as data you are forbidden to supply, and uneditable so nobody
+   * retypes or contradicts what the game states.
+   */
+  gameKnownSeasons: {
+    year: number;
+    teamName: string;
+    wins: number;
+    losses: number;
+    conferenceWins: number;
+    conferenceLosses: number;
+  }[];
+  /** Years before the first sync that are neither synced, game-known, nor already filled in. */
+  missingYears: number[];
+  manualYearCount: number;
+  /** The backfill offer has already been made for this dynasty; never ask again. */
+  promptSeen: boolean;
+}
+
 /** A freeform user note scoped to one player within a dynasty (schema v7). Timestamps are ISO strings. */
 export interface PlayerNote {
   id: number;
@@ -1989,6 +2047,50 @@ export interface ProgramArtSet {
 }
 
 export type ProgramArtSlot = 'logo' | 'helmet' | 'jersey' | 'polo';
+
+/** One of EA's own rival slots for a program — read-only; see getSaveRivals. */
+export interface SaveRival {
+  opponentTeamIndex: number;
+  opponentName: string;
+  /** The save's name for the matchup ("I-35 Rivalry"), or null when the slot is a rival with no named record. */
+  rivalryName: string | null;
+}
+
+/**
+ * A rivalry the user declared themselves (schema v20).
+ *
+ * Symmetric and pair-keyed: this is the same row whichever of the two teams you
+ * are looking at, which is why it carries both sides' names rather than an
+ * owner and an opponent. Purely app-facing — nothing here is written to the
+ * save, and EA's own rival slots are read-only beside it.
+ */
+export interface CustomRival {
+  id: number;
+  teamIndex: number;
+  teamName: string;
+  teamNameKey: string;
+  opponentTeamIndex: number;
+  opponentName: string;
+  opponentNameKey: string;
+  /** The two normalised names, sorted and joined — see lib/rivalryAssetMapping.rivalryPairKey. */
+  pairKey: string;
+  rivalryName: string;
+  /** The uploaded logo: basename plus its absolute path once the IPC layer has resolved it. Null = the generic shield. */
+  logo: ProgramArtFile | null;
+  updatedAt: string;
+}
+
+/** What the editor sends when creating or renaming a rivalry. */
+export interface CustomRivalInput {
+  teamIndex: number;
+  teamName: string;
+  teamNameKey: string;
+  opponentTeamIndex: number;
+  opponentName: string;
+  opponentNameKey: string;
+  pairKey: string;
+  rivalryName: string;
+}
 
 /** Stadium name and city, as the user wants them shown. */
 export interface ProgramOverrideIdentity {
@@ -2500,13 +2602,36 @@ export interface ProgramHistoryRecordCategory {
 }
 
 export interface ProgramHistorySeasonEntry {
+  /**
+   * Where this row came from. Three provenances, and only the first may be
+   * summed:
+   *
+   *   synced       the app captured this season in full — roster, schedule,
+   *                stats. Everything on this object was computed from these.
+   *   gameHistory  the SAVE's own year-by-year record (Team.TeamSeriesHistory),
+   *                for a season the app never synced. Real and save-derived,
+   *                but thin: an outcome with no roster or box score behind it.
+   *   manual       typed by the user from their own notes.
+   *
+   * `gameHistory` and `manual` appear on the TIMELINE ONLY. They are excluded
+   * from every `dynasty*` total, coach summary and record here, so a number
+   * computed from full seasons can never quietly absorb a thinner one. Render
+   * them visibly differently; see shared/programHistory.ts.
+   */
+  source: 'synced' | 'gameHistory' | 'manual';
   seasonYear: number;
   /** The real team this season was played for — a dynasty can span schools; see Phase 0 per-season team tracking. */
   teamName: string;
-  wins: number;
-  losses: number;
-  conferenceWins: number;
-  conferenceLosses: number;
+  /**
+   * NULL MEANS UNKNOWN, NOT ZERO — only reachable on a `manual` row, where the
+   * user left the field blank. Render a dash: a 0-0 would read as a season that
+   * was played and lost, which is a fact nobody supplied. Synced rows are always
+   * numbers.
+   */
+  wins: number | null;
+  losses: number | null;
+  conferenceWins: number | null;
+  conferenceLosses: number | null;
   mediaRank: number | null;
   coachesRank: number | null;
   cfpRank: number | null;
@@ -2879,17 +3004,26 @@ export interface DynastyApi {
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
     /** One player's lines from a season's log, filtered in the main process. The leaguewide log is ~16 MB for a played season; every renderer caller only ever wants one player out of it. */
+    /**
+     * `anchorSeasonId` is only needed when LOOPING this across seasons to build
+     * a career: player ids are recycled, so a season where a different person
+     * held the id would otherwise contribute his games. Pass the season the
+     * player is being viewed in. A single-season caller can omit it.
+     * See shared/playerIdentity.ts.
+     */
     getPlayerGameLog: (
       dynastyId: string,
       playerId: number,
       seasonId?: number,
+      anchorSeasonId?: number,
     ) => Promise<GameLogEntry[] | null>;
     getGameDetail: (
       dynastyId: string,
       gameId: number,
       seasonId?: number,
     ) => Promise<GameDetailData | null>;
-    getTeamTrophies: (dynastyId: string, seasonId?: number) => Promise<TeamTrophies | null>;
+    /** This season's trophy case. `teamIndex` omitted = the dynasty's own team; pass one to read any program's. */
+    getTeamTrophies: (dynastyId: string, seasonId?: number, teamIndex?: number) => Promise<TeamTrophies | null>;
     getSchedule: (dynastyId: string, seasonId?: number) => Promise<ScheduleOverview | null>;
     getStandings: (dynastyId: string, seasonId?: number) => Promise<StandingsOverview | null>;
     getCoaches: (dynastyId: string, seasonId?: number) => Promise<CoachOverview | null>;
@@ -2955,14 +3089,24 @@ export interface DynastyApi {
       query: string,
       seasonId?: number,
     ) => Promise<GlobalSearchResults>;
+    /**
+     * `anchorSeasonId` says WHICH occupant of a recycled id is meant — the save
+     * reissues player ids to incoming recruits, so an id alone does not name a
+     * person across seasons. Pass the season the player is being viewed in;
+     * omitting it falls back to the newest season holding that id, which is
+     * wrong for a historical player whose id has since been reused. See
+     * shared/playerIdentity.ts.
+     */
     getPlayerDevelopment: (
       dynastyId: string,
       playerId: number,
+      anchorSeasonId?: number,
     ) => Promise<PlayerDevelopmentSeason[]>;
     /** Season-by-season production INCLUDING years at other schools — see getPlayerStatHistory. */
     getPlayerStatHistory: (
       dynastyId: string,
       playerId: number,
+      anchorSeasonId?: number,
     ) => Promise<PlayerStatSeason[]>;
     getCoachHall: (dynastyId: string) => Promise<CoachHall | undefined>;
     /** Everyone this coach coached — fetched lazily, only when the picker opens. */
@@ -2985,6 +3129,12 @@ export interface DynastyApi {
       teamName: string,
       seasonId?: number,
     ) => Promise<TeamTheme | null>;
+    /** EA's own rival slots for a program. `isUserTeam` false means the save doesn't record them for this team — not that it has none. */
+    getSaveRivals: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<{ isUserTeam: boolean; rivals: SaveRival[] } | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
@@ -3191,6 +3341,19 @@ export interface DynastyApi {
       slot: ProgramArtSlot,
     ) => Promise<ProgramOverride | null>;
   };
+  /** User-declared rivalries. Cosmetic and app-only — none of these write to the save. */
+  rivals: {
+    /** Every custom rivalry in the dynasty, logo paths resolved. The renderer holds these for the session. */
+    list: (dynastyId: string) => Promise<CustomRival[]>;
+    /** Creates the rivalry, or renames the one already covering this matchup. Null when the name is blank or a team was paired with itself. */
+    save: (dynastyId: string, input: CustomRivalInput) => Promise<CustomRival | null>;
+    /** Deletes the rivalry and its uploaded logo. False when there was nothing to delete. */
+    remove: (dynastyId: string, pairKey: string) => Promise<boolean>;
+    /** Native picker + copy-in for the rivalry mark; null if cancelled. */
+    pickLogo: (dynastyId: string, pairKey: string) => Promise<CustomRival | null>;
+    /** Drops the uploaded mark and goes back to the generic shield. */
+    clearLogo: (dynastyId: string, pairKey: string) => Promise<CustomRival | null>;
+  };
   media: {
     /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
     pickFiles: () => Promise<string[] | null>;
@@ -3231,6 +3394,17 @@ export interface DynastyApi {
     resetLibraryFolder: () => Promise<MediaLibraryMoveResult>;
     /** Reveals the library in Explorer/Finder. */
     openLibraryFolder: () => Promise<void>;
+  };
+  /**
+   * User-typed historical seasons (schema v19). `save` replaces the WHOLE set
+   * for a dynasty — the editor is a grid and a cleared row must disappear.
+   * These never enter a computed total; see shared/programHistory.ts.
+   */
+  manualSeasons: {
+    list: (dynastyId: string) => Promise<ManualSeason[]>;
+    save: (dynastyId: string, seasons: ManualSeason[]) => Promise<ManualSeason[]>;
+    gap: (dynastyId: string) => Promise<ManualSeasonGap | null>;
+    markPromptSeen: (dynastyId: string) => Promise<void>;
   };
   notes: {
     /** All of a player's notes, most-recently-updated first. Scoped to (dynasty, player). */

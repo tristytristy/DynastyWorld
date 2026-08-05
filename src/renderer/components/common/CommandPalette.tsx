@@ -63,7 +63,16 @@ const PAGES: { path: string; section: string; label: string; keywords?: string }
   { path: 'trends', section: 'Program', label: 'Analytics', keywords: 'trends charts' },
   { path: 'team-awards', section: 'Program', label: 'Season Awards', keywords: 'honors trophies' },
   { path: 'weekly-honors', section: 'Program', label: 'Weekly Honors', keywords: 'player of the week' },
-  { path: 'history', section: 'Program', label: 'History', keywords: 'program record book past seasons' },
+  // The backfill editor is a modal ON this page, not a route of its own, so it
+  // is reachable by the words someone would actually type to look for it
+  // rather than by a fake destination that would then need its own routing.
+  {
+    path: 'history',
+    section: 'Program',
+    label: 'History',
+    keywords:
+      'program record book past seasons timeline add earlier seasons backfill missing years before dynastyos my own records notes spreadsheet manual',
+  },
 
   { path: 'scores', section: 'NCAA', label: 'Scores', keywords: 'box scores games week' },
   { path: 'national-stats', section: 'NCAA', label: 'National Statistics', keywords: 'leaders team stats' },

@@ -14,6 +14,15 @@ type LegacyConferenceChampionshipData = {
   opponentScore: number;
 };
 
+/**
+ * `userTeamName` is the USER's team, deliberately, even when this runs for
+ * another program. The legacy snapshot shape recorded a single championship
+ * without saying who won it, because at the time only the user's could be
+ * stored — so it can only ever be attributed to them. Reading it as a browsed
+ * team's title would hand every program in the league the user's conference
+ * trophy. Pass undefined and the legacy row is simply skipped; archives synced
+ * since the array form landed are unaffected either way.
+ */
 function normalizeConferenceChampionships(
   snapshot: ConferenceChampionshipData[] | LegacyConferenceChampionshipData | null | undefined,
   userTeamName: string | undefined,
@@ -85,15 +94,27 @@ function bowlIdentity(game: GameData): { name: string; assetName: string | null 
  * conference-championship snapshot (the one piece that needed its own
  * extractor - see extract-conference-championship.ts). Returns real, played
  * results only; nothing here is inferred from incomplete/upcoming games.
+ *
+ * WORKS FOR ANY TEAM, not just the user's. Every source it reads — the
+ * leaguewide `schedule` snapshot, `teams`, the conference-championship snapshot
+ * and the rivalry-trophy pairing map — already covers all 143 programs; the only
+ * thing that was ever user-specific here was which teamIndex it filtered on. So
+ * a browsed program's Team Hub shows the same case its own coach would see:
+ * bowls won, rivalry trophies taken, conference and national titles. Omit
+ * `teamIndex` for the dynasty's own team, which is what every existing caller
+ * does.
  */
-export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies | undefined {
+export function getTrophies(dynastyId: string, seasonId?: number, teamIndex?: number): TeamTrophies | undefined {
   const dynasty = getDynastyById(dynastyId);
   if (!dynasty) return undefined;
 
   const season = seasonId !== undefined ? getSeasonById(seasonId) : getCurrentSeason(dynastyId);
-  if (!season || season.dynastyId !== dynastyId || season.userTeamId === null) return undefined;
+  if (!season || season.dynastyId !== dynastyId) return undefined;
 
-  const userTeamIndex = season.userTeamId;
+  const subjectTeamIndex = teamIndex ?? season.userTeamId;
+  if (subjectTeamIndex === null || subjectTeamIndex === undefined) return undefined;
+
+  const userTeamIndex = subjectTeamIndex;
   const allGames = getSnapshot<GameData[]>(season.id, 'schedule') ?? [];
   const teamGames = allGames.filter(
     (g) => g.homeTeamIndex === userTeamIndex || g.awayTeamIndex === userTeamIndex,
@@ -108,12 +129,14 @@ export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies 
 
   const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
   const userTeam = teams.find((team) => team.teamIndex === userTeamIndex);
+  const isUserTeam = season.userTeamId === userTeamIndex;
   const confChampions = normalizeConferenceChampionships(
     getSnapshot<ConferenceChampionshipData[] | LegacyConferenceChampionshipData | null>(
       season.id,
       'conferenceChampionship',
     ),
-    userTeam?.displayName,
+    // Only the user's own team may claim an unattributed legacy row — see above.
+    isUserTeam ? userTeam?.displayName : undefined,
   );
   const confChamp = userTeam
     ? confChampions.find((entry) => entry.winningTeamName === userTeam.displayName)

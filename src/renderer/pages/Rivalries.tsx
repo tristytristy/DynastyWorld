@@ -4,6 +4,9 @@ import { PageMasthead } from '../components/common/PageMasthead';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLink } from '../components/common/TeamLink';
+import { useCustomRivals } from '../data/CustomRivalsProvider';
+import { canonicalKey } from '../lib/assetMapping';
+import { getRivalryLogoPath, getRivalryName } from '../lib/rivalryAssetMapping';
 import type { HeadToHeadOpponent } from '../../shared/types';
 
 function seriesLine(o: HeadToHeadOpponent): string {
@@ -65,8 +68,17 @@ function GameList({ o }: { o: HeadToHeadOpponent }) {
   );
 }
 
-function RivalCard({ o }: { o: HeadToHeadOpponent }) {
+function RivalCard({ o, userTeamName }: { o: HeadToHeadOpponent; userTeamName: string | null }) {
   const margin = marginText(o.avgMargin);
+  /*
+    THE USER'S NAME AND MARK WIN over the save's, resolved through the same two
+    functions the Schedule and Game Info use. A rivalry someone named "The
+    Battle for the Bell" reads that way here too, and the shield they uploaded
+    for it is the shield on the card — otherwise this page would be the one
+    place in the app that ignored their own rivalry.
+  */
+  const name = userTeamName ? getRivalryName(userTeamName, o.opponentName, o.rivalryName) : o.rivalryName;
+  const logo = userTeamName ? getRivalryLogoPath(userTeamName, o.opponentName, o.isRival) : null;
   return (
     <SurfaceCard>
       <div className="flex items-start justify-between gap-3">
@@ -84,9 +96,12 @@ function RivalCard({ o }: { o: HeadToHeadOpponent }) {
               logoClassName="!h-10 !w-10"
             />
           </h3>
-          {o.rivalryName && <p className="type-eyebrow text-[var(--team-accent-text)]">{o.rivalryName}</p>}
+          {name && <p className="type-eyebrow text-[var(--team-accent-text)]">{name}</p>}
         </div>
-        <StreakBadge o={o} />
+        <div className="flex shrink-0 items-center gap-2">
+          {logo && <img src={logo} alt="" className="h-9 w-9 object-contain" draggable={false} />}
+          <StreakBadge o={o} />
+        </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div>
@@ -126,8 +141,53 @@ export function Rivalries() {
   // Head-to-head is always the USER's series (getHeadToHead walks their own
   // schedules), so the mark follows the user's team rather than the viewed one.
   const { userTeamName } = useViewedTeam();
-  const rivals = (data ?? []).filter((o) => o.isRival);
-  const others = (data ?? []).filter((o) => !o.isRival);
+
+  /*
+    A RIVAL IS EITHER THE SAVE'S OR THE USER'S, and this page has to honour
+    both. `isRival` is the save's three designated slots; anything the user
+    declared in the Program editor belongs in the same section, because from
+    their side they are the same kind of thing.
+
+    A DECLARED RIVAL WITH NO MEETINGS STILL APPEARS. getHeadToHead only walks
+    opponents actually played, so a rivalry someone named before the two teams
+    ever met would be invisible on the page named after it — the one place they
+    would go looking for it. Those get a synthetic 0-0 entry: honest (there is
+    no series yet), and the card still carries the name and the mark.
+  */
+  const { rivals: customRivals } = useCustomRivals();
+  const userKey = userTeamName ? canonicalKey(userTeamName) : null;
+  const mine = userKey
+    ? customRivals.filter((r) => r.teamNameKey === userKey || r.opponentNameKey === userKey)
+    : [];
+  const customOpponentKeys = new Set(
+    mine.map((r) => (r.teamNameKey === userKey ? r.opponentNameKey : r.teamNameKey)),
+  );
+  const isCustom = (o: HeadToHeadOpponent) => customOpponentKeys.has(canonicalKey(o.opponentName));
+
+  const playedKeys = new Set((data ?? []).map((o) => canonicalKey(o.opponentName)));
+  const unplayed: HeadToHeadOpponent[] = mine
+    .map((r) => {
+      const opponentName = r.teamNameKey === userKey ? r.opponentName : r.teamName;
+      const opponentTeamIndex = r.teamNameKey === userKey ? r.opponentTeamIndex : r.teamIndex;
+      return { opponentName, opponentTeamIndex };
+    })
+    .filter((r) => !playedKeys.has(canonicalKey(r.opponentName)))
+    .map(({ opponentName, opponentTeamIndex }) => ({
+      opponentTeamIndex,
+      opponentName,
+      isRival: false,
+      rivalryName: null,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      avgMargin: 0,
+      streakType: null,
+      streakCount: 0,
+      games: [],
+    }));
+
+  const rivals = [...(data ?? []).filter((o) => o.isRival || isCustom(o)), ...unplayed];
+  const others = (data ?? []).filter((o) => !o.isRival && !isCustom(o));
 
   return (
     <div className="space-y-6">
@@ -141,7 +201,11 @@ export function Rivalries() {
 
       {data === undefined ? (
         <p className="text-slate-500 dark:text-slate-400">Loading rivalries…</p>
-      ) : data.length === 0 ? (
+      ) : /* `rivals` and not `data`: a rivalry declared before either team has
+            played would otherwise hit the "no games recorded" empty state and
+            vanish, which is the one outcome the synthetic entries above exist
+            to prevent. */
+      data.length === 0 && rivals.length === 0 ? (
         <SurfaceCard className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
           No games recorded yet. Sync a season with played games and your head-to-head history fills in — and grows every year.
         </SurfaceCard>
@@ -152,7 +216,7 @@ export function Rivalries() {
               <p className="type-eyebrow mb-3 text-slate-400 dark:text-slate-500">Your rivals</p>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {rivals.map((o) => (
-                  <RivalCard key={o.opponentTeamIndex ?? o.opponentName} o={o} />
+                  <RivalCard key={o.opponentTeamIndex ?? o.opponentName} o={o} userTeamName={userTeamName ?? null} />
                 ))}
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
+import { FCS_POOL_TEAM_INDEX, isFcsPool } from '../shared/fcsPool';
 import { storySeed } from '../shared/storyVariants';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import {
@@ -380,28 +380,91 @@ function buildGameOfTheWeek(games: GameData[], ctx: HubContext): NcaaHubGameFeat
   return toGameFeature(picked, rankByTeamIndex, summary);
 }
 
+/** The top of the poll, for the strongest upset tier. */
+const TOP_TEN_LIMIT = 10;
+
+/**
+ * Where a team with no poll slot sorts: one place worse than the last of the
+ * 138 FBS teams the polls actually rank.
+ *
+ * It replaces a flat `?? 40`, which was the whole reason an FBS team beating an
+ * FCS opponent kept winning this slot. The FCS pool is excluded from `teams`
+ * (see fcsPool.ts), so it was never in the rank map, so it resolved to 40 —
+ * BETTER than most of the league. Akron at No. 96 beating "FCS Northwest" then
+ * scored a 56-spot swing and read as the shock of the week.
+ */
+const UNPLACED_RANK = 139;
+
+type UpsetTier = 1 | 2 | 3;
+
+interface UpsetCandidate {
+  game: GameData;
+  tier: UpsetTier;
+  swing: number;
+  summary: string;
+}
+
+/**
+ * The week's upset, chosen by RULE TIER first and margin of disparity second
+ * (user direction).
+ *
+ * The tiers, strongest first:
+ *
+ *   1. A TOP-TEN TEAM LOST to someone outside the top ten. The biggest thing
+ *      that can happen on a Saturday, whoever beat them.
+ *   2. A RANKED TEAM LOST to an unranked one. The classic upset.
+ *   3. ANY loss to a worse-ranked team — decided purely on the size of the gap.
+ *
+ * Ordering by tier and not by raw gap alone is the point of the hierarchy: a
+ * No. 3 losing to No. 30 is a 27-spot gap and a national story, while No. 70
+ * losing to No. 130 is a 60-spot gap and nothing at all. Raw distance alone
+ * would have printed the second one. Within a tier the widest gap still wins,
+ * so the rule picks the story and the distance breaks the tie.
+ *
+ * FCS GAMES ONLY COUNT WHEN THE FCS SIDE WINS. An FBS program beating the
+ * placeholder pool is the expected result of a scheduled tune-up and is never
+ * an upset. Losing to them is one of the worst results in the sport, so those
+ * stay — with the pool sorted at `UNPLACED_RANK`, which is honest: the polls
+ * genuinely do not rank it.
+ */
 function buildUpsetOfTheWeek(games: GameData[], ctx: HubContext): NcaaHubGameFeature | null {
   const { rankByTeamIndex } = ctx;
   const candidates = games
-    .map((game) => {
+    .map((game): UpsetCandidate | null => {
       if (!game.homeTeamName || !game.awayTeamName) return null;
       if (game.homeScore === game.awayScore) return null;
 
+      const homeWon = game.homeScore > game.awayScore;
+      const homeIsFcs = isFcsPool(game.homeTeamIndex);
+      const awayIsFcs = isFcsPool(game.awayTeamIndex);
+      // Pool vs pool isn't a fixture the app should ever narrate, and an FBS
+      // side beating the pool is the result everybody expected.
+      if (homeIsFcs && awayIsFcs) return null;
+      if (homeIsFcs && !homeWon) return null;
+      if (awayIsFcs && homeWon) return null;
+
       const homeRank = game.homeTeamIndex !== null ? rankByTeamIndex.get(game.homeTeamIndex) ?? null : null;
       const awayRank = game.awayTeamIndex !== null ? rankByTeamIndex.get(game.awayTeamIndex) ?? null : null;
-      const homeEffective = homeRank ?? 40;
-      const awayEffective = awayRank ?? 40;
+      const homeEffective = homeRank ?? UNPLACED_RANK;
+      const awayEffective = awayRank ?? UNPLACED_RANK;
 
-      const homeWon = game.homeScore > game.awayScore;
-      const winnerRank = homeWon ? homeEffective : awayEffective;
-      const loserRank = homeWon ? awayEffective : homeEffective;
-      const swing = winnerRank - loserRank;
+      const winnerEffective = homeWon ? homeEffective : awayEffective;
+      const loserEffective = homeWon ? awayEffective : homeEffective;
+      // The gap is measured on the FULL poll (all 138 FBS teams) because that
+      // distance IS the story — a No. 96 over a No. 4 is a bigger deal than a
+      // No. 20 over a No. 12, and clamping both to the top 25 would flatten
+      // them into the same sentence.
+      const swing = winnerEffective - loserEffective;
       if (swing <= 0) return null;
 
-      // The swing is measured on the FULL poll (all 138 teams), because that
-      // gap is what makes an upset an upset — a No. 96 beating a No. 4 is a
-      // bigger story than a No. 20 beating a No. 12, and clamping both sides
-      // to the top 25 would flatten them into the same sentence.
+      const loserRanked = loserEffective <= RANKED_LIMIT;
+      const tier: UpsetTier =
+        loserEffective <= TOP_TEN_LIMIT && winnerEffective > TOP_TEN_LIMIT
+          ? 1
+          : loserRanked && winnerEffective > RANKED_LIMIT
+            ? 2
+            : 3;
+
       const winnerName = homeWon ? game.homeTeamName : game.awayTeamName;
       const loserName = homeWon ? game.awayTeamName : game.homeTeamName;
       const summary = narrateUpset({
@@ -415,10 +478,10 @@ function buildUpsetOfTheWeek(games: GameData[], ctx: HubContext): NcaaHubGameFea
         rankSwing: swing,
         winnerStreak: streakEntering(ctx, homeWon ? game.homeTeamIndex : game.awayTeamIndex, game.week),
       });
-      return { game, swing, summary };
+      return { game, tier, swing, summary };
     })
-    .filter((candidate): candidate is { game: GameData; swing: number; summary: string } => candidate !== null)
-    .sort((a, b) => b.swing - a.swing);
+    .filter((candidate): candidate is UpsetCandidate => candidate !== null)
+    .sort((a, b) => a.tier - b.tier || b.swing - a.swing);
 
   if (candidates.length === 0) return null;
   return toGameFeature(candidates[0].game, rankByTeamIndex, candidates[0].summary, candidates[0].swing);

@@ -9116,3 +9116,311 @@ the rank rule and the recruit labels all work on existing archives. That was a
 deliberate constraint throughout, not a happy accident.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 — Stadium coordinates, Media/Coach polish, editable shortcuts, custom rivalries
+
+A batch of user-directed work, smallest first.
+
+### 16 stadium coordinates (15 applied, 1 rejected)
+
+Supplied as DMS and converted, then each one checked against its state's bounding
+box AND its distance from the campus point already in the table — which is what
+caught the problem. **Kansas State was rejected**: `38°57′48″N 95°14′47″W`
+resolves to 38.96333, −95.24639, which is David Booth *Kansas* Memorial Stadium
+in Lawrence — 73 miles from K-State and within 20 metres of the `kansas` row
+already present. K-State plays at Bill Snyder Family Stadium in Manhattan and
+still has no stadium coordinate, so it keeps the plain-gradient fallback.
+
+While validating, a PRE-EXISTING bad row surfaced: `louisianalafayette`'s campus
+point was 29.94083, −90.12056 — New Orleans, 116 miles from Cajun Field.
+Corrected to 30.21444, −92.02 (Wikidata Q116485). Coverage is now **137/138**,
+every stadium within 40 miles of its own campus, and the 15 new maps rendered.
+
+### Media
+
+The **caption bar is a hover state** now — the whole bar, gradient included,
+because the gradient exists only to keep the caption legible over a bright
+photo. A wall of thumbnails each wearing a dark band and a line of text was a
+list of filenames; without them it is a contact sheet, which is what the page is
+for. `group-focus-within` keeps the delete button reachable by keyboard rather
+than moving focus to something invisible.
+
+**Groups now run in schedule order** (week, then kickoff date), while the order
+of photos INSIDE a group is untouched. Those are two different orderings and
+only one of them is the user's: the group order used to fall out of whichever
+photo happened to be tagged first, so tagging week 10 before week 1 opened the
+season at week 10; the order within a roll is drag-reorderable and re-sorting it
+would undo the only arrangement made by hand.
+
+**And that order is switchable** (user direction, later the same day) — OLDEST
+⇄ NEWEST, as the app's own mode switch with the gold team mark as the knob, the
+same device the Coach Staff page uses for Current ⇄ Tree. A switch and not a
+segmented control because this is a MODE — which way the season runs — rather
+than a filter. Oldest first is the default: it is the order the season was
+played, and a whole year reads as a story from week 0. Newest first is what you
+want mid-season, when the roll you're after is Saturday's and would otherwise be
+under twelve others. It is state, not a stored preference: a way of looking at
+this page right now, and a sort direction silently remembered from weeks ago is
+a worse surprise than re-picking it. It only appears when there is more than one
+group to order.
+
+It sits HARD LEFT on the same row as the actions, which are hard right, so it
+costs no vertical space — an earlier pass had it on its own line under an
+"Order" label, and OLDEST / NEWEST either side of the knob already say what that
+label was saying. Two consequences of moving it there, both deliberate: **"Add
+photos / videos" is now "+ Media"**, and the row's "Media" eyebrow is gone —
+with the switch on the left it landed immediately after the word NEWEST and the
+two read as one phrase, "NEWEST MEDIA", which is a sentence the page does not
+mean. It was saying nothing new either, since the nav tab above says Media and
+the button opposite now says + Media. Its InfoHint, which was the part that
+mattered, moved across to the actions.
+
+Photos from no game are pinned LAST IN BOTH DIRECTIONS — they belong to no week,
+so they are not part of the sequence being reversed, and floating the
+unplaceable pile to the top of a newest-first list is the one thing neither
+order asks for. Verified on the real 2027 UCLA library (15 game folders): Wk 0 →
+Wk 20 ascending, Wk 20 → Wk 0 descending.
+
+The batch-mode button reads **Favorites**. Worth recording: that button opens
+the batch-edit mode, which contains "Delete selected" — the label is what was
+asked for, but it does not describe what the mode does.
+
+### Coach overview
+
+STAFF → **COACHING STAFF**, and Cardbook/Scandals are icons only. Dropping the
+visible text makes `title` and `aria-label` load-bearing rather than decorative,
+so both are set explicitly.
+
+**A coordinator now sees their head coach** at the head of that list. A head
+coach looks down at his two coordinators and needs no card for himself (he is
+the masthead six inches above); a coordinator looks up first, and a section
+called "staff" that omitted the boss was conspicuous. The PPG / PA-G number is
+suppressed for him — it is a coordinator's scoreboard, and the existing ternary
+would have filed the head coach under "defence" and printed points allowed
+against his name.
+
+### The record bar wears the program it is about
+
+Browsing to Ohio State and reading their record off a UCLA-blue slab said the
+page belonged to UCLA. `OverallRecordBanner` takes optional colour vars now;
+`LeagueTeamHub` fetches the browsed team's own via the existing `getTeamTheme`.
+Omitted still means the inherited theme, so the user's own hub is unchanged and
+a Preferences custom theme is not overridden. Null until it arrives, so a team
+with no colours in the save keeps the old behaviour instead of flashing grey.
+
+### Program editor opens to every team
+
+It was held back to the user's own program while the storage was unproven, but
+it was ALWAYS keyed by the save's team slot rather than by "mine" — `teamIndex`
+was already a parameter. This is what makes a TeamBuilder-heavy league usable:
+a dozen imported schools can each get a stadium name and artwork, not only the
+one being coached. The editor closes on a team switch, or it would sit pointed
+at the team you just navigated away from.
+
+### Keyboard shortcuts: one ships bound, and the built-ins are finally written down
+
+Three changes to a system that previously modelled navigation only.
+
+**Actions.** `ShortcutTarget` is a union now — `kind: 'navigate'` with a path,
+or `kind: 'action'` with an exhaustively-switched `ShortcutAction`. Adding an
+action without handling it is a compile error rather than a dead key.
+
+**Dark ⇄ light ships on Ctrl+Shift+Z.** Destinations still ship unbound, and
+that stays right — which page deserves a key depends on how someone plays. An
+action is different: it is the same single switch for everyone, reached often,
+with no wrong answer to guess at.
+
+**An empty string is a tombstone**, and that distinction is what makes a default
+work at all. No entry means "never touched it, use the default"; the empty
+string means "the user took this key back" and has to survive a reload, or the
+default grows back every launch and clearing it looks broken. `effectiveCombo()`
+is the one place those three states resolve, so the dispatcher and the editor
+cannot disagree. Conflict resolution checks the LIVE map rather than the stored
+one — a default holder has no stored entry to delete, so moving Ctrl+Shift+Z to
+Roster would have left both firing.
+
+**The reserved combos are now shown**, locked. Ctrl+K, Escape and the team
+arrows have been live since long before the panel existed and were written down
+nowhere, so the only way to learn them was to press them by accident — and
+someone who tried to bind Ctrl+K got a refusal naming a shortcut they had never
+seen. Per-row **Restore** brings a cleared default back without costing the user
+every other binding they set.
+
+### Custom rivalries (schema v20)
+
+The save carries three rival slots per team and a fixed list of named matchups,
+neither editable in-game. A decade-long dynasty grows rivalries it has no room
+for. So the user can declare their own — name, opponent, and a 1024×1024 logo.
+
+**Nothing is written to the save.** Those rival slots drive in-game scheduling
+and commentary, and a write we got wrong would be baked into a file the user
+cannot easily repair. EA's own rivals are shown READ-ONLY beside the new ones
+for the same reason, and the panel says so on its face.
+
+**Keyed by the PAIR, not the owner**, which is the one non-obvious decision. A
+rivalry is symmetric: declare UCLA vs Oregon and Oregon vs UCLA is the same
+rivalry, drawing the same mark on both schedules and both Rivalries pages.
+`lib/rivalryAssetMapping` already sorted two team keys into one pair key for the
+shipped art, so `rivalryPairKey` is now exported and the table stores exactly
+that — custom rivalries slot into the resolver the app already uses instead of
+needing a second path beside it. `pair_key` carries the UNIQUE constraint, and
+the DAL upserts on it: re-adding a pair is a rename, not an error.
+
+**A plain module registry, not props** — the same argument as `programArt.ts`.
+`getRivalryLogoPath` is a pure function called from the Schedule table, the
+Scores list, the Game Info header and Media's game grouping;
+`CustomRivalsProvider` publishes into the module so all four light up without
+learning that custom rivalries exist. Precedence: the user's art, then shipped
+art, then the generic shield for anything either the user OR the save calls a
+rivalry.
+
+`getSaveRivals` surfaces EA's slots read-only. It reports `isUserTeam` rather
+than an empty list, because `extract-rivalries` walks the USER team's record
+only — telling a browsed program "the save only records these for the team you
+coach" is honest; implying Ohio State has no rivals is not.
+
+The Rivalries page folds custom rivals into "Your rivals" and gives a declared
+rivalry with **no meetings yet** a synthetic 0-0 entry: `getHeadToHead` only
+walks opponents actually played, so a rivalry named before the two teams met
+would have been invisible on the page named after it.
+
+**Verified.** Migration v20 run on a copy of the real 45.8 MB archive (v19, 5
+dynasties, 27 tables): a fingerprint over every pre-existing table was identical
+before and after, no row count changed, index created. Constraints hold — a
+duplicate pair, an orphan dynasty id and a null rivalry name are all rejected;
+the same pair in a DIFFERENT dynasty is allowed; a 2000-character name, emoji
+and a SQL-injection string all store inert (5 dynasties still present after).
+Cascade delete took 4 rivalry rows with its dynasty. The resolver was exercised
+directly for symmetry, case/punctuation insensitivity, precedence over shipped
+art, the shield fallback, and a clean reset on dynasty switch.
+
+typecheck / eslint / build:prod clean.
+
+## 2026-08-05 (later) — Trophy case, Coach Hub tools, and a real Upset-of-the-Week bug
+
+### Upset of the Week was picking FBS-beats-FCS, every week
+
+Reproduced exactly from the user's screenshot on the real archive: week 4 of the
+2028 UCLA season, **"Akron (#128) beat FCS Northwest 33-30"**, narrated as the
+shock of the week.
+
+The cause is a two-line interaction. The FCS placeholder pool (teamIndex 255) is
+deliberately excluded from `teams` (see `shared/fcsPool.ts`), so it was never in
+`rankByTeamIndex` — and the selector filled a missing rank with `?? 40`. That
+made the pool sort **better than two thirds of the FBS field**. Akron at No. 128
+beating a "No. 40" scored an 88-spot swing and beat every genuine upset on the
+board. Measured across the season: **9 of the week-4 candidates involved the FCS
+pool**, and it won weeks 1, 2 and 4 outright.
+
+Three changes, per the user's rules:
+
+**FCS games only count when the FCS side WINS.** An FBS program beating the pool
+is the expected result of a scheduled tune-up. Losing to them is one of the worst
+results in the sport, so those stay.
+
+**The fallback rank is now 139**, one past the last of the 138 FBS teams the
+polls actually rank — which is honest, because the polls genuinely do not rank
+the pool.
+
+**Selection is a RULE HIERARCHY, then disparity.** Tier 1: a top-ten team lost to
+someone outside the top ten. Tier 2: a ranked team lost to an unranked one.
+Tier 3: any loss to a worse-ranked team, decided on gap alone. Ordering by tier
+before gap is the whole point — No. 3 losing to No. 30 is a 27-spot gap and a
+national story, while No. 70 losing to No. 130 is a 60-spot gap and nothing at
+all, and raw distance alone printed the second one.
+
+Verified against the real archive week by week. Week 1 goes from "Middle Tenn
+beat FCS West" to **Georgia State (#82) over Alabama (#20)**; week 2 from "New
+Mexico St. beat FCS West" to **Syracuse (#35) over Penn State (#21)**; week 4
+from the Akron game to **Pittsburgh (#42) over Florida State (#19)**. Every FCS
+row still eligible after the change is an FCS *win* (FCS West over FAU, FCS
+Midwest over Northwestern, and so on) — checked explicitly rather than assumed.
+The tier boundaries were exercised separately, including the case that proves the
+hierarchy: a tier-1 pick with a 27-spot gap correctly beats a tier-2 pick with a
+62-spot gap.
+
+### The trophy case is one row that shrinks
+
+`flex-wrap` at a fixed 170px meant a five-trophy case folded into a ragged
+two-column block on a narrower window — trophies at different heights stacked
+over each other, reading as a grid of unrelated objects rather than a shelf.
+
+It measures instead of guessing, because the room this row gets depends on the
+window, the number of trophies, the width of the school's name, and whether the
+header has already wrapped the group onto its own line. The maths is a closed
+form, not a loop: width scales linearly with height for a row of fixed-aspect
+images, so subtract the gaps (which don't scale) and the rest is proportional.
+One pass, no oscillation, no resize feedback.
+
+**Two attempts were wrong, in opposite directions, and captures caught both.**
+
+*Attempt one — `flex-1`.* The case absorbed whatever was left after the name and
+the buttons had taken theirs; at 1150px that was about 40px, so the trophies
+scaled to their floor and were then clipped to a sliver by the `overflow-hidden`
+guard. It looked like a rendering fault.
+
+*Attempt two — a fixed `basis-[28rem]`, then a basis equal to the full-size
+width.* The fixed basis stopped the collapse but capped the case at 448px
+however wide the window got, so the trophies stayed small on a large screen —
+**and the reason is worth writing down: `ml-auto` on the buttons.** An auto
+margin on the main axis absorbs ALL free space BEFORE flex-grow is distributed,
+so the case's `grow` never received a pixel. Setting the basis to the full-size
+width instead made it wrap the moment full size didn't fit inline, and once
+wrapped, `grow` filled the whole line and pushed the buttons down to a THIRD
+row.
+
+**What works: the case computes its own width.** The room beside it is its
+parent's width less its siblings and the gaps — measured, because the name is as
+wide as the school's name happens to be — and the basis is the smaller of that
+and what full size needs. It is therefore always satisfiable, so the group never
+wraps and never overflows, and the buttons keep their auto margin and their
+place on the identity row. Only when that room drops under 340px does it ask for
+full size on purpose, which is what makes it wrap to its own line instead of
+collapsing. No `grow` at all, so there is nothing left to fight the auto margin.
+
+Verified on a real UCLA hub at three widths: **1920** inline at ~150px with the
+buttons on the right (the look the user asked to get back), **1700** inline at
+~110px, **1150** on its own line at ~90px with the buttons right-aligned beneath.
+One row of trophies, bottom-aligned, at all three.
+
+### Bowl and rivalry trophies on every team's hub
+
+A browsed program's case was built from `getLeagueTeamHonors`, which only knows
+conference and national titles — so it was missing every bowl that team won and
+every rivalry trophy it holds, while the user's own hub showed all of them.
+
+`getTrophies` was never user-specific in anything but its filter: the leaguewide
+schedule snapshot, the teams snapshot and the rivalry pairing map all cover all
+143 programs. It takes an optional `teamIndex` now and the league hub passes one.
+
+One thing had to stay user-only. The LEGACY conference-championship snapshot
+shape recorded a single title without saying who won it, because at the time
+only the user's could be stored — so it can only ever be attributed to them.
+Read as a browsed team's title it would have handed every program in the league
+the user's conference trophy. Guarded explicitly; archives synced since the
+array form landed are unaffected either way.
+
+### Smaller, user-directed
+
+**No postseason mark in the record bar.** It put a second piece of event artwork
+on a page already carrying the trophy for winning that same event twelve pixels
+above it. `BowlAppearanceBadge` and the banner's `trailing` slot went with it.
+
+**Card book and Scandals moved to the Coach Hub rail.** They were two buttons in
+the busiest corner of Overview, and the only way to reach your card book was to
+navigate back to Overview first. On the rail they are reachable from all seven
+destinations. Bare icons, no frame — a boxed control in a rail of unframed text
+links reads as a different kind of thing — and `py-1.5` matches the tabs' own
+padding, so the pinned bar is still exactly as tall as its text.
+
+**Two more places stopped naming a coach who wasn't the right one.** The
+All-Time Legends panel read "N honoured across <coach>'s career" and named the
+wrong one — the same fault already fixed on the page header above it
+(2026-08-03), for the same reason: the Hall spans a whole career across whatever
+schools and coaches it touched. It now mirrors the page, eyebrow and title.
+And the coaching tree lost "Where your people went" plus its boxed root node —
+that node was the third time the screen said who you are, after the Coach Hub's
+own identity line a few pixels higher. The counts stay; they are the only thing
+there not repeated elsewhere.
+
+typecheck / eslint / build:prod clean.

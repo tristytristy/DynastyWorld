@@ -10,6 +10,7 @@ import { CLASS_ORDER } from '../../lib/rosterOrder';
 import { formatAwardLabel, groupWeeklyHonors } from '../../lib/awardFormat';
 import { getAwardTrophyPath } from '../../lib/trophyAssetMapping';
 import { gameImpactScore, gameResultLine } from '../../../shared/gameImpactScore';
+import { findSamePlayer } from '../../../shared/playerIdentity';
 import type { PlayerModalFallback } from '../../data/PlayerModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { useGameModal } from '../../data/GameModalProvider';
@@ -1253,8 +1254,18 @@ function buildTimeline(
   position: string,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
+  // The timeline spans seasons, so the id alone cannot name the person — a
+  // recycled id would splice a stranger's years into this player's journey,
+  // which is exactly how a freshman ended up with a "first recorded game" two
+  // seasons before he enrolled. Fix the reference on the newest season holding
+  // the id, then match every other year against that human.
+  // See shared/playerIdentity.ts.
+  const newestHolder = [...statsHistory]
+    .sort((a, b) => b.seasonYear - a.seasonYear)
+    .map((entry) => entry.roster?.find((p) => p.id === playerId))
+    .find(Boolean);
   const rosterByYear = statsHistory
-    .map((entry) => ({ seasonYear: entry.seasonYear, player: entry.roster?.find((p) => p.id === playerId) }))
+    .map((entry) => ({ seasonYear: entry.seasonYear, player: findSamePlayer(entry.roster, newestHolder) }))
     .filter((e): e is { seasonYear: number; player: RosterPlayer } => !!e.player)
     .sort((a, b) => a.seasonYear - b.seasonYear);
 
@@ -1462,13 +1473,16 @@ export function PlayerProfileContent({
   useEffect(() => {
     let cancelled = false;
     setDevelopment([]);
-    window.api.db.getPlayerDevelopment(dynastyId, playerId).then((rows) => {
+    // Anchored on the season actually being rendered: player ids are recycled,
+    // so without it a historical player whose id was reissued would be charted
+    // as whoever holds that id now. See shared/playerIdentity.ts.
+    window.api.db.getPlayerDevelopment(dynastyId, playerId, resolvedSeasonId).then((rows) => {
       if (!cancelled) setDevelopment(rows ?? []);
     });
     return () => {
       cancelled = true;
     };
-  }, [dynastyId, playerId]);
+  }, [dynastyId, playerId, resolvedSeasonId]);
 
   /*
     The season-by-season stat breakdown, from the LEAGUEWIDE snapshot so a
@@ -1480,13 +1494,13 @@ export function PlayerProfileContent({
   useEffect(() => {
     let cancelled = false;
     setStatSeasons([]);
-    window.api.db.getPlayerStatHistory(dynastyId, playerId).then((rows) => {
+    window.api.db.getPlayerStatHistory(dynastyId, playerId, resolvedSeasonId).then((rows) => {
       if (!cancelled) setStatSeasons(rows ?? []);
     });
     return () => {
       cancelled = true;
     };
-  }, [dynastyId, playerId]);
+  }, [dynastyId, playerId, resolvedSeasonId]);
 
   /*
     Every box score this player has ever appeared in, for the History tab's
@@ -1568,7 +1582,11 @@ export function PlayerProfileContent({
             // Scoped to this player in the MAIN process. The leaguewide log is
             // ~16 MB for a played season and this loop wanted it once per season,
             // only ever to keep the dozen-odd rows belonging to one player.
-            window.api.db.getPlayerGameLog(dynastyId, playerId, season.id),
+            // Anchored: this loop spans every season, and a season where a
+            // different person held this id must contribute no games — that is
+            // what put a "first recorded game" on a freshman's journey two
+            // years before he enrolled. See shared/playerIdentity.ts.
+            window.api.db.getPlayerGameLog(dynastyId, playerId, season.id, resolvedSeasonId),
             window.api.db.getLeagueScores(dynastyId, season.id),
             window.api.db.getSchedule(dynastyId, season.id),
           ]);
@@ -1617,7 +1635,7 @@ export function PlayerProfileContent({
     return () => {
       cancelled = true;
     };
-  }, [dynastyId, playerId, needsCareerData]);
+  }, [dynastyId, playerId, needsCareerData, resolvedSeasonId]);
 
   /**
    * THE ALL-SEASONS AGGREGATE — award history, the per-season stat table, and

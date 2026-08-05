@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { formatKnownRecord, isManualSeason } from '../../shared/programHistory';
+import { useEffect, useMemo, useState } from 'react';
+import { ManualHistoryEditor } from '../components/common/ManualHistoryEditor';
+import { expandTeamSearchTerms } from '../lib/schoolLocations';
 import { InfoHint } from '../components/ui/InfoHint';
 import { Link, useParams } from 'react-router-dom';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -12,6 +15,7 @@ import { formatAwardLabel } from '../lib/awardFormat';
 import type {
   LeagueHistoryYearEntry,
   ProgramHistoryMilestone,
+  ManualSeasonGap,
   ProgramHistoryOverview,
   ProgramHistoryRecordCategory,
   ProgramHistoryRecordHolder,
@@ -191,6 +195,38 @@ export function History() {
   const { id } = useParams<{ id: string }>();
   const [history, setHistory] = useState<ProgramHistoryOverview | null | undefined>(undefined);
   const { viewedTeamIndex, leagueTeams } = useViewedTeam();
+  /*
+    THE BACKFILL EDITOR LIVES HERE, not in the app chrome. This is the page
+    where the gap is visible — a timeline that starts in 2040 above thirteen
+    years that happened — so the offer arrives when the user is already asking
+    the question. The four toolbar icons are app-level and dynasty-agnostic;
+    this is dynasty data, and putting it there would be dead on the dashboard.
+  */
+  const [gap, setGap] = useState<ManualSeasonGap | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  /*
+    Every real program, so a chosen team always matches one the app knows —
+    that is what makes a dropdown safer than a text field here. `keywords`
+    carries the full name so EA's abbreviations are findable: typing
+    "Appalachian" has to reach "App St.".
+  */
+  const teamOptions = useMemo(
+    () =>
+      (leagueTeams ?? [])
+        .map((t) => ({
+          value: t.displayName,
+          label: t.displayName,
+          // The full school name, so EA's abbreviations stay findable: typing
+          // "Appalachian" has to reach "App St." and "Jacksonville" has to
+          // reach "Jax State". schoolLocations knows every program's real city,
+          // and canonicalKey's alias table knows the expansions.
+          keywords: expandTeamSearchTerms(t.displayName),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [leagueTeams],
+  );
   const viewedLeagueTeamName =
     viewedTeamIndex === null ? null : (leagueTeams?.find((t) => t.teamIndex === viewedTeamIndex)?.displayName ?? null);
 
@@ -201,10 +237,13 @@ export function History() {
     window.api.db.getHistory(id).then((result) => {
       if (!cancelled) setHistory(result);
     });
+    void window.api.manualSeasons.gap(id).then((g) => {
+      if (!cancelled) setGap(g);
+    });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   if (history === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading program history...</p>;
@@ -353,13 +392,30 @@ export function History() {
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <SurfaceCard className="overflow-hidden p-0">
-          <div className="border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-              Dynasty Timeline
-            </p>
-            <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-              Every season in the archive, newest first.
-            </h3>
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
+            <div>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+                Dynasty Timeline
+              </p>
+              <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+                Every season in the archive, newest first.
+              </h3>
+            </div>
+            {/*
+              Offered whenever a gap is provable OR the user has already filled
+              some in (so there is a way back to edit). Never shown to someone
+              who started the app and the dynasty together — see
+              database/manualSeasons.ts for how the gap is proven.
+            */}
+            {gap && (gap.missingYears.length > 0 || gap.manualYearCount > 0) && (
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                className="corner-cut-sm border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-500 dark:border-white/15 dark:text-slate-200 dark:hover:border-white/40"
+              >
+                {gap.manualYearCount > 0 ? 'Edit earlier seasons' : 'Add seasons before DynastyOS'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-sm">
@@ -382,12 +438,30 @@ export function History() {
                     key={season.seasonYear}
                     className="border-t border-slate-200/80 bg-white/40 dark:border-white/5 dark:bg-transparent"
                   >
-                    <td className="px-5 py-4 font-semibold text-slate-950 dark:text-white">{season.seasonYear}</td>
-                    <td className="px-4 py-4 text-slate-600 dark:text-slate-300">
-                      {formatRecord(season.wins, season.losses)}
+                    {/*
+                      A user-typed year is marked ON THE ROW, permanently. The
+                      app's credibility is that every number traces to the save;
+                      the moment one that doesn't looks identical, that promise
+                      is quietly gone. See shared/programHistory.ts.
+                    */}
+                    <td className="px-5 py-4 font-semibold text-slate-950 dark:text-white">
+                      <span className="flex items-center gap-2">
+                        {season.seasonYear}
+                        {isManualSeason(season) && (
+                          <span
+                            title="From your own records — not read from the save, and never counted in a total"
+                            className="border border-slate-300 px-1 py-px text-[9px] font-medium uppercase tracking-wider text-slate-400 dark:border-white/20 dark:text-slate-500"
+                          >
+                            Yours
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-300">
-                      {formatRecord(season.conferenceWins, season.conferenceLosses)}
+                      {formatKnownRecord(season.wins, season.losses)}
+                    </td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-slate-300">
+                      {formatKnownRecord(season.conferenceWins, season.conferenceLosses)}
                     </td>
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{season.headCoachName ?? 'Unknown'}</td>
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{formatRank(season.mediaRank)}</td>
@@ -469,6 +543,68 @@ export function History() {
       </SurfaceCard>
         </>
       )}
-    </div>
+    
+      {/*
+        THE FIRST-SYNC OFFER. A banner, not a modal: someone who just pointed the
+        app at a fourteen-year dynasty wants to SEE it, and a wall of data entry
+        standing in front of that is where people bounce. It also names where the
+        editor lives, so dismissing it costs nothing — which is the whole reason
+        `promptSeen` can be permanent.
+      */}
+      {id && gap && !gap.promptSeen && gap.missingYears.length > 0 && (
+        <SurfaceCard className="border-l-0">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Before DynastyOS</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                This dynasty has run <strong>{gap.coachSeasonCount}</strong> seasons and DynastyOS has{' '}
+                <strong>{gap.syncedYearCount}</strong>. Your career record and trophies came across from the save, but
+                the <strong>{gap.missingYears.length}</strong> earlier seasons behind them didn&apos;t — the game
+                doesn&apos;t keep them. You can add those from your own notes whenever you like, here under{' '}
+                <strong>Program → History</strong>.
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void window.api.manualSeasons.markPromptSeen(id).then(() => setReloadKey((n) => n + 1));
+                }}
+                className="corner-cut-sm border border-slate-300 px-3 py-1.5 text-sm text-slate-600 dark:border-white/15 dark:text-slate-300"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditorOpen(true);
+                  void window.api.manualSeasons.markPromptSeen(id);
+                }}
+                className="corner-cut-sm border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm text-white dark:border-white dark:bg-white dark:text-slate-900"
+              >
+                Add them
+              </button>
+            </div>
+          </div>
+        </SurfaceCard>
+      )}
+
+      {/*
+        The editor itself. Mounted once at page level rather than inside the
+        table so it survives the timeline re-rendering after a save, and so the
+        same instance serves both the header button and the first-sync prompt.
+      */}
+      {id && gap && (
+        <ManualHistoryEditor
+          open={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          dynastyId={id}
+          gap={gap}
+          teamOptions={teamOptions}
+          defaultTeamName={history.teamName}
+          onSaved={() => setReloadKey((n) => n + 1)}
+        />
+      )}
+</div>
   );
 }

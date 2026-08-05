@@ -69,6 +69,7 @@ export const IPC = {
     getCoachingTree: 'db:getCoachingTree',
     getDynastyTheme: 'db:getDynastyTheme',
     getTeamTheme: 'db:getTeamTheme',
+    getSaveRivals: 'db:getSaveRivals',
     getSeasonTheme: 'db:getSeasonTheme',
     getTeamAwardDefinitions: 'db:getTeamAwardDefinitions',
     getTeamAwardResults: 'db:getTeamAwardResults',
@@ -139,6 +140,14 @@ export const IPC = {
     pickArt: 'program:pickArt',
     clearArt: 'program:clearArt',
   },
+  /** User-declared rivalries (schema v20). App-facing only — nothing here touches the save. */
+  rivals: {
+    list: 'rivals:list',
+    save: 'rivals:save',
+    remove: 'rivals:remove',
+    pickLogo: 'rivals:pickLogo',
+    clearLogo: 'rivals:clearLogo',
+  },
   media: {
     pickFiles: 'media:pickFiles',
     addFiles: 'media:addFiles',
@@ -157,6 +166,13 @@ export const IPC = {
     chooseLibraryFolder: 'media:chooseLibraryFolder',
     resetLibraryFolder: 'media:resetLibraryFolder',
     openLibraryFolder: 'media:openLibraryFolder',
+  },
+  /** User-typed historical seasons (schema v19) — see database/manualSeasons.ts. */
+  manualSeasons: {
+    list: 'manualSeasons:list',
+    save: 'manualSeasons:save',
+    gap: 'manualSeasons:gap',
+    markPromptSeen: 'manualSeasons:markPromptSeen',
   },
   notes: {
     list: 'notes:list',

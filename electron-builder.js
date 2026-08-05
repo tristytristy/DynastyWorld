@@ -54,16 +54,26 @@ module.exports = {
     authoritative — which is exactly the bug you get from hardcoding the repo in
     two places.
 
-    `releaseType: 'release'` keeps drafts and prereleases out of the update feed:
-    a draft you are still writing notes for should not offer itself to every
-    installed copy the moment it is created.
+    `releaseType` ONLY AFFECTS WHAT PUBLISHING CREATES, not what the app accepts.
+    An earlier note here claimed it kept drafts out of the update feed; that is
+    not the mechanism. electron-updater's GitHubProvider never reads this field —
+    checked in node_modules, zero references. It works off GitHub's
+    `releases.atom`, which cannot list drafts because drafts are not public, and
+    it gates prereleases separately on `allowPrerelease` (default false).
+
+    So `draft` is the safe setting AND the useful one: `--publish always` uploads
+    the artifacts to a draft that no installed copy can see, and going live stays
+    a human decision made on the release page. With `release` here, a publish
+    command would put a build in front of every user the moment it finished
+    uploading — which is the wrong default for a step that cannot be undone once
+    someone's app has started downloading.
   */
   publish: [
     {
       provider: 'github',
       owner: 'matevanz',
       repo: 'DynastyHub',
-      releaseType: 'release',
+      releaseType: 'draft',
     },
   ],
   win: {
@@ -71,7 +81,29 @@ module.exports = {
     // Generated from public/Icon/ICON.png by scripts/make-icon.js — rerun that after changing the source art.
     icon: 'build/icon.ico',
   },
+  /*
+    ARTIFACT NAMES MUST NOT CONTAIN SPACES, and this is not cosmetic.
+
+    electron-builder's defaults are "DynastyOS Setup 4.2.0.exe", but its GitHub
+    publisher replaces spaces with HYPHENS when uploading — which is why the
+    generated `latest.yml` asks for `DynastyOS-Setup-4.2.0.exe`. Upload the same
+    file by hand through the web UI instead and GitHub substitutes PERIODS,
+    producing `DynastyOS.Setup.4.2.0.exe`. The feed then points at a filename
+    that does not exist, every update check 404s, and the app reports "No update
+    information has been published yet" — which sounds like a missing feed and
+    is actually a missing binary. That cost a released 4.2.0 its updates until
+    the assets were renamed by hand.
+
+    Naming them with hyphens up front makes the two paths agree: what is built,
+    what the feed asks for, and what lands on the release are the same string
+    whether the upload is automated or manual.
+
+    Set PER TARGET, not globally: nsis and portable would otherwise collide on
+    one name. Single-quoted so `${...}` reaches electron-builder as its own
+    template syntax rather than being interpolated by JavaScript.
+  */
   nsis: {
+    artifactName: '${productName}-Setup-${version}.${ext}',
     oneClick: false,
     allowToChangeInstallationDirectory: true,
     /*
@@ -81,5 +113,8 @@ module.exports = {
       lock, which reads to the user as "the update didn't reopen".
     */
     runAfterFinish: false,
+  },
+  portable: {
+    artifactName: '${productName}-${version}.${ext}',
   },
 };

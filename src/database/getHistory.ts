@@ -1,5 +1,7 @@
 import { CFP_ROUND_NAMES } from '../shared/cfpBowls';
 import { displayRank } from '../shared/pollRank';
+import { listManualSeasons } from './manualSeasons';
+import { getGameHistorySeasons } from './gameHistorySeasons';
 import { getDynastyById, getRankingHistory, getSeasonsByDynasty, getSnapshot } from './helpers';
 import { getSeasonGameContext } from './gameContext';
 import type { AwardsData } from '../extractors/extract-awards';
@@ -168,6 +170,62 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
   const milestones: ProgramHistoryMilestone[] = [];
   const seasonEntries: ProgramHistorySeasonEntry[] = [];
   const coachSummaries = new Map<string, CoachAccumulator>();
+
+  /*
+    Read up front but merged at the very END of this function, after every total
+    has been computed. Nothing between here and there may touch it.
+  */
+  /*
+    THE SAVE'S OWN YEAR-BY-YEAR RECORD, for seasons the app never synced. This
+    is what makes a dynasty joined in year 12 look like a dynasty rather than
+    like it began the day the app was installed — and none of it is typed.
+    Ranked ahead of manual rows below, because the game knowing something always
+    beats a memory of it.
+  */
+  const gameHistoryEntries: ProgramHistorySeasonEntry[] = getGameHistorySeasons(dynastyId).map((g) => ({
+    source: 'gameHistory' as const,
+    seasonYear: g.year,
+    teamName: g.teamName,
+    wins: g.wins,
+    losses: g.losses,
+    conferenceWins: g.conferenceWins,
+    conferenceLosses: g.conferenceLosses,
+    // 0 is the save's "outside the poll", not a #0 finish.
+    mediaRank: g.finalMediaRank > 0 ? g.finalMediaRank : null,
+    coachesRank: null,
+    cfpRank: null,
+    headCoachName: g.coachName || null,
+    conferenceChampion: g.wonConferenceChampionship,
+    conferenceChampionName: g.conferenceName || null,
+    nationalChampion: g.nationalResult === 'Win',
+    playoffAppearance: Boolean(g.firstRoundResult || g.quarterFinalResult || g.semiFinalResult || g.nationalResult),
+    bowlAppearance: null,
+    bowlAssetName: null,
+    postseasonSummary: null,
+  }));
+
+  const manualSeasonEntries: ProgramHistorySeasonEntry[] = listManualSeasons(dynastyId).map((m) => ({
+    source: 'manual' as const,
+    seasonYear: m.seasonYear,
+    teamName: m.teamName ?? (dynasty.teamName ?? dynasty.label),
+    // Nulls are carried through, NOT defaulted to 0 — see the type. A blank
+    // conference record renders as a dash rather than as 0-0.
+    wins: m.wins,
+    losses: m.losses,
+    conferenceWins: m.conferenceWins,
+    conferenceLosses: m.conferenceLosses,
+    mediaRank: m.finalRank,
+    coachesRank: null,
+    cfpRank: null,
+    headCoachName: m.headCoachName,
+    conferenceChampion: m.conferenceChampion,
+    conferenceChampionName: null,
+    nationalChampion: m.nationalChampion,
+    playoffAppearance: m.playoffAppearance,
+    bowlAppearance: m.bowlName,
+    bowlAssetName: null,
+    postseasonSummary: m.note,
+  }));
 
   let teamName = dynasty.teamName ?? dynasty.label;
   let latestUserTeam: TeamData | null = null;
@@ -401,6 +459,7 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
     }
 
     seasonEntries.push({
+      source: 'synced',
       seasonYear: season.seasonYear,
       teamName: userTeam.displayName,
       wins,
@@ -473,7 +532,38 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
     headCoachName,
     headCoachCareer,
     nationalAwards: nationalAwards.sort((a, b) => b.seasonYear - a.seasonYear),
-    seasons: seasonEntries.sort((a, b) => b.seasonYear - a.seasonYear),
+    /*
+      USER-TYPED SEASONS JOIN THE TIMELINE HERE — and nowhere else on this
+      object. Every `dynasty*` total, every coach summary and every record above
+      was computed from `seasonEntries` BEFORE this merge, so none of them can
+      include a number the app didn't extract. That ordering is the safety
+      property; moving this merge earlier would silently fold human input into
+      statistics. See database/manualSeasons.ts.
+
+      A manual year that later gets synced properly is dropped in favour of the
+      real one: the save always wins over a memory of the save.
+    */
+    /*
+      PRECEDENCE: a fully synced season beats the save's thin year-row, which
+      beats anything typed. Each tier only fills years the tier above it does
+      not already cover, so a year can never appear twice and the best available
+      version of it always wins.
+    */
+    seasons: (() => {
+      const claimed = new Set(seasonEntries.map((s) => s.seasonYear));
+      const merged = [...seasonEntries];
+      for (const g of gameHistoryEntries) {
+        if (claimed.has(g.seasonYear)) continue;
+        claimed.add(g.seasonYear);
+        merged.push(g);
+      }
+      for (const m of manualSeasonEntries) {
+        if (claimed.has(m.seasonYear)) continue;
+        claimed.add(m.seasonYear);
+        merged.push(m);
+      }
+      return merged.sort((a, b) => b.seasonYear - a.seasonYear);
+    })(),
     coaches: [...coachSummaries.values()].sort(
       (a, b) => b.wins - a.wins || b.seasons - a.seasons || a.coachName.localeCompare(b.coachName),
     ),

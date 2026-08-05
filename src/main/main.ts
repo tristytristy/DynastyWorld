@@ -14,7 +14,9 @@ import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
 import { registerCardHandlers } from './ipc/card';
 import { registerProgramHandlers } from './ipc/program';
+import { registerRivalHandlers } from './ipc/rivals';
 import { registerNotesHandlers } from './ipc/notes';
+import { registerManualSeasonHandlers } from './ipc/manualSeasons';
 import { registerUpdateHandlers } from './updater/updateIpc';
 import { scheduleStartupCheck } from './updater/updateService';
 import {
@@ -613,7 +615,9 @@ app
       registerMediaHandlers();
       registerCardHandlers();
       registerProgramHandlers();
+      registerRivalHandlers();
       registerNotesHandlers();
+      registerManualSeasonHandlers();
       registerUpdateHandlers();
       try {
         const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
@@ -640,7 +644,9 @@ app
       registerMediaHandlers();
       registerCardHandlers();
       registerProgramHandlers();
+      registerRivalHandlers();
       registerNotesHandlers();
+      registerManualSeasonHandlers();
       registerUpdateHandlers();
       // Diagnostic/screenshot runs keep no menu bar so its height doesn't shift
       // captures (the normal launch path restores the native menu — see below).
@@ -787,7 +793,9 @@ app
       registerMediaHandlers();
       registerCardHandlers();
       registerProgramHandlers();
+      registerRivalHandlers();
       registerNotesHandlers();
+      registerManualSeasonHandlers();
       registerUpdateHandlers();
       // Native menu bar (File/Edit/View/Window) — reload, DevTools, zoom, and
       // clipboard actions — for IN-HOUSE DEVELOPMENT ONLY. Shipped/packaged

@@ -9,7 +9,15 @@
  */
 const STORAGE_KEY = 'dynastyos.shortcuts.v1';
 
-/** A binding is stored as its canonical combo string, e.g. "Ctrl+Shift+R". */
+/**
+ * A binding is stored as its canonical combo string, e.g. "Ctrl+Shift+R".
+ *
+ * AN EMPTY STRING IS A TOMBSTONE, not an empty binding, and the difference
+ * matters as soon as anything ships with a default. "No entry for this id"
+ * means "never touched it, use the default"; "" means "the user took this key
+ * back", which has to survive a reload or the default would grow back every
+ * launch and clearing it would look broken.
+ */
 export type ShortcutBindings = Record<string, string>;
 
 /**
@@ -17,6 +25,11 @@ export type ShortcutBindings = Record<string, string>;
  * a behaviour they can't get back from this panel — so the recorder rejects
  * them by name instead of silently creating a conflict the user then has to
  * diagnose.
+ *
+ * These are also SHOWN in the shortcuts panel, as a locked list. They were
+ * always live and always unlisted, which meant the only way to find out that
+ * Ctrl+K opens search was to press it or to be told; and someone who tried to
+ * bind it got a refusal mentioning a shortcut they had never seen written down.
  */
 export const RESERVED_COMBOS: Record<string, string> = {
   'Ctrl+K': 'Global search',
@@ -25,6 +38,17 @@ export const RESERVED_COMBOS: Record<string, string> = {
   'Shift+ArrowLeft': 'Previous team',
   'Shift+ArrowRight': 'Next team',
 };
+
+/**
+ * The locked list as the panel shows it — one row per behaviour rather than one
+ * per combo, so Global search reads as "Ctrl+K or ⌘K" instead of twice.
+ */
+export const BUILT_IN_SHORTCUTS: { combos: string[]; label: string }[] = [
+  { combos: ['Ctrl+K', 'Meta+K'], label: 'Global search' },
+  { combos: ['Escape'], label: 'Close the open panel' },
+  { combos: ['Shift+ArrowLeft'], label: 'Previous team' },
+  { combos: ['Shift+ArrowRight'], label: 'Next team' },
+];
 
 /** Modifier-only presses aren't a shortcut; they're the user still on their way to one. */
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS']);
@@ -85,12 +109,29 @@ export function loadShortcuts(): ShortcutBindings {
     if (!parsed || typeof parsed !== 'object') return {};
     const out: ShortcutBindings = {};
     for (const [id, combo] of Object.entries(parsed as Record<string, unknown>)) {
-      if (typeof combo === 'string' && combo.length > 0) out[id] = combo;
+      // '' is kept deliberately — it is the tombstone, not an absent value.
+      if (typeof combo === 'string') out[id] = combo;
     }
     return out;
   } catch {
     return {};
   }
+}
+
+/**
+ * What a target is ACTUALLY bound to right now: the user's own binding, then an
+ * explicit clear, then whatever it ships with.
+ *
+ * The one place that resolves those three states, so the dispatcher and the
+ * editor can never disagree about whether Ctrl+Shift+Z is live.
+ */
+export function effectiveCombo(
+  bindings: ShortcutBindings,
+  target: { id: string; defaultCombo?: string },
+): string | null {
+  const stored = bindings[target.id];
+  if (stored !== undefined) return stored === '' ? null : stored;
+  return target.defaultCombo ?? null;
 }
 
 export function saveShortcuts(bindings: ShortcutBindings): void {

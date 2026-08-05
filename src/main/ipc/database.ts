@@ -48,6 +48,7 @@ import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../data
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
 import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
 import { getTeamTheme } from '../../database/getTeamTheme';
+import { getSaveRivals } from '../../database/getSaveRivals';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
 import { getRoster } from '../../database/getRoster';
@@ -279,8 +280,9 @@ export function registerDatabaseHandlers(): void {
       dynastyId: string,
       playerId: number,
       seasonId?: number,
+      anchorSeasonId?: number,
     ): Promise<GameLogEntry[] | null> => {
-      return getPlayerGameLog(dynastyId, playerId, seasonId) ?? null;
+      return getPlayerGameLog(dynastyId, playerId, seasonId, anchorSeasonId) ?? null;
     },
   );
 
@@ -293,8 +295,8 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(
     IPC.db.getTeamTrophies,
-    async (_event, dynastyId: string, seasonId?: number): Promise<TeamTrophies | null> => {
-      return getTrophies(dynastyId, seasonId) ?? null;
+    async (_event, dynastyId: string, seasonId?: number, teamIndex?: number): Promise<TeamTrophies | null> => {
+      return getTrophies(dynastyId, seasonId, teamIndex) ?? null;
     },
   );
 
@@ -420,13 +422,19 @@ export function registerDatabaseHandlers(): void {
     return globalSearch(dynastyId, query, seasonId);
   });
 
-  ipcMain.handle(IPC.db.getPlayerDevelopment, async (_event, dynastyId: string, playerId: number) => {
-    return getPlayerDevelopment(dynastyId, playerId);
-  });
+  ipcMain.handle(
+    IPC.db.getPlayerDevelopment,
+    async (_event, dynastyId: string, playerId: number, anchorSeasonId?: number) => {
+      return getPlayerDevelopment(dynastyId, playerId, anchorSeasonId);
+    },
+  );
 
-  ipcMain.handle(IPC.db.getPlayerStatHistory, async (_event, dynastyId: string, playerId: number) => {
-    return getPlayerStatHistory(dynastyId, playerId);
-  });
+  ipcMain.handle(
+    IPC.db.getPlayerStatHistory,
+    async (_event, dynastyId: string, playerId: number, anchorSeasonId?: number) => {
+      return getPlayerStatHistory(dynastyId, playerId, anchorSeasonId);
+    },
+  );
 
   /*
     The Hall's four calls. Every one resolves the coach itself rather than
@@ -495,6 +503,13 @@ export function registerDatabaseHandlers(): void {
     IPC.db.getTeamTheme,
     async (_event, dynastyId: string, teamName: string, seasonId?: number): Promise<TeamTheme | null> => {
       return getTeamTheme(dynastyId, teamName, seasonId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.db.getSaveRivals,
+    async (_event, dynastyId: string, teamIndex: number, seasonId?: number) => {
+      return getSaveRivals(dynastyId, teamIndex, seasonId);
     },
   );
 

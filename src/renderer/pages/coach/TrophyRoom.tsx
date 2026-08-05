@@ -1,3 +1,4 @@
+import { formatKnownRecord } from '../../../shared/programHistory';
 import { useEffect, useMemo, useState } from 'react';
 import { PlayerPortrait } from '../../components/common/PlayerPortrait';
 import { MediaBackdrop } from '../../components/common/MediaBackdrop';
@@ -570,7 +571,7 @@ function PostseasonRoom({
                     <TeamLogo team={{ assetName: season.teamName, label: season.teamName }} size="sm" className="!h-7 !w-7" />
                     <span className="text-sm font-semibold text-white">{season.teamName}</span>
                     <span className="tnum text-sm text-gold-300/75">
-                      {season.wins}-{season.losses}
+                      {formatKnownRecord(season.wins, season.losses)}
                     </span>
                   </div>
                 )}

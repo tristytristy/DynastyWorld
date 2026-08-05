@@ -8,11 +8,13 @@ import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
+import { ToggleSwitch } from '../components/ui/ToggleSwitch';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { getGameTypeImagePath } from '../lib/scheduleFormat';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import { useTheme } from '../theme/ThemeProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
+import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useConfirm } from '../data/ConfirmDialogProvider';
 import { CloseIcon, EditIcon, ExportIcon, TrashIcon } from '../components/common/ActionIcons';
@@ -966,12 +968,29 @@ export function Media() {
   const { id } = useParams<{ id: string }>();
   const confirm = useConfirm();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
+  // The knob wears the USER's mark, not the browsed team's — this library is
+  // the dynasty's own photographs whichever team page you last looked at.
+  const { userTeamName } = useViewedTeam();
   const [items, setItems] = useState<MediaItemWithPath[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   /** Which game's roll is open. Empty = all closed, which is where the page starts. */
   const [openRolls, setOpenRolls] = useState<Set<string>>(() => new Set());
+  /*
+    Which end of the season the shelf starts at.
+
+    OLDEST FIRST IS THE DEFAULT because that is the order the season was played,
+    and a library of a whole year reads as a story from week 0. Newest first is
+    what you want mid-season, when the roll you're looking for is the one from
+    Saturday and it would otherwise be at the bottom of twelve others.
+
+    Held in state rather than persisted: it is a way of looking at THIS page
+    right now, not a standing preference about the dynasty, and a sort direction
+    silently remembered from a session weeks ago is a worse surprise than
+    re-picking it.
+  */
+  const [rollSort, setRollSort] = useState<'oldest' | 'newest'>('oldest');
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOverUpload, setDragOverUpload] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -1139,11 +1158,26 @@ export function Media() {
     the game it belongs to, and a count. That's the difference between
     collapsing and hiding.
 
-    Order is the ITEM order, not the schedule's — the grid is drag-reorderable,
-    and a group that jumped to a different place after a drag would undo the
-    only arrangement the user actually made. Each group carries its items' real
-    indices in the flat list so drag, drop and the lightbox's Prev/Next all keep
-    working across the whole season exactly as before.
+    GROUPS RUN IN SCHEDULE ORDER; ITEMS INSIDE A GROUP KEEP THEIR OWN.
+
+    Those are two different orderings and only one of them is the user's. The
+    groups used to fall out in the order their first photo happened to be
+    tagged, so someone who tagged their week 10 shots before their week 1 shots
+    got a season that opened at week 10 — the shelf was in the order they
+    reached for the rolls, not the order the games were played. Weeks are a
+    sequence the season already fixed, so the app sorts them rather than
+    preserving an accident.
+
+    Within a roll the order stays exactly as it was, because THAT order is
+    drag-reorderable and re-sorting it would silently undo the only arrangement
+    the user actually made by hand. Each group still carries its items' real
+    indices in the flat list, so drag, drop and the lightbox's Prev/Next keep
+    working across the whole season.
+
+    Photos from no game sort LAST IN BOTH DIRECTIONS: they belong to no week, so
+    they are not part of the sequence being reversed, and floating the
+    unplaceable pile to the top of a newest-first list would be the one thing
+    neither order is asking for.
   */
   const UNFILED = 'unfiled';
   const rolls: { key: string; label: string; game?: ScheduleGame; entries: { item: MediaItemWithPath; index: number }[] }[] = [];
@@ -1159,6 +1193,26 @@ export function Media() {
     }
     roll.entries.push({ item, index });
   });
+  /*
+    Week first, then the kickoff date, so two games in the same week still land
+    in the order they were played. A game the schedule no longer knows about
+    (deleted, or a season the roll outlived) has no week to sort by and joins
+    the unfiled pile at the end rather than sorting as week 0 and jumping to the
+    front.
+  */
+  const rollOrder = (roll: (typeof rolls)[number]): [number, string] =>
+    roll.game ? [roll.game.week, roll.game.date ?? ''] : [Number.MAX_SAFE_INTEGER, ''];
+  rolls.sort((a, b) => {
+    const [aw, ad] = rollOrder(a);
+    const [bw, bd] = rollOrder(b);
+    // The unfiled pile is not in the sequence, so it is pinned to the end
+    // rather than flipped with everything else — see above.
+    if (a.key === UNFILED || b.key === UNFILED) {
+      return a.key === b.key ? 0 : a.key === UNFILED ? 1 : -1;
+    }
+    const byWeek = aw - bw || ad.localeCompare(bd);
+    return rollSort === 'newest' ? -byWeek : byWeek;
+  });
 
   return (
     <div className="space-y-6">
@@ -1170,21 +1224,58 @@ export function Media() {
         named, the hint keeps the instructions, and the actions move up into the
         space the title was using.
       */}
+      {/*
+        ONE ROW: the order switch hard left, the actions hard right (user
+        direction). The switch used to sit on its own line above the shelf with
+        an "Order" label in front of it; on the same row as the buttons it costs
+        no vertical space at all, and OLDEST / NEWEST either side of the knob
+        say what the label was saying.
+
+        It is the app's own mode switch with the gold team mark as the knob —
+        the same device the Coach Staff page uses for Current ⇄ Tree — rather
+        than a segmented control, because this is a MODE (which way the season
+        runs) and not a filter.
+      */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="type-eyebrow flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-          Media
+        {/*
+          THE "MEDIA" EYEBROW IS GONE FROM THIS ROW. With the switch on the left
+          it landed immediately after the word NEWEST and the two read as one
+          phrase — "NEWEST MEDIA" — which is a sentence the page doesn't mean.
+          It was saying nothing new either: the nav tab above says Media and the
+          button opposite now says + Media. The hint it carried is what mattered,
+          so that moves across to the actions, where it still reaches everything
+          it explained.
+        */}
+        <div className="flex min-w-0 items-center gap-3">
+          {rolls.length > 1 && userTeamName && (
+            <ToggleSwitch
+              value={rollSort}
+              onChange={setRollSort}
+              left={{ value: 'oldest', label: 'OLDEST' }}
+              right={{ value: 'newest', label: 'NEWEST' }}
+              ariaLabel="Order game folders oldest or newest first"
+              knob={
+                <TeamLogo
+                  team={{ assetName: userTeamName, label: userTeamName }}
+                  size="sm"
+                  variant="gold"
+                  className="h-[35px] w-[35px]"
+                />
+              }
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
           <InfoHint label="About the media library">
-            {`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Photos group by game and open on click. Drag to reorder, drop files in to add, and use Select for batch edits.`}
+            {`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Photos group by game and open on click. Drag to reorder, drop files in to add, and use Favorites to pick out several at once. The switch on the left runs the game folders from the start of the season or from the most recent game.`}
           </InfoHint>
-        </p>
-        <div className="flex items-center gap-2">
           {hasItems && (
             <Button variant="secondary" onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}>
-              {selectMode ? 'Cancel' : 'Select'}
+              {selectMode ? 'Cancel' : 'Favorites'}
             </Button>
           )}
           <Button onClick={handleUpload} disabled={importing || seasonId === undefined}>
-            {importing ? 'Importing…' : 'Add photos / videos'}
+            {importing ? 'Importing…' : '+ Media'}
           </Button>
         </div>
       </div>
@@ -1426,7 +1517,21 @@ export function Media() {
                   </span>
                 )}
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6">
+                {/*
+                  THE CAPTION BAR IS A HOVER STATE, not furniture. A wall of
+                  thumbnails each wearing a dark gradient and a line of text is
+                  a list of filenames; the same wall without them is a contact
+                  sheet, which is what this page is for. Point at one and it
+                  tells you what it is and offers the bin.
+
+                  The WHOLE bar fades, gradient included — the gradient exists
+                  only to keep the caption legible over a bright photo, so
+                  leaving it lit under nothing would be a smudge with no job.
+                  `group-focus-within` keeps the delete button reachable by
+                  keyboard: tabbing into the tile reveals the bar it lives in,
+                  rather than moving focus to something invisible.
+                */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6 opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-within:opacity-100">
                   {!selectMode && (
                     <button
                       type="button"

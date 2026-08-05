@@ -3,6 +3,7 @@ import { CoachPortrait } from '../../components/common/CoachPortrait';
 import { TeamLogo } from '../../components/common/TeamLogo';
 import { spaceCamelCase } from '../../components/common/CoachCard';
 import { GliderNav, gliderItemClass } from '../../components/ui/GliderNav';
+import { CardStarIcon, ThiefIcon } from '../../components/common/ActionIcons';
 import { PINNED_SUB_NAV_CLASS, usePinnedSubNav } from '../../lib/pinnedSubNav';
 import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { CoachHubProvider, useCoachHub } from './coachData';
@@ -63,8 +64,8 @@ function CoachHubChrome() {
       {/* One row, one rail. `overflow-x-auto` stays on the WRAPPER rather than on
           GliderNav — the rail is positioned in the tab row's own coordinates, so
           it scrolls with the tabs instead of staying pinned to the visible edge. */}
-      <div ref={subNavRef} className={`${PINNED_SUB_NAV_CLASS} -mx-1 px-1 py-2`}>
-        <div className="overflow-x-auto">
+      <div ref={subNavRef} className={`${PINNED_SUB_NAV_CLASS} -mx-1 flex items-center gap-3 px-1 py-2`}>
+        <div className="min-w-0 flex-1 overflow-x-auto">
           <GliderNav
             activeIndex={activeIndex}
             emphasis="quiet"
@@ -82,6 +83,7 @@ function CoachHubChrome() {
             ))}
           </GliderNav>
         </div>
+        <CoachHubTools />
       </div>
 
       {/* Overview owns the full cinematic hero and the Hall has its own
@@ -92,6 +94,56 @@ function CoachHubChrome() {
       {/* The Hall is its own page with its own data — it must not be held
           behind the coach's shell state. */}
       {onHall ? <Outlet /> : <CoachDestination />}
+    </div>
+  );
+}
+
+/**
+ * Card book and Scandals, at the end of the sub-nav rail (user direction).
+ *
+ * THEY BELONG TO THE HUB, NOT TO OVERVIEW. They opened from two buttons in the
+ * Overview masthead, which meant the only way to reach your card book was to
+ * navigate back to Overview first — and they took room in the busiest corner of
+ * that page, beside the record, the rank, the job security and the contract.
+ * Up here they are reachable from all seven destinations and cost the page
+ * nothing.
+ *
+ * NO BOX, AND NO EXTRA HEIGHT. Bare icons rather than bordered buttons, because
+ * a framed control sitting in a rail of unframed text links reads as a
+ * different kind of thing; and `py-1.5` matches the tabs' own padding exactly,
+ * so the row is still as tall as its text and the pinned bar does not grow.
+ * With the frame gone, `title` and `aria-label` are the only names these have —
+ * both are set.
+ */
+function CoachHubTools() {
+  const { userCoach, openCardbook, openScandals } = useCoachHub();
+  const toolClass =
+    'shrink-0 p-1.5 transition-colors duration-base ease-standard focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--team-primary)]';
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={openCardbook}
+        title="Card book — every card you've starred"
+        aria-label="Open your card book"
+        className={`${toolClass} text-slate-400 hover:text-slate-900 dark:text-slate-500 dark:hover:text-white`}
+      >
+        <CardStarIcon className="h-5 w-5" />
+      </button>
+      {/* Scandals writes to the save, so it only exists where there is a coach
+          to write about — same gate the Overview button carried. */}
+      {userCoach && (
+        <button
+          type="button"
+          onClick={openScandals}
+          title="Scandals — off-the-books adjustments, writes to your save"
+          aria-label="Open scandals"
+          className={`${toolClass} text-red-600/70 hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-400`}
+        >
+          <ThiefIcon className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 }

@@ -241,6 +241,7 @@
 }
 
 @layer components {
+
   /**
    * Typography roles (overhaul spec §4) — the recurring identity styles,
    * formalized so pages stop hand-assembling them from arbitrary values.
@@ -1265,6 +1266,99 @@
     .trophy-backdrop-layer {
       animation: none;
       transition: none;
+    }
+  }
+
+  /*
+    THE RECORD BANNER'S MAP — where this program plays, drifting behind the
+    record. A pre-rendered image (see lib/teamMapAssetMapping.ts), never a live
+    map, so this is only ever compositing and a transform.
+
+    `luminosity` at 0.30 is the setting the probe landed on, and the blend
+    matters more than the opacity: it takes the map's light and keeps the team's
+    hue, so a crimson program reads crimson and a navy one navy. A normal-blended
+    map sat ON the colour instead of inside it, and a near-black primary (App
+    State, Colorado) swallowed it whole.
+
+    THE EDGES FALL OFF ~100px each side. A hard vertical edge against the
+    gradient looked like a pasted screenshot; the mask dissolves the map into the
+    colour instead. Doubling the mask as a blur is not possible on the same
+    element — `filter` would blur the whole layer, not its edges — so the falloff
+    is opacity, which is what reads as "soft" here anyway.
+  */
+  .team-map-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    opacity: 0.3;
+    mix-blend-mode: luminosity;
+    animation: team-map-drift 240s ease-in-out infinite alternate;
+    will-change: transform;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 100px,
+      #000 calc(100% - 100px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(to right, transparent 0, #000 100px, #000 calc(100% - 100px), transparent 100%);
+  }
+
+  /*
+    The same jumbotron dot texture the Trophy Room backdrop wears, so the two
+    surfaces read as the same room. It sits ABOVE the map and below the type —
+    the map is the thing being displayed on the board, not the board itself.
+  */
+  .team-map-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.16;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  /*
+    TUNED TO BE FELT, NOT SEEN. You should be able to tell it moves if you look
+    for it, and never catch it if you aren't. Three things decide that, and
+    speed is only one:
+
+    1. EASE, NOT LINEAR. `linear` + `alternate` flips the velocity sign
+       instantly at each end. However slow the drift, that discontinuity is a
+       tell — the single moment the eye catches. `ease-in-out` brings the motion
+       to a standstill at both extremes and turns around from rest, so the
+       reversal cannot be perceived at all.
+
+    2. DRIFT MORE THAN ZOOM. Radial expansion is *looming*, which human vision
+       is specifically tuned to detect because it signals approach — a pure
+       scale reads as movement at speeds where a lateral pan does not. So most
+       of the travel is now a translate, with only a little scale under it. The
+       1.02 floor exists to give that translate somewhere to go: without it the
+       pan would drag the image's edges into frame.
+
+    3. UNDER THE PERCEPTION THRESHOLD. Across 240s the scale moves 6% and the
+       pan about 1.2%. On a ~1500px banner that is roughly 0.2px per second —
+       below where motion registers as motion, but ~12px over a minute, which is
+       plainly different if you actually compare it to the frame.
+  */
+  @keyframes team-map-drift {
+    from {
+      transform: scale(1.02) translate3d(-0.6%, 0.35%, 0);
+    }
+    to {
+      transform: scale(1.08) translate3d(0.6%, -0.35%, 0);
+    }
+  }
+
+  /* Reduced motion keeps the map, drops the drift — same rule as the Trophy Room. */
+  @media (prefers-reduced-motion: reduce) {
+    .team-map-backdrop {
+      animation: none;
     }
   }
 }

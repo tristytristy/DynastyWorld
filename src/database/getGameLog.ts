@@ -1,4 +1,7 @@
-import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
+import { getCurrentSeason, getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot } from './helpers';
+import { isSamePlayer } from '../shared/playerIdentity';
+import { referencePlayer } from './getPlayerDevelopment';
+import type { LeagueRosterData } from '../extractors/extract-league-roster';
 import type { PlayerGameLogEntry } from '../extractors/extract-gamelog';
 import type { GameLogEntry } from '../shared/types';
 
@@ -33,7 +36,31 @@ export function getPlayerGameLog(
   dynastyId: string,
   playerId: number,
   seasonId?: number,
+  anchorSeasonId?: number,
 ): GameLogEntry[] | undefined {
   const all = getGameLog(dynastyId, seasonId);
-  return all?.filter((entry) => entry.playerId === playerId);
+  if (!all) return undefined;
+
+  /*
+    IDENTITY GATE. Callers loop this over EVERY season to build a career — which
+    turns a per-season id filter into a cross-season one, and the save recycles
+    player ids (see shared/playerIdentity.ts). Without this, a freshman's career
+    opened with the previous holder's debut: the reported case was an incoming
+    LT whose journey began "vs Charlotte · Wk 0", two years before he enrolled.
+
+    Only engages when an anchor is supplied AND it names a different season than
+    the one being read. A caller asking for one season's log without an anchor
+    (the game-log tabs, which are already scoped to the season on screen) keeps
+    the cheap path and pays nothing.
+  */
+  if (anchorSeasonId !== undefined && seasonId !== undefined && anchorSeasonId !== seasonId) {
+    const seasons = getSeasonsByDynasty(dynastyId).filter((s) => s.hasFullData);
+    const reference = referencePlayer(seasons, playerId, anchorSeasonId);
+    const here = getSnapshot<LeagueRosterData>(seasonId, 'leagueRoster')?.players.find((p) => p.id === playerId);
+    // A different person holding this id that season played no games AS THIS
+    // PLAYER — an empty log is the truthful answer, not a missing one.
+    if (!isSamePlayer(here, reference)) return [];
+  }
+
+  return all.filter((entry) => entry.playerId === playerId);
 }

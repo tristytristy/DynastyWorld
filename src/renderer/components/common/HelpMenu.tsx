@@ -442,9 +442,11 @@ const HELP_TOPICS: HelpTopic[] = [
           no uniform or coach polo.
         </p>
         <p>
-          <strong>Program editor</strong>, on your Team Hub above <strong>Program budget</strong>, is where you fix
-          that. <strong>Identity</strong> sets your stadium name and city — those show on your schedule and on every
-          game&apos;s info page. <strong>Artwork</strong> takes four uploads:
+          <strong>Program editor</strong>, on any team&apos;s hub above <strong>Program budget</strong>, is where you
+          fix that — your own program and every other team in the league, so a save full of imported schools can all
+          be dressed properly rather than only the one you coach. <strong>Identity</strong> sets the stadium name and
+          city, which show on the schedule and on every game&apos;s info page. <strong>Artwork</strong> takes four
+          uploads:
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li><strong>Program logo</strong> — 1024 × 1024, transparent</li>
@@ -462,6 +464,68 @@ const HELP_TOPICS: HelpTopic[] = [
           anything, and nothing here is written to your save file. Remove an upload and the built-in artwork comes
           back. Edits belong to <strong>this dynasty only</strong> — an imported team that happens to share a name with
           a real school never changes that school in your other saves.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'custom-rivalries',
+    title: 'Naming your own rivalries',
+    content: (
+      <>
+        <p>
+          Your save keeps three rival slots per team and a fixed list of names for them, and neither can be changed
+          from inside the game. A long dynasty grows rivalries it has no room for — the team you keep meeting in the
+          conference title game, the one that keeps taking your recruits, a Teambuilder school that has no history
+          because it didn&apos;t exist last season. The <strong>Rivals</strong> tab of the Program editor is where you
+          name those yourself.
+        </p>
+        <p>
+          Your save&apos;s own rivals sit at the top, marked <strong>EA</strong> and read-only. Below them, pick a
+          team, give the rivalry a name, and — if you want one — add a logo at{' '}
+          <strong>1024 × 1024, transparent</strong>, the same size as the ones that ship with the app. Without a logo
+          the rivalry still gets the generic shield, which is a perfectly good place to stop.
+        </p>
+        <p>
+          A rivalry belongs to <strong>both</strong> teams, so you only ever create it once. Whichever program you
+          declare it from, the name and the mark turn up on both teams&apos; schedules, in each game&apos;s info page,
+          and on the <strong>Rivalries</strong> page — where a rivalry you&apos;ve named but not yet played shows at
+          0-0 until you meet.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          This is decoration for DynastyOS and nothing more: <strong>nothing is written to your save file</strong>,
+          your save&apos;s own rivals are left exactly as they are, and the in-game scheduling and commentary that
+          depend on them are untouched. Delete a rivalry and everything goes back to how the save has it.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'keyboard-shortcuts',
+    title: 'Keyboard shortcuts',
+    content: (
+      <>
+        <p>
+          The keyboard icon in the title bar opens <strong>Shortcuts</strong>. A few keys are fixed and always work:{' '}
+          <strong>Ctrl + K</strong> opens global search, <strong>Esc</strong> closes whatever panel is open, and{' '}
+          <strong>Shift + ←</strong> / <strong>Shift + →</strong> step through teams. They&apos;re listed at the top of
+          the panel under <strong>Built in</strong> so you can see them without having to find them by accident.
+        </p>
+        <p>
+          One shortcut arrives already set: <strong>Ctrl + Shift + Z</strong> flips between dark and light mode. You
+          can move it, or clear it and take the keys back — and if you change your mind, <strong>Restore</strong> on
+          that row puts it back without disturbing anything else you&apos;ve set.
+        </p>
+        <p>
+          Everything else — every page in the app — ships with no key at all, deliberately. Which page deserves a
+          shortcut depends entirely on how you play, so the panel offers the list and you spend the keys. Click a
+          shortcut field, press the combination you want, and it&apos;s bound. It needs <strong>Ctrl</strong>,{' '}
+          <strong>Alt</strong> or <strong>Cmd</strong>, or a function key.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Shortcuts never fire while you&apos;re typing, and a shortcut to a page inside a dynasty does nothing on the
+          Dashboard, where there&apos;s no dynasty to open it for. They&apos;re stored on this machine rather than in
+          the dynasty, so they follow you between saves instead of following a save between people.
         </p>
       </>
     ),
@@ -490,9 +554,9 @@ const HELP_TOPICS: HelpTopic[] = [
           the bottom.
         </p>
         <p>
-          The <strong>star</strong> puts a card in your <strong>card book</strong> (the book icon in the top bar), which
-          collects every starred card in the dynasty, a page per season. The <strong>export</strong> icon saves a card
-          as a PNG.
+          The <strong>star</strong> puts a card in your <strong>card book</strong> — the card icon at the right-hand end
+          of the Coach tabs, which collects every starred card in the dynasty, a page per season. The{' '}
+          <strong>export</strong> icon saves a card as a PNG.
         </p>
         <p className="text-slate-500 dark:text-slate-400">
           A card is a printed moment: the year, the school and the profile line are locked in when you make it, and

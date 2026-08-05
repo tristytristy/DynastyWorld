@@ -76,6 +76,24 @@ export function AboutMenu({ triggerClassName, icon }: { triggerClassName?: strin
             </dl>
           </div>
 
+          {/*
+            MAP ATTRIBUTION IS A LICENCE OBLIGATION, not a courtesy — the team
+            map behind a record banner is rendered from OpenStreetMap data via
+            OpenFreeMap, and all three parties must be credited with the
+            copyright URL printed. The OSM Foundation's guideline explicitly
+            permits an acknowledgements section for STATIC imagery, which is
+            what ships (see lib/teamMapAssetMapping.ts), so this is its home
+            rather than a corner of every banner. Do not remove it.
+          */}
+          <div>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Map data</p>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+              Team maps: OpenFreeMap © OpenMapTiles, data from OpenStreetMap.
+              <br />
+              openstreetmap.org/copyright
+            </p>
+          </div>
+
           <p className="text-[11px] leading-5 text-slate-400 dark:text-slate-500">
             Unofficial, fan-made companion — not affiliated with, endorsed by, or sponsored by Electronic Arts or EA
             Sports. All game names and trademarks belong to their respective owners.

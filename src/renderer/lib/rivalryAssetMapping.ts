@@ -63,9 +63,49 @@ function normalizeTeam(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-/** Order-independent: a matchup is the same rivalry whoever is at home. */
-function pairKey(a: string, b: string): string {
+/**
+ * Order-independent: a matchup is the same rivalry whoever is at home.
+ *
+ * EXPORTED because user-declared rivalries are stored under this exact key
+ * (schema v20, `custom_rivals.pair_key`). One implementation, or the editor
+ * would write a key the resolver below can't find and a rivalry someone created
+ * would simply never appear.
+ */
+export function rivalryPairKey(a: string, b: string): string {
   return [normalizeTeam(a), normalizeTeam(b)].sort().join('|');
+}
+
+const pairKey = rivalryPairKey;
+
+/** A rivalry the user declared: a name, and optionally their own art for it. */
+export interface CustomRivalryEntry {
+  name: string;
+  /** A renderer-loadable URL for the uploaded logo, or null for the generic shield. */
+  logo: string | null;
+}
+
+/**
+ * User-declared rivalries, sitting in front of the shipped pairing list.
+ *
+ * A PLAIN MODULE, for the same reason `programArt.ts` is one: rivalry art is
+ * resolved by a pure function that the Schedule, Scores, Game Info and Media
+ * pages all call, none of which can use hooks at the point of the call.
+ * Threading a map through four call sites would still miss the fifth.
+ * `CustomRivalsProvider` owns the lifecycle and is the only writer.
+ *
+ * Holds ONE dynasty's rows at a time, which is what makes a name-derived key
+ * safe here — two saves can each declare their own "Montana vs Idaho" without
+ * either reaching the other.
+ */
+let customRivalries: Record<string, CustomRivalryEntry> = {};
+
+export function setCustomRivalryRegistry(next: Record<string, CustomRivalryEntry>): void {
+  customRivalries = next;
+}
+
+/** The user's rivalry for this matchup, or null. Order-independent. */
+export function customRivalryFor(teamA: string, teamB: string): CustomRivalryEntry | null {
+  return customRivalries[pairKey(teamA, teamB)] ?? null;
 }
 
 const LOGO_BY_PAIR = new Map(
@@ -75,14 +115,35 @@ const LOGO_BY_PAIR = new Map(
 /**
  * This matchup's rivalry logo, or null when it isn't one we can name.
  *
+ * ORDER OF PRECEDENCE, and the user comes first. Someone who uploaded art for
+ * their own rivalry meant it to be used, including over a shipped pairing —
+ * declaring "the Battle for the Bell" on Alabama/Auburn is an odd thing to do,
+ * but if they do it, showing them the Iron Bowl shield instead would be the app
+ * overruling an explicit instruction.
+ *
+ * A NAMED CUSTOM RIVALRY WITH NO ART still gets the generic shield. The user
+ * said these two are rivals; that is the same evidence the save's own flag
+ * provides, and it earns the same treatment.
+ *
  * `isKnownRivalry` is the save's own rivalry flag for the user's team. It only
  * ever widens the result to the generic shield — a pairing with dedicated art
  * gets it either way, so a browsed team's Iron Bowl still shows the Iron Bowl.
- * Without the flag there is no fallback, because "these two teams played" is
- * not evidence of a rivalry.
+ * Without any of the three there is no fallback, because "these two teams
+ * played" is not evidence of a rivalry.
  */
 export function getRivalryLogoPath(teamA: string, teamB: string, isKnownRivalry = false): string | null {
+  const custom = customRivalries[pairKey(teamA, teamB)];
+  if (custom?.logo) return custom.logo;
   const known = LOGO_BY_PAIR.get(pairKey(teamA, teamB));
   if (known) return known;
-  return isKnownRivalry ? DEFAULT_RIVALRY_LOGO : null;
+  return custom || isKnownRivalry ? DEFAULT_RIVALRY_LOGO : null;
+}
+
+/**
+ * What to CALL this matchup — the user's name for it, else the save's, else
+ * nothing. The counterpart to the logo lookup, for surfaces that print a
+ * rivalry's name rather than draw its mark.
+ */
+export function getRivalryName(teamA: string, teamB: string, saveName?: string | null): string | null {
+  return customRivalries[pairKey(teamA, teamB)]?.name ?? saveName ?? null;
 }

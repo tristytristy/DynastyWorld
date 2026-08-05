@@ -1,6 +1,7 @@
 import { getDb, persist } from './init';
 import { getDynastyById, getSnapshot } from './helpers';
 import { isCompatible } from '../shared/hallFormation';
+import { findSamePlayer } from '../shared/playerIdentity';
 import type { LegendTier } from '../shared/hallFormation';
 import type { RosterPlayer } from '../shared/types';
 import type { TeamData } from '../extractors/extract-teams';
@@ -190,11 +191,15 @@ export function eligiblePlayers(dynastyId: string, coachId: number): HallEligibl
  * shouldn't fold 850 of them to find out.
  */
 export function isEligibleForCoachHall(dynastyId: string, coachId: number, playerId: number): boolean {
-  for (const season of coachSeasons(dynastyId, coachId)) {
-    const roster = getSnapshot<RosterPlayer[]>(season.seasonId, 'roster') ?? [];
-    if (roster.some((p) => p.id === playerId)) return true;
-  }
-  return false;
+  // Spans every season this coach worked, so a bare id would let a RECYCLED id
+  // qualify someone the coach never coached — the newest holder of the id is
+  // the person being asked about, and only his own seasons should count.
+  // See shared/playerIdentity.ts.
+  const seasons = [...coachSeasons(dynastyId, coachId)].sort((a, b) => b.seasonYear - a.seasonYear);
+  const rosters = seasons.map((season) => getSnapshot<RosterPlayer[]>(season.seasonId, 'roster') ?? []);
+  const reference = rosters.map((roster) => roster.find((p) => p.id === playerId)).find(Boolean);
+  if (!reference) return false;
+  return rosters.some((roster) => !!findSamePlayer(roster, reference));
 }
 
 /**

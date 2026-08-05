@@ -25,7 +25,7 @@ import type { NationalTeamStatRow, ProgramHistoryOverview, ScheduleOverview } fr
  * last and the snapshot card simply appears when it does.
  */
 export function CoachOverview() {
-  const { dynastyId, seasonId, overview, userCoach, career, staff, editCoach, openCardbook, openScandals } =
+  const { dynastyId, seasonId, overview, userCoach, career, staff, editCoach } =
     useCoachHubReady();
   const { seasons } = useSelectedSeason();
   // The light all-seasons load: tenure only, no per-season schedules.
@@ -115,7 +115,24 @@ export function CoachOverview() {
   const signature = bestWin(schedule ?? null);
   const rank = overview.rankings.media ?? overview.rankings.cfp ?? overview.rankings.coaches;
 
+  /*
+    THE STAFF CARD SHOWS WHO THE USER WORKS WITH, and that is a different list
+    depending on which chair they are sitting in.
+
+    A HEAD COACH looks down: his two coordinators, and no card for himself
+    because he is already the masthead six inches above.
+
+    A COORDINATOR looks UP FIRST (user direction). His head coach is the single
+    most relevant person on the staff — the man who hired him and whose seat
+    he is angling for — and leaving him out made a section called "staff" that
+    conspicuously omitted the boss. He leads the row, ahead of the other
+    coordinator, because that is the order of the building.
+  */
+  const isUserCoordinator =
+    userCoach?.position === 'OffensiveCoordinator' || userCoach?.position === 'DefensiveCoordinator';
+  const headCoach = isUserCoordinator ? staff.find((c) => c.position === 'HeadCoach') : undefined;
   const coordinators = staff.filter((c) => c.position === 'OffensiveCoordinator' || c.position === 'DefensiveCoordinator');
+  const staffCards = headCoach ? [headCoach, ...coordinators] : coordinators;
   // "Latest" means the most recent SEASON, not the last array element — the
   // milestone list is grouped by kind, not sorted by year, so taking the tail
   // showed a 2026 playoff run while the page was displaying 2027. Ties keep
@@ -186,37 +203,16 @@ export function CoachOverview() {
 
           <div className="flex shrink-0 flex-col items-end gap-4">
             {/*
-              CARDBOOK AND SCANDALS SIT ABOVE THE FACTS, restored after a spell
-              underneath them (user direction 2026-08-03). Below the facts they
-              were the last thing in a column that had already made its point,
-              and they read as an afterthought stuck to the bottom edge; up here
-              they sit level with the coach's name and balance it.
+              CARD BOOK AND SCANDALS HAVE MOVED to the Coach Hub's sub-nav rail
+              (user direction) — see CoachHubLayout.CoachHubTools. They were two
+              buttons in the busiest corner of the page, reachable only from
+              this one destination; on the rail they are reachable from all
+              seven and this column belongs entirely to the facts.
 
               EDIT COACH IS STILL NOT HERE. Editing the coach is not a
               destination, it is a correction to the record beside his name —
               so it stays the pencil, on hover, as the staff cards do it.
             */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={openCardbook}
-                title="Your card book — every card you've starred"
-                className="corner-cut-sm border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[var(--team-primary)] hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:text-white"
-              >
-                Cardbook
-              </button>
-              {userCoach && (
-                <button
-                  type="button"
-                  onClick={openScandals}
-                  title="Off-the-books adjustments — writes to your save"
-                  className="corner-cut-sm border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/20 dark:border-red-500/40 dark:text-red-300"
-                >
-                  Scandals
-                </button>
-              )}
-            </div>
-
             <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
             <HeroFact label="Record" value={recordLine(overview.record.wins, overview.record.losses)} />
             <HeroFact
@@ -349,17 +345,18 @@ export function CoachOverview() {
       )}
 
       {/* ── STAFF SNAPSHOT ──────────────────────────────────────────────── */}
-      {coordinators.length > 0 && (
+      {staffCards.length > 0 && (
         <SurfaceCard>
           <SectionHead
-            eyebrow="Staff"
-            title="Your coordinators"
+            eyebrow="Coaching staff"
+            title={headCoach ? 'Who you work for, and with' : 'Your coordinators'}
             to={`/dynasty/${dynastyId}/coach/staff`}
             linkLabel="Full staff"
           />
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {coordinators.map((coach) => {
+            {staffCards.map((coach) => {
               const isOffense = coach.position === 'OffensiveCoordinator';
+              const isCoordinator = isOffense || coach.position === 'DefensiveCoordinator';
               return (
                 <div
                   key={coach.position}
@@ -378,7 +375,12 @@ export function CoachOverview() {
                       year
                     </p>
                   </div>
-                  {units && (
+                  {/* PPG / PA-G is a COORDINATOR'S scoreboard. The head coach
+                      owns both units, so neither number is his in the way it is
+                      theirs, and the ternary would have quietly filed him under
+                      "defence" and printed points allowed against his name. His
+                      record is the masthead's job. */}
+                  {units && isCoordinator && (
                     <div className="shrink-0 text-right">
                       <p className="tnum font-display text-lg font-bold text-slate-900 dark:text-white">
                         {(isOffense ? units.pointsPerGame : units.pointsAllowedPerGame).toFixed(1)}

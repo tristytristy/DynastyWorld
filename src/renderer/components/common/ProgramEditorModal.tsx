@@ -6,9 +6,10 @@ import { useProgramArt } from '../../data/ProgramArtProvider';
 import { useStadiumData } from '../../data/StadiumDataProvider';
 import { canonicalKey } from '../../lib/assetMapping';
 import { programArtUrl } from '../../lib/programArt';
+import { ProgramRivalsTab } from './ProgramRivalsTab';
 import type { ProgramArtSlot, ProgramOverride } from '../../../shared/types';
 
-type Tab = 'identity' | 'artwork';
+type Tab = 'identity' | 'artwork' | 'rivals';
 
 /**
  * What each upload is for, and what it has to be.
@@ -19,6 +20,9 @@ type Tab = 'identity' | 'artwork';
  * Telling the user a number the app doesn't actually use would be worse than
  * telling them nothing.
  */
+const TABS: Tab[] = ['identity', 'artwork', 'rivals'];
+const TAB_LABELS: Record<Tab, string> = { identity: 'Identity', artwork: 'Artwork', rivals: 'Rivals' };
+
 const SLOTS: { key: ProgramArtSlot; label: string; size: string; hint: string }[] = [
   {
     key: 'logo',
@@ -139,8 +143,8 @@ export function ProgramEditorModal({
 
   return (
     <CenteredModalPanel open={open} onClose={onClose} widthRem={40} eyebrow="Program editor" title={teamName}>
-      <GliderNav className="mb-5" activeIndex={tab === 'identity' ? 0 : 1} ariaLabel="Program editor sections">
-        {(['identity', 'artwork'] as Tab[]).map((t) => (
+      <GliderNav className="mb-5" activeIndex={TABS.indexOf(tab)} ariaLabel="Program editor sections">
+        {TABS.map((t) => (
           <button
             key={t}
             type="button"
@@ -148,12 +152,14 @@ export function ProgramEditorModal({
             className={gliderItemClass(tab === t)}
             aria-current={tab === t}
           >
-            {t === 'identity' ? 'Identity' : 'Artwork'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </GliderNav>
 
-      {tab === 'identity' ? (
+      {tab === 'rivals' ? (
+        <ProgramRivalsTab dynastyId={dynastyId} teamIndex={teamIndex} teamName={teamName} />
+      ) : tab === 'identity' ? (
         <div className="space-y-4">
           <div>
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Stadium name</p>

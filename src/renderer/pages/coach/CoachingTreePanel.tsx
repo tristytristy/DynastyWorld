@@ -33,26 +33,26 @@ export function CoachingTreePanel({ tree }: { tree: CoachingTree }) {
 
   return (
     <>
+      {/*
+        EYEBROW ONLY, AND NO ROOT NODE (user direction).
+
+        "Where your people went" restated the eyebrow directly above it in a
+        longer sentence, and the boxed root underneath it — your name, your team,
+        in a team-coloured frame — was the third time this screen said who you
+        are: the Coach Hub's identity line already carries the name, the role,
+        the school and the year a few pixels higher. Every branch below already
+        reads as descending from you, which is the only job that node had.
+
+        The counts stay. They are the one thing here that is not repeated
+        anywhere else on the page.
+      */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Coaching Tree</p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-            Where your people went
-          </h3>
-        </div>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Coaching Tree</p>
         <div className="flex gap-3">
           <StatTile label="Coaches produced" value={String(tree.coachesProduced)} />
           <StatTile label="Now head coaches" value={String(tree.headCoachesProduced)} />
         </div>
       </div>
-
-      {/* Root node — you */}
-      {tree.rootCoachName && (
-        <div className="mt-4 inline-flex items-center gap-2 border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-3 py-1.5">
-          <span className="text-sm font-bold text-slate-900 dark:text-white">{tree.rootCoachName}</span>
-          {tree.rootTeamName && <span className="text-xs text-slate-500 dark:text-slate-400">· {tree.rootTeamName}</span>}
-        </div>
-      )}
 
       <div className="mt-4 space-y-2.5">
         {tree.entries.map((e) => (
