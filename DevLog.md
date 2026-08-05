@@ -9424,3 +9424,41 @@ own identity line a few pixels higher. The counts stay; they are the only thing
 there not repeated elsewhere.
 
 typecheck / eslint / build:prod clean.
+
+## 2026-08-05 — Release 4.3.0
+
+Version bumped 4.2.0 → **4.3.0** in `package.json` and both root entries of
+`package-lock.json`. A MINOR and not a patch: this adds a database migration and
+three features, and not a major, because nothing here breaks an existing
+archive.
+
+Release notes at `docs/releases/GITHUB_RELEASE_v4.3.0.md`.
+
+**Schema moves to v20** — `custom_rivals`, one additive table. Migrations are
+append-only release history and nothing earlier was touched, so an existing
+archive upgrades in place. This was verified rather than assumed: the migration
+was run against a copy of the real 45.8 MB archive (v19, 5 dynasties, 27 tables)
+and a fingerprint over every pre-existing table came back identical, with no row
+count changed. See the earlier entry today for the constraint and cascade
+checks.
+
+**The manual gains a Rivals section** under Team Hub, and three of its existing
+passages were wrong as of this release and are now corrected: the Program editor
+is no longer "for your own program" (it opens on every team), the card book is
+no longer "the book icon in the top bar" (it moved to the Coach tab rail), and
+Media's button is "+ Media" rather than "Add photos / videos". The Honest
+Limitations list loses its "Program editor covers your own program" line, which
+this release makes untrue — a limitation left standing after it is fixed is
+worse than one never written down.
+
+The keyboard-shortcuts section now lists the built-in keys explicitly, because
+the app itself does as of this release, and a manual that still said "none of
+them start bound to anything" would contradict a panel that ships one binding.
+
+**What this release does NOT need.** No re-sync for any of it: custom rivalries
+are user-authored, the Upset of the Week fix is a read-time correction over data
+already archived, and the trophy change reads the same leaguewide snapshots the
+user's own hub always did. The Team Hub maps are artwork and ship with the
+installer.
+
+typecheck / eslint / check:refs / build:prod clean.
