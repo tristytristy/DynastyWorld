@@ -9575,3 +9575,79 @@ sat on top of the team logo. The middle of the bottom edge is the one place
 along it no caption furniture claims.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 (later still) — Media becomes an album shelf
+
+### Albums the user makes (schema v22)
+
+v21 gave the game folders editable names. v22 adds the two things that turn a
+folder into an album: somewhere to put photographs that belong to no game, and a
+say in which photograph the folder shows.
+
+**Two kinds of folder, genuinely different**, which is why `custom_albums` is a
+second table rather than a widening of `media_albums`. A GAME folder is DERIVED
+— it exists because the schedule says so, its membership is whatever is tagged
+to that game, and it cannot be created or deleted; `media_albums` only overrides
+its name and cover, and deleting that row leaves the folder standing. A CUSTOM
+album is DECLARED — created, named, filled and thrown away by hand, with
+membership in `media_items.album_id`. Collapsing them would produce a row that
+sometimes owns its folder's existence and sometimes doesn't, with a sentinel to
+say which.
+
+**A photo is filed under a game OR an album, never both.** The editor offers
+them as alternatives, and `updateMediaItem` writes both columns on every update
+so no path through it leaves a row in two places. A photograph in two folders
+would be counted twice and reordered against itself.
+
+**Deleting an album releases its photographs** rather than taking them with it.
+Deleting a container must never delete files the user imported: an album is a
+way of arranging photographs, and throwing one away is a filing decision.
+
+### The shelf
+
+**Grid view is now the shelf itself** — one box per album, not a wall of every
+photograph. The list answers "what is in this folder"; the grid answers "what
+folders do I have", and a grid that spilled every picture answered neither. Each
+box is a corner-cut frame carrying a slideshow of its own photographs, reusing
+`MediaBackdrop` so the album boxes and the Trophy Room move the same way — with
+a new `cover` tone, because that component was graded to sit BEHIND content
+(grey, a third opacity) and here the picture IS the content. Caught in a
+capture: at backdrop grade the boxes looked broken.
+
+**The cover leads the slideshow.** A folder with a chosen cover has to OPEN on
+it; one that reaches the cover eight seconds later is not showing it.
+
+**One thumbnail in the list, not five.** The overlapping stack was seventy-five
+pictures down a fifteen-folder list, none big enough to see. Which frame it is
+is now a choice, made from the photo itself rather than a separate picker — you
+are already looking at the pictures when you decide.
+
+**Later weeks first, always.** The OLDEST / NEWEST switch is gone: it was a
+control for a question with one good answer, since the folder you want is nearly
+always the game you just played. Three bands now — the albums you made, then
+games newest first, then the unfiled pile. Your own albums lead because you made
+them on purpose and the app did not; the unfiled pile is last in every
+arrangement because it belongs to no week.
+
+**The view is remembered**, per machine, and the switch is icons rather than
+words: two arrangements of one shelf need recognising, not reading.
+
+**The pencil moved beside the title.** A "Rename album" link under every folder
+was a row of chrome per folder.
+
+### Rule-of-thirds
+
+A toggle in the framing pill, off by default, drawn over the STAGE rather than
+the image — a grid that moved with the crop would be measuring the wrong thing.
+Only where framing is possible: on a look-only viewer a composition guide is a
+grid over someone's photograph for no reason.
+
+**Verified** on a copy of the real archive (at v21): the migration changes no
+existing row, all 470 media items survive with `album_id` null, both new columns
+land, an orphan dynasty id is rejected, duplicate album names are allowed (a
+deliberate choice — refusing the second one mid-typing is worse than letting
+them rename it), filing flips cleanly between game and album in both directions,
+deleting an album released its photo and left all 470 in place, and cascade took
+3 albums with the dynasty.
+
+typecheck / eslint / check:refs / build:prod clean.

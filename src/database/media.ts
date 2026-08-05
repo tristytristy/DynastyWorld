@@ -22,6 +22,7 @@ interface MediaRow {
   file_name: string;
   media_type: string;
   game_id: number | null;
+  album_id: number | null;
   description: string;
   player_ids_json: string;
   frame_x: number | null;
@@ -33,7 +34,7 @@ interface MediaRow {
 
 /** The one column list every read uses, so a new column can't be added to three of four queries. */
 const MEDIA_COLS =
-  'id, season_id, file_name, media_type, game_id, description, player_ids_json, frame_x, frame_y, frame_scale, look_json, created_at';
+  'id, season_id, file_name, media_type, game_id, album_id, description, player_ids_json, frame_x, frame_y, frame_scale, look_json, created_at';
 
 function mapRow(row: MediaRow): MediaItem {
   let playerIds: number[] = [];
@@ -49,6 +50,7 @@ function mapRow(row: MediaRow): MediaItem {
     fileName: row.file_name,
     mediaType: row.media_type === 'video' ? 'video' : 'image',
     gameId: row.game_id,
+    albumId: row.album_id,
     description: row.description,
     playerIds,
     // Scale is the presence flag: no scale, no saved framing.
@@ -216,6 +218,7 @@ export function addMediaItem(
     fileName,
     mediaType,
     gameId: null,
+    albumId: null,
     description: '',
     playerIds: [],
     framing: null,
@@ -224,9 +227,17 @@ export function addMediaItem(
   };
 }
 
+/**
+ * A PHOTO IS FILED UNDER A GAME **OR** A CUSTOM ALBUM, never both — see
+ * schema_v22. Writing both columns on every update is what enforces it: passing
+ * a game clears the album and passing an album clears the game, so there is no
+ * path through this function that leaves a row in two places at once.
+ */
 export function updateMediaItem(id: number, patch: MediaItemPatch): void {
-  getDb().run('UPDATE media_items SET game_id = ?, description = ?, player_ids_json = ? WHERE id = ?', [
+  getDb().run('UPDATE media_items SET game_id = ?, album_id = ?, description = ?, player_ids_json = ? WHERE id = ?', [
     patch.gameId ?? null,
+    // Exclusive by construction: a game means no album, an album means no game.
+    patch.gameId === null ? patch.albumId ?? null : null,
     patch.description,
     JSON.stringify(patch.playerIds),
     id,

@@ -19,6 +19,7 @@ import schemaV18 from './schema_v18_card_scrim.sql';
 import schemaV19 from './schema_v19_manual_seasons.sql';
 import schemaV20 from './schema_v20_custom_rivals.sql';
 import schemaV21 from './schema_v21_media_albums.sql';
+import schemaV22 from './schema_v22_custom_albums.sql';
 
 export interface Migration {
   version: number;
@@ -52,4 +53,5 @@ export const MIGRATIONS: Migration[] = [
   { version: 19, name: 'manual_seasons', sql: schemaV19 },
   { version: 20, name: 'custom_rivals', sql: schemaV20 },
   { version: 21, name: 'media_albums', sql: schemaV21 },
+  { version: 22, name: 'custom_albums', sql: schemaV22 },
 ];

@@ -6,8 +6,16 @@ import { getMediaLibraryStatus, getMediaRoot, moveMediaLibrary, resetMediaLibrar
 import { getBackupsFolderInfo, getDatabaseFileBytes, pruneOldBackups } from '../../database/init';
 import { clearDeletedDynastyCache, getDeletedDynastyCacheBytes } from '../../database/helpers';
 import { getSaveBackupsFolderInfo, pruneAllSaveBackups } from '../editorWrite';
-import { listMediaAlbums, setMediaAlbumName } from '../../database/mediaAlbums';
+import { listMediaAlbums, setMediaAlbumCover, setMediaAlbumName } from '../../database/mediaAlbums';
+import {
+  createCustomAlbum,
+  listCustomAlbums,
+  removeCustomAlbum,
+  renameCustomAlbum,
+  setCustomAlbumCover,
+} from '../../database/customAlbums';
 import type {
+  CustomAlbum,
   MediaAlbum,
   MediaFraming,
   MediaItemPatch,
@@ -179,6 +187,41 @@ export function registerMediaHandlers(): void {
     ): Promise<MediaAlbum[]> => {
       return setMediaAlbumName(dynastyId, seasonId, gameId, name);
     },
+  );
+
+  ipcMain.handle(
+    IPC.media.setAlbumCover,
+    async (_e, dynastyId: string, seasonId: number, gameId: number | null, mediaId: number | null) =>
+      setMediaAlbumCover(dynastyId, seasonId, gameId, mediaId),
+  );
+
+  ipcMain.handle(
+    IPC.media.listCustomAlbums,
+    async (_e, dynastyId: string, seasonId: number): Promise<CustomAlbum[]> =>
+      listCustomAlbums(dynastyId, seasonId),
+  );
+
+  ipcMain.handle(
+    IPC.media.createCustomAlbum,
+    async (_e, dynastyId: string, seasonId: number, name: string) => createCustomAlbum(dynastyId, seasonId, name),
+  );
+
+  ipcMain.handle(
+    IPC.media.renameCustomAlbum,
+    async (_e, dynastyId: string, seasonId: number, albumId: number, name: string) =>
+      renameCustomAlbum(dynastyId, seasonId, albumId, name),
+  );
+
+  ipcMain.handle(
+    IPC.media.removeCustomAlbum,
+    async (_e, dynastyId: string, seasonId: number, albumId: number) =>
+      removeCustomAlbum(dynastyId, seasonId, albumId),
+  );
+
+  ipcMain.handle(
+    IPC.media.setCustomAlbumCover,
+    async (_e, dynastyId: string, seasonId: number, albumId: number, mediaId: number | null) =>
+      setCustomAlbumCover(dynastyId, seasonId, albumId, mediaId),
   );
 
   ipcMain.handle(IPC.media.update, async (_event, id: number, patch: MediaItemPatch): Promise<void> => {

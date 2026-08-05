@@ -187,6 +187,14 @@ export function ZoomableImage({
   }, [zoomTo]);
 
   const zoomed = framing.scale > 1;
+  /*
+    THE RULE-OF-THIRDS GRID (user direction) — off by default, because it is a
+    tool for composing a crop and not something to look at a photograph
+    through. Local to the viewer rather than saved: it guides the framing, it
+    is not part of it, and nothing about the photograph changes when it is on.
+  */
+  const [showThirds, setShowThirds] = useState(false);
+
   const dirty = !same(framing, savedFraming);
   const hasSaved = Boolean(saved) && !isUnframed(savedFraming);
 
@@ -223,6 +231,28 @@ export function ZoomableImage({
         />
       </div>
 
+      {/* Drawn over the stage, not over the IMAGE, so the lines stay put while
+          the photo pans and zooms underneath them — a grid that moved with the
+          crop would be measuring the wrong thing. */}
+      {showThirds && (
+        <div className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
+          {[1, 2].map((n) => (
+            <span
+              key={`v${n}`}
+              className="absolute inset-y-0 w-px bg-white/45 mix-blend-difference"
+              style={{ left: `${(n * 100) / 3}%` }}
+            />
+          ))}
+          {[1, 2].map((n) => (
+            <span
+              key={`h${n}`}
+              className="absolute inset-x-0 h-px bg-white/45 mix-blend-difference"
+              style={{ top: `${(n * 100) / 3}%` }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Sits with the counter along the bottom of the stage, in the same
           quiet dark pill — a control that belongs to the photo, not chrome
           competing with it.
@@ -250,6 +280,27 @@ export function ZoomableImage({
           className="w-28 accent-[var(--team-primary)]"
         />
         <span className="tnum w-10 text-right text-xs">{Math.round(framing.scale * 100)}%</span>
+
+        {/* Only where framing is possible: on a viewer that cannot crop, a
+            composition guide is a grid over someone's photograph for no
+            reason. */}
+        {onSave && (
+          <button
+            type="button"
+            onClick={() => setShowThirds((v) => !v)}
+            aria-pressed={showThirds}
+            title={showThirds ? 'Hide the rule-of-thirds grid' : 'Show the rule-of-thirds grid'}
+            aria-label="Rule-of-thirds grid"
+            className={`ml-1 border-l border-white/20 pl-2 transition-colors ${
+              showThirds ? 'text-[var(--team-primary)]' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
+              <rect x="2" y="2" width="16" height="16" />
+              <path d="M7.33 2v16M12.67 2v16M2 7.33h16M2 12.67h16" />
+            </svg>
+          </button>
+        )}
 
         {/* Only where framing can be kept, and only once there's something to
             keep or to undo — a Save that is permanently there invites the

@@ -3,24 +3,22 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { CustomAlbum, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
-import { ToggleSwitch } from '../components/ui/ToggleSwitch';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { getGameTypeImagePath } from '../lib/scheduleFormat';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import { useTheme } from '../theme/ThemeProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
-import { useViewedTeam } from '../data/ViewedTeamProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useConfirm } from '../data/ConfirmDialogProvider';
-import { CloseIcon, EditIcon, ExportIcon, TrashIcon } from '../components/common/ActionIcons';
+import { CloseIcon, EditIcon, ExportIcon, GridViewIcon, ListViewIcon, PlusIcon, TrashIcon } from '../components/common/ActionIcons';
 import { ModalCloseButton } from '../components/common/ModalCloseButton';
 import { ZoomableImage, framingTransform } from '../components/common/ZoomableImage';
+import { MediaBackdrop } from '../components/common/MediaBackdrop';
 import {
   DEFAULT_MEDIA_LOOK,
   FILTER_PRESETS,
@@ -42,6 +40,9 @@ import {
  * selected.
  */
 const CLEAR_GAME = '__clear__';
+
+/** The dropdown row that opens the "name it" field rather than selecting an album. */
+const NEW_ALBUM = '__new_album__';
 
 const DELETE_MEDIA_CONFIRM = {
   eyebrow: 'Delete media',
@@ -74,6 +75,33 @@ function playerLabel(player: RosterPlayer): string {
  * dynasty rather than a fact about a particular photograph.
  */
 const GOLD_MARK_KEY = 'cfb.mediaPlateGoldMark';
+
+/**
+ * Which arrangement the library opens in.
+ *
+ * REMEMBERED (user direction) — picking Grid every single visit is a tax on a
+ * preference that never changes. Per-machine like the other view preferences,
+ * because it is about how this person likes to look at a page, not about the
+ * dynasty; a shared archive should not carry one person's habit into someone
+ * else's copy.
+ */
+const MEDIA_VIEW_KEY = 'cfb.mediaView';
+
+function loadMediaView(): 'list' | 'grid' {
+  try {
+    return localStorage.getItem(MEDIA_VIEW_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveMediaView(view: 'list' | 'grid'): void {
+  try {
+    localStorage.setItem(MEDIA_VIEW_KEY, view);
+  } catch {
+    // A blocked localStorage just means it opens in List next time.
+  }
+}
 
 function loadGoldMark(): boolean {
   try {
@@ -141,6 +169,8 @@ function MediaTile({
   onDropTile,
   canReorder,
   onDelete,
+  onMakeCover,
+  isCover,
 }: {
   item: MediaItemWithPath;
   index: number;
@@ -154,6 +184,9 @@ function MediaTile({
   onDropTile: (event: ReactDragEvent) => void;
   canReorder: boolean;
   onDelete: () => void;
+  /** Present only where the tile sits inside a folder that can have a cover. */
+  onMakeCover?: () => void;
+  isCover?: boolean;
 }) {
   return (
               <div
@@ -257,6 +290,29 @@ function MediaTile({
                       className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
                     >
                       <TrashIcon />
+                    </button>
+                  )}
+                  {/* WHICH PHOTO THE FOLDER SHOWS, chosen here rather than in a
+                      separate picker: you are already looking at the pictures,
+                      and the one you want as the cover is the one under your
+                      pointer. */}
+                  {onMakeCover && !selectMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMakeCover();
+                      }}
+                      title={isCover ? 'This is the folder cover' : 'Use as the folder cover'}
+                      aria-label={isCover ? 'Folder cover' : 'Use as the folder cover'}
+                      aria-pressed={isCover}
+                      className={`pointer-events-auto shrink-0 border px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                        isCover
+                          ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                          : 'border-white/25 bg-slate-950/70 text-slate-200 hover:border-[var(--team-primary)]'
+                      }`}
+                    >
+                      Cover
                     </button>
                   )}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
@@ -572,35 +628,141 @@ function MediaDetailsForm({
   item,
   games,
   roster,
+  albums,
+  onCreateAlbum,
   onSave,
   onCancel,
 }: {
   item: MediaItemWithPath;
   games: ScheduleGame[];
   roster: RosterPlayer[];
+  albums: CustomAlbum[];
+  /** Creates an album and hands back its id, so the photo can be filed into it immediately. */
+  onCreateAlbum: (name: string) => Promise<number | null>;
   onSave: (patch: MediaItemPatch) => void;
   onCancel: () => void;
 }) {
   const [gameId, setGameId] = useState<number | null>(item.gameId);
+  const [albumId, setAlbumId] = useState<number | null>(item.albumId);
+  /*
+    Which side the switch opens on. An album wins when the photo has one,
+    because that is where it actually lives; everything else — including a photo
+    filed nowhere at all — opens on Game, which is how the overwhelming majority
+    of these are filed.
+  */
+  const [filedUnder, setFiledUnder] = useState<'game' | 'album'>(item.albumId !== null ? 'album' : 'game');
+  const [creatingHere, setCreatingHere] = useState(false);
+  const [newAlbum, setNewAlbum] = useState('');
   const [description, setDescription] = useState(item.description);
   const [playerIds, setPlayerIds] = useState<number[]>(item.playerIds);
+
+  async function addAlbum() {
+    const name = newAlbum.trim();
+    if (!name) return;
+    const created = await onCreateAlbum(name);
+    if (created === null) return;
+    // Filed into it straight away — you named an album while looking at a
+    // photograph, so that photograph is what it is for.
+    setAlbumId(created);
+    setNewAlbum('');
+    setCreatingHere(false);
+  }
   const inputClass =
     'w-full border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
   return (
     <div className="space-y-4">
+      {/*
+        WHERE THIS PHOTO IS FILED — a game, or one of your own albums. They are
+        alternatives, not a pair (see schema_v22): a photograph lives in exactly
+        one folder, so choosing GAME clears any album and choosing ALBUM clears
+        the game. Anything else would put the same picture in two places on a
+        shelf and count it twice.
+      */}
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game</p>
-        <Select
-          value={gameId === null ? '' : String(gameId)}
-          onChange={(next) => setGameId(next === '' ? null : Number(next))}
-          ariaLabel="Game this media is from"
-          className="mt-1.5 w-full"
-          options={[
-            { value: '', label: 'Not from a specific game' },
-            ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
-          ]}
-        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Filed under</p>
+          <div className="inline-flex border border-slate-200/80 bg-slate-50/90 p-0.5 dark:border-slate-800 dark:bg-white/5">
+            {(['game', 'album'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={filedUnder === mode}
+                onClick={() => {
+                  setFiledUnder(mode);
+                  if (mode === 'game') setAlbumId(null);
+                  else setGameId(null);
+                }}
+                className={`px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors duration-base ${
+                  filedUnder === mode
+                    ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                {mode === 'game' ? 'Game' : 'Album'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filedUnder === 'game' ? (
+          <Select
+            value={gameId === null ? '' : String(gameId)}
+            onChange={(next) => setGameId(next === '' ? null : Number(next))}
+            ariaLabel="Game this media is from"
+            className="mt-1.5 w-full"
+            options={[
+              { value: '', label: 'Not from a specific game' },
+              ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+            ]}
+          />
+        ) : (
+          <>
+            {/* CREATE NEW ALBUM IS ALWAYS THE LAST OPTION, and the only one when
+                there are none yet — a dropdown whose sole entry is an action
+                reads as "there is nothing here, make one", which is exactly the
+                state it describes. */}
+            <Select
+              value={creatingHere ? NEW_ALBUM : albumId === null ? '' : String(albumId)}
+              onChange={(next) => {
+                if (next === NEW_ALBUM) {
+                  setCreatingHere(true);
+                  return;
+                }
+                setCreatingHere(false);
+                setAlbumId(next === '' ? null : Number(next));
+              }}
+              ariaLabel="Album this media is filed in"
+              className="mt-1.5 w-full"
+              options={[
+                ...(albums.length > 0 ? [{ value: '', label: 'Not in an album' }] : []),
+                ...albums.map((album) => ({ value: String(album.id), label: album.name })),
+                { value: NEW_ALBUM, label: 'Create new album…' },
+              ]}
+            />
+            {creatingHere && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newAlbum}
+                  onChange={(e) => setNewAlbum(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void addAlbum();
+                    if (e.key === 'Escape') setCreatingHere(false);
+                  }}
+                  placeholder="Album name"
+                  aria-label="New album name"
+                  className={inputClass}
+                />
+                <Button compact onClick={() => void addAlbum()}>
+                  Create
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div>
@@ -633,7 +795,20 @@ function MediaDetailsForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button onClick={() => onSave({ gameId, description: description.trim(), playerIds })}>Save details</Button>
+        <Button
+          onClick={() =>
+            onSave({
+              // The DAL enforces exclusivity too, but sending the pair already
+              // resolved keeps the two ends agreeing about what was chosen.
+              gameId: filedUnder === 'game' ? gameId : null,
+              albumId: filedUnder === 'album' ? albumId : null,
+              description: description.trim(),
+              playerIds,
+            })
+          }
+        >
+          Save details
+        </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
@@ -650,6 +825,8 @@ function MediaLightbox({
   index,
   games,
   roster,
+  albums,
+  onCreateAlbum,
   onNavigate,
   onClose,
   onSaved,
@@ -663,6 +840,8 @@ function MediaLightbox({
   index: number;
   games: ScheduleGame[];
   roster: RosterPlayer[];
+  albums: CustomAlbum[];
+  onCreateAlbum: (name: string) => Promise<number | null>;
   onNavigate: (index: number) => void;
   onClose: () => void;
   onSaved: (item: MediaItemWithPath, patch: MediaItemPatch) => void;
@@ -1146,6 +1325,8 @@ function MediaLightbox({
                   item={item}
                   games={games}
                   roster={roster}
+                  albums={albums}
+                  onCreateAlbum={onCreateAlbum}
                   onSave={(patch) => {
                     onSaved(item, patch);
                     setEditing(false);
@@ -1178,9 +1359,6 @@ export function Media() {
   const { id } = useParams<{ id: string }>();
   const confirm = useConfirm();
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
-  // The knob wears the USER's mark, not the browsed team's — this library is
-  // the dynasty's own photographs whichever team page you last looked at.
-  const { userTeamName } = useViewedTeam();
   const [items, setItems] = useState<MediaItemWithPath[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
@@ -1200,7 +1378,15 @@ export function Media() {
     silently remembered from a session weeks ago is a worse surprise than
     re-picking it.
   */
-  const [rollSort, setRollSort] = useState<'oldest' | 'newest'>('oldest');
+  /*
+    LATER WEEKS FIRST, ALWAYS (user direction) — week 10, 9, 8, and so on. The
+    OLDEST ⇄ NEWEST switch it replaces was a control for a question that has one
+    good answer: the folder you want is nearly always the one from the game you
+    just played, and putting week 0 at the top buried it under a season. Kept as
+    a constant rather than deleted so the ordering below still reads as a
+    decision rather than an accident of the comparator.
+  */
+  const ROLL_SORT_NEWEST_FIRST = true;
   /*
     HOW THE LIBRARY IS ARRANGED (user direction).
 
@@ -1215,12 +1401,16 @@ export function Media() {
     Session state, like the sort direction: it is how you want to look right
     now, not a standing preference.
   */
-  const [view, setView] = useState<'list' | 'grid'>('list');
-  /** Folder names the user has chosen this season, by game id (null = the unfiled pile). */
+  const [view, setView] = useState<'list' | 'grid'>(loadMediaView);
+  /** Folder names and covers the user has chosen this season, by game id (null = the unfiled pile). */
   const [albums, setAlbums] = useState<MediaAlbum[]>([]);
+  /** Albums the user made — their own folders, filled by hand. */
+  const [customAlbums, setCustomAlbums] = useState<CustomAlbum[]>([]);
   /** Which folder is being renamed, keyed the way the rolls are. */
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOverUpload, setDragOverUpload] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -1244,6 +1434,9 @@ export function Media() {
     void window.api.media.listAlbums(id, seasonId).then((rows) => {
       if (!cancelled) setAlbums(rows);
     });
+    void window.api.media.listCustomAlbums(id, seasonId).then((rows) => {
+      if (!cancelled) setCustomAlbums(rows);
+    });
     return () => {
       cancelled = true;
     };
@@ -1253,6 +1446,75 @@ export function Media() {
     if (!id || seasonId === undefined) return;
     setAlbums(await window.api.media.renameAlbum(id, seasonId, gameId, name));
     setRenamingKey(null);
+  }
+
+  /** Renames a game folder or a user-made album, whichever this roll is. */
+  async function renameRoll(roll: { game?: ScheduleGame; albumId?: number }, name: string) {
+    if (!id || seasonId === undefined) return;
+    if (roll.albumId !== undefined) {
+      setCustomAlbums(await window.api.media.renameCustomAlbum(id, seasonId, roll.albumId, name));
+      setRenamingKey(null);
+      return;
+    }
+    await renameAlbum(roll.game?.gameId ?? null, name);
+  }
+
+  /** Chooses the photograph a folder shows. Same call shape for both kinds. */
+  async function setCover(roll: { game?: ScheduleGame; albumId?: number }, mediaId: number | null) {
+    if (!id || seasonId === undefined) return;
+    if (roll.albumId !== undefined) {
+      setCustomAlbums(await window.api.media.setCustomAlbumCover(id, seasonId, roll.albumId, mediaId));
+      return;
+    }
+    setAlbums(await window.api.media.setAlbumCover(id, seasonId, roll.game?.gameId ?? null, mediaId));
+  }
+
+  /**
+   * Removes an album and RELEASES its photographs — they go back to the
+   * unfiled pile rather than being deleted with it. Deleting a container must
+   * never delete files the user imported.
+   */
+  async function deleteAlbum(albumId: number, name: string) {
+    if (!id || seasonId === undefined) return;
+    const ok = await confirm({
+      eyebrow: 'Delete album',
+      title: `Delete "${name}"?`,
+      message: 'The album goes; its photos stay and return to "Not from a game".',
+      confirmLabel: 'Delete album',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setCustomAlbums(await window.api.media.removeCustomAlbum(id, seasonId, albumId));
+    setRenamingKey(null);
+    refresh();
+  }
+
+  /**
+   * Creates an album and returns its id, for the editor's "Create new album…"
+   * — which needs to file the photo into it immediately, not just refresh a
+   * list. The id is found by NAME against the returned rows rather than by
+   * asking the DAL for a last-insert id: the list comes back sorted and
+   * complete either way, and this avoids a second round trip.
+   */
+  async function createAlbumNamed(name: string): Promise<number | null> {
+    if (!id || seasonId === undefined) return null;
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const before = new Set(customAlbums.map((a) => a.id));
+    const rows = await window.api.media.createCustomAlbum(id, seasonId, trimmed);
+    setCustomAlbums(rows);
+    // The one that wasn't there before. Falls back to a name match, which
+    // matters only if two albums share a name — in which case either is right.
+    return rows.find((a) => !before.has(a.id))?.id ?? rows.find((a) => a.name === trimmed)?.id ?? null;
+  }
+
+  async function createAlbum() {
+    if (!id || seasonId === undefined) return;
+    const name = newAlbumName.trim();
+    if (!name) return;
+    setCustomAlbums(await window.api.media.createCustomAlbum(id, seasonId, name));
+    setNewAlbumName('');
+    setCreatingAlbum(false);
   }
 
   const refresh = useCallback(() => {
@@ -1469,12 +1731,41 @@ export function Media() {
     defaultLabel: string;
     /** The user's name, or null when the folder still uses the game's. */
     custom: string | null;
+    /** Set when this roll is a user-made album rather than a game folder. */
+    albumId?: number;
+    /** The photo the folder shows, if one was chosen. */
+    coverMediaId: number | null;
     game?: ScheduleGame;
     entries: { item: MediaItemWithPath; index: number }[];
   }[] = [];
   const rollByKey = new Map<string, (typeof rolls)[number]>();
+  /*
+    EVERY USER-MADE ALBUM GETS A ROLL UP FRONT, before any photo is placed —
+    otherwise an album you just created would not exist on the shelf until you
+    filed something into it, which is exactly backwards: you make the album so
+    you have somewhere to put things.
+  */
+  for (const album of customAlbums) {
+    const roll = {
+      key: `album:${album.id}`,
+      label: album.name,
+      defaultLabel: album.name,
+      custom: null,
+      albumId: album.id,
+      coverMediaId: album.coverMediaId,
+      entries: [] as { item: MediaItemWithPath; index: number }[],
+    };
+    rollByKey.set(roll.key, roll);
+    rolls.push(roll);
+  }
+
   (items ?? []).forEach((item, index) => {
-    const key = item.gameId === null ? UNFILED : String(item.gameId);
+    const key =
+      item.albumId !== null && rollByKey.has(`album:${item.albumId}`)
+        ? `album:${item.albumId}`
+        : item.gameId === null
+          ? UNFILED
+          : String(item.gameId);
     let roll = rollByKey.get(key);
     if (!roll) {
       const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
@@ -1484,8 +1775,17 @@ export function Media() {
         findable as the Purdue game, so the game line stays underneath it.
       */
       const defaultLabel = game ? gameLabel(game) : 'Not from a game';
-      const custom = albums.find((a) => a.gameId === item.gameId)?.name ?? null;
-      roll = { key, label: custom ?? defaultLabel, defaultLabel, custom, game, entries: [] };
+      const saved = albums.find((a) => a.gameId === item.gameId);
+      const custom = saved?.name ? saved.name : null;
+      roll = {
+        key,
+        label: custom ?? defaultLabel,
+        defaultLabel,
+        custom,
+        coverMediaId: saved?.coverMediaId ?? null,
+        game,
+        entries: [],
+      };
       rollByKey.set(key, roll);
       rolls.push(roll);
     }
@@ -1501,15 +1801,23 @@ export function Media() {
   const rollOrder = (roll: (typeof rolls)[number]): [number, string] =>
     roll.game ? [roll.game.week, roll.game.date ?? ''] : [Number.MAX_SAFE_INTEGER, ''];
   rolls.sort((a, b) => {
+    /*
+      THREE BANDS, in this order: the albums you made, then the season's games
+      newest first, then the unfiled pile.
+
+      Your own albums lead because you made them on purpose and the app did not
+      — a folder someone built by hand should not be sorted in among forty
+      derived ones. The unfiled pile is last in every arrangement: it belongs to
+      no week, so it is not part of the sequence being ordered at all.
+    */
+    const band = (r: (typeof rolls)[number]) => (r.albumId !== undefined ? 0 : r.key === UNFILED ? 2 : 1);
+    if (band(a) !== band(b)) return band(a) - band(b);
+    if (a.albumId !== undefined) return a.label.localeCompare(b.label);
+    if (a.key === UNFILED) return 0;
     const [aw, ad] = rollOrder(a);
     const [bw, bd] = rollOrder(b);
-    // The unfiled pile is not in the sequence, so it is pinned to the end
-    // rather than flipped with everything else — see above.
-    if (a.key === UNFILED || b.key === UNFILED) {
-      return a.key === b.key ? 0 : a.key === UNFILED ? 1 : -1;
-    }
     const byWeek = aw - bw || ad.localeCompare(bd);
-    return rollSort === 'newest' ? -byWeek : byWeek;
+    return ROLL_SORT_NEWEST_FIRST ? -byWeek : byWeek;
   });
 
   return (
@@ -1571,35 +1879,70 @@ export function Media() {
           it explained.
         */}
         <div className="flex min-w-0 flex-wrap items-center gap-3">
+          {/* ICONS, NOT WORDS (user direction). Two arrangements of the same
+              shelf need to be recognised, not read, and the shapes say it
+              faster than the labels did. `title`/`aria-label` carry the names
+              now that nothing else does. */}
           {hasItems && (
-            <SegmentedControl
-              size="sm"
-              value={view}
-              onChange={setView}
-              ariaLabel="How to arrange the library"
-              options={[
-                { value: 'list', label: 'List' },
-                { value: 'grid', label: 'Grid' },
-              ]}
-            />
+            <div className="inline-flex shrink-0 border border-slate-200/80 bg-slate-50/90 p-1 dark:border-slate-800 dark:bg-white/5">
+              {(['list', 'grid'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === mode}
+                  title={mode === 'list' ? 'List view' : 'Grid view'}
+                  aria-label={mode === 'list' ? 'List view' : 'Grid view'}
+                  onClick={() => {
+                    setView(mode);
+                    saveMediaView(mode);
+                  }}
+                  className={`px-2.5 py-1.5 transition-colors duration-base ${
+                    view === mode
+                      ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  {mode === 'list' ? <ListViewIcon /> : <GridViewIcon />}
+                </button>
+              ))}
+            </div>
           )}
-          {/* The order switch is about the FOLDERS, so it goes when they do. */}
-          {view === 'list' && rolls.length > 1 && userTeamName && (
-            <ToggleSwitch
-              value={rollSort}
-              onChange={setRollSort}
-              left={{ value: 'oldest', label: 'OLDEST' }}
-              right={{ value: 'newest', label: 'NEWEST' }}
-              ariaLabel="Order game folders oldest or newest first"
-              knob={
-                <TeamLogo
-                  team={{ assetName: userTeamName, label: userTeamName }}
-                  size="sm"
-                  variant="gold"
-                  className="h-[35px] w-[35px]"
-                />
-              }
-            />
+          {/* Albums the user makes are the one thing on this page that has to be
+              created before it can be filled, so the plus lives with the views
+              rather than in the editor where you would only find it by accident. */}
+          <button
+            type="button"
+            onClick={() => setCreatingAlbum(true)}
+            title="New album"
+            aria-label="New album"
+            disabled={seasonId === undefined}
+            className="shrink-0 border border-slate-200/80 bg-slate-50/90 p-1.5 text-slate-500 transition hover:border-[var(--team-primary)] hover:text-slate-900 disabled:opacity-40 dark:border-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white"
+          >
+            <PlusIcon />
+          </button>
+          {creatingAlbum && (
+            <span className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                type="text"
+                value={newAlbumName}
+                onChange={(e) => setNewAlbumName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void createAlbum();
+                  if (e.key === 'Escape') setCreatingAlbum(false);
+                }}
+                placeholder="Album name"
+                aria-label="New album name"
+                className="w-40 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+              <Button compact onClick={() => void createAlbum()}>
+                Create
+              </Button>
+              <Button variant="secondary" compact onClick={() => setCreatingAlbum(false)}>
+                Cancel
+              </Button>
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
@@ -1751,32 +2094,66 @@ export function Media() {
       )}
 
       {/*
-        GRID VIEW — every photo at once, no folders. Deliberately in ITEM order
-        and not schedule order: with the grouping gone, the drag-to-reorder
-        arrangement is the only arrangement left, and this is the view where you
-        can actually see it. The season's own sequence is what the folder view
-        is for.
+        GRID VIEW IS THE SHELF ITSELF (user direction) — one box per album, not
+        a wall of every photograph. The list answers "what is in this folder";
+        the grid answers "what folders do I have", and a grid that just spilled
+        every picture answered neither.
+
+        Each box carries a slideshow of its OWN photographs, using the same
+        component the Trophy Room's backdrop uses, so the two rooms move the
+        same way. The title sits at the bottom over a scrim, where it is legible
+        against whatever the picture happens to be doing.
       */}
       {items && items.length > 0 && view === 'grid' && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {items.map((item, index) => {
-            const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {rolls.map((roll) => {
+            const cover =
+              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
+            /*
+              THE COVER LEADS, then the rest. A folder with a chosen cover has
+              to OPEN on it — a slideshow that starts somewhere else and reaches
+              the cover eight seconds later is not showing you the cover.
+            */
+            const photos = [
+              ...(cover ? [cover] : []),
+              ...roll.entries.map(({ item }) => item).filter((item) => item.id !== cover?.id),
+            ]
+              .filter((item) => item.mediaType === 'image')
+              .slice(0, 8)
+              .map((item) => fileUrl(item.absolutePath));
             return (
-              <MediaTile
-                key={item.id}
-                item={item}
-                index={index}
-                caption={item.description || (game ? gameLabel(game) : 'Add details')}
-                selectMode={selectMode}
-                selected={selectedIds.has(item.id)}
-                onOpen={() => setLightboxIndex(index)}
-                onToggleSelect={() => toggleSelect(item.id)}
-                onDragStartTile={() => (dragIndexRef.current = index)}
-                onDragEndTile={() => (dragIndexRef.current = null)}
-                onDropTile={(e) => onTileDrop(e, index)}
-                canReorder={dragIndexRef.current !== null}
-                onDelete={() => void confirmDelete(item)}
-              />
+              <button
+                key={roll.key}
+                type="button"
+                onClick={() => {
+                  // Opening a box means "show me this one" — switch to the
+                  // shelf with only it expanded, rather than inventing a third
+                  // arrangement that exists nowhere else.
+                  setOpenRolls(new Set([roll.key]));
+                  setView('list');
+                  saveMediaView('list');
+                }}
+                className="corner-cut group/box relative aspect-[16/10] overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
+              >
+                {photos.length > 0 ? (
+                  <MediaBackdrop photos={photos} tone="cover" />
+                ) : (
+                  <span className="absolute inset-0 grid place-items-center text-xs text-slate-500">Empty album</span>
+                )}
+                {/* The scrim is what makes the title readable over a moving
+                    photograph; without it the type flickers as the slideshow
+                    changes. */}
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent px-4 pb-3 pt-10">
+                  <span className="block truncate font-display text-base font-bold text-white">{roll.label}</span>
+                  <span className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-300">
+                    <span className="tnum">
+                      {roll.entries.length} {roll.entries.length === 1 ? 'photo' : 'photos'}
+                    </span>
+                    {roll.custom && <span className="truncate opacity-70">{roll.defaultLabel}</span>}
+                    {roll.albumId !== undefined && <span className="opacity-70">Album</span>}
+                  </span>
+                </span>
+              </button>
             );
           })}
         </div>
@@ -1796,6 +2173,11 @@ export function Media() {
           {rolls.map((roll) => {
             const open = openRolls.has(roll.key);
             const photos = roll.entries.length;
+            // The chosen cover, else the first photo in the folder — which is
+            // what every folder showed before covers existed, and what one
+            // falls back to when its cover has since been deleted.
+            const cover =
+              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
             return (
               <div
                 key={roll.key}
@@ -1820,31 +2202,26 @@ export function Media() {
                   >
                     ▶
                   </span>
-                  {/* The peek: what's in the roll, without opening it. Overlapped
-                      rather than laid in a row, so five thumbnails read as a
-                      stack of photographs and cost the width of two. */}
-                  <span className="flex shrink-0 items-center">
-                    {roll.entries.slice(0, 5).map(({ item }, i) => (
-                      <span
-                        key={item.id}
-                        className="relative -ml-3 h-9 w-12 shrink-0 overflow-hidden border border-white/70 bg-slate-950 first:ml-0 dark:border-slate-700"
-                        style={{ zIndex: 5 - i }}
-                      >
-                        {item.mediaType === 'image' && (
-                          <img
-                            src={fileUrl(item.absolutePath)}
-                            alt=""
-                            aria-hidden
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                            style={{
-                              transform: framingTransform(item.framing),
-                              filter: filterCss(resolveMediaLook(item.look)) || undefined,
-                            }}
-                          />
-                        )}
-                      </span>
-                    ))}
+                  {/* ONE COVER, NOT FIVE (user direction). A stack of five
+                      overlapping thumbnails down a list of fifteen folders was
+                      seventy-five pictures, none of them big enough to see. A
+                      single frame is what a folder on a shelf actually shows,
+                      and which frame it is is now the user's choice — see
+                      "Make cover" on each photo. */}
+                  <span className="relative h-11 w-16 shrink-0 overflow-hidden border border-white/70 bg-slate-950 dark:border-slate-700">
+                    {cover && cover.mediaType === 'image' && (
+                      <img
+                        src={fileUrl(cover.absolutePath)}
+                        alt=""
+                        aria-hidden
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                        style={{
+                          transform: framingTransform(cover.framing),
+                          filter: filterCss(resolveMediaLook(cover.look)) || undefined,
+                        }}
+                      />
+                    )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1870,15 +2247,16 @@ export function Media() {
                   browser silently reflows and a keyboard cannot reach. It rides
                   the same row visually via the negative top margin.
                 */}
-                {/* ON HOVER, like every other edit affordance in the app. A
-                    permanent "Rename album" on all fifteen rows was fifteen
-                    lines of chrome under a shelf whose whole point is to be
-                    quiet — and renaming is something you do once, not
-                    something you read every visit. It stays in the DOM while
-                    the editor is open, and `focus-within` keeps it reachable
-                    by keyboard rather than vanishing under the caret. */}
+                {/*
+                  THE PENCIL SITS BESIDE THE TITLE (user direction), not on a
+                  strip of its own underneath — renaming is an edit to that
+                  line, and a separate row of link text under every folder was
+                  a row of chrome per folder. It has to live OUTSIDE the header
+                  button, because a button cannot contain another button; the
+                  negative margin pulls it back onto the same line.
+                */}
                 <div
-                  className={`-mt-1 flex items-center gap-2 px-3 pb-2 transition-opacity duration-base ease-standard focus-within:opacity-100 group-hover/roll:opacity-100 ${
+                  className={`-mt-9 mb-1 flex items-center justify-end gap-2 pr-3 transition-opacity duration-base ease-standard focus-within:opacity-100 group-hover/roll:opacity-100 ${
                     renamingKey === roll.key ? 'opacity-100' : 'opacity-0'
                   }`}
                 >
@@ -1890,21 +2268,34 @@ export function Media() {
                         value={renameDraft}
                         onChange={(e) => setRenameDraft(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') void renameAlbum(roll.game?.gameId ?? null, renameDraft);
+                          if (e.key === 'Enter') void renameRoll(roll, renameDraft);
                           if (e.key === 'Escape') setRenamingKey(null);
                         }}
                         placeholder={roll.defaultLabel}
                         aria-label={`Name for ${roll.defaultLabel}`}
-                        className="min-w-0 flex-1 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        className="w-56 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                       />
-                      <Button compact onClick={() => void renameAlbum(roll.game?.gameId ?? null, renameDraft)}>
+                      <Button compact onClick={() => void renameRoll(roll, renameDraft)}>
                         Save
                       </Button>
-                      {/* Clearing the box is "undo the rename", which is why
-                          this only exists once there is one to undo. */}
-                      {roll.custom && (
-                        <Button variant="tertiary" compact onClick={() => void renameAlbum(roll.game?.gameId ?? null, '')}>
+                      {/* Only a GAME folder can be handed back — a user-made
+                          album has no other name to fall back to. */}
+                      {roll.custom && roll.albumId === undefined && (
+                        <Button
+                          variant="tertiary"
+                          compact
+                          onClick={() => void renameAlbum(roll.game?.gameId ?? null, '')}
+                        >
                           Use game name
+                        </Button>
+                      )}
+                      {roll.albumId !== undefined && (
+                        <Button
+                          variant="tertiary"
+                          compact
+                          onClick={() => void deleteAlbum(roll.albumId as number, roll.label)}
+                        >
+                          Delete album
                         </Button>
                       )}
                       <Button variant="secondary" compact onClick={() => setRenamingKey(null)}>
@@ -1916,11 +2307,13 @@ export function Media() {
                       type="button"
                       onClick={() => {
                         setRenamingKey(roll.key);
-                        setRenameDraft(roll.custom ?? '');
+                        setRenameDraft(roll.albumId !== undefined ? roll.label : roll.custom ?? '');
                       }}
-                      className="text-xs font-medium text-slate-400 underline-offset-2 transition hover:text-slate-700 hover:underline dark:text-slate-500 dark:hover:text-slate-200"
+                      title={`Rename ${roll.label}`}
+                      aria-label={`Rename ${roll.label}`}
+                      className="p-1 text-slate-400 transition hover:text-slate-800 dark:text-slate-500 dark:hover:text-white"
                     >
-                      Rename album
+                      <EditIcon />
                     </button>
                   )}
                 </div>
@@ -1942,6 +2335,8 @@ export function Media() {
                         onDropTile={(e) => onTileDrop(e, index)}
                         canReorder={dragIndexRef.current !== null}
                         onDelete={() => void confirmDelete(item)}
+                        isCover={cover?.id === item.id}
+                        onMakeCover={() => void setCover(roll, item.id)}
                       />
                     ))}
                   </div>
@@ -1960,6 +2355,8 @@ export function Media() {
           index={lightboxIndex}
           games={games}
           roster={roster}
+          albums={customAlbums}
+          onCreateAlbum={createAlbumNamed}
           onNavigate={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onSaved={handleSaved}

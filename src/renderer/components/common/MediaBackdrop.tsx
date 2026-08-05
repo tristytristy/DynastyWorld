@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
  *
  * The host must be `relative` and `overflow-hidden`; this fills it.
  */
-export function MediaBackdrop({ photos }: { photos: string[] }) {
+export function MediaBackdrop({ photos, tone = 'backdrop' }: { photos: string[]; tone?: 'backdrop' | 'cover' }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -35,8 +35,18 @@ export function MediaBackdrop({ photos }: { photos: string[] }) {
   const current = photos[index];
   const previous = photos[(index - 1 + photos.length) % photos.length];
 
+  /*
+    TWO JOBS, ONE MECHANISM. As a BACKDROP the photograph sits behind a trophy
+    or a masthead and must never compete with it — drained to grey and held at a
+    third opacity. As a COVER it IS the content: an album box is a picture with
+    a name on it, and the same grade there just looks like a fault. Same drift,
+    same crossfade, same two layers; only the grade changes.
+  */
   return (
-    <div className="trophy-backdrop" aria-hidden="true">
+    <div
+      className={`trophy-backdrop${tone === 'cover' ? ' trophy-backdrop--cover' : ''}`}
+      aria-hidden="true"
+    >
       <div
         className="trophy-backdrop-layer"
         data-visible={even ? 'true' : 'false'}

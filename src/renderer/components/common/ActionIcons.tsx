@@ -145,3 +145,26 @@ export function CardStarIcon({ className }: { className?: string }) {
     </Glyph>
   );
 }
+
+/** A shelf of rows — the List arrangement of the media library. */
+export function ListViewIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <rect x="2.5" y="3.5" width="15" height="4" />
+      <rect x="2.5" y="12.5" width="15" height="4" />
+    </svg>
+  );
+}
+
+/** Four panes — the Grid arrangement. */
+export function GridViewIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <rect x="2.5" y="2.5" width="6" height="6" />
+      <rect x="11.5" y="2.5" width="6" height="6" />
+      <rect x="2.5" y="11.5" width="6" height="6" />
+      <rect x="11.5" y="11.5" width="6" height="6" />
+    </svg>
+  );
+}
+

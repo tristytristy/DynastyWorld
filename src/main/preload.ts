@@ -258,6 +258,18 @@ const api: DynastyApi = {
     listAlbums: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.listAlbums, dynastyId, seasonId),
     renameAlbum: (dynastyId, seasonId, gameId, name) =>
       ipcRenderer.invoke(IPC.media.renameAlbum, dynastyId, seasonId, gameId, name),
+    setAlbumCover: (dynastyId, seasonId, gameId, mediaId) =>
+      ipcRenderer.invoke(IPC.media.setAlbumCover, dynastyId, seasonId, gameId, mediaId),
+    listCustomAlbums: (dynastyId, seasonId) =>
+      ipcRenderer.invoke(IPC.media.listCustomAlbums, dynastyId, seasonId),
+    createCustomAlbum: (dynastyId, seasonId, name) =>
+      ipcRenderer.invoke(IPC.media.createCustomAlbum, dynastyId, seasonId, name),
+    renameCustomAlbum: (dynastyId, seasonId, albumId, name) =>
+      ipcRenderer.invoke(IPC.media.renameCustomAlbum, dynastyId, seasonId, albumId, name),
+    removeCustomAlbum: (dynastyId, seasonId, albumId) =>
+      ipcRenderer.invoke(IPC.media.removeCustomAlbum, dynastyId, seasonId, albumId),
+    setCustomAlbumCover: (dynastyId, seasonId, albumId, mediaId) =>
+      ipcRenderer.invoke(IPC.media.setCustomAlbumCover, dynastyId, seasonId, albumId, mediaId),
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
     setFraming: (id, framing) => ipcRenderer.invoke(IPC.media.setFraming, id, framing),
     setLook: (id, look) => ipcRenderer.invoke(IPC.media.setLook, id, look),

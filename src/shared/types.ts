@@ -2055,7 +2055,10 @@ export type ProgramArtSlot = 'logo' | 'helmet' | 'jersey' | 'polo';
  */
 export interface MediaAlbum {
   gameId: number | null;
+  /** Empty when the folder keeps the game's own name and only a cover was chosen. */
   name: string;
+  /** The photo this folder shows. Null = whichever is first in it. */
+  coverMediaId: number | null;
 }
 
 /** One of EA's own rival slots for a program — read-only; see getSaveRivals. */
@@ -2138,6 +2141,8 @@ export interface MediaItem {
   look: Partial<MediaLook> | null;
   /** Save-native SeasonGame gameId — same id ScheduleGame and the /schedule/:gameId route use. Null = not linked to a game. */
   gameId: number | null;
+  /** A user-made album (schema v22). Mutually exclusive with `gameId` — a photo is filed in exactly one place. */
+  albumId: number | null;
   description: string;
   /** Tagged players, as the same opaque roster player ids used app-wide; names resolve from that season's roster snapshot. */
   playerIds: number[];
@@ -2151,8 +2156,18 @@ export interface MediaItemWithPath extends MediaItem {
 
 export interface MediaItemPatch {
   gameId: number | null;
+  /** Ignored unless `gameId` is null — the two are alternatives, not a pair. */
+  albumId?: number | null;
   description: string;
   playerIds: number[];
+}
+
+/** An album the user created (schema v22) — its own folder, filled by hand. */
+export interface CustomAlbum {
+  id: number;
+  name: string;
+  /** The photo the folder shows. Null = whichever is first in it. */
+  coverMediaId: number | null;
 }
 
 /** A tagged player's display info, resolved from the item's own season's roster snapshot. */
@@ -3391,6 +3406,30 @@ export interface DynastyApi {
       gameId: number | null,
       name: string,
     ) => Promise<MediaAlbum[]>;
+    /** Which photo a GAME folder shows; null goes back to whichever is first in it. */
+    setAlbumCover: (
+      dynastyId: string,
+      seasonId: number,
+      gameId: number | null,
+      mediaId: number | null,
+    ) => Promise<MediaAlbum[]>;
+    /** Albums the user made this season. */
+    listCustomAlbums: (dynastyId: string, seasonId: number) => Promise<CustomAlbum[]>;
+    createCustomAlbum: (dynastyId: string, seasonId: number, name: string) => Promise<CustomAlbum[]>;
+    renameCustomAlbum: (
+      dynastyId: string,
+      seasonId: number,
+      albumId: number,
+      name: string,
+    ) => Promise<CustomAlbum[]>;
+    /** Deletes the album and RELEASES its photos back to unfiled — it never deletes pictures. */
+    removeCustomAlbum: (dynastyId: string, seasonId: number, albumId: number) => Promise<CustomAlbum[]>;
+    setCustomAlbumCover: (
+      dynastyId: string,
+      seasonId: number,
+      albumId: number,
+      mediaId: number | null,
+    ) => Promise<CustomAlbum[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
     /** Save (or clear, with null) how this photo is framed. Metadata only — the file is never touched. */
     setFraming: (id: number, framing: MediaFraming | null) => Promise<void>;
