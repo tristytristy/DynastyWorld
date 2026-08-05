@@ -225,8 +225,16 @@ export function ZoomableImage({
 
       {/* Sits with the counter along the bottom of the stage, in the same
           quiet dark pill — a control that belongs to the photo, not chrome
-          competing with it. */}
-      <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-slate-950/70 px-2.5 py-1 text-slate-200">
+          competing with it.
+
+          CENTRED, NOT LEFT (user direction). The bottom-left corner is where
+          the plate prints the program's mark, so the pill sat on top of the
+          team logo and the two fought over the same corner. The middle of the
+          bottom edge is the one place along it that no caption furniture
+          claims. `-translate-x-1/2` rather than a flex parent so the pill keeps
+          sizing to its own contents — it grows when the framing buttons appear
+          and must stay centred when it does. */}
+      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 bg-slate-950/70 px-2.5 py-1 text-slate-200">
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.3-4.3M8 11h6" strokeLinecap="round" />

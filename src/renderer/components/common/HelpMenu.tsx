@@ -427,6 +427,21 @@ const HELP_TOPICS: HelpTopic[] = [
           Uploads land in whichever season the Season dropdown is set to — switch seasons first if you&apos;re
           backfilling older memories. Supported: PNG/JPG/WebP/GIF images and MP4/WebM video.
         </p>
+        <p>
+          <strong>Drop files anywhere on the page</strong> to add them — the whole panel is a target, not just the
+          grid. <strong>List</strong> keeps the collapsible folder per game; <strong>Grid</strong> drops the folders
+          and lays every photo out at once, for when you want a picture rather than a Saturday.
+        </p>
+        <p>
+          <strong>Rename a folder</strong> by hovering it and clicking <strong>Rename album</strong> — call it
+          &ldquo;Senior Day&rdquo; and the game it came from stays underneath, so you never lose which one it was.
+          Clearing the name hands the folder back to the game.
+        </p>
+        <p>
+          <strong>Select</strong> turns on multi-select. Tick photos (or <em>Select all</em>), then set the game for
+          all of them at once, <strong>tag players across the whole selection</strong> — added to each photo, so tags
+          already there are kept — or delete them together with the bin.
+        </p>
       </>
     ),
   },

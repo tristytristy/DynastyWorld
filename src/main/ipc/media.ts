@@ -6,7 +6,9 @@ import { getMediaLibraryStatus, getMediaRoot, moveMediaLibrary, resetMediaLibrar
 import { getBackupsFolderInfo, getDatabaseFileBytes, pruneOldBackups } from '../../database/init';
 import { clearDeletedDynastyCache, getDeletedDynastyCacheBytes } from '../../database/helpers';
 import { getSaveBackupsFolderInfo, pruneAllSaveBackups } from '../editorWrite';
+import { listMediaAlbums, setMediaAlbumName } from '../../database/mediaAlbums';
 import type {
+  MediaAlbum,
   MediaFraming,
   MediaItemPatch,
   MediaItemWithPath,
@@ -156,6 +158,26 @@ export function registerMediaHandlers(): void {
     IPC.media.listForGame,
     async (_event, dynastyId: string, seasonId: number | undefined, gameId: number): Promise<MediaItemResolved[]> => {
       return listMediaForGame(dynastyId, seasonId, gameId).map((item) => withPath(dynastyId, item));
+    },
+  );
+
+  ipcMain.handle(
+    IPC.media.listAlbums,
+    async (_event, dynastyId: string, seasonId: number): Promise<MediaAlbum[]> => {
+      return listMediaAlbums(dynastyId, seasonId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.media.renameAlbum,
+    async (
+      _event,
+      dynastyId: string,
+      seasonId: number,
+      gameId: number | null,
+      name: string,
+    ): Promise<MediaAlbum[]> => {
+      return setMediaAlbumName(dynastyId, seasonId, gameId, name);
     },
   );
 

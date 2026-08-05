@@ -154,6 +154,8 @@ export const IPC = {
     list: 'media:list',
     listForPlayer: 'media:listForPlayer',
     listForGame: 'media:listForGame',
+    listAlbums: 'media:listAlbums',
+    renameAlbum: 'media:renameAlbum',
     update: 'media:update',
     setFraming: 'media:setFraming',
     setLook: 'media:setLook',

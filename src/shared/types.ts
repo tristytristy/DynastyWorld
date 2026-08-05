@@ -2048,6 +2048,16 @@ export interface ProgramArtSet {
 
 export type ProgramArtSlot = 'logo' | 'helmet' | 'jersey' | 'polo';
 
+/**
+ * A user-chosen name for one media folder (schema v21). `gameId` null is the
+ * "not from a game" pile. A name only — it never decides which photos are in
+ * the folder; that stays the game each photo is tagged to.
+ */
+export interface MediaAlbum {
+  gameId: number | null;
+  name: string;
+}
+
 /** One of EA's own rival slots for a program — read-only; see getSaveRivals. */
 export interface SaveRival {
   opponentTeamIndex: number;
@@ -3372,6 +3382,15 @@ export interface DynastyApi {
       seasonId: number | undefined,
       gameId: number,
     ) => Promise<MediaItemResolved[]>;
+    /** Every folder the user has renamed this season. A folder with no row uses the game's own label. */
+    listAlbums: (dynastyId: string, seasonId: number) => Promise<MediaAlbum[]>;
+    /** Renames one folder; a blank name hands it back to the game. Returns the season's albums after the change. */
+    renameAlbum: (
+      dynastyId: string,
+      seasonId: number,
+      gameId: number | null,
+      name: string,
+    ) => Promise<MediaAlbum[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
     /** Save (or clear, with null) how this photo is framed. Metadata only — the file is never touched. */
     setFraming: (id: number, framing: MediaFraming | null) => Promise<void>;

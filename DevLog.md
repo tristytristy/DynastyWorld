@@ -9462,3 +9462,116 @@ user's own hub always did. The Team Hub maps are artwork and ship with the
 installer.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 (later still) — Media: Select restored, two views, named albums, stronger darkroom
+
+### Dropping files had quietly stopped working
+
+Not a regression in code — the handlers were untouched and still correct. The
+drop target was the photo GRID, which was the whole page back when the page was
+a wall of photographs. Once photos moved into collapsed game folders, the grid
+became a short stack of thin rows, and everything around it — the header, the
+space beside the folders, the area below them — silently rejected a drop.
+Nothing was broken; there was almost nothing left to aim at.
+
+The whole panel is the target now, with a full-panel overlay while you drag
+rather than the one-pixel outline that was there before and that nobody
+reported ever seeing. `onDragLeave` fires only when the pointer leaves the panel
+itself, not on every child boundary it crosses on the way in, or the overlay
+strobes.
+
+### Select is Select again
+
+Renamed back (reversing 4.3.0's rename). "Favorites" hid the feature: the button
+opens multi-select — batch tagging and batch delete — and nobody looks for
+"select several photos" under a word that means starred. Worth recording that
+the original concern was right and the rename should have been questioned harder
+at the time rather than shipped and reverted a day later.
+
+The batch panel grew to match what it actually does:
+
+**A bin, at the far end from Apply.** The two are one slip apart and only one of
+them can be undone.
+
+**Batch player tagging**, which is new. Players are ADDED, not replaced, and the
+asymmetry with the game is deliberate: a photo is from exactly one game, so
+setting the game is a choice between values and the last one wins; it can have
+any number of players in it, and the reason you reach for batch tagging is
+"these forty shots all have the quarterback in them". Replacing would wipe tags
+put on individual photos by hand. Untagging stays a per-photo job, where you can
+see who you are removing.
+
+**A blank game selection now leaves the game alone.** The dropdown starts empty,
+and "I only came here to tag players" must not silently unfile the selection —
+so `''` means "don't touch it" and clearing is its own explicit option. Two
+intentions cannot share one value.
+
+The roster picker is now ONE component (`PlayerTagList`) shared by the photo's
+own detail editor and the batch panel, jersey search and all. Two copies would
+have drifted the first time either was touched.
+
+### Two views, one tile
+
+**List** is the folder shelf; **Grid** drops the folders and lays every photo out
+at once. `MediaTile` was extracted so both draw the same object — selection,
+drag-to-reorder, the bin and the lightbox behave identically in either. Grid is
+deliberately in ITEM order rather than schedule order: with grouping gone, the
+drag-reorder arrangement is the only one left, and grid is the view where you
+can see it.
+
+The OLDEST ⇄ NEWEST switch hides in grid view. It orders folders, so it goes
+when they do.
+
+### Albums have names (schema v21)
+
+`media_albums` — a NAME only, never membership. Which photos are in a folder is
+still decided entirely by the game each one is tagged to, so this row is safe to
+delete at any time and the folder simply reverts. Renaming shows the game's own
+label underneath the new one, because "Senior Day" still has to be findable as
+the Purdue game.
+
+`game_key` is an INTEGER with a −1 sentinel rather than a nullable `game_id`,
+and that is the one non-obvious decision: the "not from a game" pile is a real
+folder someone will want to name, but SQLite treats NULLs as DISTINCT inside a
+UNIQUE constraint, so a nullable column would accept twenty rows for it and the
+last write would stop winning.
+
+The rename affordance is hover-only. A permanent "Rename album" on all fifteen
+rows was fifteen lines of chrome under a shelf whose whole point is to be quiet.
+
+**Verified** on a copy of the real archive (already at v20): the migration alone
+changes no existing row and creates the table and index; duplicate keys in a
+season, a duplicate unfiled row and an orphan dynasty id are all rejected; the
+same key in a DIFFERENT season is allowed; a 2000-character name and a
+`DROP TABLE` string store inert; cascade delete took 5 rows with its dynasty.
+
+### The darkroom actually does something now
+
+All three were user reports that the controls were too weak to see.
+
+**Vignette.** Corner alpha now reaches a true 1.0 rather than stopping at 0.92,
+and the falloff STARTS much further in — 8%–68% of the radius instead of
+25%–75% — so a mid setting does what the old maximum did. A second stop at 45%
+strength sits between: one gradient from clear to black over that distance is a
+long even ramp that reads as grey haze, and a real vignette falls off faster
+near the corner than in the middle.
+
+**Grain.** Three things were fighting it at once. The layer capped at 0.55
+opacity, the noise rect inside the SVG was itself only 0.6 opaque — so the
+strongest possible grain was a third of one — and `baseFrequency` 0.85 put each
+grain below one screen pixel, where it averaged out to flat grey. Full opacity
+on both now, and 0.62 so the grains are big enough to survive being drawn.
+
+**Saturation**, new, 0–200 with neutral at 100 and a tick under the track
+marking it. Appended LAST in the filter chain so it multiplies the preset rather
+than fighting it for the same knob — two `saturate()` functions compose, which
+is exactly the behaviour wanted. It is computed before the no-preset early
+return, because it has to work on an untreated photo, which is most of them.
+
+### Zoom moved to the bottom centre
+
+The bottom-LEFT is where the plate prints the program's mark, so the zoom pill
+sat on top of the team logo. The middle of the bottom edge is the one place
+along it no caption furniture claims.
+
+typecheck / eslint / check:refs / build:prod clean.

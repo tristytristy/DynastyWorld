@@ -255,6 +255,9 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
     listForGame: (dynastyId, seasonId, gameId) =>
       ipcRenderer.invoke(IPC.media.listForGame, dynastyId, seasonId, gameId),
+    listAlbums: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.listAlbums, dynastyId, seasonId),
+    renameAlbum: (dynastyId, seasonId, gameId, name) =>
+      ipcRenderer.invoke(IPC.media.renameAlbum, dynastyId, seasonId, gameId, name),
     update: (id, patch) => ipcRenderer.invoke(IPC.media.update, id, patch),
     setFraming: (id, framing) => ipcRenderer.invoke(IPC.media.setFraming, id, framing),
     setLook: (id, look) => ipcRenderer.invoke(IPC.media.setLook, id, look),

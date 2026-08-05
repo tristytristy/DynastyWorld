@@ -24,6 +24,14 @@ export interface MediaLook {
   vignetteSoftness: number;
   /** 0–100. Film grain over the whole frame. */
   grain: number;
+  /**
+   * 0–200, where 100 is the photo as it came. Sits AFTER the preset in the
+   * filter chain and multiplies it, so it reads as "more/less of whatever this
+   * look already does to colour" rather than fighting the preset for the same
+   * knob: 0 is grey, 200 is twice as saturated, and a preset that already
+   * desaturates still responds.
+   */
+  saturation: number;
   /** Print the program's mark in the caption's left corner. */
   showTeamMark: boolean;
   /** Print the occasion's mark (bowl, playoff round, rivalry, conference) in the right corner. */
@@ -42,6 +50,7 @@ export const DEFAULT_MEDIA_LOOK: MediaLook = {
   vignette: 0,
   vignetteSoftness: 55,
   grain: 0,
+  saturation: 100,
   showTeamMark: true,
   showOccasionMark: true,
 };
@@ -58,6 +67,7 @@ export function isUntreated(look: MediaLook): boolean {
     (look.filter === 'none' || look.intensity === 0) &&
     look.vignette === 0 &&
     look.grain === 0 &&
+    look.saturation === 100 &&
     look.showTeamMark &&
     look.showOccasionMark
   );
@@ -189,7 +199,16 @@ function lerp(neutral: number, target: number | undefined, t: number): number | 
 export function filterCss(look: MediaLook): string {
   const preset = findPreset(look.filter);
   const t = Math.max(0, Math.min(100, look.intensity)) / 100;
-  if (preset.key === 'none' || t === 0) return '';
+  /*
+    SATURATION IS INDEPENDENT OF THE PRESET, so it is computed before the early
+    return: it has to work on an untreated photo too, which is most of them.
+    Appended LAST in the chain so it multiplies whatever the preset did rather
+    than being overwritten by it — two saturate() functions compose, which is
+    exactly the behaviour wanted here.
+  */
+  const userSaturation = Math.max(0, Math.min(200, look.saturation)) / 100;
+  const saturationPart = userSaturation === 1 ? null : `saturate(${userSaturation.toFixed(3)})`;
+  if (preset.key === 'none' || t === 0) return saturationPart ?? '';
 
   const parts: string[] = [];
   const grayscale = lerp(0, preset.grayscale, t);
@@ -204,6 +223,7 @@ export function filterCss(look: MediaLook): string {
   if (contrast !== null) parts.push(`contrast(${contrast.toFixed(3)})`);
   if (brightness !== null) parts.push(`brightness(${brightness.toFixed(3)})`);
   if (hue !== null) parts.push(`hue-rotate(${hue.toFixed(1)}deg)`);
+  if (saturationPart) parts.push(saturationPart);
   return parts.join(' ');
 }
 
@@ -229,7 +249,26 @@ export function washStyle(look: MediaLook): { background: string; mixBlendMode: 
  */
 export function vignetteCss(look: MediaLook): string | null {
   if (look.vignette <= 0) return null;
-  const alpha = (look.vignette / 100) * 0.92;
-  const start = 25 + (Math.max(0, Math.min(100, look.vignetteSoftness)) / 100) * 50;
-  return `radial-gradient(ellipse 140% 140% at 50% 50%, rgba(0,0,0,0) ${start}%, rgba(0,0,0,${alpha.toFixed(3)}) 100%)`;
+  /*
+    STRENGTHENED (user direction): the top of the range was not dark enough to
+    read as a vignette at all. Two numbers moved. The corner alpha now reaches a
+    true 1.0 rather than stopping at 0.92, so 100 is genuinely black in the
+    corners; and the falloff STARTS much further in — 8%–68% of the radius
+    instead of 25%–75% — so the darkening covers a real part of the frame
+    instead of hugging the very edge. A mid setting now does what the old
+    maximum did.
+
+    A second, tighter stop is layered under the first at half strength. One
+    gradient from clear to black over that distance is a long even ramp, which
+    reads as a grey haze; a photograph's vignette falls off faster near the
+    corner than in the middle, and the inner stop is what gives it that shape.
+  */
+  const alpha = Math.max(0, Math.min(100, look.vignette)) / 100;
+  const start = 8 + (Math.max(0, Math.min(100, look.vignetteSoftness)) / 100) * 60;
+  const mid = start + (100 - start) * 0.55;
+  return (
+    `radial-gradient(ellipse 140% 140% at 50% 50%, rgba(0,0,0,0) ${start.toFixed(1)}%, ` +
+    `rgba(0,0,0,${(alpha * 0.45).toFixed(3)}) ${mid.toFixed(1)}%, ` +
+    `rgba(0,0,0,${alpha.toFixed(3)}) 100%)`
+  );
 }

@@ -3,12 +3,13 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { ToggleSwitch } from '../components/ui/ToggleSwitch';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { getGameTypeImagePath } from '../lib/scheduleFormat';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
@@ -31,6 +32,16 @@ import {
   washStyle,
   type MediaLook,
 } from '../../shared/mediaLook';
+
+/**
+ * The batch panel's "take the game off these" option.
+ *
+ * A sentinel and not '', because '' already means "don't touch the game" — the
+ * dropdown's resting state. Two different intentions cannot share one value:
+ * without this, opening Select to tag a player would unfile every photo you had
+ * selected.
+ */
+const CLEAR_GAME = '__clear__';
 
 const DELETE_MEDIA_CONFIRM = {
   eyebrow: 'Delete media',
@@ -106,6 +117,245 @@ function gameSentence(game: ScheduleGame): string {
   return `${game.teamScore}-${game.opponentScore} ${outcome} ${where} ${game.opponent} in ${week}.`;
 }
 
+/**
+ * ONE PHOTO IN A GRID — the tile, lifted out so the folder view and the flat
+ * grid view draw exactly the same thing. They are two arrangements of the same
+ * object, and a second copy of this markup would have drifted the first time
+ * either one was touched.
+ *
+ * Everything it needs is passed in, including `index`, which is the item's
+ * position in the FLAT season list rather than in whatever group is drawing it:
+ * drag-to-reorder and the lightbox's Prev/Next both work across the whole
+ * season, so the group a tile happens to sit in must not change its identity.
+ */
+function MediaTile({
+  item,
+  index,
+  caption,
+  selectMode,
+  selected,
+  onOpen,
+  onToggleSelect,
+  onDragStartTile,
+  onDragEndTile,
+  onDropTile,
+  canReorder,
+  onDelete,
+}: {
+  item: MediaItemWithPath;
+  index: number;
+  caption: string;
+  selectMode: boolean;
+  selected: boolean;
+  onOpen: () => void;
+  onToggleSelect: () => void;
+  onDragStartTile: () => void;
+  onDragEndTile: () => void;
+  onDropTile: (event: ReactDragEvent) => void;
+  canReorder: boolean;
+  onDelete: () => void;
+}) {
+  return (
+              <div
+                key={item.id}
+                role="button"
+                tabIndex={0}
+                draggable={!selectMode}
+                onDragStart={(e) => {
+                  onDragStartTile();
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(index));
+                }}
+                onDragEnd={onDragEndTile}
+                onDragOver={(e) => {
+                  if (canReorder) e.preventDefault();
+                }}
+                onDrop={onDropTile}
+                onClick={() => (selectMode ? onToggleSelect() : onOpen())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (selectMode) onToggleSelect();
+                    else onOpen();
+                  }
+                }}
+                aria-label={selectMode ? `Select media: ${caption}` : `Open media: ${caption}`}
+                className={`group relative aspect-video overflow-hidden border bg-slate-950 text-left transition ${
+                  selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+                } ${
+                  selected
+                    ? 'border-[var(--team-primary)] outline outline-2 outline-[var(--team-primary)]'
+                    : 'border-slate-200/80 hover:border-[var(--team-primary)] dark:border-slate-800'
+                }`}
+              >
+                {item.mediaType === 'video' ? (
+                  <>
+                    <video src={fileUrl(item.absolutePath)} preload="metadata" muted className="pointer-events-none h-full w-full object-cover" />
+                    <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/60 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-white">
+                      ▶ Video
+                    </span>
+                  </>
+                ) : (
+                  <img
+                    src={fileUrl(item.absolutePath)}
+                    alt={caption}
+                    loading="lazy"
+                    /* A framed photo shows its framing here too — a crop you
+                       saved and then didn't see anywhere would read as not
+                       having saved. The tile stays object-cover (so nothing
+                       letterboxes and un-framed tiles look exactly as before)
+                       and the framing rides on top, which lands on the same
+                       part of the photo cropped to the tile's shape. */
+                    className={`pointer-events-none h-full w-full object-cover ${item.framing ? '' : 'transition duration-base ease-standard group-hover:scale-[1.03]'}`}
+                    /* The tile wears the treatment too — a photo you took to
+                       black and white should be black and white in the grid,
+                       or the library stops being a picture of itself. */
+                    style={{
+                      transform: framingTransform(item.framing),
+                      filter: filterCss(resolveMediaLook(item.look)) || undefined,
+                    }}
+                    draggable={false}
+                  />
+                )}
+
+                {selectMode && (
+                  <span
+                    className={`pointer-events-none absolute left-2 top-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
+                      selected
+                        ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                        : 'border-white/70 bg-slate-950/50 text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </span>
+                )}
+
+                {/*
+                  THE CAPTION BAR IS A HOVER STATE, not furniture. A wall of
+                  thumbnails each wearing a dark gradient and a line of text is
+                  a list of filenames; the same wall without them is a contact
+                  sheet, which is what this page is for. Point at one and it
+                  tells you what it is and offers the bin.
+
+                  The WHOLE bar fades, gradient included — the gradient exists
+                  only to keep the caption legible over a bright photo, so
+                  leaving it lit under nothing would be a smudge with no job.
+                  `group-focus-within` keeps the delete button reachable by
+                  keyboard: tabbing into the tile reveals the bar it lives in,
+                  rather than moving focus to something invisible.
+                */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6 opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-within:opacity-100">
+                  {!selectMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      aria-label={`Delete media: ${caption}`}
+                      title="Delete"
+                      className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
+                  {item.playerIds.length > 0 && (
+                    <span className="tnum shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                      {item.playerIds.length} tagged
+                    </span>
+                  )}
+                </div>
+              </div>
+  );
+}
+
+/**
+ * The roster list with its search box — the same control the photo's own detail
+ * editor uses, lifted out so batch tagging is the SAME interaction rather than
+ * a second one that drifts. Number search (`#17`), position search and the
+ * tagged-float-to-top ordering all come with it.
+ */
+function PlayerTagList({
+  roster,
+  selected,
+  onToggle,
+  maxHeightClass = 'max-h-48',
+}: {
+  roster: RosterPlayer[];
+  selected: number[];
+  onToggle: (playerId: number) => void;
+  maxHeightClass?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const raw = query.trim();
+    const jerseyQuery = /^#?\d+$/.test(raw) ? raw.replace('#', '') : null;
+    let matches: RosterPlayer[];
+    if (jerseyQuery !== null) matches = roster.filter((p) => String(p.jerseyNumber).startsWith(jerseyQuery));
+    else if (raw === '#') matches = roster;
+    else if (raw) {
+      const q = raw.toLowerCase();
+      matches = roster.filter((p) => playerLabel(p).toLowerCase().includes(q) || p.position.toLowerCase() === q);
+    } else matches = roster;
+    return [...matches].sort((a, b) => {
+      const at = selected.includes(a.id) ? 0 : 1;
+      const bt = selected.includes(b.id) ? 0 : 1;
+      if (at !== bt) return at - bt;
+      if (jerseyQuery !== null) {
+        const ae = String(a.jerseyNumber) === jerseyQuery ? 0 : 1;
+        const be = String(b.jerseyNumber) === jerseyQuery ? 0 : 1;
+        if (ae !== be) return ae - be;
+        if (a.jerseyNumber !== b.jerseyNumber) return a.jerseyNumber - b.jerseyNumber;
+      }
+      return b.overallRating - a.overallRating;
+    });
+  }, [roster, query, selected]);
+
+  return (
+    <>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search by name, number or position..."
+        aria-label="Search players to tag — by name, position, or jersey number"
+        className="w-full border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
+      />
+      <div className={`mt-1.5 ${maxHeightClass} overflow-y-auto border border-slate-200/80 dark:border-slate-800`}>
+        {filtered.map((player) => {
+          const tagged = selected.includes(player.id);
+          return (
+            <button
+              key={player.id}
+              type="button"
+              onClick={() => onToggle(player.id)}
+              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition ${
+                tagged
+                  ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                  : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
+              }`}
+            >
+              <span className="min-w-0 flex-1 truncate">
+                <span className={`tnum mr-1.5 ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+                  #{player.jerseyNumber}
+                </span>
+                {playerLabel(player)}
+              </span>
+              <span className={`shrink-0 text-xs ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+                {player.position} {player.overallRating}
+              </span>
+            </button>
+          );
+        })}
+        {filtered.length === 0 && (
+          <p className="px-2.5 py-3 text-xs text-slate-400 dark:text-slate-500">No matching players.</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** One labelled slider — the darkroom's only control shape, so the panel reads as one instrument. */
 function LookSlider({
   label,
@@ -113,12 +363,19 @@ function LookSlider({
   onChange,
   suffix = '%',
   disabled = false,
+  min = 0,
+  max = 100,
+  /** Where the value means "unchanged" — a tick under the track, for a slider whose neutral isn't its floor. */
+  neutral,
 }: {
   label: string;
   value: number;
   onChange: (next: number) => void;
   suffix?: string;
   disabled?: boolean;
+  min?: number;
+  max?: number;
+  neutral?: number;
 }) {
   return (
     <label className={`block ${disabled ? 'opacity-40' : ''}`}>
@@ -131,8 +388,8 @@ function LookSlider({
       </span>
       <input
         type="range"
-        min={0}
-        max={100}
+        min={min}
+        max={max}
         step={1}
         value={value}
         disabled={disabled}
@@ -140,6 +397,16 @@ function LookSlider({
         aria-label={label}
         className="mt-1.5 h-1 w-full cursor-pointer appearance-none bg-slate-200 accent-[var(--team-primary)] dark:bg-white/10"
       />
+      {/* A slider whose neutral sits in the MIDDLE needs to show where that is,
+          or "back to normal" becomes a guess. One hairline, no label. */}
+      {neutral !== undefined && (
+        <span aria-hidden className="relative block h-0">
+          <span
+            className="absolute top-0 h-1.5 w-px bg-slate-400/70 dark:bg-white/30"
+            style={{ left: `${((neutral - min) / (max - min)) * 100}%` }}
+          />
+        </span>
+      )}
     </label>
   );
 }
@@ -250,6 +517,17 @@ function LookPanel({
           disabled={look.vignette === 0}
         />
         <LookSlider label="Grain" value={look.grain} onChange={(grain) => set({ grain })} />
+        {/* Neutral at 100 and headroom to 200: this is a correction as often as
+            an effect, and a slider that could only ever drain colour would be
+            half a control. */}
+        <LookSlider
+          label="Saturation"
+          value={look.saturation}
+          onChange={(saturation) => set({ saturation })}
+          min={0}
+          max={200}
+          neutral={100}
+        />
       </div>
 
       <div className="space-y-2 border-t border-slate-200/60 pt-3 dark:border-slate-800/60">
@@ -306,56 +584,6 @@ function MediaDetailsForm({
   const [gameId, setGameId] = useState<number | null>(item.gameId);
   const [description, setDescription] = useState(item.description);
   const [playerIds, setPlayerIds] = useState<number[]>(item.playerIds);
-  const [playerQuery, setPlayerQuery] = useState('');
-
-  const filteredRoster = useMemo(() => {
-    const raw = playerQuery.trim();
-    /*
-      JERSEY SEARCH, TYPED THE WAY PEOPLE TYPE IT (user request, 2026-08-02).
-
-      Two changes, both about not making someone spell the query the app's way:
-
-      · The `#` is optional. Digits ARE a jersey number — no name on a roster is
-        "27" — so typing 27 means the same thing as typing #27. The `#` still
-        works, because it's in the manual and because it's an unambiguous way to
-        say "I mean the number" if a roster ever holds a numeral in a name.
-
-      · PREFIX, not exact. Typing 5 was matching only #5 and hiding #50 through
-        #59, which is the opposite of how a number half-remembered off a jersey
-        arrives: you get the first digit, then the second. Now 5 opens the whole
-        fifties and keeps narrowing as you type.
-
-      Exact matches still sort first, so 5 lists #5 above #50 — the number you
-      typed in full is the one you most likely meant.
-    */
-    const jerseyQuery = /^#?\d+$/.test(raw) ? raw.replace('#', '') : null;
-    let matches: RosterPlayer[];
-    if (jerseyQuery !== null) {
-      matches = roster.filter((p) => String(p.jerseyNumber).startsWith(jerseyQuery));
-    } else if (raw === '#') {
-      matches = roster;
-    } else if (raw) {
-      const q = raw.toLowerCase();
-      matches = roster.filter((p) => playerLabel(p).toLowerCase().includes(q) || p.position.toLowerCase() === q);
-    } else {
-      matches = roster;
-    }
-    // Tagged players float to the top so the current selection is always visible.
-    return [...matches].sort((a, b) => {
-      const at = playerIds.includes(a.id) ? 0 : 1;
-      const bt = playerIds.includes(b.id) ? 0 : 1;
-      if (at !== bt) return at - bt;
-      if (jerseyQuery !== null) {
-        const ae = String(a.jerseyNumber) === jerseyQuery ? 0 : 1;
-        const be = String(b.jerseyNumber) === jerseyQuery ? 0 : 1;
-        // Then numerically, so the fifties read 50, 51, 52 rather than by rating.
-        if (ae !== be) return ae - be;
-        if (a.jerseyNumber !== b.jerseyNumber) return a.jerseyNumber - b.jerseyNumber;
-      }
-      return b.overallRating - a.overallRating;
-    });
-  }, [roster, playerQuery, playerIds]);
-
   const inputClass =
     'w-full border border-slate-200/80 bg-slate-50/85 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100';
 
@@ -391,45 +619,16 @@ function MediaDetailsForm({
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">
           Players in this media {playerIds.length > 0 ? `(${playerIds.length})` : ''}
         </p>
-        <input
-          type="text"
-          value={playerQuery}
-          onChange={(e) => setPlayerQuery(e.target.value)}
-          placeholder="Search by name, number or position..."
-          aria-label="Search players to tag — by name, position, or jersey number"
-          className={`${inputClass} mt-1.5`}
-        />
-        <div className="mt-1.5 max-h-48 overflow-y-auto border border-slate-200/80 dark:border-slate-800">
-          {filteredRoster.map((player) => {
-            const tagged = playerIds.includes(player.id);
-            return (
-              <button
-                key={player.id}
-                type="button"
-                onClick={() =>
-                  setPlayerIds((prev) => (tagged ? prev.filter((pid) => pid !== player.id) : [...prev, player.id]))
-                }
-                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition ${
-                  tagged
-                    ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
-                }`}
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  <span className={`tnum mr-1.5 ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
-                    #{player.jerseyNumber}
-                  </span>
-                  {playerLabel(player)}
-                </span>
-                <span className={`shrink-0 text-xs ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {player.position} {player.overallRating}
-                </span>
-              </button>
-            );
-          })}
-          {filteredRoster.length === 0 && (
-            <p className="px-2.5 py-3 text-xs text-slate-400 dark:text-slate-500">No matching players.</p>
-          )}
+        <div className="mt-1.5">
+          <PlayerTagList
+            roster={roster}
+            selected={playerIds}
+            onToggle={(playerId) =>
+              setPlayerIds((prev) =>
+                prev.includes(playerId) ? prev.filter((pid) => pid !== playerId) : [...prev, playerId],
+              )
+            }
+          />
         </div>
       </div>
 
@@ -715,9 +914,20 @@ function MediaLightbox({
                 aria-hidden
                 className="pointer-events-none absolute inset-0 mix-blend-overlay"
                 style={{
-                  opacity: (look.grain / 100) * 0.55,
+                  /*
+                    STRENGTHENED (user direction) — at the old settings you
+                    genuinely could not tell it was on. Three things were
+                    fighting it: the layer capped at 0.55 opacity, the noise
+                    rect inside the SVG was itself only 0.6 opaque, so the
+                    strongest possible grain was a third of one, and
+                    `baseFrequency` 0.85 put the grain below one screen pixel
+                    where it averaged out to flat grey. Now full opacity on both,
+                    and a coarser 0.62 frequency so each grain is big enough to
+                    survive being drawn.
+                  */
+                  opacity: look.grain / 100,
                   backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
+                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E\")",
                 }}
               />
             )}
@@ -991,15 +1201,59 @@ export function Media() {
     re-picking it.
   */
   const [rollSort, setRollSort] = useState<'oldest' | 'newest'>('oldest');
+  /*
+    HOW THE LIBRARY IS ARRANGED (user direction).
+
+    LIST is the folder shelf this page has had — a collapsed row per game, which
+    is what stops a season of several hundred screenshots burying the rest of
+    the page. GRID drops the folders entirely and lays every photo out at once,
+    for when you are looking for one picture and don't care which Saturday it
+    came from.
+
+    They are two arrangements of the SAME tiles (see MediaTile), so selection,
+    drag-to-reorder, the bin and the lightbox behave identically in both.
+    Session state, like the sort direction: it is how you want to look right
+    now, not a standing preference.
+  */
+  const [view, setView] = useState<'list' | 'grid'>('list');
+  /** Folder names the user has chosen this season, by game id (null = the unfiled pile). */
+  const [albums, setAlbums] = useState<MediaAlbum[]>([]);
+  /** Which folder is being renamed, keyed the way the rolls are. */
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOverUpload, setDragOverUpload] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchGameId, setBatchGameId] = useState('');
+  /** Players to ADD to every selected photo. Empty = leave tags alone. */
+  const [batchPlayerIds, setBatchPlayerIds] = useState<number[]>([]);
   const dragIndexRef = useRef<number | null>(null);
 
   const seasonYear = seasons.find((s) => s.id === seasonId)?.seasonYear;
+  /** Apply stays inert until the panel actually says to change something. */
+  const canApplyBatch = selectedIds.size > 0 && (batchGameId !== '' || batchPlayerIds.length > 0);
   const importing = importProgress !== null;
+
+  useEffect(() => {
+    if (!id || seasonId === undefined) {
+      setAlbums([]);
+      return;
+    }
+    let cancelled = false;
+    void window.api.media.listAlbums(id, seasonId).then((rows) => {
+      if (!cancelled) setAlbums(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, seasonId]);
+
+  async function renameAlbum(gameId: number | null, name: string) {
+    if (!id || seasonId === undefined) return;
+    setAlbums(await window.api.media.renameAlbum(id, seasonId, gameId, name));
+    setRenamingKey(null);
+  }
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -1088,17 +1342,45 @@ export function Media() {
     setSelectMode(false);
     setSelectedIds(new Set());
     setBatchGameId('');
+    setBatchPlayerIds([]);
   }
 
-  async function batchSetGame() {
+  /**
+   * Applies the batch panel to every selected photo.
+   *
+   * PLAYERS ARE ADDED, NOT REPLACED, and that asymmetry with the game is
+   * deliberate. A photo is from exactly ONE game, so setting the game is a
+   * choice between values and the last one wins. It can have any number of
+   * players in it, and the reason you reach for batch tagging is "these forty
+   * shots all have the quarterback in them" — replacing would wipe the tags you
+   * already put on individual photos, which is the opposite of the intent.
+   * Untagging stays a per-photo job, where you can see who you are removing.
+   *
+   * A blank game selection leaves the game ALONE rather than clearing it: the
+   * dropdown starts empty, and "I only came here to tag players" must not
+   * silently unfile every photo in the selection. Clearing is its own explicit
+   * option in the list.
+   */
+  async function applyBatch() {
     if (!items || selectedIds.size === 0) return;
-    const gid = batchGameId === '' ? null : Number(batchGameId);
+    const changeGame = batchGameId !== '';
+    if (!changeGame && batchPlayerIds.length === 0) return;
+    const gid = batchGameId === CLEAR_GAME ? null : Number(batchGameId);
     for (const m of items.filter((it) => selectedIds.has(it.id))) {
-      await window.api.media.update(m.id, { gameId: gid, description: m.description, playerIds: m.playerIds });
+      await window.api.media.update(m.id, {
+        gameId: changeGame ? gid : m.gameId,
+        description: m.description,
+        playerIds: [...new Set([...m.playerIds, ...batchPlayerIds])],
+      });
     }
     refresh();
     exitSelectMode();
   }
+  /** One photo, from a tile's bin — confirms, then removes it. */
+  async function confirmDelete(item: MediaItemWithPath) {
+    if (await confirm(DELETE_MEDIA_CONFIRM)) handleDeleted(item);
+  }
+
   async function batchDelete() {
     if (selectedIds.size === 0) return;
     const ok = await confirm({
@@ -1180,14 +1462,30 @@ export function Media() {
     neither order is asking for.
   */
   const UNFILED = 'unfiled';
-  const rolls: { key: string; label: string; game?: ScheduleGame; entries: { item: MediaItemWithPath; index: number }[] }[] = [];
+  const rolls: {
+    key: string;
+    label: string;
+    /** What the game itself is called — shown as a subtitle once renamed. */
+    defaultLabel: string;
+    /** The user's name, or null when the folder still uses the game's. */
+    custom: string | null;
+    game?: ScheduleGame;
+    entries: { item: MediaItemWithPath; index: number }[];
+  }[] = [];
   const rollByKey = new Map<string, (typeof rolls)[number]>();
   (items ?? []).forEach((item, index) => {
     const key = item.gameId === null ? UNFILED : String(item.gameId);
     let roll = rollByKey.get(key);
     if (!roll) {
       const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
-      roll = { key, label: game ? gameLabel(game) : 'Not from a game', game, entries: [] };
+      /*
+        THE USER'S NAME WINS, and the game's own label becomes the placeholder
+        rather than disappearing — a folder called "Senior Day" still has to be
+        findable as the Purdue game, so the game line stays underneath it.
+      */
+      const defaultLabel = game ? gameLabel(game) : 'Not from a game';
+      const custom = albums.find((a) => a.gameId === item.gameId)?.name ?? null;
+      roll = { key, label: custom ?? defaultLabel, defaultLabel, custom, game, entries: [] };
       rollByKey.set(key, roll);
       rolls.push(roll);
     }
@@ -1215,7 +1513,33 @@ export function Media() {
   });
 
   return (
-    <div className="space-y-6">
+    /*
+      THE WHOLE PAGE IS THE DROP TARGET (user direction — dropping files had
+      stopped working in practice). It used to be only the photo grid, which was
+      fine when the grid WAS the page; once photos moved into collapsed game
+      folders the grid became a short stack of thin rows, and everything around
+      it — the header, the space beside the folders, the empty area below them —
+      silently rejected a drop. Nothing was broken, there was just almost
+      nothing left to aim at.
+
+      A full-panel overlay says so while you are dragging, rather than the
+      one-pixel outline that was there before and that nobody reported seeing.
+    */
+    <div
+      className="relative space-y-6"
+      onDragOver={onGridDragOver}
+      onDragLeave={(e) => {
+        // Only when the pointer leaves the PANEL, not on every child boundary
+        // it crosses on the way in — otherwise the overlay strobes.
+        if (e.currentTarget === e.target) setDragOverUpload(false);
+      }}
+      onDrop={onGridDrop}
+    >
+      {dragOverUpload && !importing && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center border-2 border-dashed border-[var(--team-primary)] bg-slate-950/70">
+          <p className="type-eyebrow text-white">Drop to add to {seasonYear ?? 'this season'}</p>
+        </div>
+      )}
       {/*
         No headline (user's call). "The season, in pictures." was a title for a
         page whose content IS pictures — it said nothing the grid underneath
@@ -1246,8 +1570,21 @@ export function Media() {
           so that moves across to the actions, where it still reaches everything
           it explained.
         */}
-        <div className="flex min-w-0 items-center gap-3">
-          {rolls.length > 1 && userTeamName && (
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          {hasItems && (
+            <SegmentedControl
+              size="sm"
+              value={view}
+              onChange={setView}
+              ariaLabel="How to arrange the library"
+              options={[
+                { value: 'list', label: 'List' },
+                { value: 'grid', label: 'Grid' },
+              ]}
+            />
+          )}
+          {/* The order switch is about the FOLDERS, so it goes when they do. */}
+          {view === 'list' && rolls.length > 1 && userTeamName && (
             <ToggleSwitch
               value={rollSort}
               onChange={setRollSort}
@@ -1267,11 +1604,15 @@ export function Media() {
         </div>
         <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
           <InfoHint label="About the media library">
-            {`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Photos group by game and open on click. Drag to reorder, drop files in to add, and use Favorites to pick out several at once. The switch on the left runs the game folders from the start of the season or from the most recent game.`}
+            {`Game-day screenshots and clips for ${seasonYear !== undefined ? `the ${seasonYear} season` : 'this season'} — tag the game and the players, and everything links back to their pages. Photos group by game and open on click. Drag to reorder, drop files in to add, and use Select to tag or delete several at once. The switch on the left runs the game folders from the start of the season or from the most recent game.`}
           </InfoHint>
+          {/* SELECT, not "Favorites" (user direction, reversing the earlier
+              rename). The button opens multi-select — batch tagging and batch
+              delete — and calling it Favorites hid that: nobody looks for
+              "select several photos" under a word that means starred. */}
           {hasItems && (
             <Button variant="secondary" onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}>
-              {selectMode ? 'Cancel' : 'Favorites'}
+              {selectMode ? 'Cancel' : 'Select'}
             </Button>
           )}
           <Button onClick={handleUpload} disabled={importing || seasonId === undefined}>
@@ -1298,49 +1639,93 @@ export function Media() {
         </SurfaceCard>
       )}
 
-      {/* Batch toolbar (Select mode) */}
+      {/*
+        THE BATCH PANEL. Everything you can do to a selection lives here, and it
+        only exists while a selection is being made — the page is a gallery the
+        rest of the time.
+      */}
       {selectMode && (
-        <SurfaceCard className="flex flex-wrap items-center gap-3 py-3">
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{selectedIds.size} selected</span>
-          <button
-            type="button"
-            onClick={() => setSelectedIds(new Set((items ?? []).map((m) => m.id)))}
-            className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
-          >
-            Select all
-          </button>
-          <div className="h-5 w-px bg-slate-300/70 dark:bg-slate-700/70" aria-hidden="true" />
-          {/* A span, not a <label>: a label wrapping a BUTTON doesn't forward
-              clicks the way it does for a native control, so the text would look
-              clickable and do nothing. */}
-          <span className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-            Set game
-            <Select
-              value={batchGameId}
-              onChange={setBatchGameId}
-              disabled={selectedIds.size === 0}
-              ariaLabel="Game to assign to the selected media"
-              options={[
-                { value: '', label: 'Not from a specific game' },
-                ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
-              ]}
-            />
-          </span>
-          <Button onClick={batchSetGame} disabled={selectedIds.size === 0}>
-            Apply to {selectedIds.size}
-          </Button>
-          <button
-            type="button"
-            onClick={batchDelete}
-            disabled={selectedIds.size === 0}
-            className="border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-red-400 dark:hover:bg-red-950/60"
-          >
-            Delete selected
-          </button>
-          <div className="ml-auto">
-            <Button variant="secondary" onClick={exitSelectMode}>
-              Done
-            </Button>
+        <SurfaceCard className="space-y-3 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set((items ?? []).map((m) => m.id)))}
+              className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
+            >
+              Select all
+            </button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline dark:text-slate-400"
+              >
+                Clear
+              </button>
+            )}
+
+            {/* THE BIN IS AN ICON AND IT SITS AT THE END (user direction) —
+                away from Apply, because the two are one slip apart and only one
+                of them can be undone. It still confirms first. */}
+            <div className="ml-auto flex items-center gap-2">
+              <Button onClick={() => void applyBatch()} disabled={!canApplyBatch}>
+                Apply to {selectedIds.size}
+              </Button>
+              <button
+                type="button"
+                onClick={() => void batchDelete()}
+                disabled={selectedIds.size === 0}
+                aria-label={`Delete ${selectedIds.size} selected`}
+                title={selectedIds.size === 0 ? 'Select photos to delete' : `Delete ${selectedIds.size} selected`}
+                className="border border-slate-300/80 bg-white/85 p-2 text-red-600 transition hover:border-red-400/70 hover:bg-red-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-red-400 dark:hover:bg-red-950/60"
+              >
+                <TrashIcon />
+              </button>
+              <Button variant="secondary" onClick={exitSelectMode}>
+                Done
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-t border-slate-200/60 pt-3 md:grid-cols-2 dark:border-slate-800/60">
+            <div>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">Set game</p>
+              <Select
+                value={batchGameId}
+                onChange={setBatchGameId}
+                disabled={selectedIds.size === 0}
+                ariaLabel="Game to assign to the selected media"
+                className="mt-1.5 w-full"
+                options={[
+                  { value: '', label: 'Leave the game as it is' },
+                  { value: CLEAR_GAME, label: 'Not from a specific game' },
+                  ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+                ]}
+              />
+            </div>
+            <div>
+              <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+                Tag players {batchPlayerIds.length > 0 ? `(${batchPlayerIds.length})` : ''}
+              </p>
+              <div className="mt-1.5">
+                <PlayerTagList
+                  roster={roster}
+                  selected={batchPlayerIds}
+                  maxHeightClass="max-h-40"
+                  onToggle={(playerId) =>
+                    setBatchPlayerIds((prev) =>
+                      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId],
+                    )
+                  }
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                Added to every selected photo — tags already on a photo are kept.
+              </p>
+            </div>
           </div>
         </SurfaceCard>
       )}
@@ -1365,7 +1750,39 @@ export function Media() {
         </div>
       )}
 
-      {items && items.length > 0 && (
+      {/*
+        GRID VIEW — every photo at once, no folders. Deliberately in ITEM order
+        and not schedule order: with the grouping gone, the drag-to-reorder
+        arrangement is the only arrangement left, and this is the view where you
+        can actually see it. The season's own sequence is what the folder view
+        is for.
+      */}
+      {items && items.length > 0 && view === 'grid' && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {items.map((item, index) => {
+            const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
+            return (
+              <MediaTile
+                key={item.id}
+                item={item}
+                index={index}
+                caption={item.description || (game ? gameLabel(game) : 'Add details')}
+                selectMode={selectMode}
+                selected={selectedIds.has(item.id)}
+                onOpen={() => setLightboxIndex(index)}
+                onToggleSelect={() => toggleSelect(item.id)}
+                onDragStartTile={() => (dragIndexRef.current = index)}
+                onDragEndTile={() => (dragIndexRef.current = null)}
+                onDropTile={(e) => onTileDrop(e, index)}
+                canReorder={dragIndexRef.current !== null}
+                onDelete={() => void confirmDelete(item)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {items && items.length > 0 && view === 'list' && (
         <div
           onDragOver={onGridDragOver}
           onDragLeave={(e) => {
@@ -1380,7 +1797,10 @@ export function Media() {
             const open = openRolls.has(roll.key);
             const photos = roll.entries.length;
             return (
-              <div key={roll.key} className="border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/[0.03]">
+              <div
+                key={roll.key}
+                className="group/roll border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/[0.03]"
+              >
                 <button
                   type="button"
                   onClick={() =>
@@ -1426,136 +1846,104 @@ export function Media() {
                       </span>
                     ))}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    {roll.label}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {roll.label}
+                    </span>
+                    {/* Renaming a folder must not lose which game it is. The
+                        game's own line stays underneath, but only once the name
+                        no longer says it. */}
+                    {roll.custom && (
+                      <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
+                        {roll.defaultLabel}
+                      </span>
+                    )}
                   </span>
                   <span className="tnum shrink-0 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     {photos} {photos === 1 ? 'photo' : 'photos'}
                   </span>
                 </button>
 
-                {open && (
-                  <div className="grid grid-cols-2 gap-3 border-t border-slate-200/80 p-3 md:grid-cols-3 xl:grid-cols-4 dark:border-slate-800">
-                    {roll.entries.map(({ item, index }) => {
-                      const game = roll.game;
-                      const caption = item.description || (game ? gameLabel(game) : 'Add details');
-                      const selected = selectedIds.has(item.id);
-                      return (
-              <div
-                key={item.id}
-                role="button"
-                tabIndex={0}
-                draggable={!selectMode}
-                onDragStart={(e) => {
-                  dragIndexRef.current = index;
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', String(index));
-                }}
-                onDragEnd={() => {
-                  dragIndexRef.current = null;
-                }}
-                onDragOver={(e) => {
-                  if (dragIndexRef.current !== null) e.preventDefault();
-                }}
-                onDrop={(e) => onTileDrop(e, index)}
-                onClick={() => (selectMode ? toggleSelect(item.id) : setLightboxIndex(index))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (selectMode) toggleSelect(item.id);
-                    else setLightboxIndex(index);
-                  }
-                }}
-                aria-label={selectMode ? `Select media: ${caption}` : `Open media: ${caption}`}
-                className={`group relative aspect-video overflow-hidden border bg-slate-950 text-left transition ${
-                  selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
-                } ${
-                  selected
-                    ? 'border-[var(--team-primary)] outline outline-2 outline-[var(--team-primary)]'
-                    : 'border-slate-200/80 hover:border-[var(--team-primary)] dark:border-slate-800'
-                }`}
-              >
-                {item.mediaType === 'video' ? (
-                  <>
-                    <video src={fileUrl(item.absolutePath)} preload="metadata" muted className="pointer-events-none h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/60 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-white">
-                      ▶ Video
-                    </span>
-                  </>
-                ) : (
-                  <img
-                    src={fileUrl(item.absolutePath)}
-                    alt={caption}
-                    loading="lazy"
-                    /* A framed photo shows its framing here too — a crop you
-                       saved and then didn't see anywhere would read as not
-                       having saved. The tile stays object-cover (so nothing
-                       letterboxes and un-framed tiles look exactly as before)
-                       and the framing rides on top, which lands on the same
-                       part of the photo cropped to the tile's shape. */
-                    className={`pointer-events-none h-full w-full object-cover ${item.framing ? '' : 'transition duration-base ease-standard group-hover:scale-[1.03]'}`}
-                    /* The tile wears the treatment too — a photo you took to
-                       black and white should be black and white in the grid,
-                       or the library stops being a picture of itself. */
-                    style={{
-                      transform: framingTransform(item.framing),
-                      filter: filterCss(resolveMediaLook(item.look)) || undefined,
-                    }}
-                    draggable={false}
-                  />
-                )}
-
-                {selectMode && (
-                  <span
-                    className={`pointer-events-none absolute left-2 top-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
-                      selected
-                        ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-                        : 'border-white/70 bg-slate-950/50 text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </span>
-                )}
-
                 {/*
-                  THE CAPTION BAR IS A HOVER STATE, not furniture. A wall of
-                  thumbnails each wearing a dark gradient and a line of text is
-                  a list of filenames; the same wall without them is a contact
-                  sheet, which is what this page is for. Point at one and it
-                  tells you what it is and offers the bin.
-
-                  The WHOLE bar fades, gradient included — the gradient exists
-                  only to keep the caption legible over a bright photo, so
-                  leaving it lit under nothing would be a smudge with no job.
-                  `group-focus-within` keeps the delete button reachable by
-                  keyboard: tabbing into the tile reveals the bar it lives in,
-                  rather than moving focus to something invisible.
+                  OUTSIDE THE HEADER BUTTON, not inside it — a <button> cannot
+                  contain another button, and nesting one produces markup the
+                  browser silently reflows and a keyboard cannot reach. It rides
+                  the same row visually via the negative top margin.
                 */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-slate-950/0 px-2.5 pb-2 pt-6 opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-within:opacity-100">
-                  {!selectMode && (
+                {/* ON HOVER, like every other edit affordance in the app. A
+                    permanent "Rename album" on all fifteen rows was fifteen
+                    lines of chrome under a shelf whose whole point is to be
+                    quiet — and renaming is something you do once, not
+                    something you read every visit. It stays in the DOM while
+                    the editor is open, and `focus-within` keeps it reachable
+                    by keyboard rather than vanishing under the caret. */}
+                <div
+                  className={`-mt-1 flex items-center gap-2 px-3 pb-2 transition-opacity duration-base ease-standard focus-within:opacity-100 group-hover/roll:opacity-100 ${
+                    renamingKey === roll.key ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
+                  {renamingKey === roll.key ? (
+                    <>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void renameAlbum(roll.game?.gameId ?? null, renameDraft);
+                          if (e.key === 'Escape') setRenamingKey(null);
+                        }}
+                        placeholder={roll.defaultLabel}
+                        aria-label={`Name for ${roll.defaultLabel}`}
+                        className="min-w-0 flex-1 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <Button compact onClick={() => void renameAlbum(roll.game?.gameId ?? null, renameDraft)}>
+                        Save
+                      </Button>
+                      {/* Clearing the box is "undo the rename", which is why
+                          this only exists once there is one to undo. */}
+                      {roll.custom && (
+                        <Button variant="tertiary" compact onClick={() => void renameAlbum(roll.game?.gameId ?? null, '')}>
+                          Use game name
+                        </Button>
+                      )}
+                      <Button variant="secondary" compact onClick={() => setRenamingKey(null)}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
                     <button
                       type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (await confirm(DELETE_MEDIA_CONFIRM)) handleDeleted(item);
+                      onClick={() => {
+                        setRenamingKey(roll.key);
+                        setRenameDraft(roll.custom ?? '');
                       }}
-                      aria-label={`Delete media: ${caption}`}
-                      title="Delete"
-                      className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
+                      className="text-xs font-medium text-slate-400 underline-offset-2 transition hover:text-slate-700 hover:underline dark:text-slate-500 dark:hover:text-slate-200"
                     >
-                      <TrashIcon />
+                      Rename album
                     </button>
                   )}
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
-                  {item.playerIds.length > 0 && (
-                    <span className="tnum shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
-                      {item.playerIds.length} tagged
-                    </span>
-                  )}
                 </div>
-              </div>
-                      );
-                    })}
+
+                {open && (
+                  <div className="grid grid-cols-2 gap-3 border-t border-slate-200/80 p-3 md:grid-cols-3 xl:grid-cols-4 dark:border-slate-800">
+                    {roll.entries.map(({ item, index }) => (
+                      <MediaTile
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        caption={item.description || (roll.game ? gameLabel(roll.game) : 'Add details')}
+                        selectMode={selectMode}
+                        selected={selectedIds.has(item.id)}
+                        onOpen={() => setLightboxIndex(index)}
+                        onToggleSelect={() => toggleSelect(item.id)}
+                        onDragStartTile={() => (dragIndexRef.current = index)}
+                        onDragEndTile={() => (dragIndexRef.current = null)}
+                        onDropTile={(e) => onTileDrop(e, index)}
+                        canReorder={dragIndexRef.current !== null}
+                        onDelete={() => void confirmDelete(item)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
