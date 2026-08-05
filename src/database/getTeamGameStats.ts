@@ -3,6 +3,7 @@ import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { RivalryData } from '../extractors/extract-rivalries';
 import type { TeamGameStat } from '../shared/types';
+import { isGamePlayed } from '../shared/gameStatus';
 
 /**
  * Per-game team + opponent stat lines for ONE team (the user's own or any
@@ -45,7 +46,7 @@ export function getTeamGameStats(dynastyId: string, teamIndex: number | null, se
         : teamConference !== null && teamConference === opponentConference
           ? 'conference'
           : 'non-conference';
-      const played = g.status !== 'Unplayed';
+      const played = isGamePlayed(g.status);
       return {
         gameId: g.gameId,
         week: g.week,

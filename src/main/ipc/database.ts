@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
+import { withTask } from '../updater/taskRegistry';
 import { mediaDirFor } from './media';
 import type {
   AwardsOverview,
@@ -41,7 +42,7 @@ import {
   getSnapshot,
   resolveSeasonTeam,
 } from '../../database/helpers';
-import { formatSaveWeek } from '../../shared/syncPhase';
+import { formatSaveWeek, isBowlSlateSet } from '../../shared/syncPhase';
 import type { LeagueData } from '../../extractors/extract-league';
 import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../database/importExtraction';
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
@@ -65,6 +66,7 @@ import { getRankings } from '../../database/getRankings';
 import { getRecruits } from '../../database/getRecruits';
 import { getLeagueTeams, getLeagueTeamOverview, getLeagueTeamRoster, getAllLeaguePlayers, getLeagueTeamSchedule, getLeagueTeamHonors, getTeamCard } from '../../database/getLeagueRoster';
 import { getLeagueScores } from '../../database/getLeagueScores';
+import { getPlayoffBracket } from '../../database/getPlayoffBracket';
 import { getNationalTeamStats } from '../../database/getNationalTeamStats';
 import { getNationalStatLeaders } from '../../database/getNationalStatLeaders';
 import { getNationalRecruits, getRecruitById } from '../../database/getNationalRecruits';
@@ -77,7 +79,9 @@ import { getTransfers } from '../../database/getTransfers';
 import { getDepartures } from '../../database/getDepartures';
 import { globalSearch } from '../../database/globalSearch';
 import { getPlayerDevelopment } from '../../database/getPlayerDevelopment';
+import { getPlayerStatHistory } from '../../database/getPlayerStatHistory';
 import { getHeadToHead } from '../../database/getHeadToHead';
+import { activeCoachId, addLegend, assignLegend, getCoachHall, getHallEligible, getLegendStatus, removeLegend } from '../../database/hallOfLegends';
 import { getCoachingTree } from '../../database/getCoachingTree';
 import {
   confirmTeamAwardWinner,
@@ -137,7 +141,13 @@ export function registerDatabaseHandlers(): void {
     });
   });
 
-  ipcMain.handle(IPC.db.importDynasty, async (event, savePath: string): Promise<ImportResult> => {
+  /*
+    Registered with the task registry so the updater knows this is running: an
+    import reads a 10 MB save and writes ~25 tables, and restarting into an
+    installer half-way through would abandon all of it. See updater/taskRegistry.
+  */
+  ipcMain.handle(IPC.db.importDynasty, async (event, savePath: string): Promise<ImportResult> =>
+    withTask('import', async () => {
     try {
       const extraction = await extractAll(savePath, (step, status) => {
         event.sender.send(IPC.extraction.progress, { step, status });
@@ -154,7 +164,8 @@ export function registerDatabaseHandlers(): void {
         message: err instanceof Error ? err.message : 'Import failed unexpectedly.',
       };
     }
-  });
+  }),
+  );
 
   ipcMain.handle(
     IPC.db.checkDynastyMatch,
@@ -174,9 +185,9 @@ export function registerDatabaseHandlers(): void {
     },
   );
 
-  ipcMain.handle(IPC.db.syncDynasty, async (_event, dynastyId: string): Promise<ImportResult> => {
-    return syncDynasty(dynastyId);
-  });
+  ipcMain.handle(IPC.db.syncDynasty, async (_event, dynastyId: string): Promise<ImportResult> =>
+    withTask('sync', async () => syncDynasty(dynastyId)),
+  );
 
   ipcMain.handle(
     IPC.db.getSeasonOverview,
@@ -215,6 +226,7 @@ export function registerDatabaseHandlers(): void {
       isCurrent: season.isCurrent,
       hasFullData: season.hasFullData,
       teamName: resolveSeasonTeam(season)?.displayName ?? null,
+      postseasonReached: isBowlSlateSet(season.syncedWeekType) || !season.isCurrent,
     }));
   });
 
@@ -328,6 +340,10 @@ export function registerDatabaseHandlers(): void {
     },
   );
 
+  ipcMain.handle(IPC.db.getPlayoffBracket, async (_event, dynastyId: string, seasonId?: number) => {
+    return getPlayoffBracket(dynastyId, seasonId) ?? null;
+  });
+
   ipcMain.handle(IPC.db.getLeagueScores, async (_event, dynastyId: string, seasonId?: number) => {
     return getLeagueScores(dynastyId, seasonId) ?? null;
   });
@@ -407,6 +423,47 @@ export function registerDatabaseHandlers(): void {
   ipcMain.handle(IPC.db.getPlayerDevelopment, async (_event, dynastyId: string, playerId: number) => {
     return getPlayerDevelopment(dynastyId, playerId);
   });
+
+  ipcMain.handle(IPC.db.getPlayerStatHistory, async (_event, dynastyId: string, playerId: number) => {
+    return getPlayerStatHistory(dynastyId, playerId);
+  });
+
+  /*
+    The Hall's four calls. Every one resolves the coach itself rather than
+    taking a coachId from the renderer: the active coach is a property of the
+    dynasty's own seasons (`user_coach_id`), so letting a caller pass one in
+    would be inventing a way to write into somebody else's Hall.
+  */
+  ipcMain.handle(IPC.db.getCoachHall, async (_event, dynastyId: string) => {
+    return getCoachHall(dynastyId);
+  });
+
+  ipcMain.handle(IPC.db.getHallEligible, async (_event, dynastyId: string) => {
+    return getHallEligible(dynastyId);
+  });
+
+  ipcMain.handle(IPC.db.getLegendStatus, async (_event, dynastyId: string, playerId: number) => {
+    return getLegendStatus(dynastyId, playerId);
+  });
+
+  ipcMain.handle(IPC.db.addLegend, async (_event, dynastyId: string, playerId: number) => {
+    const coachId = activeCoachId(dynastyId);
+    return coachId === null ? false : addLegend(dynastyId, coachId, playerId);
+  });
+
+  ipcMain.handle(IPC.db.removeLegend, async (_event, dynastyId: string, playerId: number) => {
+    const coachId = activeCoachId(dynastyId);
+    if (coachId !== null) removeLegend(dynastyId, coachId, playerId);
+  });
+
+  ipcMain.handle(
+    IPC.db.assignLegend,
+    async (_event, dynastyId: string, playerId: number, tier: 'first' | 'second' | null, slotId: string | null) => {
+      const coachId = activeCoachId(dynastyId);
+      if (coachId === null) return { ok: false, message: 'No coach identity recorded for this dynasty yet.' };
+      return assignLegend(dynastyId, coachId, playerId, tier, slotId);
+    },
+  );
 
   ipcMain.handle(IPC.db.getHeadToHead, async (_event, dynastyId: string) => {
     return getHeadToHead(dynastyId);

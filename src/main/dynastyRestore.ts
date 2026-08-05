@@ -41,6 +41,19 @@ const ID_SPACES: { table: string; refs: [string, string][] }[] = [
       ['ranking_history', 'season_id'],
       ['media_items', 'season_id'],
       ['team_award_results', 'season_id'],
+      /*
+        Added 2026-08-02, and it had been missing since game_context shipped
+        (schema v11). Everything above it was listed when this file was written;
+        this table arrived later and nobody came back here.
+
+        The consequence was not subtle: with 1,841 context rows left pointing at
+        the old season numbers, `foreign_key_check` failed and EVERY restore into
+        an archive that already had seasons in it aborted with "That backup could
+        not be renumbered safely". The guard did its job — the list is what
+        drifted. `game_context.game_id` deliberately isn't shifted: it's the
+        save's own SeasonGame row index, not a `games.id`.
+      */
+      ['game_context', 'season_id'],
     ],
   },
   {
@@ -60,6 +73,12 @@ const ID_SPACES: { table: string; refs: [string, string][] }[] = [
 
 /** Tables with their own integer ids but nothing pointing at them — shifted so they can't collide either. */
 const STANDALONE_ID_TABLES = [
+  // Per-dynasty rows with an AUTOINCREMENT id, so two dynasties' overrides
+  // occupy the same numbers. Unshifted, the INSERT OR REPLACE below would
+  // overwrite another dynasty's stadium name and artwork without a word — the
+  // UNIQUE(dynasty_id, team_index) can't catch it, because the collision is on
+  // the id, not on that pair.
+  'program_overrides',
   'season_snapshots',
   'player_seasons',
   'coach_seasons',
@@ -198,12 +217,41 @@ export async function inspectBackup(zipPath: string): Promise<BackupInspection> 
  * needing the impossible atomic update — and this is a throwaway copy, never
  * the user's archive.
  */
+/**
+ * How far to move one table's ids.
+ *
+ * The obvious answer — the live table's highest id — is wrong, and wrong in a
+ * way that only shows up on small tables. `UPDATE t SET id = id + n` is applied
+ * ROW BY ROW, and the primary key is checked after every one, so if the shifted
+ * range overlaps the range being shifted, some row lands on a number a row that
+ * hasn't moved yet is still using: `UNIQUE constraint failed: t.id`. A real
+ * backup hit this on `media_items` — 455 rows at ids 47–522 going into an
+ * archive whose own media ids stopped in the twenties, so a 20-odd shift moved
+ * 47 straight onto a number still occupied.
+ *
+ * It doesn't bite on `seasons` or `player_game_stats` because a populated
+ * archive's ids there are already far above anything in a single dynasty's
+ * backup, which is exactly why this survived until a dynasty with a lot of
+ * photos met an archive with almost none.
+ *
+ * Taking the LARGER of the two maxima fixes both halves at once: at least the
+ * live max, so nothing lands on an existing row; at least the incoming max, so
+ * the old and new ranges are disjoint and no intermediate step can collide.
+ */
+function shiftOffset(incoming: Database, live: Database, table: string): number {
+  const liveMax = maxId(live, table);
+  // Nothing on this side to collide with, so leave the ids alone — which is
+  // also what makes a restore into an empty archive a straight copy.
+  if (liveMax === 0) return 0;
+  return Math.max(liveMax, maxId(incoming, table));
+}
+
 function shiftIncomingIds(incoming: Database, live: Database): void {
   incoming.run('PRAGMA foreign_keys = OFF;');
 
   for (const { table, refs } of ID_SPACES) {
     if (!tableExists(incoming, table)) continue;
-    const offset = maxId(live, table);
+    const offset = shiftOffset(incoming, live, table);
     if (offset === 0) continue;
     // Children first: shifting the parent id before its references would leave
     // the children pointing at rows that no longer carry those numbers.
@@ -217,7 +265,7 @@ function shiftIncomingIds(incoming: Database, live: Database): void {
 
   for (const table of STANDALONE_ID_TABLES) {
     if (!tableExists(incoming, table) || !hasIntegerId(incoming, table)) continue;
-    const offset = maxId(live, table);
+    const offset = shiftOffset(incoming, live, table);
     if (offset === 0) continue;
     incoming.run(`UPDATE ${table} SET id = id + ${offset}`);
   }
@@ -227,7 +275,20 @@ function shiftIncomingIds(incoming: Database, live: Database): void {
   incoming.run('PRAGMA foreign_keys = ON;');
   const violations = incoming.exec('PRAGMA foreign_key_check');
   if (violations.length > 0) {
-    throw new Error('That backup could not be renumbered safely, so nothing was changed.');
+    /*
+      Name the tables. This message used to say only that renumbering failed,
+      which is true and useless: the cause is always the same one thing — a
+      child table whose reference isn't in ID_SPACES above, so its parent moved
+      and it didn't — and the table name IS the answer. It cost an hour of
+      instrumentation to learn "game_context" the first time.
+
+      `foreign_key_check` returns one row per broken row, so 1,841 of them
+      collapse to one name here.
+    */
+    const tables = [...new Set(violations[0].values.map((row) => String(row[0])))].sort();
+    throw new Error(
+      `That backup could not be renumbered safely, so nothing was changed (unmapped reference in: ${tables.join(', ')}).`,
+    );
   }
 }
 
@@ -321,15 +382,30 @@ export async function restoreDynastyBackup(zipPath: string): Promise<DynastyRest
     const live = getDb();
     live.run('PRAGMA foreign_keys = ON;');
 
-    // Replacing an existing copy: remove it first so the restore is a clean
-    // swap rather than a half-merge of two versions of the same dynasty.
-    if (getDynastyById(dynastyId)) {
-      live.run('DELETE FROM dynasties WHERE id = ?', [dynastyId]);
-    }
-
     const scratch = loadDatabaseFromBuffer(archiveBuffer);
     try {
+      /*
+        RENUMBER FIRST, DELETE SECOND. The delete used to run up here, before
+        the shift — so when the shift threw (see `shiftOffset`), the user's
+        existing copy of this dynasty had already been removed from the live
+        handle by a restore that then reported failure and changed nothing else.
+        It survived only because nothing persisted afterwards, which is luck,
+        not a guarantee.
+
+        Everything above this line is read-only against the live archive, so a
+        failure in it now leaves the archive exactly as it was.
+
+        Deleting after the offsets are computed only makes them larger than
+        strictly necessary — the old rows are still counted — which is harmless.
+      */
       shiftIncomingIds(scratch, live);
+
+      // Replacing an existing copy: remove it so the restore is a clean swap
+      // rather than a half-merge of two versions of the same dynasty.
+      if (getDynastyById(dynastyId)) {
+        live.run('DELETE FROM dynasties WHERE id = ?', [dynastyId]);
+      }
+
       const rows = copyAllRows(scratch, live);
       persist();
       // Snapshot rows were written straight into the live handle, so the handle

@@ -77,6 +77,10 @@ export function getTransfers(dynastyId: string, focusTeamName: string): TeamTran
         toTeam,
         seasonYear: curr.season.seasonYear,
         toSeasonId: curr.season.id,
+        // The season he left, so a caller can scope "who left THIS year"
+        // without being a season out of step with the departures list.
+        fromSeasonYear: prev.season.seasonYear,
+        fromSeasonId: prev.season.id,
         toTeamIndex: p.teamIndex,
       };
 

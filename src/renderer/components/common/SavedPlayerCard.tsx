@@ -21,10 +21,21 @@ export function SavedPlayerCard({
   dynastyId,
   card,
   className = '',
+  layerOverrides,
+  hideMark = false,
 }: {
   dynastyId: string;
   card: PlayerCardRecord;
   className?: string;
+  /** Drops the DynastyOS mark — see PlayerCard. */
+  hideMark?: boolean;
+  /**
+   * Layers to force OFF (or on) on top of the card's own choices — for the
+   * hover preview, which shows a trimmed version of the card rather than a
+   * different card. Applied over `card.layers`, so anything the user switched
+   * off on their card stays off.
+   */
+  layerOverrides?: Partial<PlayerCardRecord['layers']>;
 }) {
   const colorVars = useTeamThemeVars(dynastyId, card.teamName);
   return (
@@ -34,7 +45,9 @@ export function SavedPlayerCard({
         teamName={card.teamName}
         seasonYear={card.seasonYear}
         stats={card.stats}
-        layers={card.layers}
+        layers={{ ...card.layers, ...layerOverrides }}
+        statSource={card.statSource}
+        hideMark={hideMark}
         photoUrl={
           card.photoPath
             ? // Busted on updatedAt. Replacing a card's photo reuses the same
@@ -45,6 +58,7 @@ export function SavedPlayerCard({
             : null
         }
         photoTransform={card.photoTransform}
+        scrim={card.scrim}
       />
     </div>
   );

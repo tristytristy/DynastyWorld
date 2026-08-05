@@ -41,6 +41,25 @@ function groupSaves(files: SaveFileInfo[]): SaveGroup[] {
     .sort((a, b) => b.main.modifiedAt.localeCompare(a.main.modifiedAt));
 }
 
+/**
+ * The save's filename, without the folder it sits in.
+ *
+ * The path is already printed once at the top of the dialog, and it is the same
+ * for every row — repeating it per row would be a column of identical text with
+ * the one distinguishing word buried at the end. The FILENAME is the part that
+ * differs, and it is what a user matches against when they are looking at the
+ * folder in Explorer alongside this.
+ *
+ * Splits on both separators: these paths come from the OS as Windows paths, but
+ * a save picked by hand or restored from elsewhere can arrive with forward
+ * slashes, and a lastIndexOf on one separator would hand back the whole string
+ * for the other.
+ */
+function baseName(filePath: string): string {
+  const cut = Math.max(filePath.lastIndexOf('\\'), filePath.lastIndexOf('/'));
+  return cut >= 0 ? filePath.slice(cut + 1) : filePath;
+}
+
 function kindLabel(kind: SaveFileInfo['kind']): string {
   if (kind === 'autosave') return 'Autosave';
   if (kind === 'backup') return 'Backup';
@@ -153,7 +172,12 @@ export function ImportDynastyModal({
             const already = importedPaths.includes(group.main.path);
             return (
               <div key={group.slug} className="space-y-1">
-                <button type="button" onClick={() => onPick(group.main.path)} className={rowClass}>
+                <button
+                  type="button"
+                  onClick={() => onPick(group.main.path)}
+                  title={baseName(group.main.path)}
+                  className={rowClass}
+                >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center">
                     {peek?.teamName ? (
                       <TeamLogo team={{ assetName: peek.teamName, label: peek.teamName }} size="sm" className="h-9 w-9" />
@@ -199,6 +223,7 @@ export function ImportDynastyModal({
                           key={variant.path}
                           type="button"
                           onClick={() => onPick(variant.path)}
+                          title={baseName(variant.path)}
                           className={`${rowClass} mt-1 py-2`}
                         >
                           <div className="min-w-0 flex-1">

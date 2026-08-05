@@ -328,7 +328,7 @@ export function NationalPlayers() {
         description="Every player in the country, not just your roster."
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 4xl:grid-cols-6">
         <StatTile label="Players" value={String(players.length)} />
         <StatTile label="Filtered" value={String(sorted.length)} />
         <StatTile label="Average OVR" value={averageOverall} />

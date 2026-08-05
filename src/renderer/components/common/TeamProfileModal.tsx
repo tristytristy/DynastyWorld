@@ -9,6 +9,8 @@ import { TeamLogo } from './TeamLogo';
 import { TeamLink } from './TeamLink';
 import { PlayerPortrait } from './PlayerPortrait';
 import { aggregateTeamGames, perGame as perGameAvg, ratioPct, turnoverMargin } from '../../lib/teamStats';
+import { DARK_SURFACE_HEX, LIGHT_SURFACE_HEX, ensureContrastText, textColorOn } from '../../lib/teamTheme';
+import { useTheme } from '../../theme/ThemeProvider';
 import type { GameSummary, TeamCard, TeamCardPlayer } from '../../../shared/types';
 import { ModalOverlay } from './ModalOverlay';
 import { ModalCloseButton } from './ModalCloseButton';
@@ -90,7 +92,22 @@ function BestPlayerRow({
 function TeamCardBody({ card, onViewHub }: { card: TeamCard; onViewHub: () => void }) {
   const { openPlayerModal } = usePlayerModal();
   const { overview, topPlayers } = card;
-  const primary = card.primaryColorHex ?? 'var(--team-primary)';
+  const { appearance } = useTheme();
+  /*
+    THE VIEWED team's colours, not the user's. Everything painted below uses
+    this team's fill, so the text on top of it has to be computed from THIS
+    hex — the modal used to paint a team's colour and then take its text colour
+    from `--team-on-primary`, which is the user's own dynasty theme, so a navy
+    team's button inherited near-black text from a pale-primary dynasty.
+  */
+  const primaryHex = card.primaryColorHex ?? null;
+  const primary = primaryHex ?? 'var(--team-primary)';
+  const onPrimary = primaryHex ? textColorOn(primaryHex) : 'var(--team-on-primary)';
+  // Contrast-corrected against the page ground, for the team colour used as TEXT
+  // rather than as a fill (a dark navy on a dark surface is unreadable as-is).
+  const accentText = primaryHex
+    ? ensureContrastText(primaryHex, appearance === 'dark' ? DARK_SURFACE_HEX : LIGHT_SURFACE_HEX)
+    : 'var(--team-accent-text)';
 
   const played = card.games.filter((g) => g.played);
   const agg = aggregateTeamGames(played);
@@ -108,7 +125,6 @@ function TeamCardBody({ card, onViewHub }: { card: TeamCard; onViewHub: () => vo
         className="relative flex items-center gap-4 border-b border-slate-200/80 px-5 py-5 dark:border-white/10"
         style={{ backgroundImage: `linear-gradient(120deg, color-mix(in srgb, ${primary} 18%, transparent), transparent 60%)` }}
       >
-        <span className="absolute inset-y-0 left-0 w-[3px]" style={{ background: primary }} />
         <TeamLogo team={{ assetName: overview.teamName, label: overview.teamName }} size="md" className="shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="type-eyebrow text-slate-400 dark:text-slate-500">
@@ -125,7 +141,7 @@ function TeamCardBody({ card, onViewHub }: { card: TeamCard; onViewHub: () => vo
             {rank != null && (
               <span
                 className="corner-cut-sm px-2 py-0.5 text-xs font-semibold"
-                style={{ background: `color-mix(in srgb, ${primary} 16%, transparent)`, color: primary }}
+                style={{ background: `color-mix(in srgb, ${primary} 16%, transparent)`, color: accentText }}
               >
                 #{rank}
               </span>
@@ -138,7 +154,7 @@ function TeamCardBody({ card, onViewHub }: { card: TeamCard; onViewHub: () => vo
         {/* Stat strip */}
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           <StatTile label="Points / G" value={dec(agg.points)} />
-          <StatTile label="Total Off / G" value={num(agg.totalYards)} />
+          <StatTile label="Total Off / G" value={num(agg.offenseYards)} />
           <StatTile label="Total Def / G" value={num(agg.defTotalYards)} />
           <StatTile label="Turnover Margin" value={`${margin > 0 ? '+' : ''}${margin}`} />
           <StatTile label="3rd Down %" value={third === null ? '—' : `${third.toFixed(1)}%`} />
@@ -172,8 +188,8 @@ function TeamCardBody({ card, onViewHub }: { card: TeamCard; onViewHub: () => vo
         <button
           type="button"
           onClick={onViewHub}
-          className="corner-cut-sm w-full px-4 py-3 text-sm font-semibold text-[var(--team-on-primary)] transition hover:brightness-110"
-          style={{ background: primary }}
+          className="corner-cut-sm w-full px-4 py-3 text-sm font-semibold transition hover:brightness-110"
+          style={{ background: primary, color: onPrimary }}
         >
           View Team Hub →
         </button>

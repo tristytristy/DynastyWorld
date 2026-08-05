@@ -42,11 +42,6 @@ function helmetUrl(side: HelmetSide, token: string): string {
   return `${HELMET_BASE_PATH}/${side}/thel_${prefix}helmets_${token}_result.webp`;
 }
 
-/** True when this team has dedicated helmet art (vs. falling back to Default). */
-export function hasTeamHelmet(teamAssetName: string): boolean {
-  return Boolean(TEAM_3D_LOGOS[canonicalKey(teamAssetName)]);
-}
-
 /**
  * Best helmet path for a team. Falls back to the generic Default helmet for
  * teams without dedicated art (mirrors getLogoPath's fallback behavior), so a

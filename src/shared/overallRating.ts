@@ -51,12 +51,6 @@ export interface OverallResult {
   reason: OverallUnavailableReason | null;
 }
 
-/** True when a live overall can be trusted for this position/archetype. */
-export function canCalculateOverall(position: string, playerType: string): boolean {
-  const key = formulaKey(position, playerType);
-  return key !== null && !UNSUPPORTED_FORMULA_KEYS.has(key) && OVR_FORMULAS[key] !== undefined;
-}
-
 /**
  * The overall this player's ratings produce, or null with a reason.
  *

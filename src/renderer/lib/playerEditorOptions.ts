@@ -5,6 +5,8 @@
  * labels are humanized for display. An unknown current value is still shown via
  * the editor's fallback option so nothing is ever silently changed.
  */
+import { DEALBREAKER_LABELS, IDEAL_PITCH_LABELS } from '../../shared/recruitPreferences';
+
 export interface EnumOption {
   value: string;
   label: string;
@@ -74,42 +76,20 @@ export const SCHEME_DEFENSE_OPTIONS: EnumOption[] = [
   { value: 'DEF_3_4_MULTIPLE', label: '3-4 Multiple' },
 ];
 
-export const DEALBREAKER_OPTIONS: EnumOption[] = [
-  { value: 'AcademicPrestige', label: 'Academic Prestige' },
-  { value: 'AthleticFacilities', label: 'Athletic Facilities' },
-  { value: 'BrandExposure', label: 'Brand Exposure' },
-  { value: 'CampusLifestyle', label: 'Campus Lifestyle' },
-  { value: 'ChampionshipContender', label: 'Championship Contender' },
-  { value: 'CoachPrestige', label: 'Coach Prestige' },
-  { value: 'CoachStability', label: 'Coach Stability' },
-  { value: 'ConferencePrestige', label: 'Conference Prestige' },
-  { value: 'PlayingStyle', label: 'Playing Style' },
-  { value: 'PlayingTime', label: 'Playing Time' },
-  { value: 'ProPotential', label: 'Pro Potential' },
-  { value: 'ProgramTradition', label: 'Program Tradition' },
-  { value: 'ProximityToHome', label: 'Proximity to Home' },
-  { value: 'StadiumAtmosphere', label: 'Stadium Atmosphere' },
-];
+/**
+ * Both recruit-preference lists are DERIVED from the shared wording maps rather
+ * than written out here. They used to be a hand-kept copy, and the National
+ * Recruits page labelled the same enums through a camelCase splitter instead —
+ * so the two surfaces disagreed on seven values ("Coachs Favorite" vs "Coach's
+ * Favorite", "TVTime" vs "TV Time"). One source means that cannot recur.
+ *
+ * Order follows the maps, which are alphabetical by enum member; `Invalid` is
+ * absent from both by design — it is the game's "not revealed yet" sentinel,
+ * not something to offer as a choice.
+ */
+const toOptions = (labels: Readonly<Record<string, string>>): EnumOption[] =>
+  Object.entries(labels).map(([value, label]) => ({ value, label }));
 
-export const IDEAL_PITCH_OPTIONS: EnumOption[] = [
-  { value: 'Aspirational', label: 'Aspirational' },
-  { value: 'CampusPersonality', label: 'Campus Personality' },
-  { value: 'CoachsFavorite', label: "Coach's Favorite" },
-  { value: 'CollegeExperience', label: 'College Experience' },
-  { value: 'ConferenceSpotlight', label: 'Conference Spotlight' },
-  { value: 'FootballInfluencer', label: 'Football Influencer' },
-  { value: 'Grassroots', label: 'Grassroots' },
-  { value: 'HometownHero', label: 'Hometown Hero' },
-  { value: 'ItsGameTime', label: "It's Game Time" },
-  { value: 'Prestigious', label: 'Prestigious' },
-  { value: 'ProveYourself', label: 'Prove Yourself' },
-  { value: 'Starter', label: 'Starter' },
-  { value: 'StudentOfTheGame', label: 'Student of the Game' },
-  { value: 'SundayBound', label: 'Sunday Bound' },
-  { value: 'TVTime', label: 'TV Time' },
-  { value: 'TeamPlayer', label: 'Team Player' },
-  { value: 'TheClutch', label: 'The Clutch' },
-  { value: 'TimeToGetToWork', label: 'Time to Get to Work' },
-  { value: 'ToTheHouse', label: 'To the House' },
-  { value: 'WorkHorse', label: 'Work Horse' },
-];
+export const DEALBREAKER_OPTIONS: EnumOption[] = toOptions(DEALBREAKER_LABELS);
+
+export const IDEAL_PITCH_OPTIONS: EnumOption[] = toOptions(IDEAL_PITCH_LABELS);

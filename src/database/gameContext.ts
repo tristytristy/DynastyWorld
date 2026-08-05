@@ -86,6 +86,30 @@ export function captureGameContext(
     if (Number(row[1]) === 1) lockedIds.add(id);
   }
 
+  /*
+    SELF-HEAL, before anything else reads `lockedIds`.
+
+    A row may only stay locked while its game is genuinely played. Archives
+    written before the CFP bracket was understood locked their quarterfinal,
+    semifinal and championship rows months early: the old played-test counted
+    the save's `HomeScheduled`/`Unscheduled` slots as played (see
+    shared/gameStatus.ts), and a locked row is never refreshed again — so those
+    rows would have kept a pre-game snapshot taken before the field even
+    existed, permanently.
+
+    Unlocking them here lets this same pass re-capture them correctly. Only
+    in-progress seasons can be affected; a completed season's playoff games
+    really are played, so nothing is unlocked in an archive that's already
+    finished.
+  */
+  const unlockStmt = db.prepare('UPDATE game_context SET locked = 0 WHERE season_id = ? AND game_id = ?');
+  for (const game of games) {
+    if (game.played || !lockedIds.has(game.gameId)) continue;
+    unlockStmt.run([seasonId, game.gameId]);
+    lockedIds.delete(game.gameId);
+  }
+  unlockStmt.free();
+
   const stmt = db.prepare(
     `INSERT INTO game_context (
        season_id, game_id,

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, screen, protocol } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, screen, protocol, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import os from 'os';
@@ -9,14 +9,14 @@ import { migrateLegacyUserData } from './userDataMigration';
 import { registerFilesystemHandlers } from './ipc/filesystem';
 import { registerAssetHandlers } from './ipc/assets';
 import { registerDatabaseHandlers } from './ipc/database';
-import { registerExtractionHandlers } from './ipc/extraction';
 import { registerExportHandlers } from './ipc/export';
 import { registerEditorHandlers } from './ipc/editor';
 import { registerMediaHandlers } from './ipc/media';
 import { registerCardHandlers } from './ipc/card';
 import { registerProgramHandlers } from './ipc/program';
 import { registerNotesHandlers } from './ipc/notes';
-import { registerUpdateHandlers } from './ipc/update';
+import { registerUpdateHandlers } from './updater/updateIpc';
+import { scheduleStartupCheck } from './updater/updateService';
 import {
   initDatabase,
   DatabaseCorruptedError,
@@ -73,7 +73,9 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // it is already too late. See userDataMigration.ts.
 const userDataMigration = migrateLegacyUserData();
 if (userDataMigration.migrated) {
-  console.log(`[startup] moved existing data from ${userDataMigration.from} (${userDataMigration.method})`);
+  console.log(
+    `[startup] moved existing data from ${userDataMigration.from} (${userDataMigration.method})`,
+  );
 } else if (userDataMigration.error) {
   console.error('[startup] could not move existing data:', userDataMigration.error);
 }
@@ -113,7 +115,10 @@ const USE_PRE_SPLASH_ONLY = process.env.USE_PRE_SPLASH_ONLY === '1';
  * BEFORE app 'ready' so <img> can load it under the page CSP.
  */
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'cfbmedia', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  {
+    scheme: 'cfbmedia',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
 ]);
 
 const MEDIA_CONTENT_TYPES: Record<string, string> = {
@@ -143,8 +148,11 @@ function registerMediaProtocol(): void {
     }
     try {
       const data = await fs.promises.readFile(resolved);
-      const type = MEDIA_CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream';
-      return new Response(data, { headers: { 'content-type': type, 'cache-control': 'public, max-age=31536000' } });
+      const type =
+        MEDIA_CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream';
+      return new Response(data, {
+        headers: { 'content-type': type, 'cache-control': 'public, max-age=31536000' },
+      });
     } catch {
       return new Response('not found', { status: 404 });
     }
@@ -296,7 +304,39 @@ function createWindow(): BrowserWindow {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      /*
+        Explicit rather than inherited. Electron has sandboxed renderers by
+        default since v20, so this changes nothing today — it states the
+        requirement, so a future webPreferences edit has to argue with it
+        instead of quietly turning it off. The preload survives it: it imports
+        `electron` and one bundled constants module, and touches no Node
+        built-in.
+      */
+      sandbox: true,
     },
+  });
+
+  /*
+    THE APP IS ONE PAGE AND IT NEVER LEAVES IT.
+
+    Two doors were standing open. `setWindowOpenHandler` denies every new
+    window — nothing in this app opens one, so any attempt is either a stray
+    `target="_blank"` or something that should not be happening; an http(s)
+    target is handed to the user's real browser instead, which is where a link
+    out of a desktop app belongs. `will-navigate` pins the frame to the page it
+    booted with (its own file:// index, hash routes and all), so a dropped link
+    or an injected navigation cannot replace the application with a remote
+    document that would then be talking to the preload bridge.
+  */
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    const current = win.webContents.getURL();
+    // Same document (a hash route change is the router doing its job) is fine;
+    // anything else is not.
+    if (url.split('#')[0] !== current.split('#')[0]) event.preventDefault();
   });
 
   // Dev-only (unpackaged) developer shortcuts, wired straight onto the
@@ -332,10 +372,16 @@ function createWindow(): BrowserWindow {
     setTitleBarOverlay only exists on Windows — on any other platform the whole
     thing is a no-op rather than a crash.
   */
-  const applyTitleBarTheme = (_event: Electron.IpcMainInvokeEvent, appearance: 'light' | 'dark') => {
+  const applyTitleBarTheme = (
+    _event: Electron.IpcMainInvokeEvent,
+    appearance: 'light' | 'dark',
+  ) => {
     if (win.isDestroyed() || typeof win.setTitleBarOverlay !== 'function') return;
     try {
-      win.setTitleBarOverlay({ ...TITLE_BAR_THEMES[appearance] ?? TITLE_BAR_THEMES.dark, height: TITLE_BAR_HEIGHT });
+      win.setTitleBarOverlay({
+        ...(TITLE_BAR_THEMES[appearance] ?? TITLE_BAR_THEMES.dark),
+        height: TITLE_BAR_HEIGHT,
+      });
     } catch {
       // Platform doesn't support the overlay — the window simply keeps its
       // initial colours, which is cosmetic only.
@@ -350,7 +396,9 @@ function createWindow(): BrowserWindow {
         console.log('[renderer-console]', message);
       });
     }
-    win.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: process.env.SCREENSHOT_ROUTE });
+    win.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      hash: process.env.SCREENSHOT_ROUTE,
+    });
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
@@ -362,6 +410,14 @@ function showWhenReady(win: BrowserWindow, onShown?: () => void): void {
   win.once('ready-to-show', () => {
     win.show();
     onShown?.();
+    /*
+      The quiet update check, started only once the window is actually up.
+      Deliberately AFTER the paint and on a delay: launch is the slowest moment
+      in the app's life (database open, migrations, first render), and a network
+      round trip competing with that buys nothing. Packaged builds only, and it
+      never downloads on its own — see updateService.
+    */
+    scheduleStartupCheck();
   });
 }
 
@@ -469,7 +525,9 @@ async function initDatabaseWithRecovery(): Promise<void> {
     const backups = listBackups();
     const mostRecent = backups[0];
 
-    const buttons = mostRecent ? ['Restore Backup', 'Start Fresh', 'Quit'] : ['Start Fresh', 'Quit'];
+    const buttons = mostRecent
+      ? ['Restore Backup', 'Start Fresh', 'Quit']
+      : ['Start Fresh', 'Quit'];
     const detail = mostRecent
       ? `Your dynasty database could not be read and may be corrupted. The unreadable file was moved to:\n${quarantinePath}\n\nA backup from ${mostRecent.label} is available to restore, or you can start fresh with an empty database.`
       : `Your dynasty database could not be read and may be corrupted. The unreadable file was moved to:\n${quarantinePath}\n\nNo backup was found. Starting fresh creates a new, empty database — any imported dynasties will need to be re-imported from their save files.`;
@@ -483,15 +541,17 @@ async function initDatabaseWithRecovery(): Promise<void> {
     // actually used to catch a real bug in this same function.
     const choice = process.env.DIAGNOSTIC_DB_RECOVERY_CHOICE
       ? process.env.DIAGNOSTIC_DB_RECOVERY_CHOICE
-      : buttons[dialog.showMessageBoxSync({
-          type: 'warning',
-          title: 'Database Could Not Be Opened',
-          message: 'Your dynasty database could not be read.',
-          detail,
-          buttons,
-          defaultId: 0,
-          cancelId: buttons.length - 1,
-        })];
+      : buttons[
+          dialog.showMessageBoxSync({
+            type: 'warning',
+            title: 'Database Could Not Be Opened',
+            message: 'Your dynasty database could not be read.',
+            detail,
+            buttons,
+            defaultId: 0,
+            cancelId: buttons.length - 1,
+          })
+        ];
 
     if (choice === 'Quit') {
       app.quit();
@@ -548,7 +608,6 @@ app
       registerFilesystemHandlers();
       registerAssetHandlers();
       registerDatabaseHandlers();
-      registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
@@ -560,7 +619,10 @@ app
         const extraction = await extractAll(process.env.DIAGNOSTIC_IMPORT_PATH);
         const { dynasty } = persistExtraction(process.env.DIAGNOSTIC_IMPORT_PATH, extraction);
         const schedule = getSchedule(dynasty.id);
-        console.log('[diagnostic] sample games:', JSON.stringify(schedule?.games.slice(0, 3), null, 2));
+        console.log(
+          '[diagnostic] sample games:',
+          JSON.stringify(schedule?.games.slice(0, 3), null, 2),
+        );
       } catch (err) {
         console.error('[diagnostic] FAILED', err);
       }
@@ -573,7 +635,6 @@ app
       registerFilesystemHandlers();
       registerAssetHandlers();
       registerDatabaseHandlers();
-      registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();
@@ -659,7 +720,9 @@ app
             // rects) rather than eyeball a screenshot. Local dev only, like
             // every other SCREENSHOT_* hook.
             if (process.env.SCREENSHOT_EVAL) {
-              const evalResult = await win.webContents.executeJavaScript(process.env.SCREENSHOT_EVAL);
+              const evalResult = await win.webContents.executeJavaScript(
+                process.env.SCREENSHOT_EVAL,
+              );
               console.log('[screenshot-eval]', JSON.stringify(evalResult));
             }
             if (process.env.SCREENSHOT_CLICK_SELECTOR) {
@@ -695,10 +758,15 @@ app
             }
             const rectEnv = process.env.SCREENSHOT_RECT;
             const rect = rectEnv
-              ? (([x, y, width, height]) => ({ x, y, width, height }))(rectEnv.split(',').map(Number))
+              ? (([x, y, width, height]) => ({ x, y, width, height }))(
+                  rectEnv.split(',').map(Number),
+                )
               : undefined;
             const image = await win.webContents.capturePage(rect);
-            fs.writeFileSync(path.join(dir, `${process.env.SCREENSHOT_NAME ?? 'shot'}.png`), image.toPNG());
+            fs.writeFileSync(
+              path.join(dir, `${process.env.SCREENSHOT_NAME ?? 'shot'}.png`),
+              image.toPNG(),
+            );
             app.quit();
           }, 3500);
         }
@@ -714,7 +782,6 @@ app
       registerFilesystemHandlers();
       registerAssetHandlers();
       registerDatabaseHandlers();
-      registerExtractionHandlers();
       registerExportHandlers();
       registerEditorHandlers();
       registerMediaHandlers();

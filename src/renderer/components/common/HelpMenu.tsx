@@ -302,6 +302,61 @@ const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'roster-tiles',
+    title: 'The Roster page — the tiles, and filtering by class',
+    content: (
+      <>
+        <p>
+          <strong>Team</strong>, <strong>Offense</strong> and <strong>Defense</strong> are the average overall of the
+          players currently shown, with the count underneath. Kickers and punters belong to neither unit, so offense
+          and defense together come up a few short of the team count.
+        </p>
+        <p>
+          They are the <em>roster&apos;s</em> averages, not the team rating the game itself shows — that one is built
+          from the depth chart, which the save doesn&apos;t store, so there&apos;s nothing more faithful to use. Read
+          them as &quot;how good is this group&quot;, and compare them between teams and seasons rather than against
+          the in-game number.
+        </p>
+        <p>
+          <strong>The class row filters.</strong> Click <em>21 Freshman</em> to see only them; click more than one to
+          combine (freshmen and RS freshmen together are a recruiting class; seniors and RS seniors are who&apos;s
+          leaving). A <strong>Clear</strong> button appears at the end of the row while anything is selected.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          The tiles follow whatever is on screen, so filtering to one class tells you how good that class is, and the
+          counts read &quot;21 of 85 players&quot; so it&apos;s always clear what the average is over.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'roster-export',
+    title: 'Getting a roster into a spreadsheet',
+    content: (
+      <>
+        <p>
+          <strong>Export Roster</strong> on the Roster page saves whatever that page is showing — the team in the team
+          switcher, at the season you have selected — as a file. The save dialog offers two formats:
+        </p>
+        <p>
+          <strong>CSV</strong> (the default) is the one to pick for <strong>Google Sheets</strong>,{' '}
+          <strong>Excel</strong>, or <strong>OpenOffice/LibreOffice Calc</strong>. One row per player, one column per
+          field, ready to sort, filter, and chart. Team and season are on every row, so several exports can be pasted
+          into a single sheet and still be told apart.
+        </p>
+        <p>
+          <strong>XML</strong> keeps the nested structure and is meant for other tools, not spreadsheets — no
+          spreadsheet app opens it directly.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          The 50-odd individual ratings come from your save file, which only ever holds the current season, so
+          exporting a past season fills the profile columns and leaves the rating columns blank. The message under the
+          button tells you how many players came out with full ratings.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'editing',
     title: 'Editing players and coaches',
     content: (
@@ -358,9 +413,10 @@ const HELP_TOPICS: HelpTopic[] = [
           different way on the card — changing either one never touches the other.
         </p>
         <p>
-          When tagging players, if you don&apos;t know a name, search by jersey number instead: start your search
-          with <strong>#</strong> (e.g. <em>#17</em>) and the roster filters to whoever wears that number — handy when
-          you recognize the number in the picture but not the face.
+          When tagging players, if you don&apos;t know a name, <strong>type the jersey number</strong> — just the
+          digits. It matches from the front, so <em>5</em> brings up #5 and the whole fifties, and typing the second
+          digit narrows it. Handy when you recognize the number in the picture but not the face. (A leading
+          <strong>#</strong> still works if you prefer it.)
         </p>
         <p>
           Tags do double duty: anything you tag automatically shows up under <strong>Showcase → Media on each tagged

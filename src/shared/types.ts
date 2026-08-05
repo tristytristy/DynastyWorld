@@ -1,3 +1,4 @@
+import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
   TeamHistorySeasonData,
@@ -330,6 +331,20 @@ export interface NcaaHubTop25Entry {
   coachesRank: number | null;
   cfpRank: number | null;
   isUserTeam: boolean;
+  /**
+   * Spots gained since last week IN THIS LIST'S OWN POLL: positive is a climb,
+   * negative a fall, 0 held station. Deliberately not named for the media poll
+   * — each poll list carries its own movement, so a coaches ranking can never
+   * be annotated with media-poll movement.
+   *
+   * Null when there is nothing honest to compare against: a season synced
+   * before the last-week field was captured, a week before the poll was
+   * released, or the CFP poll, whose `LastWeeksRank` mirrors its current rank
+   * on every save checked (see extract-teams.ts).
+   */
+  rankMovement: number | null;
+  /** Last week's rank in the same poll, so a chip can name where the team came from. Null under the same conditions as rankMovement. */
+  lastWeekRank: number | null;
 }
 
 export interface NcaaHubHeismanFeature {
@@ -359,6 +374,13 @@ export interface NcaaHubGameFeature {
   bowlAssetName: string | null;
   isNeutralSite: boolean;
   summary: string;
+  /**
+   * For the upset feature: how many poll spots the winner reached up
+   * (loser's rank subtracted from the winner's, always positive). Kept as a
+   * fact rather than only as a word in `summary`, so the magnitude is
+   * readable without parsing prose. Null on any feature that isn't an upset.
+   */
+  rankSwing: number | null;
 }
 
 export interface NcaaHubCoachSpotlight {
@@ -392,15 +414,6 @@ export interface NcaaHubConferenceLeader {
   isUserTeam: boolean;
 }
 
-export interface NcaaHubCfpEntry {
-  rank: number;
-  teamName: string;
-  conferenceName: string | null;
-  wins: number;
-  losses: number;
-  isUserTeam: boolean;
-}
-
 export interface NcaaHubRecruitingClassEntry {
   rank: number;
   teamName: string;
@@ -412,14 +425,22 @@ export interface NcaaHubRecruitingClassEntry {
 export interface NcaaHubOverview {
   seasonYear: number;
   lastSyncedAt: string;
+  /** The media poll, top 25 — the "AP" list in the UI's terms. */
   top25: NcaaHubTop25Entry[];
+  /** The coaches poll, top 25, with its own movement (the save carries a real coaches LastWeeksRank). */
+  coachesTop25: NcaaHubTop25Entry[];
+  /**
+   * The CFP poll, top 25 — empty until the committee's first release, which is
+   * how the UI knows not to offer a CFP tab. Movement is always null here: the
+   * save's CFP LastWeeksRank never differs from its current rank.
+   */
+  cfpTop25: NcaaHubTop25Entry[];
   heismanFeature: NcaaHubHeismanFeature | null;
   gameOfTheWeek: NcaaHubGameFeature | null;
   upsetOfTheWeek: NcaaHubGameFeature | null;
   upcomingWeek: number | null;
   upcomingGames: NcaaHubGameFeature[];
   coachSpotlight: NcaaHubCoachSpotlight | null;
-  playoffPicture: NcaaHubCfpEntry[];
   recruitingBuzz: NcaaHubRecruitingClassEntry[];
   undefeatedWatch: NcaaHubRecordWatchEntry[];
   oneLossWatch: NcaaHubRecordWatchEntry[];
@@ -688,9 +709,11 @@ export interface TeamStats {
   twoPointConvMade: number;
 }
 
-export type TeamAwardCategory = 'major' | 'offense' | 'defense' | 'specialTeams' | 'position' | 'story';
+export type TeamAwardCategory =
+  'major' | 'offense' | 'defense' | 'specialTeams' | 'position' | 'story';
 export type TeamAwardCalculationMode = 'automaticWithConfirmation' | 'manual';
-export type TeamAwardStatus = 'notCalculated' | 'calculated' | 'confirmed' | 'finalized' | 'insufficientData';
+export type TeamAwardStatus =
+  'notCalculated' | 'calculated' | 'confirmed' | 'finalized' | 'insufficientData';
 export type TeamAwardSelectionMode = 'recommended' | 'manuallyChanged' | 'manual';
 
 /** Static metadata for one of the 12 Team Awards — enough for the renderer to lay out every award's card (even disabled ones, with their reason) without needing the full scoring-model definition, which only the main process needs. */
@@ -836,6 +859,14 @@ export interface LeagueScoreGame {
   weekType: string;
   homeTeamName: string;
   awayTeamName: string;
+  /**
+   * The save's own broadcast abbreviation (`Team.ShortName` — BAMA, ZONA, BC;
+   * 5 characters at most), for surfaces too tight for a display name. Null when
+   * the team didn't resolve in the season's teams snapshot; callers fall back
+   * to the display name rather than abbreviating one themselves.
+   */
+  homeShortName: string | null;
+  awayShortName: string | null;
   homeTeamIndex: number;
   awayTeamIndex: number;
   homeScore: number | null;
@@ -843,6 +874,8 @@ export interface LeagueScoreGame {
   bowlName: string | null;
   /** Stable bowl identity for logo matching; null outside the postseason. */
   bowlAssetName: string | null;
+  /** Venue reference — identifies WHICH bowl a CFP quarterfinal or semifinal is. See shared/cfpBowls.ts. */
+  neutralVenueId: string | null;
   isBowlGame: boolean;
   isNationalChampionship: boolean;
   homeConference: string | null;
@@ -892,13 +925,80 @@ export interface LeagueScoresView {
   heldWeek: number | null;
 }
 
+export type PlayoffRound = 'first-round' | 'quarterfinal' | 'semifinal' | 'championship';
+
+/** One side of a bracket game. Every field is nullable: a slot exists before its participants do. */
+export interface PlayoffBracketSide {
+  teamIndex: number | null;
+  teamName: string | null;
+  shortName: string | null;
+  /** CFP seed 1-12. Null when the slot is empty or the poll never ranked them. */
+  seed: number | null;
+  wins: number | null;
+  losses: number | null;
+  /** Null until the game is genuinely played — see shared/gameStatus.ts. */
+  score: number | null;
+  isWinner: boolean;
+  isUserTeam: boolean;
+  primaryColorHex: string | null;
+  secondaryColorHex: string | null;
+}
+
+export interface PlayoffBracketGame {
+  /** Null for a slot the save hasn't created a game row for. */
+  gameId: number | null;
+  /** The save's own bracket position, 0-10. See GameData.playoffBracketSlot. */
+  slot: number;
+  round: PlayoffRound;
+  week: number | null;
+  played: boolean;
+  /**
+   * The bowl this game IS — "Rose Bowl" — for a quarterfinal or semifinal whose
+   * venue is known. Null for the first round (played on campus), for the title
+   * game (a neutral site that is nobody's bowl), and for a semifinal before the
+   * quarterfinals resolve, which is when the save assigns its venue.
+   */
+  bowlName: string | null;
+  /** Asset key for the same bowl, feeding the existing bowl logo/trophy lookups. */
+  bowlAssetName: string | null;
+  /** Raw venue reference; the renderer resolves it to a stadium name. */
+  neutralVenueId: string | null;
+  /** Where this game's winner goes. Null for the championship. */
+  feedsIntoSlot: number | null;
+  home: PlayoffBracketSide;
+  away: PlayoffBracketSide;
+}
+
+export interface PlayoffBracketView {
+  seasonYear: number;
+  /** All eleven slots, always, ordered 0-10 — an empty slot is a slot, not an absence. */
+  games: PlayoffBracketGame[];
+  championTeamIndex: number | null;
+  championName: string | null;
+  /** The title game's venue, for the champion panel. */
+  championshipVenueId: string | null;
+  userTeamIndex: number | null;
+  /**
+   * False when the bracket positions were reconstructed from CFP seeds because
+   * the season predates `playoffBracketSlot` being extracted. The bracket is
+   * still correct; this exists so a caller can tell derived from authoritative.
+   */
+  slotsFromSave: boolean;
+}
+
 /** One side of a game, in neutral home/away terms — powers the universal Game Info modal for ANY league game. */
 export interface GameDetailTeamSide {
   teamIndex: number;
   name: string;
   score: number;
-  /** [Q1, Q2, Q3, Q4]. */
+  /** [Q1, Q2, Q3, Q4] — REGULATION ONLY; overtime is `overtimePoints`. */
   quarterScores: number[];
+  /**
+   * Points scored in overtime, TOTAL across every extra period. The save keeps
+   * one number per side rather than a period-by-period split, so a double
+   * overtime shows as one OT column, not OT1/OT2. Zero on a regulation game.
+   */
+  overtimePoints: number;
   /** null until the game is played. */
   stats: TeamStatLine | null;
   /** Media-poll rank AT KICKOFF where game_context captured one, falling back to the team's current rank. */
@@ -928,6 +1028,8 @@ export interface GameDetailData {
   gameId: number;
   week: number;
   played: boolean;
+  /** Went to overtime — the box score adds an OT column and the score line says so. */
+  isOvertime: boolean;
   status: string;
   dayOfWeek: string;
   kickoffTime: string;
@@ -1042,9 +1144,13 @@ export interface NationalTeamStatRow {
   games: number;
   points: number;
   pointsAllowed: number;
+  /** ALL-PURPOSE yards (offense + kick/punt returns) — the save's own TOTALYARDS. Never rank "offense" on this; see shared/teamYards.ts. */
   totalYards: number;
+  /** Total offense (pass + rush) — what the game calls Total Offense, and what an offensive ranking means. */
+  offenseYards: number;
   passYards: number;
   rushYards: number;
+  /** Yards ALLOWED — the opponent's OFFENSE, not their all-purpose total. */
   defTotalYards: number;
   defPassYards: number;
   defRushYards: number;
@@ -1086,6 +1192,17 @@ export interface SeasonSummary {
   hasFullData: boolean;
   /** The school the user coached that season — for the season picker's label so a multi-school journey reads "2028 — SMU / 2029 — UCLA". Null for a history-only season. */
   teamName: string | null;
+  /**
+   * Whether this season has got as far as the postseason — gates the Playoff
+   * tab, which shouldn't exist during a regular season that has no bracket yet.
+   *
+   * True once the save's week type leaves RegularSeason (see isBowlSlateSet),
+   * and true for any season that is no longer the current one. That second
+   * clause is deliberate: a superseded season's postseason either happened or
+   * never will, and hiding a real archived bracket is a worse failure than
+   * showing a tab that says a season has no playoff on record.
+   */
+  postseasonReached: boolean;
 }
 
 export type GameType = 'conference' | 'non-conference' | 'bowl';
@@ -1153,7 +1270,12 @@ export interface ScheduleGame {
   /** The opponent's overall win-loss record — the save only ever exposes a team's CURRENT/final record, not a point-in-time snapshot from the week this game was actually played, so this is the same "final" caveat as opponentCurrentRank. Null if the opponent couldn't be resolved. */
   opponentRecord: { wins: number; losses: number } | null;
   /** The user's own overall/conference record after this game specifically — computed by accumulating games in week order up through this row, not copied from the season's final totals. Null for a game that hasn't been played yet (nothing to accumulate through). */
-  runningRecord: { overallWins: number; overallLosses: number; conferenceWins: number; conferenceLosses: number } | null;
+  runningRecord: {
+    overallWins: number;
+    overallLosses: number;
+    conferenceWins: number;
+    conferenceLosses: number;
+  } | null;
 }
 
 export interface ScheduleOverview {
@@ -1211,7 +1333,8 @@ export interface StandingsOverview {
   groups: ConferenceStandingsGroup[];
 }
 
-export type TrophyKind = 'national-championship' | 'conference-championship' | 'bowl-win' | 'rivalry-win';
+export type TrophyKind =
+  'national-championship' | 'conference-championship' | 'bowl-win' | 'rivalry-win';
 
 export interface Trophy {
   kind: TrophyKind;
@@ -1402,7 +1525,11 @@ export interface LeagueTeamSummary {
 
 export interface LeagueRosterPlayer extends RosterPlayer {
   teamIndex: number;
-  seasonStat: { playerId: number; category: 'offense' | 'defense'; season: OffensiveStatLine | DefensiveStatLine | null } | null;
+  seasonStat: {
+    playerId: number;
+    category: 'offense' | 'defense';
+    season: OffensiveStatLine | DefensiveStatLine | null;
+  } | null;
 }
 
 /** A league player flattened for the national Players page — a LeagueRosterPlayer with its team name + conference joined on. */
@@ -1467,6 +1594,36 @@ export interface CoachingTreeEntry {
   nowSeasonYear: number | null;
   /** They're now a head coach somewhere — the prestige branch. */
   isHeadCoachNow: boolean;
+  /**
+   * Their team's record in the most recent synced season — how the job is going
+   * right now. Head coaches only, and OBSERVED from that team's own season
+   * record rather than read off the coach: `Coach.careerStats` is not usable for
+   * anyone but the user's own coach (see getCoachingTree for the measurement).
+   */
+  currentRecord: { wins: number; losses: number } | null;
+  /** Accumulated across every synced season they've been a head coach, anywhere. */
+  headCoachRecord: { wins: number; losses: number } | null;
+  /**
+   * Every stop AFTER they left your staff, oldest first — a coach who moves from
+   * his first job to a second belongs on your tree twice, because his journey is
+   * a piece of yours. Empty for someone still at their first destination in the
+   * season they arrived.
+   */
+  journey: CoachingTreeStop[];
+}
+
+/** One contiguous run at one school in one role. */
+export interface CoachingTreeStop {
+  teamIndex: number;
+  teamName: string | null;
+  position: string;
+  firstYear: number;
+  lastYear: number;
+  isHeadCoach: boolean;
+  /** Their team's accumulated record over this stop. HEAD COACHES ONLY — null otherwise. */
+  record: { wins: number; losses: number } | null;
+  /** Postseason wins during this stop. Head coaches only. */
+  trophies: { seasonYear: number; label: string; kind: 'national' | 'bowl' }[];
 }
 
 /** "Where your people went" — the program's coaching tree (getCoachingTree). */
@@ -1511,6 +1668,24 @@ export interface HeadToHeadOpponent {
 }
 
 /** One season in a player's rating arc (getPlayerDevelopment) — for the OVR-over-seasons chart. */
+/**
+ * One synced season of a player's production, with the school he played it for.
+ *
+ * Leaguewide, so a transfer's years at previous schools are included — see
+ * getPlayerStatHistory for why that can't come from the user's own snapshots.
+ */
+export interface PlayerStatSeason {
+  seasonYear: number;
+  teamIndex: number;
+  teamName: string;
+  /** Whether this season was played for the dynasty's own program that year. */
+  isUserTeam: boolean;
+  schoolYear: string | null;
+  position: string | null;
+  category: 'offense' | 'defense';
+  line: OffensiveStatLine | DefensiveStatLine;
+}
+
 export interface PlayerDevelopmentSeason {
   seasonYear: number;
   overallRating: number;
@@ -1685,6 +1860,8 @@ export interface PlayerCardRecord {
   photoFile: string | null;
   photoPath: string | null;
   photoTransform: CardPhotoTransform;
+  /** The bottom fade. Never null to a caller — a card that predates the setting reads back DEFAULT_CARD_SCRIM. */
+  scrim: CardScrim;
   favorite: boolean;
   isDefault: boolean;
   createdAt: string;
@@ -1706,14 +1883,50 @@ export interface PlayerCardRecord {
 export interface CardLayers {
   ovr: boolean;
   name: boolean;
+  /** "vs. NC State" — only ever drawn when the card's stats came from one game. */
+  opponent: boolean;
   /** Position · School · Class · Year. */
   profile: boolean;
   stats: boolean;
   teamLogo: boolean;
 }
 
+/**
+ * The dark gradient a card draws up from its bottom edge, so the name and the
+ * profile line stay legible over whatever is behind them.
+ *
+ * `height` is a FRACTION OF THE CARD'S HEIGHT measured up from the bottom, not a
+ * gradient start position, because that is the thing being set: how much of my
+ * card is this covering. 0.30 means the fade occupies the bottom 30% and the top
+ * 70% of the photograph is untouched.
+ */
+export interface CardScrim {
+  enabled: boolean;
+  height: number;
+}
+
+/**
+ * Enough to sit just above the team mark in the bottom-left corner and no
+ * further (user direction 2026-08-03).
+ *
+ * It used to be 0.58 — transparent at 42% of the card and solid by 74% — which
+ * is fine over a generated portrait (a head on a flat background, nothing in the
+ * lower half worth seeing) and wrong over a photograph. Someone framing their
+ * own shot was composing against a fade that ate more than half the card, so the
+ * moment they were trying to place either sat in the dark or had to be dragged
+ * up out of frame to escape it.
+ */
+export const DEFAULT_CARD_SCRIM: CardScrim = { enabled: true, height: 0.58 };
+
+/** The narrowest and widest the slider will go. Below the floor the profile line
+ *  loses its backing entirely; above the ceiling the fade is back to eating the
+ *  card, which is the thing this exists to stop. */
+export const CARD_SCRIM_MIN = 0.12;
+export const CARD_SCRIM_MAX = 0.6;
+
 export const ALL_CARD_LAYERS: CardLayers = {
   ovr: true,
+  opponent: true,
   name: true,
   profile: true,
   stats: true,
@@ -1738,6 +1951,8 @@ export interface PlayerCardInput {
   statSource: CardStatSource | null;
   photoFile: string | null;
   photoTransform: CardPhotoTransform;
+  /** The bottom fade — see CardScrim. */
+  scrim: CardScrim;
 }
 
 /**
@@ -1807,6 +2022,8 @@ export interface MediaItem {
   mediaType: 'image' | 'video';
   /** The user's saved crop, or null for the whole photo. Never alters the file on disk. */
   framing: MediaFraming | null;
+  /** Colour treatment, vignette and which plate marks are printed. Null = untouched (see shared/mediaLook.ts). */
+  look: Partial<MediaLook> | null;
   /** Save-native SeasonGame gameId — same id ScheduleGame and the /schedule/:gameId route use. Null = not linked to a game. */
   gameId: number | null;
   description: string;
@@ -2016,7 +2233,12 @@ export interface DynastyTrendSeason {
   finalCoachesRank: number | null;
   finalCfpRank: number | null;
   /** Week-by-week poll ranks accumulated across syncs (ranking_history) — the only real weekly trend the save can't provide on its own. */
-  rankingWeeks: { week: number; mediaRank: number | null; coachesRank: number | null; cfpRank: number | null }[];
+  rankingWeeks: {
+    week: number;
+    mediaRank: number | null;
+    coachesRank: number | null;
+    cfpRank: number | null;
+  }[];
 }
 
 export interface DynastyTrends {
@@ -2037,6 +2259,18 @@ export interface TransferEntry {
   /** The season the player shows up on their new team. */
   seasonYear: number;
   toSeasonId: number;
+  /**
+   * The season he was on the OLD team — the year he left.
+   *
+   * Both ends are recorded because a transfer belongs to a different season
+   * depending on which side you're looking from, and the page shows both. An
+   * arrival is news in the season he turns up; a departure is news in the
+   * season he left, which is the season BEFORE. Keying everything to the
+   * arrival year put "transferred out" a season ahead of the departures list
+   * beside it, and broke the join that annotates a leaver with his reason.
+   */
+  fromSeasonYear: number;
+  fromSeasonId: number;
   /** The player's team index in the destination season — lets the bio modal resolve the full league profile. */
   toTeamIndex: number;
 }
@@ -2050,6 +2284,67 @@ export interface TeamTransfers {
 }
 
 /** A player who left the program this offseason — from the game's LeavingPlayer table (see getDepartures / extract-departures). */
+
+/** A player as they were when enshrined — what the card renders when the save no longer holds them. */
+export interface LegendPlayerSnapshot {
+  name: string;
+  position: string;
+  jerseyNumber?: number;
+  schoolName?: string | null;
+  teamIndex?: number | null;
+  peakOverall?: number;
+  portraitAssetName?: string | null;
+  firstSeasonYear?: number;
+  lastSeasonYear?: number;
+}
+
+/** One player in a coach's Hall. Tier and slot are null while they sit in the pool unassigned. */
+export interface LegendEntry {
+  playerId: number;
+  addedAt: string;
+  addedFromSeasonId: number | null;
+  addedFromTeamIndex: number | null;
+  tier: 'first' | 'second' | null;
+  slotId: string | null;
+  assignedAt: string | null;
+  inductionNote: string | null;
+  snapshot: LegendPlayerSnapshot;
+}
+
+/** Someone this coach actually coached — the set a player must come from to be added. */
+export interface HallEligiblePlayer {
+  playerId: number;
+  firstName: string;
+  lastName: string;
+  position: string;
+  jerseyNumber: number;
+  portraitAssetName: string | null;
+  /** Best overall reached in a season under THIS coach. */
+  peakOverall: number;
+  schoolName: string | null;
+  teamIndex: number | null;
+  firstSeasonYear: number;
+  lastSeasonYear: number;
+  seasonsCoached: number;
+}
+
+/** Where one player stands with the active coach's Hall — what the profile action needs. */
+export interface LegendStatus {
+  eligible: boolean;
+  inPool: boolean;
+  tier: 'first' | 'second' | null;
+  slotId: string | null;
+}
+
+export interface CoachHall {
+  /** Coach.PresentationId, or null when no season records a coach identity yet. */
+  coachId: number | null;
+  coachName: string | null;
+  careerFirstYear: number | null;
+  careerLastYear: number | null;
+  entries: LegendEntry[];
+}
+
 export interface PlayerDeparture {
   playerId: number;
   firstName: string;
@@ -2059,12 +2354,23 @@ export interface PlayerDeparture {
   portraitAssetName: string | null;
   teamIndex: number;
   teamName: string | null;
-  /** 'nfl' = declared for the NFL (projected round only — no team/pick); 'transfer' = entered the portal; 'other'. */
-  type: 'nfl' | 'transfer' | 'other';
+  /**
+   * 'nfl' = declared for the NFL (projected round only — no team/pick);
+   * 'transfer' = went to another FBS school; 'graduated' = a senior out of
+   * eligibility; 'left' = off FBS with no reason recorded; 'other' = a stored
+   * row from before this was resolved against the roster.
+   */
+  type: 'nfl' | 'transfer' | 'graduated' | 'left' | 'other';
   /** NFL declarations: projected round 1–7. */
   projectedRound: number | null;
   /** Transfers: the game's stated reason, humanized (e.g. "Pro Potential"). */
   reason: string | null;
+  /**
+   * True once the following season's roster proved the player actually left.
+   * False means this is still only the game's declaration list — players can
+   * and do withdraw, and graduating seniors aren't in it at all.
+   */
+  confirmed: boolean;
 }
 
 /**
@@ -2081,7 +2387,12 @@ export interface PlayerDeparture {
  * it hasn't got rather than drawing an empty row.
  */
 export type RecruitProfileSubject = NationalRecruit &
-  Partial<Pick<RecruitBoardEntry, 'isFavorite' | 'currentNilOffer' | 'committedWeekNumber' | 'signedTeamDisplayName' | 'stage'>>;
+  Partial<
+    Pick<
+      RecruitBoardEntry,
+      'isFavorite' | 'currentNilOffer' | 'committedWeekNumber' | 'signedTeamDisplayName' | 'stage'
+    >
+  >;
 
 export interface RecruitBoardEntry {
   playerId: number;
@@ -2516,6 +2827,8 @@ export interface ScandalsEdit {
   talentUnlocks?: Record<string, number[]>;
 }
 
+import type { UpdatePreferences, UpdateState } from './updateTypes';
+
 export interface DynastyApi {
   fs: {
     selectFile: () => Promise<string | null>;
@@ -2529,7 +2842,6 @@ export interface DynastyApi {
   assets: {
     getStatus: () => Promise<AssetStatus>;
     chooseFolder: () => Promise<AssetChooseResult>;
-    clearPath: () => Promise<AssetStatus>;
   };
   db: {
     getDynasties: () => Promise<DynastySummary[]>;
@@ -2546,15 +2858,37 @@ export interface DynastyApi {
     getPlayerStats: (dynastyId: string, seasonId?: number) => Promise<PlayerStats[] | null>;
     getTeamStats: (dynastyId: string, seasonId?: number) => Promise<TeamStats | null>;
     /** Per-game team + opponent stat lines for one team (null teamIndex = the user's own) — the Statistics page's filterable source. */
-    getTeamGameStats: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<TeamGameStat[] | null>;
-    getTeamCard: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<TeamCard | null>;
-    getNationalTeamStats: (dynastyId: string, seasonId?: number) => Promise<NationalTeamStatRow[] | null>;
-    getNationalStatLeaders: (dynastyId: string, seasonId?: number) => Promise<NationalStatLeaders | null>;
+    getTeamGameStats: (
+      dynastyId: string,
+      teamIndex: number | null,
+      seasonId?: number,
+    ) => Promise<TeamGameStat[] | null>;
+    getTeamCard: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<TeamCard | null>;
+    getNationalTeamStats: (
+      dynastyId: string,
+      seasonId?: number,
+    ) => Promise<NationalTeamStatRow[] | null>;
+    getNationalStatLeaders: (
+      dynastyId: string,
+      seasonId?: number,
+    ) => Promise<NationalStatLeaders | null>;
     getKickingStats: (dynastyId: string, seasonId?: number) => Promise<PlayerKickingStats[] | null>;
     getGameLog: (dynastyId: string, seasonId?: number) => Promise<GameLogEntry[] | null>;
     /** One player's lines from a season's log, filtered in the main process. The leaguewide log is ~16 MB for a played season; every renderer caller only ever wants one player out of it. */
-    getPlayerGameLog: (dynastyId: string, playerId: number, seasonId?: number) => Promise<GameLogEntry[] | null>;
-    getGameDetail: (dynastyId: string, gameId: number, seasonId?: number) => Promise<GameDetailData | null>;
+    getPlayerGameLog: (
+      dynastyId: string,
+      playerId: number,
+      seasonId?: number,
+    ) => Promise<GameLogEntry[] | null>;
+    getGameDetail: (
+      dynastyId: string,
+      gameId: number,
+      seasonId?: number,
+    ) => Promise<GameDetailData | null>;
     getTeamTrophies: (dynastyId: string, seasonId?: number) => Promise<TeamTrophies | null>;
     getSchedule: (dynastyId: string, seasonId?: number) => Promise<ScheduleOverview | null>;
     getStandings: (dynastyId: string, seasonId?: number) => Promise<StandingsOverview | null>;
@@ -2564,16 +2898,44 @@ export interface DynastyApi {
     getRecruits: (dynastyId: string, seasonId?: number) => Promise<RecruitingOverview | null>;
     getLeagueTeams: (dynastyId: string, seasonId?: number) => Promise<LeagueTeamSummary[] | null>;
     getLeagueScores: (dynastyId: string, seasonId?: number) => Promise<LeagueScoresView | null>;
-    getLeagueTeamOverview: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<SeasonOverview | null>;
-    getLeagueTeamRoster: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamRoster | null>;
+    getPlayoffBracket: (dynastyId: string, seasonId?: number) => Promise<PlayoffBracketView | null>;
+    getLeagueTeamOverview: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<SeasonOverview | null>;
+    getLeagueTeamRoster: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<LeagueTeamRoster | null>;
     getAllLeaguePlayers: (dynastyId: string, seasonId?: number) => Promise<NationalPlayer[] | null>;
-    getLeagueTeamSchedule: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamGame[] | null>;
-    getLeagueTeamHonors: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<LeagueTeamHonors | null>;
-    getNationalRecruits: (dynastyId: string, seasonId?: number) => Promise<NationalRecruit[] | null>;
+    getLeagueTeamSchedule: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<LeagueTeamGame[] | null>;
+    getLeagueTeamHonors: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<LeagueTeamHonors | null>;
+    getNationalRecruits: (
+      dynastyId: string,
+      seasonId?: number,
+    ) => Promise<NationalRecruit[] | null>;
     /** One program's all-time résumé, season-by-season history and record book. Null for seasons synced before this shipped. */
-    getTeamHistory: (dynastyId: string, teamIndex: number, seasonId?: number) => Promise<TeamHistoryView | null>;
+    getTeamHistory: (
+      dynastyId: string,
+      teamIndex: number,
+      seasonId?: number,
+    ) => Promise<TeamHistoryView | null>;
     /** One prospect by player id, or null when the id is not a recruit — the test that routes an open to the recruit view instead of the player workspace. */
-    getRecruitById: (dynastyId: string, playerId: number, seasonId?: number) => Promise<NationalRecruit | null>;
+    getRecruitById: (
+      dynastyId: string,
+      playerId: number,
+      seasonId?: number,
+    ) => Promise<NationalRecruit | null>;
     getNcaaRecords: (
       dynastyId: string,
       seasonId?: number,
@@ -2583,19 +2945,55 @@ export interface DynastyApi {
     getSeasonAnalytics: (dynastyId: string, seasonId?: number) => Promise<SeasonAnalytics | null>;
     getProgramArc: (dynastyId: string) => Promise<ProgramArc | null>;
     getTransfers: (dynastyId: string, focusTeamName: string) => Promise<TeamTransfers | null>;
-    getDepartures: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<PlayerDeparture[] | null>;
-    globalSearch: (dynastyId: string, query: string, seasonId?: number) => Promise<GlobalSearchResults>;
-    getPlayerDevelopment: (dynastyId: string, playerId: number) => Promise<PlayerDevelopmentSeason[]>;
+    getDepartures: (
+      dynastyId: string,
+      teamIndex: number | null,
+      seasonId?: number,
+    ) => Promise<PlayerDeparture[] | null>;
+    globalSearch: (
+      dynastyId: string,
+      query: string,
+      seasonId?: number,
+    ) => Promise<GlobalSearchResults>;
+    getPlayerDevelopment: (
+      dynastyId: string,
+      playerId: number,
+    ) => Promise<PlayerDevelopmentSeason[]>;
+    /** Season-by-season production INCLUDING years at other schools — see getPlayerStatHistory. */
+    getPlayerStatHistory: (
+      dynastyId: string,
+      playerId: number,
+    ) => Promise<PlayerStatSeason[]>;
+    getCoachHall: (dynastyId: string) => Promise<CoachHall | undefined>;
+    /** Everyone this coach coached — fetched lazily, only when the picker opens. */
+    getHallEligible: (dynastyId: string) => Promise<HallEligiblePlayer[]>;
+    getLegendStatus: (dynastyId: string, playerId: number) => Promise<LegendStatus>;
+    addLegend: (dynastyId: string, playerId: number) => Promise<boolean>;
+    removeLegend: (dynastyId: string, playerId: number) => Promise<void>;
+    assignLegend: (
+      dynastyId: string,
+      playerId: number,
+      tier: 'first' | 'second' | null,
+      slotId: string | null,
+    ) => Promise<{ ok: boolean; message?: string }>;
     getHeadToHead: (dynastyId: string) => Promise<HeadToHeadOpponent[]>;
     getCoachingTree: (dynastyId: string) => Promise<CoachingTree>;
     getDynastyTheme: (dynastyId: string) => Promise<DynastyTheme | null>;
     /** A specific team's brand colors (any team), for theming a player's card to the team he plays for. Season optional (colors are stable). */
-    getTeamTheme: (dynastyId: string, teamName: string, seasonId?: number) => Promise<TeamTheme | null>;
+    getTeamTheme: (
+      dynastyId: string,
+      teamName: string,
+      seasonId?: number,
+    ) => Promise<TeamTheme | null>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
     getTeamAwardResults: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;
-    calculateTeamAward: (dynastyId: string, seasonId: number, awardDefinitionId: string) => Promise<TeamAwardResult>;
+    calculateTeamAward: (
+      dynastyId: string,
+      seasonId: number,
+      awardDefinitionId: string,
+    ) => Promise<TeamAwardResult>;
     confirmTeamAwardWinner: (
       dynastyId: string,
       seasonId: number,
@@ -2611,18 +3009,28 @@ export interface DynastyApi {
     finalizeTeamAwards: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;
     unlockTeamAwards: (dynastyId: string, seasonId: number) => Promise<TeamAwardResult[]>;
     getTeamAwardSettings: (dynastyId: string) => Promise<TeamAwardSettings>;
-    saveTeamAwardSettings: (dynastyId: string, settings: TeamAwardSettings) => Promise<TeamAwardSettings>;
+    saveTeamAwardSettings: (
+      dynastyId: string,
+      settings: TeamAwardSettings,
+    ) => Promise<TeamAwardSettings>;
     getTeamAwardHistory: (dynastyId: string) => Promise<TeamAwardHistorySeason[]>;
   };
   extraction: {
-    extractAll: (savePath: string) => Promise<ExtractionResult>;
     onProgress: (callback: (event: ExtractionProgressEvent) => void) => () => void;
   };
   export: {
     historyToHtml: (dynastyId: string) => Promise<ExportResult>;
     seasonYearbookToHtml: (dynastyId: string, seasonId: number) => Promise<ExportResult>;
     /** Capture a rectangle of the window (the rendered card) and save it as a PNG. */
-    playerCardToPng: (fileName: string, rect: { x: number; y: number; width: number; height: number }) => Promise<ExportResult>;
+    playerCardToPng: (
+      fileName: string,
+      rect: { x: number; y: number; width: number; height: number },
+    ) => Promise<ExportResult>;
+    /** The media viewer's photo-and-caption plate, captured as it appears on screen. */
+    mediaPlateToPng: (
+      fileName: string,
+      rect: { x: number; y: number; width: number; height: number },
+    ) => Promise<ExportResult>;
     /** Folder picker for a bulk card export — chosen once, then written to without further prompting. */
     pickCardFolder: () => Promise<string | null>;
     /** Capture one card straight into an already-chosen folder. No dialog, so a run of cards doesn't ask N times. */
@@ -2632,15 +3040,19 @@ export interface DynastyApi {
       rect: { x: number; y: number; width: number; height: number },
     ) => Promise<ExportResult>;
     /**
-     * One team's roster as XML — the archived player record plus every rating.
-     * `teamIndex` null means the user's own team. Ratings come from the live
-     * save, so a past season (or a missing save) exports profiles only and the
-     * file says why.
+     * One team's roster as a file — the archived player record plus every
+     * rating, written as CSV or XML depending on which the save dialog is left
+     * on. `teamIndex` null means the user's own team. Ratings come from the live
+     * save, so a past season (or a missing save) exports profiles only and says
+     * why.
      */
-    rosterToXml: (dynastyId: string, teamIndex: number | null, seasonId?: number) => Promise<ExportResult>;
+    rosterToFile: (
+      dynastyId: string,
+      teamIndex: number | null,
+      seasonId?: number,
+    ) => Promise<ExportResult>;
   };
   editor: {
-    backupSaveFile: (dynastyId: string) => Promise<SaveFileBackupResult>;
     /** Reads the user coach's current Scandals values straight from the save. */
     getScandals: (dynastyId: string) => Promise<ScandalsData | null>;
     /** Writes Scandals edits to the save (backs up first). */
@@ -2648,16 +3060,29 @@ export interface DynastyApi {
     /** Sizes for each part of this dynasty's backup, for the picker's running total. */
     estimateDynastyBackup: (dynastyId: string) => Promise<DynastyBackupEstimate | null>;
     /** Opens a save dialog, then writes the backup zip. A cancelled dialog returns success:false with an empty message. */
-    createDynastyBackup: (dynastyId: string, contents: DynastyBackupContents) => Promise<DynastyBackupResult>;
+    createDynastyBackup: (
+      dynastyId: string,
+      contents: DynastyBackupContents,
+    ) => Promise<DynastyBackupResult>;
     /** Opens a file picker and reports what the chosen backup contains, WITHOUT changing anything. Null if cancelled. */
     chooseBackupToRestore: () => Promise<(BackupInspection & { filePath: string }) | null>;
     /** Restores a backup, after checkpointing whatever is already here. */
     restoreDynastyBackup: (filePath: string) => Promise<DynastyRestoreResult>;
     /** Subscribes to write progress; returns an unsubscribe function. */
-    onBackupProgress: (callback: (progress: { percent: number; step: string }) => void) => () => void;
+    onBackupProgress: (
+      callback: (progress: { percent: number; step: string }) => void,
+    ) => () => void;
     getPlayer: (dynastyId: string, playerId: number) => Promise<PlayerEditData | null>;
-    savePlayer: (dynastyId: string, playerId: number, fields: PlayerEditFields) => Promise<SaveEditResult>;
-    getCoach: (dynastyId: string, teamIndex: number, position: string) => Promise<CoachEditData | null>;
+    savePlayer: (
+      dynastyId: string,
+      playerId: number,
+      fields: PlayerEditFields,
+    ) => Promise<SaveEditResult>;
+    getCoach: (
+      dynastyId: string,
+      teamIndex: number,
+      position: string,
+    ) => Promise<CoachEditData | null>;
     saveCoach: (
       dynastyId: string,
       teamIndex: number,
@@ -2665,10 +3090,22 @@ export interface DynastyApi {
       fields: CoachEditFields,
     ) => Promise<SaveEditResult>;
     getRecruit: (dynastyId: string, playerId: number) => Promise<RecruitEditData | null>;
-    saveRecruit: (dynastyId: string, playerId: number, fields: RecruitEditFields) => Promise<SaveEditResult>;
-    saveRecruitInfluence: (dynastyId: string, playerId: number, edit: RecruitInfluenceEdit) => Promise<SaveEditResult>;
+    saveRecruit: (
+      dynastyId: string,
+      playerId: number,
+      fields: RecruitEditFields,
+    ) => Promise<SaveEditResult>;
+    saveRecruitInfluence: (
+      dynastyId: string,
+      playerId: number,
+      edit: RecruitInfluenceEdit,
+    ) => Promise<SaveEditResult>;
     getTeamBudget: (dynastyId: string, teamIndex: number) => Promise<TeamBudgetData | null>;
-    saveTeamBudget: (dynastyId: string, teamIndex: number, edit: TeamBudgetEdit) => Promise<SaveEditResult>;
+    saveTeamBudget: (
+      dynastyId: string,
+      teamIndex: number,
+      edit: TeamBudgetEdit,
+    ) => Promise<SaveEditResult>;
     /** EXPERIMENTAL — force a boarded recruit to commit to the user's team. */
     forceCommitRecruit: (dynastyId: string, playerId: number) => Promise<ForceCommitResult>;
     searchPortraits: (
@@ -2682,14 +3119,17 @@ export interface DynastyApi {
     /** Pick an image and store it as this player's custom card photo; returns its absolute path, or null if cancelled. */
     pickPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
     /** Store an existing image (e.g. a gallery photo tagged to this player) as the card photo; returns its stored path, or null if the type is unsupported. */
-    setPhotoFromPath: (dynastyId: string, playerId: number, sourcePath: string) => Promise<string | null>;
     /** The player's stored custom card photo path, or null if none. */
     getPhoto: (dynastyId: string, playerId: number) => Promise<string | null>;
     /** Remove the player's custom card photo. */
     removePhoto: (dynastyId: string, playerId: number) => Promise<void>;
 
     /** Pick an image for ONE card. Returns the stored basename (what the card row keeps), or null if cancelled. */
-    pickPhotoForCard: (dynastyId: string, playerId: number, cardId: number) => Promise<string | null>;
+    pickPhotoForCard: (
+      dynastyId: string,
+      playerId: number,
+      cardId: number,
+    ) => Promise<string | null>;
     /** Store an existing image (e.g. a tagged gallery photo) as this card's photo; returns the stored basename. */
     setCardPhotoFromPath: (
       dynastyId: string,
@@ -2706,9 +3146,21 @@ export interface DynastyApi {
     listFavorites: (dynastyId: string) => Promise<PlayerCardRecord[]>;
     /** Player ids that have at least one saved card. */
     listCardedPlayerIds: (dynastyId: string) => Promise<number[]>;
-    create: (dynastyId: string, playerId: number, input: PlayerCardInput) => Promise<PlayerCardRecord>;
-    update: (dynastyId: string, id: number, input: PlayerCardInput) => Promise<PlayerCardRecord | null>;
-    setFavorite: (dynastyId: string, id: number, favorite: boolean) => Promise<PlayerCardRecord | null>;
+    create: (
+      dynastyId: string,
+      playerId: number,
+      input: PlayerCardInput,
+    ) => Promise<PlayerCardRecord>;
+    update: (
+      dynastyId: string,
+      id: number,
+      input: PlayerCardInput,
+    ) => Promise<PlayerCardRecord | null>;
+    setFavorite: (
+      dynastyId: string,
+      id: number,
+      favorite: boolean,
+    ) => Promise<PlayerCardRecord | null>;
     /** Promote a card to the player's default (what the hover preview shows); returns the player's cards after the change. */
     setDefault: (dynastyId: string, playerId: number, id: number) => Promise<PlayerCardRecord[]>;
     /** Deletes the card AND its photo file; returns the player's remaining cards. */
@@ -2743,15 +3195,25 @@ export interface DynastyApi {
     /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
     pickFiles: () => Promise<string[] | null>;
     /** Copies the given files into the dynasty's media library and creates their DB rows. Split from pickFiles so verification runs can add files without a native dialog. */
-    addFiles: (dynastyId: string, seasonId: number, filePaths: string[]) => Promise<MediaItemWithPath[]>;
+    addFiles: (
+      dynastyId: string,
+      seasonId: number,
+      filePaths: string[],
+    ) => Promise<MediaItemWithPath[]>;
     list: (dynastyId: string, seasonId?: number) => Promise<MediaItemWithPath[] | undefined>;
     /** Everything this player is tagged in, across all seasons — the Media tab on player bios. */
     listForPlayer: (dynastyId: string, playerId: number) => Promise<MediaItemResolved[]>;
     /** Everything linked to one game — the media section on the Game info page. */
-    listForGame: (dynastyId: string, seasonId: number | undefined, gameId: number) => Promise<MediaItemResolved[]>;
+    listForGame: (
+      dynastyId: string,
+      seasonId: number | undefined,
+      gameId: number,
+    ) => Promise<MediaItemResolved[]>;
     update: (id: number, patch: MediaItemPatch) => Promise<void>;
     /** Save (or clear, with null) how this photo is framed. Metadata only — the file is never touched. */
     setFraming: (id: number, framing: MediaFraming | null) => Promise<void>;
+    /** Null clears the look back to untreated. */
+    setLook: (id: number, look: MediaLook | null) => Promise<void>;
     /** Persist a drag-chosen order: `orderedIds` is the season's item ids in display order. */
     reorder: (dynastyId: string, seasonId: number, orderedIds: number[]) => Promise<void>;
     remove: (id: number) => Promise<void>;
@@ -2773,7 +3235,12 @@ export interface DynastyApi {
   notes: {
     /** All of a player's notes, most-recently-updated first. Scoped to (dynasty, player). */
     list: (dynastyId: string, playerId: number) => Promise<PlayerNote[]>;
-    create: (dynastyId: string, playerId: number, title: string, body: string) => Promise<PlayerNote>;
+    create: (
+      dynastyId: string,
+      playerId: number,
+      title: string,
+      body: string,
+    ) => Promise<PlayerNote>;
     /** Updates title + body; resolves to the fresh note, or null if the id no longer exists. */
     update: (id: number, title: string, body: string) => Promise<PlayerNote | null>;
     remove: (id: number) => Promise<void>;
@@ -2781,10 +3248,21 @@ export interface DynastyApi {
     titleSuggestions: (dynastyId: string) => Promise<string[]>;
   };
   update: {
-    /** Checks the GitHub Releases API for a newer version. Never throws — network/rate-limit failures come back as `error`. */
-    check: () => Promise<UpdateCheckResult>;
-    /** Opens a download URL in the user's default browser (http/https only). */
-    openDownload: (url: string) => Promise<void>;
+    /** Asks GitHub whether a newer release exists. Never throws — failures come back as `state.error`. */
+    check: () => Promise<UpdateState>;
+    /** Starts downloading the available update, inside the app. */
+    download: () => Promise<UpdateState>;
+    /** Saves everything outstanding, then closes, installs and relaunches. Refuses (with a reason) while work is in flight. */
+    install: () => Promise<UpdateState>;
+    /** The current state, for a renderer that just mounted mid-download. */
+    getState: () => Promise<UpdateState>;
+    /** Subscribes to state pushes; returns its own unsubscribe. */
+    onStateChanged: (callback: (state: UpdateState) => void) => () => void;
+    /** Opens a GitHub link the user clicked in their browser (https + GitHub hosts only). */
+    openLink: (url: string) => Promise<void>;
+    /** The updater's own settings, owned by the main process (the launch check reads them before any renderer exists). */
+    getPrefs: () => Promise<UpdatePreferences>;
+    setPrefs: (next: Partial<UpdatePreferences>) => Promise<UpdatePreferences>;
   };
   window: {
     /**
@@ -2796,21 +3274,4 @@ export interface DynastyApi {
     setTitleBarTheme: (appearance: 'light' | 'dark') => Promise<void>;
   };
 }
-
-/** Result of an update check against the project's GitHub Releases. */
-export interface UpdateCheckResult {
-  /** The running app version. */
-  current: string;
-  /** The latest published release version (tag, `v` stripped), or null if none/failed. */
-  latest: string | null;
-  updateAvailable: boolean;
-  /** Direct installer download (Setup .exe asset) or the release page, for the Download button. */
-  url: string | null;
-  /** The release notes (markdown), if any. */
-  notes: string | null;
-  /** Non-null when the check couldn't complete (offline, rate-limited, etc.) — the UI stays quiet. */
-  error: string | null;
-}
-
-
 

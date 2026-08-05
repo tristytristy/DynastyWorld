@@ -1,3 +1,4 @@
+import { isGamePlayed } from '../shared/gameStatus';
 import { extractAll } from '../extractors/extract-all';
 import type { ExtractionData } from '../extractors/extract-all';
 import {
@@ -39,7 +40,7 @@ import type { ImportResult, ResultsHold } from '../shared/types';
 function computeLastPlayedWeek(schedule: ExtractionData['schedule'], teamIndex: number): number {
   const played = schedule.filter(
     (game) =>
-      (game.homeTeamIndex === teamIndex || game.awayTeamIndex === teamIndex) && game.status !== 'Unplayed',
+      (game.homeTeamIndex === teamIndex || game.awayTeamIndex === teamIndex) && isGamePlayed(game.status),
   );
   if (played.length === 0) return 0;
   return Math.max(...played.map((game) => game.week));
@@ -237,7 +238,7 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
       extraction.schedule.map((g) => ({
         gameId: g.gameId,
         week: g.week,
-        played: g.status !== 'Unplayed',
+        played: isGamePlayed(g.status),
         home: g.homeTeamIndex !== null ? teamStateByIndex.get(g.homeTeamIndex) ?? null : null,
         away: g.awayTeamIndex !== null ? teamStateByIndex.get(g.awayTeamIndex) ?? null : null,
       })),

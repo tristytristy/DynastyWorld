@@ -53,10 +53,33 @@ export interface TeamData {
   confLosses: number;
   nonConfWins: number;
   nonConfLosses: number;
-  /** In-game poll ranks; 0 means unranked (same convention as the games table). */
+  /**
+   * In-game poll ranks. The polls rank ALL 138 FBS teams, not a top 25 — 0
+   * means the poll has not been released yet (every team reads 0 before the
+   * first CFP poll), and 255 is the FCS placeholder pool. Treat "ranked" as
+   * <= 25 downstream; a bare rank of 112 is not a ranking worth showing.
+   */
   mediaPollRank: number;
   coachesPollRank: number;
   cfpRank: number;
+  /**
+   * The same poll one week earlier — `MediaPoll_LastWeeksRank` /
+   * `CoachesPoll_LastWeeksRank`, siblings of the CurrentRank fields above,
+   * with the identical 0/255 convention. This is the whole basis of the hub's
+   * rank-movement chips: the save keeps no per-week poll history anywhere, so
+   * one week back is genuinely all that exists in a single snapshot.
+   *
+   * `CFPPoll_LastWeeksRank` exists too and is deliberately NOT pulled: across
+   * seven real saves (preseason, mid-season, and two post-playoff) it never
+   * once differed from `CFPPoll_CurrentRank`, so a CFP "movement" number built
+   * from it would always read as zero movement. Checked, not assumed.
+   *
+   * Absent on seasons synced before this shipped.
+   */
+  mediaPollLastWeekRank?: number;
+  coachesPollLastWeekRank?: number;
+  /** Where the media poll had this team before a game was played. Media only — the coaches and CFP polls carry no start-of-season sibling field. Absent on seasons synced before this shipped. */
+  mediaPollStartOfSeasonRank?: number;
   topClassRank: number;
   topClassConferenceRank: number;
   teamPrestige: number;
@@ -132,7 +155,10 @@ const FIELDS = [
   'DivisionLoss',
   'CurSeasonDivStanding',
   'MediaPoll_CurrentRank',
+  'MediaPoll_LastWeeksRank',
+  'MediaPoll_StartOfSeasonRank',
   'CoachesPoll_CurrentRank',
+  'CoachesPoll_LastWeeksRank',
   'CFPPoll_CurrentRank',
   'TopClassRank',
   'TopClassConferenceRank',
@@ -225,6 +251,9 @@ function mapTeam(
     mediaPollRank: Number(r.MediaPoll_CurrentRank),
     coachesPollRank: Number(r.CoachesPoll_CurrentRank),
     cfpRank: Number(r.CFPPoll_CurrentRank),
+    mediaPollLastWeekRank: Number(r.MediaPoll_LastWeeksRank),
+    coachesPollLastWeekRank: Number(r.CoachesPoll_LastWeeksRank),
+    mediaPollStartOfSeasonRank: Number(r.MediaPoll_StartOfSeasonRank),
     topClassRank: Number(r.TopClassRank),
     topClassConferenceRank: Number(r.TopClassConferenceRank),
     teamPrestige: Number(r.TeamPrestige),

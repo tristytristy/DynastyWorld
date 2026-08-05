@@ -295,6 +295,30 @@ export function ScandalsModal({
 
   const dirty = Object.keys(edit).length > 0;
 
+  /*
+    THE TALENT TREES ARE HIDDEN, because unlocking one writes to the save and the
+    game does not honour it — a maxed recruiting tree left scouting speed
+    unchanged (user report 2026-08-03). A control that says it did something it
+    did not is worse than no control, so it is off until the save-side question
+    is answered (see the audit note on the board).
+
+    Ctrl+Shift+C brings it back for testing. Deliberately undocumented: it is a
+    development affordance for verifying the fix, not a feature, and putting it
+    in the manual would make a broken thing discoverable again.
+  */
+  const [devUnlocked, setDevUnlocked] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+        e.preventDefault();
+        setDevUnlocked((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   // Which sections are holding staged edits, so a collapsed one still announces
   // that something inside it is about to be written.
   const touched = {
@@ -303,12 +327,16 @@ export function ScandalsModal({
       edit.coachXpSpeed !== undefined ||
       edit.experiencePoints !== undefined ||
       edit.level !== undefined ||
-      edit.coachPoints !== undefined ||
       edit.prestigeScore !== undefined ||
       edit.jobSecurity !== undefined ||
       edit.contractPoints !== undefined,
     peds: edit.talentProgressSpeed !== undefined || edit.positionXp !== undefined,
-    embezzlement: Object.values(edit.talentUnlocks ?? {}).some((row) => row.some((level) => level > 0)),
+    // Coach points moved here with the field. A staged edit has to mark the
+    // section it is VISIBLE in, or a collapsed section stays silent about a
+    // change that is about to be written from inside it.
+    embezzlement:
+      edit.coachPoints !== undefined ||
+      Object.values(edit.talentUnlocks ?? {}).some((row) => row.some((level) => level > 0)),
   };
 
   return (
@@ -396,7 +424,6 @@ export function ScandalsModal({
             <div className="grid gap-3 sm:grid-cols-2">
               <NumberField label="Experience points" value={val('experiencePoints', 'experiencePoints')} max={limits.experiencePoints ?? 0} onChange={(experiencePoints) => setEdit((e) => ({ ...e, experiencePoints }))} />
               <NumberField label="Level" value={val('level', 'level')} max={limits.level ?? 0} onChange={(level) => setEdit((e) => ({ ...e, level }))} />
-              <NumberField label="Coach points" value={val('coachPoints', 'coachPoints')} max={limits.coachPoints ?? 0} onChange={(coachPoints) => setEdit((e) => ({ ...e, coachPoints }))} />
               <NumberField label="Prestige score" value={val('prestigeScore', 'prestigeScore')} max={limits.prestigeScore ?? 0} onChange={(prestigeScore) => setEdit((e) => ({ ...e, prestigeScore }))} />
               <NumberField label="Job security %" value={val('jobSecurity', 'jobSecurity')} max={limits.jobSecurity ?? 100} onChange={(jobSecurity) => setEdit((e) => ({ ...e, jobSecurity }))} />
               <NumberField label="Contract points (this year)" value={val('contractPoints', 'contractPoints')} max={limits.contractPoints ?? 0} onChange={(contractPoints) => setEdit((e) => ({ ...e, contractPoints }))} />
@@ -448,7 +475,19 @@ export function ScandalsModal({
             </div>
           </Scandal>
 
-          <Scandal eyebrow="Embezzlement" title="Unlock coach talents" dirty={touched.embezzlement}>
+          <Scandal
+            eyebrow="Embezzlement"
+            /* The title says what is actually in the section. With the trees
+               hidden, "Unlock coach talents" would promise something that is not
+               there. */
+            title={devUnlocked ? 'Unlock coach talents' : 'Coach points'}
+            dirty={touched.embezzlement}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NumberField label="Coach points" value={val('coachPoints', 'coachPoints')} max={limits.coachPoints ?? 0} onChange={(coachPoints) => setEdit((e) => ({ ...e, coachPoints }))} />
+            </div>
+            {devUnlocked && (
+            <>
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 <span className="tnum font-semibold text-slate-800 dark:text-slate-200">
@@ -573,6 +612,8 @@ export function ScandalsModal({
               4 levels, CEO is 9 one-offs, Program Builder 7 of 3. Names come from the game&apos;s tree screens; the
               save stores only positions, so a name could sit on the wrong row. No undo beyond restoring the backup.
             </p>
+            </>
+            )}
           </Scandal>
 
           {/* A real, observed quirk — surfaced so a working write doesn't look broken. */}

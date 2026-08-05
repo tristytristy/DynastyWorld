@@ -1,3 +1,5 @@
+import { offenseYards } from '../shared/teamYards';
+import { isGamePlayed } from '../shared/gameStatus';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { getTeamGameStats } from './getTeamGameStats';
 import type { GameData } from '../extractors/extract-schedule';
@@ -294,7 +296,7 @@ export function buildFindings(journey: SeasonGamePoint[], games: TeamGameStat[])
 export function aggregateLeagueFromSchedule(schedule: GameData[]): Map<number, LeagueAggregate> {
   const league = new Map<number, LeagueAggregate>();
   for (const g of schedule) {
-    if (g.status === 'Unplayed') continue;
+    if (!isGamePlayed(g.status)) continue;
     for (const side of ['home', 'away'] as const) {
       const idx = side === 'home' ? g.homeTeamIndex : g.awayTeamIndex;
       if (idx === null || idx === undefined) continue;
@@ -307,7 +309,7 @@ export function aggregateLeagueFromSchedule(schedule: GameData[]): Map<number, L
       a.points += points ?? 0;
       a.pointsAllowed += against ?? 0;
       if (stats) {
-        a.yards += stats.totalYards ?? 0;
+        a.yards += stats ? offenseYards(stats) : 0;
         a.thirdDownConv += stats.thirdDownConversions ?? 0;
         a.thirdDownAtt += stats.thirdDownAttempts ?? 0;
         a.sacks += stats.sacks ?? 0;
@@ -315,7 +317,7 @@ export function aggregateLeagueFromSchedule(schedule: GameData[]): Map<number, L
         a.takeaways += stats.takeaways ?? 0;
         a.penaltyYards += stats.penaltyYards ?? 0;
       }
-      if (oppStats) a.yardsAllowed += oppStats.totalYards ?? 0;
+      if (oppStats) a.yardsAllowed += offenseYards(oppStats);
       league.set(idx, a);
     }
   }
@@ -416,7 +418,7 @@ export function getSeasonAnalytics(dynastyId: string, seasonId?: number): Season
     own.points += g.teamScore;
     own.pointsAllowed += g.opponentScore;
     if (s?.teamStats) {
-      own.yards += s.teamStats.totalYards ?? 0;
+      own.yards += offenseYards(s.teamStats);
       own.thirdDownConv += s.teamStats.thirdDownConversions ?? 0;
       own.thirdDownAtt += s.teamStats.thirdDownAttempts ?? 0;
       own.sacks += s.teamStats.sacks ?? 0;
@@ -424,7 +426,7 @@ export function getSeasonAnalytics(dynastyId: string, seasonId?: number): Season
       own.takeaways += s.teamStats.takeaways ?? 0;
       own.penaltyYards += s.teamStats.penaltyYards ?? 0;
     }
-    if (s?.opponentStats) own.yardsAllowed += s.opponentStats.totalYards ?? 0;
+    if (s?.opponentStats) own.yardsAllowed += offenseYards(s.opponentStats);
   }
 
   // League-wide population for percentiles, aggregated from every played game

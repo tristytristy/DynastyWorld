@@ -5,7 +5,7 @@ import { TeamLogo } from '../components/common/TeamLogo';
 import { CoachPortrait } from '../components/common/CoachPortrait';
 import { FALLBACK_LOGO_PATH } from '../lib/assetMapping';
 import { buildTeamColorVars } from '../lib/teamTheme';
-import { angledClip } from '../components/ui/angledClip';
+import { ANGLED_FRAME, angledFrame } from '../components/ui/angledClip';
 import { EXTRACTION_STEPS } from '../../shared/types';
 import type { DynastySummary, ExtractionStep, ExtractionStepStatus } from '../../shared/types';
 import { useConfirm } from '../data/ConfirmDialogProvider';
@@ -13,7 +13,7 @@ import { DynastyBackupModal } from '../components/common/DynastyBackupModal';
 import { ImportDynastyModal } from '../components/common/ImportDynastyModal';
 import { ExportIcon, TrashIcon } from '../components/common/ActionIcons';
 
-const ANGLED_PANEL = angledClip('1.1rem');
+const ANGLED_PANEL = angledFrame('1.1rem');
 
 // The one primary action on the dashboard, so it carries the brand gold rather
 // than the team colour: it belongs to the APP, not to whichever program you
@@ -317,7 +317,7 @@ export function Dashboard() {
     <div className="space-y-6 pt-5 md:pt-8">
       <section
         style={ANGLED_PANEL}
-        className="border border-white/65 bg-white/76 p-6 shadow-[0_28px_90px_-44px_rgba(15,23,42,0.4)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76"
+        className={`${ANGLED_FRAME} border border-white/65 bg-white/76 p-6 shadow-[0_28px_90px_-44px_rgba(15,23,42,0.4)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/76`}
       >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -332,7 +332,7 @@ export function Dashboard() {
               onClick={handleImportClick}
               disabled={importing || restoring}
               style={ANGLED_PANEL}
-              className={IMPORT_BUTTON_CLASS}
+              className={`${ANGLED_FRAME} ${IMPORT_BUTTON_CLASS}`}
             >
               {importing ? 'Importing...' : restoring ? 'Restoring…' : 'Import'}
             </button>
@@ -422,7 +422,7 @@ export function Dashboard() {
           </button>
         </section>
       ) : (
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4">
           {dynasties.map((dynasty) => {
             const colorVars = buildTeamColorVars(dynasty.primaryColor, dynasty.secondaryColor);
             const primaryTint = colorVars['--team-primary-rgb'] ?? '37 99 235';
@@ -451,9 +451,11 @@ export function Dashboard() {
                     Own reserved column, stretched to the row's full height and
                     split top/bottom via justify-between — the action row lives
                     in real layout space here, not absolutely floated over the
-                    portrait column. That's what makes it collision-proof: no
-                    matter how tall the coach portrait gets, this column is a
-                    structurally separate flex track, never underneath it.
+                    portrait column. That handles VERTICAL collision: however
+                    tall the portrait gets, this is a separate flex track.
+
+                    It does NOT handle horizontal, and that is a real failure
+                    rather than a theoretical one — see the action row below.
                   */}
                   <div className="flex min-w-0 max-w-[13rem] flex-col justify-between">
                     <div>
@@ -476,7 +478,33 @@ export function Dashboard() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3 opacity-0 transition duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                    {/*
+                      `relative z-[2]` is load-bearing, and this is why.
+
+                      This column is `min-w-0` and the portrait's is `shrink-0`,
+                      so on a narrow card — three grid columns at 1600px gives
+                      each one about 390px — flexbox takes the difference out of
+                      THIS column and nothing out of the portrait. The column
+                      lands around 124px while the buttons in this row are
+                      `shrink-0` and need ~185px, so the row overflows to the
+                      right, straight underneath the portrait. The portrait is
+                      later in the DOM and its image carries `z-[1]`, so it won
+                      both the paint and the hit test.
+
+                      That is exactly one symptom: the RIGHTMOST control stops
+                      working while the others are fine. Measured before the fix
+                      at a 1600px window — `elementFromPoint` at the centre of
+                      the delete button returned the portrait `<img>`. Delete is
+                      rightmost, so delete is what breaks.
+
+                      So the row is lifted above the portrait, and the portrait
+                      column is made `pointer-events-none` (it is decoration —
+                      the whole card is a Link, so clicks through it still
+                      navigate, and `group-hover` still fires because hover is
+                      resolved on the <a>). Two lines, and the icons are visible
+                      and clickable at every width instead of only wide ones.
+                    */}
+                    <div className="relative z-[2] flex items-center gap-3 opacity-0 transition duration-200 focus-within:opacity-100 group-hover:opacity-100">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -523,7 +551,9 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex flex-1 items-end justify-end">
+                  {/* Decoration only, and deliberately transparent to the
+                      mouse — see the action row above. */}
+                  <div className="pointer-events-none flex flex-1 items-end justify-end">
                     {dynasty.coachPortraitAssetName ? (
                       /*
                         The portrait is anchored INTO the card's lower-right

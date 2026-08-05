@@ -9,7 +9,6 @@ export const IPC = {
   assets: {
     getStatus: 'assets:getStatus',
     chooseFolder: 'assets:chooseFolder',
-    clearPath: 'assets:clearPath',
   },
   db: {
     getDynasties: 'db:getDynasties',
@@ -42,6 +41,7 @@ export const IPC = {
     getRecruits: 'db:getRecruits',
     getLeagueTeams: 'db:getLeagueTeams',
     getLeagueScores: 'db:getLeagueScores',
+    getPlayoffBracket: 'db:getPlayoffBracket',
     getLeagueTeamOverview: 'db:getLeagueTeamOverview',
     getLeagueTeamRoster: 'db:getLeagueTeamRoster',
     getAllLeaguePlayers: 'db:getAllLeaguePlayers',
@@ -58,7 +58,14 @@ export const IPC = {
     getDepartures: 'db:getDepartures',
     globalSearch: 'db:globalSearch',
     getPlayerDevelopment: 'db:getPlayerDevelopment',
+    getPlayerStatHistory: 'db:getPlayerStatHistory',
     getHeadToHead: 'db:getHeadToHead',
+    getCoachHall: 'db:getCoachHall',
+    getHallEligible: 'db:getHallEligible',
+    getLegendStatus: 'db:getLegendStatus',
+    addLegend: 'db:addLegend',
+    removeLegend: 'db:removeLegend',
+    assignLegend: 'db:assignLegend',
     getCoachingTree: 'db:getCoachingTree',
     getDynastyTheme: 'db:getDynastyTheme',
     getTeamTheme: 'db:getTeamTheme',
@@ -75,19 +82,18 @@ export const IPC = {
     getTeamAwardHistory: 'db:getTeamAwardHistory',
   },
   extraction: {
-    extractAll: 'extract:all',
     progress: 'extract:progress',
   },
   export: {
     historyToHtml: 'export:historyToHtml',
     seasonYearbookToHtml: 'export:seasonYearbookToHtml',
     playerCardToPng: 'export:playerCardToPng',
+    mediaPlateToPng: 'export:mediaPlateToPng',
     pickCardFolder: 'export:pickCardFolder',
     playerCardToFolder: 'export:playerCardToFolder',
-    rosterToXml: 'export:rosterToXml',
+    rosterToFile: 'export:rosterToFile',
   },
   editor: {
-    backupSaveFile: 'editor:backupSaveFile',
     getScandals: 'editor:getScandals',
     saveScandals: 'editor:saveScandals',
     estimateDynastyBackup: 'editor:estimateDynastyBackup',
@@ -112,7 +118,6 @@ export const IPC = {
     // stay because cards made before schema v12 adopt those files where they sit;
     // the *ForCard trio is keyed by card, which is what multiple cards needs.
     pickPhoto: 'card:pickPhoto',
-    setPhotoFromPath: 'card:setPhotoFromPath',
     getPhoto: 'card:getPhoto',
     removePhoto: 'card:removePhoto',
     pickPhotoForCard: 'card:pickPhotoForCard',
@@ -142,6 +147,7 @@ export const IPC = {
     listForGame: 'media:listForGame',
     update: 'media:update',
     setFraming: 'media:setFraming',
+    setLook: 'media:setLook',
     reorder: 'media:reorder',
     remove: 'media:remove',
     getStorageUsage: 'media:getStorageUsage',
@@ -161,7 +167,15 @@ export const IPC = {
   },
   update: {
     check: 'update:check',
-    openDownload: 'update:openDownload',
+    download: 'update:download',
+    install: 'update:install',
+    getState: 'update:getState',
+    /** Main -> renderer push. The state lives in main, so this is how the UI learns it changed. */
+    state: 'update:state',
+    /** Opens a GitHub link the user clicked (release-note links, the manual fallback) in their real browser. */
+    openLink: 'update:openLink',
+    getPrefs: 'update:getPrefs',
+    setPrefs: 'update:setPrefs',
   },
   window: {
     /** Recolours the Windows Control Overlay strip when the app's light/dark appearance flips. */

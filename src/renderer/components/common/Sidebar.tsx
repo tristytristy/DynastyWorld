@@ -6,6 +6,24 @@ import type { DynastySummary } from '../../../shared/types';
 
 const UPCOMING_LINKS: string[] = [];
 
+/**
+ * Whether the rail is collapsed, PERSISTED — unlike the dynasty list's own
+ * expand/collapse, which is a glance and resets.
+ *
+ * The reason is the user's: once you've picked the dynasty you coach, the panel
+ * is a permanent 290px reminder of a choice you already made. Someone who
+ * collapses it means it, and means it tomorrow too.
+ */
+const COLLAPSED_KEY = 'cfb.sidebarCollapsed';
+
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg
@@ -21,10 +39,33 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
+/** Points the way the panel will move — into the edge to collapse, out of it to reopen. */
+function RailToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
+      <path d="M3 3.5v13" strokeLinecap="round" />
+      <path
+        d={collapsed ? 'M8 10h8M12.5 6.5 16 10l-3.5 3.5' : 'M17 10H9M12.5 6.5 9 10l3.5 3.5'}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function Sidebar() {
   const location = useLocation();
   const [dynasties, setDynasties] = useState<DynastySummary[]>([]);
   const [expanded, setExpanded] = useState(true);
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, String(collapsed));
+    } catch {
+      /* non-fatal: the rail simply reopens next launch */
+    }
+  }, [collapsed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +91,9 @@ export function Sidebar() {
   const activeDynastyId = location.pathname.startsWith('/dynasty/')
     ? location.pathname.split('/')[2]
     : undefined;
-  const rows = expanded ? dynasties : [];
+  // Collapsed, the list is the ONLY thing left in the rail, so it stays open
+  // regardless — a rail with its one row hidden would be an empty strip.
+  const rows = expanded || collapsed ? dynasties : [];
   // -1 (no glider) when the active dynasty's row is collapsed out of view — the
   // alternative is parking the indicator on a row that isn't where you are.
   const activeIndex = activeDynastyId
@@ -59,9 +102,53 @@ export function Sidebar() {
       ? 0
       : -1;
 
+  /*
+    COLLAPSED IS A RAIL, NOT A DISAPPEARANCE.
+
+    The panel exists to switch dynasties, and someone who collapses it hasn't
+    stopped being able to — they've stopped needing the names. So it keeps the
+    team marks and drops everything that was only there to label them: 290px of
+    list becomes a 64px strip of logos, and the ~226px goes to the page, which
+    is the point on a recruiting board with eight columns.
+
+    Hiding it entirely was the other option and it's worse: the way back has to
+    live somewhere, and a floating handle over the content is a second piece of
+    chrome to explain. The rail IS the way back.
+  */
   return (
-    <aside className="hidden w-[290px] shrink-0 overflow-y-auto lg:block">
-      <nav className="flex h-full flex-col border border-slate-900/10 bg-white/85 p-4 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-black">
+    <aside
+      className={`hidden shrink-0 overflow-y-auto transition-[width] duration-base ease-standard lg:block ${
+        collapsed ? 'w-[64px]' : 'w-[290px]'
+      }`}
+    >
+      <nav
+        className={`flex h-full flex-col border border-slate-900/10 bg-white/85 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur-md dark:border-white/10 dark:bg-black ${
+          collapsed ? 'px-2 py-4' : 'p-4'
+        }`}
+      >
+        {/*
+          Above the list, not below it, and icon-only (user's call). It sits
+          outside the GliderNav on purpose: that nav is a positional indicator
+          over its own children, so a button among them would be a row the
+          glider could land on.
+
+          Right-aligned when open, because it points at the edge it collapses
+          toward; centred when the rail is 64px wide and there is no other
+          alignment to have.
+        */}
+        <div className={`mb-1 flex ${collapsed ? 'justify-center' : 'justify-end'}`}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((prev) => !prev)}
+            aria-label={collapsed ? 'Expand the dynasty panel' : 'Collapse the dynasty panel'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand the dynasty panel' : 'Collapse the dynasty panel'}
+            className="flex h-8 w-8 items-center justify-center text-slate-400 transition hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
+          >
+            <RailToggleIcon collapsed={collapsed} />
+          </button>
+        </div>
+
         <GliderNav
           activeIndex={activeIndex}
           orientation="vertical"
@@ -69,10 +156,17 @@ export function Sidebar() {
           itemsClassName="gap-1"
         >
           <div className="flex items-center gap-1">
-            <Link to="/" className={`flex-1 ${gliderItemClass(activeIndex === 0, 'px-4 py-3')}`}>
-              Dynasty
+            <Link
+              to="/"
+              title={collapsed ? 'All dynasties' : undefined}
+              className={`flex-1 ${gliderItemClass(activeIndex === 0, collapsed ? 'px-0 py-3 text-center' : 'px-4 py-3')}`}
+            >
+              {/* The full word doesn't fit a 64px rail, and shrinking it to fit
+                  would make the one label in the panel the smallest text in the
+                  app. "All" says the same thing at this width. */}
+              {collapsed ? 'All' : 'Dynasty'}
             </Link>
-            {dynasties.length > 0 && (
+            {dynasties.length > 0 && !collapsed && (
               <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
@@ -89,19 +183,26 @@ export function Sidebar() {
             <Link
               key={dynasty.id}
               to={`/dynasty/${dynasty.id}`}
-              className={`block ${gliderItemClass(activeIndex === index + 1, 'pl-10 pr-4 py-3')}`}
+              // Collapsed, the logo is the whole row, so the name it stands for
+              // has to be reachable some other way.
+              title={collapsed ? (dynasty.coachName ?? dynasty.teamName) : undefined}
+              className={`block ${gliderItemClass(
+                activeIndex === index + 1,
+                collapsed ? 'px-0 py-2.5' : 'pl-10 pr-4 py-3',
+              )}`}
             >
-              <span className="flex min-w-0 items-center gap-2.5">
+              <span className={`flex min-w-0 items-center gap-2.5 ${collapsed ? 'justify-center' : ''}`}>
                 <TeamLogo
                   team={{ assetName: dynasty.teamName, label: dynasty.teamName }}
                   size="sm"
                   className="shrink-0"
                 />
-                <span className="truncate">{dynasty.coachName ?? dynasty.teamName}</span>
+                {!collapsed && <span className="truncate">{dynasty.coachName ?? dynasty.teamName}</span>}
               </span>
             </Link>
           ))}
         </GliderNav>
+
 
         {/* The Tools group (Preferences / Quick Help / User Manual / About)
             moved into the title bar as icons — the pattern every browser uses,

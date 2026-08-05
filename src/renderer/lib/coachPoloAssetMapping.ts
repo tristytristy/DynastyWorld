@@ -26,12 +26,14 @@ const POLO_BASE_PATH = 'cfbmedia://media/coachpolos';
  * asset folders (150 jerseys vs 144 polos). All six are generic/created-team
  * mascots, not real schools.
  */
-const TOKENS_WITHOUT_POLO = new Set(['Cyclones', 'Mustangs', 'Orcas', 'Pumas', 'Rattlers', 'Renegades']);
-
-/** True when this team has a dedicated coach polo. */
-export function hasCoachPolo(teamAssetName: string | null | undefined): boolean {
-  return getCoachPoloPath(teamAssetName) !== null;
-}
+const TOKENS_WITHOUT_POLO = new Set([
+  'Cyclones',
+  'Mustangs',
+  'Orcas',
+  'Pumas',
+  'Rattlers',
+  'Renegades',
+]);
 
 /**
  * The polo overlay path for a team, or null when there's nothing to dress the

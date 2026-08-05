@@ -272,22 +272,6 @@
     letter-spacing: -0.01em;
   }
 
-  .type-section-title {
-    font-family: var(--font-display);
-    font-size: var(--text-section-title);
-    line-height: var(--text-section-title-lh);
-    font-weight: 600;
-    letter-spacing: 0;
-  }
-
-  .type-card-title {
-    font-family: var(--font-display);
-    font-size: var(--text-card-title);
-    line-height: var(--text-card-title-lh);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-  }
-
   /**
    * Stat values render in the display face with tabular (fixed-width)
    * numerals so columns of numbers align and values don't jitter when they
@@ -344,6 +328,30 @@
     }
   }
 
+  /**
+   * The Hall of Legends formation revealing itself — the same fade-and-rise as
+   * `.content-enter`, but STAGGERED across the slots so the board assembles
+   * rather than appearing.
+   *
+   * `both` matters: each card carries its own delay, and without holding the
+   * from-state it would sit fully drawn until its turn came and then flicker.
+   *
+   * THE DELAY IS THE ONE THING THE GLOBAL REDUCED-MOTION CLAMP DOESN'T COVER.
+   * That rule zeroes animation-DURATION, which is what makes every other
+   * animation in the app honour the preference automatically — but a 28ms
+   * stagger over eleven slots is 300ms of nothing-then-pop, delay by delay,
+   * even at zero duration. So the delay is zeroed here too, and the board
+   * simply exists for anyone who asked not to be moved at.
+   */
+  .legend-enter {
+    animation: content-fade-up var(--duration-base) var(--ease-enter) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .legend-enter {
+      animation-delay: 0ms !important;
+    }
+  }
+
   /* The hover-preview trading card easing in near a player's name. */
   @keyframes cardHoverIn {
     from {
@@ -365,16 +373,75 @@
    *
    * Note: clip-path clips the element's own painting, including box-shadow —
    * surfaces using these classes are deliberately flat (border-defined), which
-   * matches the flat, border-defined aesthetic anyway. The app shell keeps its existing
-   * two-corner angledClip() frame (a distinct, established wrapper shape).
+   * matches the flat, border-defined aesthetic anyway.
+   *
+   * THE ANGLE IS CLOSED (2026-08-02, user direction). clip-path cuts away the
+   * border along the diagonal, so every bordered surface used to have three
+   * drawn edges and one open one — the shape read as a torn corner rather than
+   * a cut one. The `::after` below lays a hairline back along that diagonal so
+   * the outline closes.
+   *
+   * IT INHERITS THE BORDER RATHER THAN NAMING A COLOUR, which is the whole
+   * trick: `border-top-*: inherit` takes the host's own computed border, so the
+   * diagonal is automatically the right colour on all ~80 surfaces (slate, gold,
+   * team-primary, red), follows `hover:border-*` for free, and — because a
+   * computed border-width is 0 when there's no border — draws NOTHING on the
+   * deliberately borderless ones: `SurfaceCard` primary/raised (sections are
+   * separated, not boxed), filled buttons, the gradient team block, the trading
+   * card. Those want a silhouette, not an outline, and naming a colour here
+   * would have put a line on all of them.
+   *
+   * Geometry: the bar is the diagonal's length (cut × √2) plus 2px so its ends
+   * tuck under the straight borders instead of leaving pinholes at the mitres,
+   * and it rotates about its own centre — which sits half a border-width inside
+   * the clip edge, so the line lands fully inside the shape instead of being
+   * half-clipped and rendering at half strength. Rotated, its box lands exactly
+   * on the border box, so it adds no scrollable overflow.
    */
   .corner-cut {
-    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 1rem, 100% 100%, 0 100%);
+    --cut: 1rem;
   }
 
   .corner-cut-sm {
-    clip-path: polygon(0 0, calc(100% - 0.5rem) 0, 100% 0.5rem, 100% 100%, 0 100%);
+    --cut: 0.5rem;
   }
+
+  /* Two cuts (top-right + bottom-left) — the app-shell frame; see angledClip.ts. */
+  .corner-cut-frame {
+    --cut: 1.25rem;
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% var(--cut),
+      100% 100%,
+      var(--cut) 100%,
+      0 calc(100% - var(--cut))
+    );
+  }
+
+  .corner-cut,
+  .corner-cut-sm {
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+  }
+
+  .corner-cut,
+  .corner-cut-sm,
+  .corner-cut-frame {
+    position: relative;
+  }
+
+  /*
+    THE ANGLE IS OPEN AGAIN (user direction 2026-08-03). A hairline was laid back
+    along the diagonal so the outline closed; on a black surface with a hairline
+    border it read heavier than the straight edges it was joining, and the user's
+    verdict on the result was that some of them looked bad.
+
+    So the cut goes back to what it always was: the clip removes the border along
+    the diagonal, and the shape is defined by three drawn edges and one open one.
+    The two-level `--cut` variable and `.corner-cut-frame` stay — those were the
+    useful half of that change, and the app shell's polygon still lives in CSS
+    rather than in an inline style.
+  */
 
   /**
    * MODALS (2026-07-30). One scrim and one panel treatment for every overlay in
@@ -794,7 +861,13 @@
     overflow: hidden;
     /* They arrive at the outer edge and are gone well before the score column:
        fully out by 78%, so nothing crosses into the logo/week/score stack. */
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 14%, #000 46%, transparent 78%);
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      #000 14%,
+      #000 46%,
+      transparent 78%
+    );
     mask-image: linear-gradient(to right, transparent 0%, #000 14%, #000 46%, transparent 78%);
   }
 
@@ -906,6 +979,827 @@
     }
     to {
       transform: translateX(22.5rem);
+    }
+  }
+}
+
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+  THE TROPHY ROOM (2026-08-03)
+
+  A museum, built out of lighting rather than geometry. Everything here is
+  gradients, blur, masks and opacity — no WebGL, no 3D library, no per-frame
+  JavaScript. Electron has to stay smooth on a laptop, and a spotlight is a
+  radial gradient whether or not you raytrace it.
+
+  The trophy art is a flat PNG. It is never rotated or perspective-warped,
+  because a 2D image faked into 3D looks like a 2D image faked into 3D. Instead
+  the ROOM does the work: a lit floor behind it, a reflection under it, a
+  vignette around it, a haze above it. Composition, not simulation.
+  ═══════════════════════════════════════════════════════════════════════════
+*/
+@layer components {
+  /* The room itself — floor, back wall and the pool of light between them. */
+  .trophy-room {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 50% 8%, rgba(216, 182, 124, 0.13), transparent 62%),
+      radial-gradient(80% 60% at 50% 96%, rgba(216, 182, 124, 0.06), transparent 70%),
+      linear-gradient(180deg, #0b0b0d 0%, #07070a 55%, #050506 100%);
+  }
+
+  :root:not(.dark) .trophy-room {
+    background:
+      radial-gradient(120% 90% at 50% 8%, rgba(216, 182, 124, 0.2), transparent 62%),
+      radial-gradient(80% 60% at 50% 96%, rgba(15, 23, 42, 0.05), transparent 70%),
+      linear-gradient(180deg, #1a1a1e 0%, #121216 55%, #0d0d10 100%);
+  }
+
+  /* The shaft of light the hero stands in. Breathes, slowly. */
+  .trophy-spotlight {
+    position: absolute;
+    left: 50%;
+    top: -12%;
+    width: min(46rem, 90%);
+    height: 128%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: radial-gradient(50% 42% at 50% 34%, rgba(255, 245, 224, 0.16), transparent 70%);
+    filter: blur(10px);
+    animation: trophy-breathe 9s var(--ease-standard, ease-in-out) infinite;
+  }
+
+  @keyframes trophy-breathe {
+    0%,
+    100% {
+      opacity: 0.85;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* The lit ellipse the pedestal sits on. */
+  .trophy-floor {
+    position: absolute;
+    left: 50%;
+    bottom: 8%;
+    width: min(34rem, 78%);
+    height: 7rem;
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: radial-gradient(50% 50% at 50% 50%, rgba(255, 240, 214, 0.22), transparent 72%);
+    filter: blur(14px);
+  }
+
+  /* Vignette — the edges of a room you can't quite see the end of. */
+  .trophy-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(75% 65% at 50% 45%, transparent 45%, rgba(0, 0, 0, 0.62) 100%);
+  }
+
+  /*
+    The reflection. A second copy of the trophy, flipped and faded out downward
+    with a mask — which is why the art must be a transparent PNG and why this
+    costs nothing: the browser is compositing one more image, not rendering one.
+  */
+  .trophy-reflection {
+    transform: scaleY(-1);
+    opacity: 0.16;
+    filter: blur(1.5px);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent 62%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent 62%);
+  }
+
+  /* The hero swap: fade and settle, never bounce. */
+  .trophy-hero-in {
+    animation: trophy-hero-in 380ms var(--ease-enter, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  }
+
+  @keyframes trophy-hero-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.965);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* A shelf piece lifts slightly under the cursor. Expensive, not playful. */
+  .trophy-plinth {
+    transition:
+      transform var(--duration-base, 220ms) var(--ease-standard, ease-in-out),
+      opacity var(--duration-base, 220ms) var(--ease-standard, ease-in-out);
+  }
+
+  .trophy-plinth:hover {
+    transform: translateY(-4px);
+  }
+
+  /* Never won: present, shaped, unmistakably unclaimed. */
+  .trophy-locked {
+    filter: brightness(0) saturate(0) opacity(0.28);
+  }
+
+  :root:not(.dark) .trophy-locked {
+    filter: brightness(0) saturate(0) opacity(0.22);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trophy-spotlight {
+      animation: none;
+    }
+  }
+}
+
+@layer components {
+  /*
+    The trophy room's own spark field — the box-score's drift, made room-sized.
+
+    `.hero-sparks` is 20rem wide with a shadow list that only spans the top of
+    its box, which is right for a header strip and wrong for a display case: the
+    particles bunched into the top corners and stopped. This widens the emitter,
+    and the CALLER stacks several copies at uneven vertical offsets with uneven
+    delays, so the field covers the full height and the seam between one copy
+    and the next never lines up.
+
+    Same technique, same cost — one element and one transform per copy, a
+    box-shadow list, zero DOM nodes per particle.
+  */
+  .trophy-sparks {
+    /*
+      THE SPARK COLOUR HAS TO BE DECLARED HERE. `.hero-spark-field` paints its
+      whole box-shadow list in `var(--spark)`, and that variable was defined on
+      `.hero-sparks` — the class this replaced. Without it every shadow resolved
+      to an invalid colour and the entire field rendered nothing, while the
+      elements, the animation and the element count all still looked correct.
+    */
+    --spark: #e9d28c;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 32rem;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      #000 12%,
+      #000 55%,
+      transparent 94%
+    );
+    mask-image: linear-gradient(to right, transparent 0%, #000 12%, #000 55%, transparent 94%);
+  }
+
+  .trophy-sparks[data-side='right'] {
+    transform: scaleX(-1);
+  }
+}
+
+@layer components {
+  /*
+    The glow a trophy stands in.
+
+    Behind the art, not on it: a `drop-shadow` in gold would trace the silhouette
+    and read as a sticker outline, while a radial pool BEHIND the piece is what a
+    lit display case actually does to the wall. Blurred hard and sized larger
+    than the trophy so the falloff is the shape you see, never the circle.
+
+    Two stops rather than one — a hot core and a wide wash — because a single
+    stop fades linearly and looks like fog. The core is what makes it read bold
+    at a glance; the wash is what stops it ending in a visible edge.
+  */
+  .trophy-glow {
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    width: 30rem;
+    height: 30rem;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background:
+      radial-gradient(circle, rgba(240, 219, 160, 0.42) 0%, transparent 46%),
+      radial-gradient(circle, rgba(216, 182, 124, 0.26) 0%, transparent 68%);
+    filter: blur(30px);
+  }
+
+  .trophy-glow[data-size='shelf'] {
+    top: 42%;
+    width: 7.5rem;
+    height: 7.5rem;
+    background:
+      radial-gradient(circle, rgba(240, 219, 160, 0.34) 0%, transparent 48%),
+      radial-gradient(circle, rgba(216, 182, 124, 0.2) 0%, transparent 70%);
+    filter: blur(10px);
+  }
+
+  /* A locked piece is unclaimed — it should not be lit as if it were won. */
+  .trophy-glow[data-locked='true'] {
+    opacity: 0.12;
+  }
+}
+
+@layer components {
+  /*
+    The trophy room's backdrop slideshow — the dynasty's own photographs, drained
+    of colour and turned right down, drifting slowly behind the case.
+
+    TWO LAYERS THAT SWAP, not a carousel. One holds the outgoing photo and one
+    the incoming; a class flip crossfades them. That is two composited images at
+    any moment regardless of how many photos a dynasty has, and no layout, no
+    scroll container, no reflow.
+
+    The zoom is a long, linear scale on the layer itself. Slow enough
+    (20s across 8%) that it reads as drift rather than as motion, which is the
+    difference between atmosphere and distraction.
+
+    It sits UNDER everything the room already draws — the spotlight, the floor,
+    the sparks and the vignette all still land on top, so the composition doesn't
+    change when a dynasty happens to have photos.
+  */
+  .trophy-backdrop {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .trophy-backdrop-layer {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    /* Drained and dimmed so it can never compete with the trophy or the type. */
+    filter: grayscale(1) contrast(1.05);
+    opacity: 0;
+    transition: opacity 1200ms var(--ease-standard, ease-in-out);
+    animation: trophy-backdrop-drift 20s linear infinite alternate;
+    will-change: opacity, transform;
+  }
+
+  .trophy-backdrop-layer[data-visible='true'] {
+    opacity: 0.33;
+  }
+
+  @keyframes trophy-backdrop-drift {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(1.08);
+    }
+  }
+
+  /*
+    Reduced motion keeps the PHOTOGRAPH and drops the movement. The global clamp
+    zeroes duration but not the swap itself, so the drift is stopped explicitly
+    and the crossfade becomes an instant change of image.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .trophy-backdrop-layer {
+      animation: none;
+      transition: none;
+    }
+  }
+}
+
+@layer components {
+  /*
+    THE BACKDROP IS A JUMBOTRON (user direction 2026-08-03).
+
+    Two things happen here, and they're related.
+
+    First the grade. `contrast(1.05)` was barely a grade at all — the blacks sat
+    at mid-grey, so the trophy and the type had nothing to sit against. Half
+    again on contrast plus a real pull on brightness lets the shadows go to
+    something like black, which is what makes the white text in front of it read
+    as lit rather than as printed on fog.
+
+    Then the texture: a fine dark grid over the photograph, so it reads as an LED
+    wall rather than as a picture behind glass. TWO repeating gradients at a 3px
+    pitch — one per axis — which is a single painted layer and no DOM, and it
+    lands on top of the image but under everything the room draws.
+
+    Deliberately NOT a fixed-size PNG: a texture that doesn't scale with the
+    window either tiles visibly or blurs, and a gradient is resolution-free.
+  */
+  .trophy-backdrop-layer {
+    filter: grayscale(1) contrast(1.5) brightness(0.68);
+  }
+
+  .trophy-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.45) 0 1px, transparent 1px 3px);
+  }
+}
+
+/*
+  HALL OF CHAMPIONS — hovering one legend puts every other one behind glass.
+
+  The effect belongs to the BOARD rather than to a card, because it is about the
+  cards a card is standing among: hovering says "this one", and the only way to
+  say that is to quiet the rest. `:has()` is what lets a hover reach siblings in
+  OTHER rows, which a plain `~` cannot — the rows are separate grids.
+
+  Deliberately not React state. Tracking a hovered slot in state would re-render
+  eleven cards to change eleven class names every time the mouse crosses a gap,
+  and it would stutter exactly when it needs to be smooth. CSS does it on the
+  compositor for free.
+
+  The zoom rides `.legend-slot-body`, never `.legend-slot`, because the slot
+  carries `.legend-enter` — an animation whose filled final transform would win
+  over a hover transform on the same element.
+*/
+.legend-board .legend-slot {
+  position: relative;
+}
+
+.legend-board .legend-slot-body {
+  transform-origin: center;
+  /* ROLL-OFF: fast and snappy, unchanged. Leaving is not an event. */
+  transition:
+    transform 240ms cubic-bezier(0.3, 0, 0.2, 1),
+    filter 240ms ease;
+  will-change: transform, filter;
+}
+
+/* Toward the viewer, 66% — big enough to read as a step forward out of the
+   formation rather than as a nudge. z-index on the SLOT so the card that grew
+   passes over its neighbours instead of under them. */
+.legend-board .legend-slot:not(.legend-slot-empty):hover {
+  z-index: 30;
+}
+
+/*
+  THE ARRIVAL IS 1150ms AND THE DEPARTURE IS 240ms, and the
+  asymmetry is the whole effect. Coming forward is the event, so it eases in
+  slowly, carries, and settles on a long tail rather than stopping. Leaving is
+  not an event — a card that took two seconds to get out of the way would feel
+  like the board was arguing with the mouse. The roll-off is on the base rule
+  above; this overrides it only while hovered.
+
+  cubic-bezier(0.34, 0, 0.1, 1): slow off the mark, most of the distance in the
+  middle, and a very long approach to rest — the trail-off, rather than a curve
+  that arrives and halts.
+*/
+.legend-board .legend-slot:not(.legend-slot-empty):hover .legend-slot-body {
+  transform: scale(1.66);
+  transition:
+    transform 1150ms cubic-bezier(0.34, 0, 0.1, 1),
+    filter 620ms ease-out;
+}
+
+/*
+  A BREATH OF ZOOM ON THE PHOTOGRAPH ITSELF, riding the same two seconds — the
+  card comes forward and the picture inside it opens very slightly, which is
+  what a real object moving toward you does and what a flat scale-up does not.
+
+  4% and no more. Past that it reads as a zoom effect rather than as depth.
+
+  It scales the photo CONTAINER, never the <img>: a custom photo carries the
+  user's own crop as an inline transform on that element, and overwriting it
+  would throw away their framing the moment they hovered. Scoped to the board,
+  so no card anywhere else in the app is touched.
+*/
+.legend-board .legend-slot .card-photo {
+  transition: transform 260ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.legend-board .legend-slot:not(.legend-slot-empty):hover .card-photo {
+  transform: scale(1.04);
+  transition: transform 1150ms cubic-bezier(0.34, 0, 0.1, 1);
+}
+
+/* Everything that isn't the hovered card: half dark, and just enough blur to
+   push it behind the focal plane without turning the board into soup. */
+.legend-board:has(.legend-slot:not(.legend-slot-empty):hover)
+  .legend-slot:not(:hover)
+  .legend-slot-body {
+  filter: blur(2.5px) brightness(0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legend-board .legend-slot-body {
+    transition: none;
+  }
+  .legend-board .legend-slot:not(.legend-slot-empty):hover .legend-slot-body {
+    transform: none;
+  }
+}
+
+/*
+  THE LIGHT SWEEP — the card's OWN foil sheen, moving.
+
+  This is the one idea in the batch that could have gone corny, and what keeps it
+  from being corny is that nothing new was added. The card already carries a
+  static diagonal sheen (PlayerCard, the second overlay: a 115deg band of white
+  at 12%) — that is the foil, and it has been sitting still since the card was
+  designed. Hovering just moves it across once.
+
+  A NEW glare element, or a loop that sweeps every card forever, is the version
+  of this that belongs on a gacha screen. Once, on hover, on a highlight that was
+  already part of the artwork, is a card catching the light as it turns toward
+  you.
+
+  22.5° off vertical (user's angle), so it rakes rather than wipes. The band is
+  gold at low alpha rather than the team's secondary: secondary is the OVR and
+  the stat figures, and a moving version of that colour would read as a UI
+  element sliding across a photograph instead of as light.
+
+  IT RUNS EXACTLY AS LONG AS THE ZOOM, on the same curve and with no delay
+  (user direction 2026-08-03) — same 1150ms, same cubic-bezier. Light and motion
+  arriving and finishing together is one event; a sweep that started late or
+  outlived the movement was two things happening near each other.
+*/
+.legend-board .legend-slot-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.legend-board .legend-slot:not(.legend-slot-empty):hover .legend-slot-sweep {
+  opacity: 1;
+}
+
+.legend-board .legend-slot-sweep::before {
+  content: '';
+  position: absolute;
+  /* Oversized and rotated so the band's own ends never appear inside the card —
+     a sweep you can see the edges of stops being light. */
+  top: -60%;
+  bottom: -60%;
+  left: -60%;
+  width: 45%;
+  transform: rotate(22.5deg) translateX(-140%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(233, 210, 140, 0.05) 30%,
+    rgba(255, 248, 226, 0.22) 50%,
+    rgba(233, 210, 140, 0.05) 70%,
+    transparent 100%
+  );
+  filter: blur(6px);
+}
+
+.legend-board .legend-slot:not(.legend-slot-empty):hover .legend-slot-sweep::before {
+  animation: legend-sweep 1150ms cubic-bezier(0.34, 0, 0.1, 1) forwards;
+}
+
+@keyframes legend-sweep {
+  from {
+    transform: rotate(22.5deg) translateX(-140%);
+  }
+  to {
+    transform: rotate(22.5deg) translateX(560%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legend-board .legend-slot:not(.legend-slot-empty):hover .legend-slot-sweep {
+    opacity: 0;
+  }
+  .legend-board .legend-slot:not(.legend-slot-empty):hover .card-photo {
+    transform: none;
+  }
+}
+
+/*
+  THE SWAP CONTROL ARMS ITSELF, from its own corner.
+
+  It used to reveal on `group-hover/slot` — cross any part of a card and the
+  control appeared. That is right for something you reach for often and wrong for
+  this: swapping a legend out is rare and semi-destructive, and a control that
+  arms itself whenever the mouse is anywhere near the card is a control you can
+  hit by accident.
+
+  So the reveal is a plain `:hover` on the 20px button itself, flush in the
+  corner. It stays click-through and invisible until the pointer is actually on
+  it, which on a target that size means the user aimed. `focus-visible` is the
+  keyboard equivalent — without it the control would be unreachable without a
+  mouse, which is a worse bug than the one this fixes.
+
+  Only while the slot is hovered at all, though: a bare invisible hotspot sitting
+  on every card at rest would still be a trap, just a smaller one.
+*/
+.legend-board .legend-swap {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.legend-board .legend-slot:not(.legend-slot-empty):hover .legend-swap {
+  pointer-events: auto;
+}
+
+.legend-board .legend-slot:not(.legend-slot-empty):hover .legend-swap:hover,
+.legend-board .legend-swap:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/*
+  THE ROOM WEARS THE JUMBOTRON GRID, the same one the Trophy Room's media
+  backdrop uses — a 3px pitch of horizontal and vertical dark lines, which reads
+  as an LED wall rather than as a pattern.
+
+  On the ROOM and not on the cards: the point is that the legends are standing in
+  front of a board, so the texture belongs to the surface behind them. Laid over
+  the room's own gradient and under everything else (`z-0` against the board's
+  `relative`), so it darkens the ground without touching a photograph.
+*/
+.legend-room::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.45) 0 1px, transparent 1px 3px);
+}
+
+/*
+  THE SCORE RAIL — the Top Scores ribbon's horizontally scrolling game strip.
+
+  The scrollbar is hidden rather than styled: the rail is 88px tall and a
+  scrollbar inside it would eat a tenth of the strip and sit under the scores.
+  Arrow buttons and edge fades carry the affordance instead, so nothing is
+  hidden without a replacement.
+
+  `overflow-y: hidden` (not visible) because the spec forces the other axis to
+  `auto` the moment one axis scrolls — and an auto y-axis on a strip this tight
+  flickers a vertical bar on hover. It also means a vertical wheel over the rail
+  bubbles to the page, which is what stops the ribbon hijacking normal scrolling.
+
+  `overscroll-behavior-x: contain` keeps a swipe that runs off the end of the
+  rail from triggering the window's back-navigation gesture.
+*/
+.score-rail {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.score-rail::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+  DRAG TO PAN, for the windows the formation does not fit in.
+
+  Ten tracks of card need ~1240px. That is fine on a desktop and not fine on a
+  tablet, and the earlier answer — shrink everything until it fits — stopped
+  being available once the cards were pinned to one size. So the board scrolls
+  sideways again, but by GRABBING it rather than by hunting a scrollbar.
+
+  `cursor: grab` only while there is something to grab: a board that fits shows
+  no affordance, because offering to drag something that cannot move is a lie.
+  That is set from JS, which is the only thing that knows whether the content
+  overflows.
+
+  The vertical padding is what stops the hover zoom being clipped. `overflow-x`
+  cannot be `auto` while `overflow-y` is `visible` — the spec forces the other
+  axis to `auto` too — so a card growing 39px past its box would be cut off at
+  the scroller's edge without room reserved inside it.
+*/
+.legend-pan {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.legend-pan::-webkit-scrollbar {
+  display: none;
+}
+
+.legend-pan[data-pannable='true'] {
+  cursor: grab;
+}
+
+.legend-pan[data-panning='true'] {
+  cursor: grabbing;
+  /* A drag that also selects text reads as broken. */
+  user-select: none;
+}
+
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+  THE PLAYOFF BRACKET
+  ═══════════════════════════════════════════════════════════════════════════
+  Same room as the Trophy Room, for the same reason: this is a display case,
+  not a table. The stage stays dark in BOTH themes — the trophy room already
+  establishes that a lit room is a lit room regardless of app appearance, and a
+  bracket rendered on white with twelve saturated team colours is a spreadsheet.
+
+  The connectors are pseudo-elements rather than SVG. A bracket's geometry is
+  "join a pair, then run one line onward", which is exactly a right-side border
+  box plus a rule — and keeping it in CSS means it scales with the transform
+  and inherits colour changes (the gold route) without a second render path.
+*/
+@layer components {
+  .cfp-stage {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: max-content;
+    transform-origin: top left;
+    color: #f2f2f6;
+    background:
+      radial-gradient(120% 90% at 50% 6%, rgba(216, 182, 124, 0.13), transparent 62%),
+      radial-gradient(80% 60% at 50% 98%, rgba(216, 182, 124, 0.06), transparent 70%),
+      linear-gradient(180deg, #0b0b0d 0%, #07070a 55%, #050506 100%);
+    border: 1px solid rgba(233, 210, 140, 0.14);
+  }
+
+  /* The pair-joining "]" and the line onward from its midpoint. */
+  .cfp-grp[data-onward]::after {
+    content: '';
+    position: absolute;
+    left: 100%;
+    top: calc(var(--cfp-box-h) / 2);
+    height: calc(var(--cfp-box-h) + var(--cfp-box-gap));
+    width: calc(var(--cfp-gutter) / 2);
+    border: 1.5px solid rgba(233, 210, 140, 0.24);
+    border-left: 0;
+    transition: border-color 0.5s, filter 0.5s;
+  }
+
+  .cfp-grp[data-onward]::before {
+    content: '';
+    position: absolute;
+    left: calc(100% + var(--cfp-gutter) / 2);
+    top: calc(var(--cfp-box-h) + var(--cfp-box-gap) / 2);
+    width: calc(var(--cfp-gutter) / 2);
+    border-top: 1.5px solid rgba(233, 210, 140, 0.24);
+    transition: border-color 0.5s;
+  }
+
+  /* Gold burns only through games YOUR program won — not whoever is winning. */
+  .cfp-stage[data-spot='1'] .cfp-grp[data-route='1']::after,
+  .cfp-stage[data-spot='1'] .cfp-grp[data-route='1']::before {
+    border-color: #e9d28c;
+  }
+
+  .cfp-stage[data-spot='1'] .cfp-grp[data-route='1']::after {
+    filter: drop-shadow(0 0 5px rgba(233, 210, 140, 0.55));
+  }
+
+  .cfp-box {
+    position: relative;
+    height: var(--cfp-box-h);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 10px;
+    background: linear-gradient(180deg, var(--cfp-tc, #1a1a22) 0%, var(--cfp-tc-dark, #101017) 100%);
+    color: var(--cfp-to, #fff);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+    transition: filter 0.45s, opacity 0.45s;
+  }
+
+  /* Eliminated: to ash, so the surviving path is the only lit thing left. */
+  .cfp-box[data-out='1'] {
+    filter: grayscale(1) brightness(0.38);
+    opacity: 0.6;
+  }
+
+  /* Advanced, but the save hasn't written the next game yet. */
+  .cfp-box[data-pending='1'] {
+    background: transparent;
+    border: 1.5px dashed color-mix(in srgb, var(--cfp-tc) 74%, #ffffff);
+    color: color-mix(in srgb, var(--cfp-tc) 26%, #ffffff);
+  }
+
+  .cfp-box[data-tbd='1'] {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1.5px solid rgba(233, 210, 140, 0.16);
+    color: #6d6d7a;
+  }
+
+  /*
+    YOUR PROGRAM — a two-tone ring, dark outside and gold inside.
+
+    Two things this is working around. A single gold ring vanishes on a
+    gold-adjacent primary (Tennessee orange, Michigan, LSU, Iowa), so the dark
+    band gives it something to sit against on any fill. And `clip-path` on the
+    box clips `outline` and `box-shadow` away ENTIRELY, so it has to be drawn as
+    inset pseudo-elements — the cut corner then trims the ring in the shape
+    language rather than erasing it.
+  */
+  .cfp-stage[data-spot='1'] .cfp-box[data-you='1']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid #06060a;
+    pointer-events: none;
+  }
+
+  .cfp-stage[data-spot='1'] .cfp-box[data-you='1']::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 2px solid #e9d28c;
+    pointer-events: none;
+  }
+
+  /* Your program stays findable even in defeat — a full ash would take the
+     ring down with it, since `filter` applies to the whole subtree. */
+  .cfp-stage[data-spot='1'] .cfp-box[data-you='1'][data-out='1'] {
+    filter: grayscale(0.72) brightness(0.52);
+    opacity: 0.8;
+  }
+
+  /*
+    The round mark sits on a soft pool, NOT a ring: a bordered circle collided
+    with the next column and severed the connector it sits on. A radial falloff
+    lets the line read through instead of being cut.
+  */
+  .cfp-medal {
+    position: absolute;
+    left: calc(100% + var(--cfp-gutter) / 2);
+    top: calc(var(--cfp-box-h) + var(--cfp-box-gap) / 2);
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: radial-gradient(circle closest-side, #08080c 58%, rgba(8, 8, 12, 0) 100%);
+  }
+
+  .cfp-medal img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    pointer-events: none;
+    transition: filter 0.2s, opacity 0.2s;
+  }
+
+  .cfp-medal:hover img,
+  .cfp-medal:focus-visible img,
+  .cfp-medal[data-open='1'] img {
+    filter: drop-shadow(0 0 7px rgba(233, 210, 140, 0.5));
+  }
+
+  .cfp-medal:focus-visible {
+    outline: 2px solid #e9d28c;
+    outline-offset: 3px;
+  }
+
+  /* A generic round mark is quieter than a real bowl's identity. */
+  .cfp-medal[data-round='1'] img {
+    opacity: 0.58;
+  }
+
+  .cfp-medal[data-round='1']:hover img,
+  .cfp-medal[data-round='1']:focus-visible img,
+  .cfp-medal[data-round='1'][data-open='1'] img {
+    opacity: 0.92;
+  }
+
+  .cfp-champ-glow {
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    width: 260px;
+    height: 260px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background:
+      radial-gradient(circle, rgba(233, 210, 140, 0.26) 0%, transparent 46%),
+      radial-gradient(circle, rgba(216, 182, 124, 0.13) 0%, transparent 68%);
+    filter: blur(6px);
+    animation: cfp-breathe 9s var(--ease-standard, ease-in-out) infinite;
+  }
+
+  @keyframes cfp-breathe {
+    0%,
+    100% {
+      opacity: 0.84;
+    }
+    50% {
+      opacity: 1;
     }
   }
 }

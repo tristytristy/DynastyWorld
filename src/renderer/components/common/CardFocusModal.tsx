@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ModalOverlay } from './ModalOverlay';
 import { PlayerCard } from './PlayerCard';
-import { CardLayerToggles } from './CardLayerToggles';
+import { CardLayerToggles, CardScrimControl } from './CardLayerToggles';
 import { EditIcon, ExportIcon, TrashIcon } from './ActionIcons';
 import { mediaFileUrl } from './MediaGallery';
 import { CARD_DESIGN_H, CARD_DESIGN_W } from './SavedPlayerCard';
@@ -9,6 +9,7 @@ import { Select } from '../ui/Select';
 import { useTeamThemeVars } from '../../lib/cardTheme';
 import type {
   CardLayers,
+  CardScrim,
   CardPhotoTransform,
   CardStatSource,
   CardStatSourceOption,
@@ -41,6 +42,8 @@ export interface CardFocusEditor {
   commitFraming: (card: PlayerCardRecord, transform: CardPhotoTransform) => void;
   setStats: (card: PlayerCardRecord, source: CardStatSource, tiles: { label: string; value: string }[]) => void;
   setLayers: (card: PlayerCardRecord, layers: CardLayers) => void;
+  /** The bottom fade — on/off and how far up the card it reaches. */
+  setScrim: (card: PlayerCardRecord, scrim: CardScrim) => void;
   toggleFavorite: (card: PlayerCardRecord) => void;
   makeDefault: (card: PlayerCardRecord) => void;
   remove: (card: PlayerCardRecord) => void;
@@ -143,6 +146,14 @@ function FocusCard({
           seasonYear={card.seasonYear}
           stats={card.stats}
           layers={card.layers}
+          statSource={card.statSource}
+          // The card's OWN fade, not the app default. Omitting this made
+          // PlayerCard fall back to DEFAULT_CARD_SCRIM, so the editor's Bottom
+          // fade control moved a value the preview beside it never drew — the
+          // one surface where seeing the change is the whole point of the
+          // panel. The grid tile (SavedPlayerCard) always passed it, which is
+          // why the setting looked correct everywhere except while editing.
+          scrim={card.scrim}
           photoUrl={photoUrl}
           photoTransform={transform}
           onPhotoPointerDown={draggable ? onPointerDownPhoto : undefined}
@@ -618,6 +629,10 @@ export function CardFocusModal({
             <div className="mt-5 space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
               <p className="type-eyebrow text-slate-400 dark:text-slate-500">Show on card</p>
               <CardLayerToggles layers={card.layers} onChange={(next) => editor.setLayers(card, next)} />
+            </div>
+
+            <div className="mt-5 space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+              <CardScrimControl scrim={card.scrim} onChange={(next) => editor.setScrim(card, next)} />
             </div>
           </div>
         )}

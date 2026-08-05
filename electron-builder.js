@@ -47,6 +47,25 @@ module.exports = {
   directories: {
     output: 'release',
   },
+  /*
+    WHERE THE UPDATER LOOKS. electron-updater reads this same block at runtime
+    (electron-builder writes it into app-update.yml inside the package), so the
+    app and the publisher can never disagree about which repository is
+    authoritative — which is exactly the bug you get from hardcoding the repo in
+    two places.
+
+    `releaseType: 'release'` keeps drafts and prereleases out of the update feed:
+    a draft you are still writing notes for should not offer itself to every
+    installed copy the moment it is created.
+  */
+  publish: [
+    {
+      provider: 'github',
+      owner: 'matevanz',
+      repo: 'DynastyHub',
+      releaseType: 'release',
+    },
+  ],
   win: {
     target: ['nsis', 'portable'],
     // Generated from public/Icon/ICON.png by scripts/make-icon.js — rerun that after changing the source art.
@@ -55,5 +74,12 @@ module.exports = {
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
+    /*
+      The updater relaunches the app itself after installing (see
+      updateService.ts), so the installer must not also try to start it — two
+      launches race each other and the second one loses to the single-instance
+      lock, which reads to the user as "the update didn't reopen".
+    */
+    runAfterFinish: false,
   },
 };

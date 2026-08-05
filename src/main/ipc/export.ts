@@ -11,6 +11,7 @@ import { getSchedule } from '../../database/getSchedule';
 import { buildHistoryExportHtml } from '../htmlExport';
 import { buildYearbookHtml } from '../yearbookExport';
 import { buildRosterXml } from '../rosterXmlExport';
+import { buildRosterCsv } from '../rosterCsvExport';
 import { getRoster } from '../../database/getRoster';
 import { getLeagueTeamRoster } from '../../database/getLeagueRoster';
 import { getPlayerRatingsBatch } from '../editorWrite';
@@ -146,19 +147,25 @@ export function registerExportHandlers(): void {
   // further prompting. Twenty cards through the save dialog above would be
   // twenty dialogs, which is not an export so much as a punishment.
   /**
-   * A team's roster as XML.
+   * A team's roster as a file — CSV or XML, whichever the save dialog is left on.
    *
    * Profiles come from the archive (always present, any season); ratings come
    * from the live save, because they are not archived. The two are merged per
    * player, and when the save can't supply them the file still exports with a
    * note explaining it rather than a roster of zeros.
    *
+   * CSV leads the filter list because that is the one both Google Sheets and
+   * OpenOffice Calc open directly; the nested XML opens in neither, and stays
+   * for the tooling that wants the structure. The format is read back off the
+   * chosen filename rather than tracked separately — the dialog rewrites the
+   * extension when the filter changes, so the path is already the answer.
+   *
    * Ratings are read in ONE pass over the Player table. Reusing the editor's
    * single-player lookup would have rescanned it once per player — eighty-five
    * scans for an eighty-five-man roster.
    */
   ipcMain.handle(
-    IPC.export.rosterToXml,
+    IPC.export.rosterToFile,
     async (_event, dynastyId: string, teamIndex: number | null, seasonId?: number): Promise<ExportResult> => {
       const dynasty = getDynastyById(dynastyId);
       if (!dynasty) return { success: false, message: 'Dynasty not found.' };
@@ -190,29 +197,72 @@ export function registerExportHandlers(): void {
           'Ratings omitted: the save file for this dynasty could not be read. Profiles below are from the archive and are unaffected.';
       }
 
-      const xml = buildRosterXml(players, {
-        teamName,
-        seasonYear: season?.seasonYear ?? 0,
-        ratingsByPlayer,
-        ratingsNote,
-      });
-
       const result = await dialog.showSaveDialog({
         title: 'Export Roster',
-        defaultPath: `${sanitizeFilename(teamName)} Roster${season ? ` ${season.seasonYear}` : ''}.xml`,
-        filters: [{ name: 'XML File', extensions: ['xml'] }],
+        defaultPath: `${sanitizeFilename(teamName)} Roster${season ? ` ${season.seasonYear}` : ''}.csv`,
+        filters: [
+          { name: 'CSV — opens in Google Sheets, Excel, Calc', extensions: ['csv'] },
+          { name: 'XML File', extensions: ['xml'] },
+        ],
       });
       if (result.canceled || !result.filePath) {
         return { success: false, message: 'Export canceled.' };
       }
 
-      await fs.writeFile(result.filePath, xml, 'utf-8');
+      const options = {
+        teamName,
+        seasonYear: season?.seasonYear ?? 0,
+        ratingsByPlayer,
+        ratingsNote,
+      };
+      const asXml = path.extname(result.filePath).toLowerCase() === '.xml';
+      const contents = asXml ? buildRosterXml(players, options) : buildRosterCsv(players, options);
+
+      await fs.writeFile(result.filePath, contents, 'utf-8');
       const withRatings = ratingsByPlayer.size;
       return {
         success: true,
         message: `Exported ${players.length} players${withRatings > 0 ? ` (${withRatings} with full ratings)` : ' — profiles only'}.`,
         filePath: result.filePath,
       };
+    },
+  );
+
+  /**
+   * The media viewer's plate — the photo with its caption underneath — saved as
+   * one PNG.
+   *
+   * Captured off the screen rather than composed in the main process, and that
+   * is the point: the plate a user is looking at is already the layout they
+   * want, framing and typography included, so re-drawing it server-side would
+   * be a second implementation of the same design to keep in step. The renderer
+   * hides the hover chrome before it calls.
+   *
+   * The original file is untouched; this is a copy to share, not an edit.
+   */
+  ipcMain.handle(
+    IPC.export.mediaPlateToPng,
+    async (
+      event,
+      fileName: string,
+      rect: { x: number; y: number; width: number; height: number },
+    ): Promise<ExportResult> => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) return { success: false, message: 'Could not find the window to capture.' };
+
+      const image = await captureRegion(win, rect);
+
+      const result = await dialog.showSaveDialog({
+        title: 'Export Photo',
+        defaultPath: `${sanitizeFilename(fileName)}.png`,
+        filters: [{ name: 'PNG Image', extensions: ['png'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { success: false, message: 'Export canceled.' };
+      }
+
+      await fs.writeFile(result.filePath, image.toPNG());
+      return { success: true, message: 'Photo exported.', filePath: result.filePath };
     },
   );
 

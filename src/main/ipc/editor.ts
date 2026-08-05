@@ -1,7 +1,12 @@
 import { app, dialog, ipcMain } from 'electron';
 import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
-import { createDynastyBackup, estimateDynastyBackup, suggestedBackupFileName } from '../dynastyBackup';
+import { withTask } from '../updater/taskRegistry';
+import {
+  createDynastyBackup,
+  estimateDynastyBackup,
+  suggestedBackupFileName,
+} from '../dynastyBackup';
 import { inspectBackup, restoreDynastyBackup } from '../dynastyRestore';
 import { getScandalsData, saveScandals } from '../scandalsWrite';
 import type {
@@ -22,12 +27,10 @@ import type {
   RecruitInfluenceEdit,
   ForceCommitResult,
   SaveEditResult,
-  SaveFileBackupResult,
   TeamBudgetData,
   TeamBudgetEdit,
 } from '../../shared/types';
 import {
-  backupSaveFile,
   getCoachEditData,
   getPlayerEditData,
   getRecruitEditData,
@@ -41,10 +44,6 @@ import {
 import { forceCommitRecruit, saveRecruitInfluence } from '../recruitingWrite';
 
 export function registerEditorHandlers(): void {
-  ipcMain.handle(IPC.editor.backupSaveFile, async (_event, dynastyId: string): Promise<SaveFileBackupResult> => {
-    return backupSaveFile(dynastyId);
-  });
-
   ipcMain.handle(
     IPC.editor.estimateDynastyBackup,
     async (_event, dynastyId: string): Promise<DynastyBackupEstimate | null> => {
@@ -54,22 +53,33 @@ export function registerEditorHandlers(): void {
 
   ipcMain.handle(
     IPC.editor.createDynastyBackup,
-    async (event, dynastyId: string, contents: DynastyBackupContents): Promise<DynastyBackupResult> => {
+    async (
+      event,
+      dynastyId: string,
+      contents: DynastyBackupContents,
+    ): Promise<DynastyBackupResult> => {
       const estimate = await estimateDynastyBackup(dynastyId);
       if (!estimate) return { success: false, message: 'That dynasty no longer exists.' };
 
       const result = await dialog.showSaveDialog({
         title: 'Save dynasty backup',
-        defaultPath: path.join(app.getPath('documents'), suggestedBackupFileName(estimate.teamName)),
+        defaultPath: path.join(
+          app.getPath('documents'),
+          suggestedBackupFileName(estimate.teamName),
+        ),
         filters: [{ name: 'Dynasty backup (zip)', extensions: ['zip'] }],
       });
       if (result.canceled || !result.filePath) {
         return { success: false, message: '' }; // Cancelled — the caller stays silent.
       }
 
-      return createDynastyBackup(dynastyId, contents, result.filePath, (progress) => {
-        event.sender.send(IPC.editor.backupProgress, progress);
-      });
+      // Registered as a task: zipping a large dynasty runs for a while, and the
+      // updater must not restart the app out from under a half-written archive.
+      return withTask('backup', () =>
+        createDynastyBackup(dynastyId, contents, result.filePath, (progress) => {
+          event.sender.send(IPC.editor.backupProgress, progress);
+        }),
+      );
     },
   );
 
@@ -98,7 +108,9 @@ export function registerEditorHandlers(): void {
 
   // Scandals — the user coach's cheat panel. Every field here was proven to
   // round-trip on a disposable save before being exposed; see scandalsWrite.ts.
-  ipcMain.handle(IPC.editor.getScandals, async (_event, dynastyId: string) => getScandalsData(dynastyId));
+  ipcMain.handle(IPC.editor.getScandals, async (_event, dynastyId: string) =>
+    getScandalsData(dynastyId),
+  );
 
   ipcMain.handle(
     IPC.editor.saveScandals,
@@ -116,14 +128,24 @@ export function registerEditorHandlers(): void {
 
   ipcMain.handle(
     IPC.editor.savePlayer,
-    async (_event, dynastyId: string, playerId: number, fields: PlayerEditFields): Promise<SaveEditResult> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      fields: PlayerEditFields,
+    ): Promise<SaveEditResult> => {
       return savePlayerEdits(dynastyId, playerId, fields);
     },
   );
 
   ipcMain.handle(
     IPC.editor.getCoach,
-    async (_event, dynastyId: string, teamIndex: number, position: string): Promise<CoachEditData | null> => {
+    async (
+      _event,
+      dynastyId: string,
+      teamIndex: number,
+      position: string,
+    ): Promise<CoachEditData | null> => {
       return getCoachEditData(dynastyId, teamIndex, position);
     },
   );
@@ -150,18 +172,27 @@ export function registerEditorHandlers(): void {
 
   ipcMain.handle(
     IPC.editor.saveRecruit,
-    async (_event, dynastyId: string, playerId: number, fields: RecruitEditFields): Promise<SaveEditResult> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      fields: RecruitEditFields,
+    ): Promise<SaveEditResult> => {
       return saveRecruitEdits(dynastyId, playerId, fields);
     },
   );
 
   ipcMain.handle(
     IPC.editor.saveRecruitInfluence,
-    async (_event, dynastyId: string, playerId: number, edit: RecruitInfluenceEdit): Promise<SaveEditResult> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      edit: RecruitInfluenceEdit,
+    ): Promise<SaveEditResult> => {
       return saveRecruitInfluence(dynastyId, playerId, edit);
     },
   );
-
 
   ipcMain.handle(
     IPC.editor.getTeamBudget,
@@ -172,7 +203,12 @@ export function registerEditorHandlers(): void {
 
   ipcMain.handle(
     IPC.editor.saveTeamBudget,
-    async (_event, dynastyId: string, teamIndex: number, edit: TeamBudgetEdit): Promise<SaveEditResult> => {
+    async (
+      _event,
+      dynastyId: string,
+      teamIndex: number,
+      edit: TeamBudgetEdit,
+    ): Promise<SaveEditResult> => {
       return saveTeamBudget(dynastyId, teamIndex, edit);
     },
   );

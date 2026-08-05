@@ -3,9 +3,7 @@ import type { LeagueGameData } from '../extractors/extract-league-schedule';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { LeagueScoresView, ResultsHold } from '../shared/types';
-
-/** A poll ranks every FBS team; only the first 25 are "ranked" in the sense a scoreboard means. */
-const POLL_RANKED_CUTOFF = 25;
+import { displayRank, isRanked } from '../shared/pollRank';
 
 /**
  * Every game in the league for a season — the national scoreboard behind the
@@ -59,6 +57,17 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
   const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
   const confByIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
   /*
+    The save's own broadcast abbreviation, joined from the same snapshot as the
+    conference and the rank. It's read here rather than derived anywhere in the
+    renderer because guessing one from a display name ("Mississippi State" ->
+    "MSST"?) produces labels the game itself disagrees with — the save already
+    says BAMA, ZONA, BC. Blank values fall through as null so a caller shows the
+    display name instead.
+  */
+  const shortByIndex = new Map(
+    teams.filter((t) => !!t.shortName).map((t) => [t.teamIndex, t.shortName]),
+  );
+  /*
     The poll ranks ALL 138 FBS teams, not just the top 25 — 0 means "poll not
     released" and 255 is the FCS placeholder (see shared/fcsPool.ts). So a
     scoreboard rank has to be capped at 25 explicitly; without it every team in
@@ -67,8 +76,8 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
   */
   const rankByIndex = new Map(
     teams
-      .filter((t) => t.mediaPollRank > 0 && t.mediaPollRank <= POLL_RANKED_CUTOFF)
-      .map((t) => [t.teamIndex, t.mediaPollRank]),
+      .map((t) => [t.teamIndex, displayRank(t.mediaPollRank, t.cfpRank)] as const)
+      .filter((entry): entry is readonly [number, number] => isRanked(entry[1])),
   );
 
   const rows = games
@@ -81,12 +90,15 @@ export function getLeagueScores(dynastyId: string, seasonId?: number): LeagueSco
         weekType: g.weekType,
         homeTeamName: g.homeTeamName,
         awayTeamName: g.awayTeamName,
+        homeShortName: shortByIndex.get(g.homeTeamIndex) ?? null,
+        awayShortName: shortByIndex.get(g.awayTeamIndex) ?? null,
         homeTeamIndex: g.homeTeamIndex,
         awayTeamIndex: g.awayTeamIndex,
         homeScore: g.homeScore,
         awayScore: g.awayScore,
         bowlName: detail?.bowlName ?? g.bowlName,
         bowlAssetName: detail?.bowlAssetName ?? null,
+        neutralVenueId: detail?.neutralVenueId ?? null,
         isBowlGame: detail?.isBowlGame ?? false,
         isNationalChampionship: detail?.isNationalChampionship ?? false,
         homeConference: confByIndex.get(g.homeTeamIndex) ?? null,

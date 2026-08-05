@@ -1,3 +1,4 @@
+import { isGamePlayed } from '../shared/gameStatus';
 import {
   getCurrentSeason,
   getDynastyById,
@@ -37,7 +38,7 @@ function toGameSummary(game: GameData, userTeamIndex: number): GameSummary {
   const opponent = (isHome ? game.awayTeamName : game.homeTeamName) ?? 'TBD';
   const teamScore = isHome ? game.homeScore : game.awayScore;
   const opponentScore = isHome ? game.awayScore : game.homeScore;
-  const played = game.status !== 'Unplayed';
+  const played = isGamePlayed(game.status);
 
   let result: GameSummary['result'] = null;
   if (played) {
@@ -73,8 +74,8 @@ export function getSeasonOverview(dynastyId: string, seasonId?: number): SeasonO
   const teamGames = schedule.filter(
     (g) => g.homeTeamIndex === userTeamIndex || g.awayTeamIndex === userTeamIndex,
   );
-  const played = teamGames.filter((g) => g.status !== 'Unplayed').sort((a, b) => a.week - b.week);
-  const upcoming = teamGames.filter((g) => g.status === 'Unplayed').sort((a, b) => a.week - b.week);
+  const played = teamGames.filter((g) => isGamePlayed(g.status)).sort((a, b) => a.week - b.week);
+  const upcoming = teamGames.filter((g) => !isGamePlayed(g.status)).sort((a, b) => a.week - b.week);
 
   return {
     dynastyId: dynasty.id,

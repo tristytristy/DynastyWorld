@@ -23,9 +23,11 @@ import {
   listMediaItems,
   reorderMedia,
   setMediaFraming,
+  setMediaLook,
   updateMediaItem,
 } from '../../database/media';
 import type { MediaItemResolved } from '../../shared/types';
+import type { MediaLook } from '../../shared/mediaLook';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'm4v'];
@@ -167,6 +169,10 @@ export function registerMediaHandlers(): void {
       setMediaFraming(id, framing);
     },
   );
+
+  ipcMain.handle(IPC.media.setLook, async (_event, id: number, look: MediaLook | null): Promise<void> => {
+    setMediaLook(id, look);
+  });
 
   ipcMain.handle(
     IPC.media.reorder,

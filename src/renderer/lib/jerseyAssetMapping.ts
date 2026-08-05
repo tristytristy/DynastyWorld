@@ -17,11 +17,6 @@ import { programArtFor } from './programArt';
 
 const JERSEY_BASE_PATH = 'cfbmedia://media/jersey';
 
-/** True when this team has a dedicated jersey (i.e. a real, mapped team). */
-export function hasTeamJersey(teamAssetName: string): boolean {
-  return Boolean(TEAM_3D_LOGOS[canonicalKey(teamAssetName)]);
-}
-
 /**
  * The jersey overlay path for a team, or null when there's no team to dress the
  * player in (no team passed, or a team with no dedicated jersey — e.g. an
@@ -35,5 +30,7 @@ export function getJerseyPath(teamAssetName: string | null | undefined): string 
   const uploaded = programArtFor(key, 'jersey');
   if (uploaded) return uploaded;
   const filename = TEAM_3D_LOGOS[key];
-  return filename ? `${JERSEY_BASE_PATH}/tjer_teamjerseys_${filename.replace(/\.webp$/i, '')}_result.webp` : null;
+  return filename
+    ? `${JERSEY_BASE_PATH}/tjer_teamjerseys_${filename.replace(/\.webp$/i, '')}_result.webp`
+    : null;
 }

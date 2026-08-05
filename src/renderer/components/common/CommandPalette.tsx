@@ -38,11 +38,22 @@ const PAGES: { path: string; section: string; label: string; keywords?: string }
   // nothing. The retired names live on as keywords so they still resolve for
   // anyone who remembers them, and the sublabel says what the page actually
   // holds instead of repeating the section name back.
-  { path: '', section: 'Contract, staff, career', label: 'Coach', keywords: 'coach hub staff contract career résumé tree scandals' },
+  // The Coach section's sublabel and keywords track what Overview ACTUALLY
+  // holds now that career, staff and legacy are their own destinations below —
+  // an entry that still promised "career résumé tree" would land you on a page
+  // that no longer has any of them.
+  { path: '', section: 'Record, contract, form', label: 'Coach', keywords: 'coach hub contract job security cardbook scandals' },
   { path: 'team-hub', section: 'Team overview', label: 'Program', keywords: 'team hub overview record program' },
   { path: 'ncaa-hub', section: 'National overview', label: 'NCAA', keywords: 'ncaa hub national league country' },
   { path: 'recruiting', section: 'Your board', label: 'Recruiting', keywords: 'recruit hub my board recruits commits' },
   { path: 'media', section: 'Photos and clips', label: 'Media', keywords: 'media hub screenshots photos gallery' },
+
+  { path: 'coach/season', section: 'Coach', label: 'Season', keywords: 'this year form splits margin trends' },
+  { path: 'coach/career', section: 'Coach', label: 'Career', keywords: 'record résumé resume accomplishments championships bowls' },
+  { path: 'coach/staff', section: 'Coach', label: 'Staff', keywords: 'coordinators assistants oc dc units coaching tree branches where they went promoted' },
+  { path: 'coach/milestones', section: 'Coach', label: 'Milestones', keywords: 'legacy achievements titles streaks firsts history' },
+  { path: 'coach/trophy-room', section: 'Coach', label: 'Trophy Room', keywords: 'trophies championships bowls awards heisman silverware cabinet' },
+  { path: 'hall', section: 'Coach', label: 'Hall of Champions', keywords: 'legends all time greatest players first team' },
 
   { path: 'roster', section: 'Program', label: 'Roster', keywords: 'players depth chart nil team' },
   { path: 'transfers', section: 'Program', label: 'Transfers', keywords: 'portal' },

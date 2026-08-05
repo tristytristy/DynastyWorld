@@ -188,8 +188,21 @@ export function getLeagueTeamRoster(dynastyId: string, teamIndex: number, season
  * Team Hub roster. Same per-team league snapshot the browse pages use, but
  * flattened across all teams with each player's team name + conference joined
  * on (for the national Players page's Team column + team/conference filters).
- * Players whose team index doesn't resolve to a real team (free-agent/pool
- * placeholders) are dropped so the list is genuinely "players on NCAA teams".
+ *
+ * THE FCS POOL IS EXCLUDED, and the previous guard only looked like it did
+ * (user-reported 2026-08-04: "FCS West is showing up"). The test was
+ * `nameByIndex.has(teamIndex)` — "does this resolve to a real team" — but the
+ * pool DOES resolve to a name: all five "FCS East / West / Midwest / Northwest
+ * / Southeast" rows sit in the teams snapshot at index 255, so every one of the
+ * ~4,500 players parked there passed it.
+ *
+ * They all rendered as "FCS West" for a second reason worth knowing: five names
+ * key to the one index, so the last write to `nameByIndex` wins and the whole
+ * pool inherits whichever sorts last.
+ *
+ * The honest test is the one shared/fcsPool.ts defines — index 255 — plus a
+ * null conference as a backstop, since a real program always has one. Both,
+ * because either alone has been forgotten somewhere in this codebase before.
  */
 export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): NationalPlayer[] | null {
   const resolved = resolveSeasonId(dynastyId, seasonId);
@@ -197,8 +210,9 @@ export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): Natio
   const league = getSnapshot<LeagueRosterData>(resolved, 'leagueRoster');
   if (!league) return null;
   const teams = getSnapshot<TeamsSnapshotEntry[]>(resolved, 'teams') ?? [];
-  const nameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
-  const confByIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
+  const realTeams = teams.filter((t) => !isFcsPool(t.teamIndex) && !!t.conferenceName);
+  const nameByIndex = new Map(realTeams.map((t) => [t.teamIndex, t.displayName]));
+  const confByIndex = new Map(realTeams.map((t) => [t.teamIndex, t.conferenceName ?? null]));
   const statByPlayer = new Map(league.stats.map((s) => [s.playerId, s]));
 
   return league.players

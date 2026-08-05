@@ -45,7 +45,8 @@ export function deriveSyncPhase(input: SyncPhaseInput): SyncPhase {
   else kind = 'postseason'; // NationalChampionship, bowls, playoff rounds, etc.
 
   let label: string;
-  if (kind === 'offseason') label = OFFSEASON_STAGE_LABELS[offseasonStage] ?? `Offseason · stage ${offseasonStage}`;
+  if (kind === 'offseason')
+    label = OFFSEASON_STAGE_LABELS[offseasonStage] ?? `Offseason · stage ${offseasonStage}`;
   else if (kind === 'preseason') label = 'Preseason';
   else if (kind === 'regular') label = 'Regular Season';
   else label = 'Postseason';
@@ -62,14 +63,10 @@ export function deriveSyncPhase(input: SyncPhaseInput): SyncPhase {
 export function formatSaveWeek(input: SyncPhaseInput & { currentWeek: number }): string {
   const phase = deriveSyncPhase(input);
   if (phase.kind === 'preseason') return 'Preseason';
-  if (phase.kind === 'regular') return input.currentWeek > 0 ? `Week ${input.currentWeek}` : 'Regular Season';
+  if (phase.kind === 'regular')
+    return input.currentWeek > 0 ? `Week ${input.currentWeek}` : 'Regular Season';
   if (phase.kind === 'offseason') return phase.label; // "End of Season Recap", "Players Leaving", "Offseason · stage N"
   return 'Postseason'; // bowls / playoff / national championship
-}
-
-/** The season is still being PLAYED — safe to keep overwriting its snapshot each sync. */
-export function isSeasonInProgress(p: SyncPhase): boolean {
-  return p.kind !== 'offseason';
 }
 
 /**

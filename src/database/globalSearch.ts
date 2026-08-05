@@ -1,7 +1,7 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getCurrentSeason, getSeasonById, getSnapshot } from './helpers';
 import { getAllLeaguePlayers } from './getLeagueRoster';
-import { getRecruitIds } from './getNationalRecruits';
+import { getRecruitRanks } from './getNationalRecruits';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GlobalSearchResults } from '../shared/types';
@@ -50,12 +50,48 @@ export function globalSearch(dynastyId: string, query: string, seasonId?: number
     Identity comes from the recruit pool, NOT from the team index: 255 is a
     shared bucket that also holds non-prospect placeholder entities.
   */
-  const recruitIds = new Set(getRecruitIds(dynastyId, season.id) ?? []);
+  /*
+    AND NEITHER IS THE ORDER. (2026-08-02, user's suggestion.)
 
-  const players = (getAllLeaguePlayers(dynastyId, season.id) ?? [])
-    .filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(q))
-    .sort((a, b) => b.overallRating - a.overallRating)
-    .slice(0, 12)
+    Withholding the number while still RANKING by it leaks the more useful half:
+    the order of the list is the scouting answer. So the two kinds are ranked by
+    two different public keys — players by overall, which is public for them, and
+    prospects by NATIONAL RANK, which is printed beside every name on the board
+    and in the profile. Nothing hidden touches the ordering.
+
+    The rank is also the better answer on its own terms: it's the number a user
+    recruits by, and it isn't a proxy for the rating (on a real board sorted by
+    overall the ranks run 2262, 965, 715, 635, 489, 323, 214, 329 — related, not
+    equivalent), so a top-100 prospect surfaces above an unranked one exactly as
+    you'd want.
+
+    SLOTS ARE RESERVED so neither kind starves the other. Ranking prospects last
+    and cutting at twelve would have hidden them behind any common surname, which
+    would defeat the "you can still find a prospect by name" the split above
+    exists for. Each kind gets at least six of the twelve when it has matches,
+    and takes the lot when the other has none.
+  */
+  const recruitRanks = getRecruitRanks(dynastyId, season.id) ?? new Map<number, number>();
+  const recruitIds = new Set(recruitRanks.keys());
+
+  const matches = (getAllLeaguePlayers(dynastyId, season.id) ?? []).filter((p) =>
+    `${p.firstName} ${p.lastName}`.toLowerCase().includes(q),
+  );
+  const matchedPlayers = matches
+    .filter((p) => !recruitIds.has(p.id))
+    .sort((a, b) => b.overallRating - a.overallRating);
+  const matchedRecruits = matches
+    .filter((p) => recruitIds.has(p.id))
+    // 0 means unranked in the save, which belongs at the bottom, not the top.
+    .sort((a, b) => (recruitRanks.get(a.id) || Infinity) - (recruitRanks.get(b.id) || Infinity));
+
+  const LIMIT = 12;
+  const FLOOR = 6;
+  const players = [
+    ...matchedPlayers.slice(0, Math.max(FLOOR, LIMIT - matchedRecruits.length)),
+    ...matchedRecruits.slice(0, Math.max(FLOOR, LIMIT - matchedPlayers.length)),
+  ]
+    .slice(0, LIMIT)
     .map((p) => {
       const isRecruit = recruitIds.has(p.id);
       return {

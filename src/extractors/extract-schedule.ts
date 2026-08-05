@@ -7,6 +7,7 @@ import {
   type FranchiseRecord,
   type OpenFranchise,
 } from './lib/franchise';
+import { isGamePlayed } from '../shared/gameStatus';
 
 /**
  * Team-level per-game box score. Field names mirror the game's own generic
@@ -48,9 +49,30 @@ export interface GameData {
   awayTeamName: string | null;
   homeScore: number;
   awayScore: number;
-  /** [Q1, Q2, Q3, Q4] — overtime not broken out; folded into Q4 by the game itself if it occurs. */
+  /**
+   * [Q1, Q2, Q3, Q4] — REGULATION ONLY.
+   *
+   * This used to say overtime was "folded into Q4 by the game itself". It
+   * isn't, and that was the whole bug: on an overtime game the four quarters
+   * sum to regulation and the box score's own rows then failed to reach the
+   * final score. Measured on two real OT games — 7/3/7/7 with a final of 39,
+   * and 3/7/10/11 with a final of 37 — where the missing 15 and 6 sit in
+   * `HomeScoreOT`. Q1–Q4 plus OT hits the final exactly, both times.
+   */
   homeQuarterScores: number[];
   awayQuarterScores: number[];
+  /**
+   * Overtime points, TOTAL across every extra period — the save keeps one
+   * number per side (`HomeScoreOT`/`AwayScoreOT`), not a period-by-period
+   * breakdown, so a double-overtime game can be shown as "went to overtime and
+   * these points came from it" but not split into OT1 and OT2. `ScoringSummaries`
+   * would be the place to recover the periods and it is a null reference on
+   * every game checked.
+   */
+  homeScoreOvertime: number;
+  awayScoreOvertime: number;
+  /** The game's own flag, rather than inferring overtime from the arithmetic. */
+  isOvertimeGame: boolean;
   dayOfWeek: string;
   /**
    * Renamed from the save's own "BroadcastNetwork" field, which is misleading — the
@@ -93,6 +115,28 @@ export interface GameData {
    */
   bowlAssetName: string | null;
   /**
+   * The CFP bracket position this game occupies, from the BowlGame record's
+   * `PlayoffBracketSlot` — the save's own numbering of the eleven playoff games:
+   *
+   *   0-3   first round      4-7   quarterfinals
+   *   8-9   semifinals        10   national championship
+   *
+   * This is the bracket's wiring, and it is exact: first-round slot N feeds
+   * quarterfinal slot N+4; quarterfinals 4 and 7 feed semifinal 8; 5 and 6 feed
+   * semifinal 9; both semifinals feed 10. Verified against every actual matchup
+   * across two full postseasons.
+   *
+   * ROW ORDER IS NOT SLOT ORDER — the first-round BowlGame rows 7/8/9/10 carry
+   * slots 3/2/1/0. Always read the field; never infer position from the order
+   * games come back in.
+   *
+   * Null for anything that isn't a playoff game (the record's `IsPlayoffBowl`
+   * is false), since a traditional bowl reports slot 0 and 0 is a real
+   * first-round position. Absent on seasons synced before this shipped, where
+   * the bracket is reconstructed from CFP seeds instead.
+   */
+  playoffBracketSlot?: number | null;
+  /**
    * True for bowl/playoff games, real season-opening neutral-site games (IsKickoffGame),
    * and recurring neutral rivalries (e.g. Army-Navy) listed in ScheduleNeutralStadium.
    * Specific venue/city is NOT available anywhere in the save — the Stadium reference on
@@ -134,6 +178,9 @@ const FIELDS = [
   'AwayScoreQuarter2',
   'AwayScoreQuarter3',
   'AwayScoreQuarter4',
+  'HomeScoreOT',
+  'AwayScoreOT',
+  'IsOvertimeGame',
   'DayOfWeek',
   'BroadcastNetwork',
   'TimeOfDay',
@@ -143,6 +190,18 @@ const FIELDS = [
   'AwayTeamStatCache',
   'BowlGame',
   'IsKickoffGame',
+  /*
+    Was MISSING, and silently, from the day `neutralVenueId` shipped: this list
+    is an explicit allow-list, so `Stadium` was never loaded and
+    getReferenceDataByKey returned null for every game in the league. The venue
+    id was therefore ALWAYS null, and nothing looked broken because
+    lib/neutralVenues.ts falls back to conference name for championships and to
+    bowl asset name for bowls — which between them cover every case that has a
+    venue worth naming EXCEPT the one with no fallback: a CFP quarterfinal or
+    semifinal, whose BowlGame AssetName is blank. That absence is most of why
+    the playoff bowls looked unrecoverable from the save.
+  */
+  'Stadium',
 ];
 
 function mapTeamStatLine(r: FranchiseRecord): TeamStatLine {
@@ -266,6 +325,12 @@ export async function extractSchedule(franchise: OpenFranchise, expectedRelative
     const bowlAssetNameRaw = bowlResolved ? String(bowlResolved.record.AssetName) : '';
     const bowlAssetName = bowlAssetNameRaw ? bowlAssetNameRaw : null;
 
+    // Gated on IsPlayoffBowl because a traditional bowl reports slot 0, and 0 is
+    // a real first-round position — reading the number unconditionally would
+    // make every ordinary bowl look like a playoff game.
+    const isPlayoffBowl = bowlResolved ? String(bowlResolved.record.IsPlayoffBowl) === 'true' : false;
+    const playoffBracketSlot = isPlayoffBowl ? Number(bowlResolved?.record.PlayoffBracketSlot) : null;
+
     const pairKey =
       home && away ? [Number(home.TeamIndex), Number(away.TeamIndex)].sort((a, b) => a - b).join('-') : null;
 
@@ -296,6 +361,15 @@ export async function extractSchedule(franchise: OpenFranchise, expectedRelative
       neutralVenueId !== null ||
       (pairKey !== null && neutralSitePairs.has(pairKey));
 
+    /*
+      An unresolved CFP bracket slot carries the PREVIOUS season's score and a
+      full stat line, which the game never clears — see shared/gameStatus.ts.
+      They're dropped at the source rather than left in the snapshot to be
+      filtered correctly at every one of ~20 read sites forever.
+    */
+    const played = isGamePlayed(String(r.GameStatus));
+    const score = (key: string) => (played ? Number(r[key]) : 0);
+
     games.push({
       gameId,
       week: Number(r.SeasonWeek),
@@ -304,32 +378,36 @@ export async function extractSchedule(franchise: OpenFranchise, expectedRelative
       awayTeamIndex: away ? Number(away.TeamIndex) : null,
       homeTeamName: home ? String(home.DisplayName) : null,
       awayTeamName: away ? String(away.DisplayName) : null,
-      homeScore: Number(r.HomeScore),
-      awayScore: Number(r.AwayScore),
+      homeScore: score('HomeScore'),
+      awayScore: score('AwayScore'),
       homeQuarterScores: [
-        Number(r.HomeScoreQuarter1),
-        Number(r.HomeScoreQuarter2),
-        Number(r.HomeScoreQuarter3),
-        Number(r.HomeScoreQuarter4),
+        score('HomeScoreQuarter1'),
+        score('HomeScoreQuarter2'),
+        score('HomeScoreQuarter3'),
+        score('HomeScoreQuarter4'),
       ],
       awayQuarterScores: [
-        Number(r.AwayScoreQuarter1),
-        Number(r.AwayScoreQuarter2),
-        Number(r.AwayScoreQuarter3),
-        Number(r.AwayScoreQuarter4),
+        score('AwayScoreQuarter1'),
+        score('AwayScoreQuarter2'),
+        score('AwayScoreQuarter3'),
+        score('AwayScoreQuarter4'),
       ],
+      homeScoreOvertime: score('HomeScoreOT') || 0,
+      awayScoreOvertime: score('AwayScoreOT') || 0,
+      isOvertimeGame: played && String(r.IsOvertimeGame) === 'true',
       dayOfWeek: String(r.DayOfWeek),
       broadcastScope: String(r.BroadcastNetwork),
       kickoffMinutes: Number(r.TimeOfDay),
       gameMonth: Number(r.GameDateMonth),
       gameDay: Number(r.GameDateDay),
-      homeTeamStats: resolveTeamStats(franchise, r, 'HomeTeamStatCache'),
-      awayTeamStats: resolveTeamStats(franchise, r, 'AwayTeamStatCache'),
+      homeTeamStats: played ? resolveTeamStats(franchise, r, 'HomeTeamStatCache') : null,
+      awayTeamStats: played ? resolveTeamStats(franchise, r, 'AwayTeamStatCache') : null,
       isBowlGame,
       isNationalChampionship,
       neutralVenueId,
       bowlName,
       bowlAssetName,
+      playoffBracketSlot,
       isNeutralSite,
     });
   });

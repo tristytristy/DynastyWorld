@@ -7,6 +7,7 @@ import {
   type OpenFranchise,
 } from './lib/franchise';
 import { PLAYER_FIELDS } from './lib/playerFields';
+import { dealbreakerLabel, idealPitchLabel } from '../shared/recruitPreferences';
 
 /**
  * One school pursuing a recruit, from the recruit's own top-schools list
@@ -122,8 +123,11 @@ function mapRecruit(
     gemBust: String(recruit.QualityModifier),
     commitScore: Number(recruit.CommitScore),
     totalOffers: Number(recruit.TotalScholarshipOffers),
-    dealbreaker: humanizeEnum(String(player.RecruitingDealbreaker)),
-    idealPitch: humanizeEnum(String(player.IdealRecruitingPitch)),
+    // The game's own wording, not the camelCase splitter's — an enum name can
+    // carry neither an apostrophe nor the knowledge of which of its words are
+    // articles, so these two need the maps. See shared/recruitPreferences.ts.
+    dealbreaker: dealbreakerLabel(String(player.RecruitingDealbreaker)),
+    idealPitch: idealPitchLabel(String(player.IdealRecruitingPitch)),
     baseNilValue: Number(player.BaseNILValue),
     athletic: {
       speed: Number(player.SpeedRating),

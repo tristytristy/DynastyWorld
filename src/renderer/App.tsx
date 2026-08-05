@@ -3,7 +3,14 @@ import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { DynastyLayout } from './components/common/DynastyLayout';
 import { Dashboard } from './pages/Dashboard';
-import { CoachHub } from './pages/CoachHub';
+import { CoachHubLayout } from './pages/coach/CoachHubLayout';
+import { CoachOverview } from './pages/coach/CoachOverview';
+import { CoachSeason } from './pages/coach/CoachSeason';
+import { CoachCareer } from './pages/coach/CoachCareer';
+import { CoachStaff } from './pages/coach/CoachStaff';
+import { CoachMilestones } from './pages/coach/CoachMilestones';
+import { TrophyRoom } from './pages/coach/TrophyRoom';
+import { HallOfLegends } from './pages/HallOfLegends';
 import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
 import { PairLayout } from './components/common/PairLayout';
@@ -18,6 +25,7 @@ import { Roster } from './pages/Roster';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
 import { Scores } from './pages/Scores';
+import { PlayoffBracket } from './pages/PlayoffBracket';
 import { Statistics } from './pages/Statistics';
 import { TeamAwards } from './pages/TeamAwards';
 import { AnnualAwards } from './pages/awards/AnnualAwards';
@@ -34,9 +42,9 @@ import { ProgramArtProvider } from './data/ProgramArtProvider';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
 import { UpdateNotice } from './components/common/UpdateNotice';
-import { angledClip } from './components/ui/angledClip';
+import { ANGLED_FRAME, angledFrame } from './components/ui/angledClip';
 
-const ANGLED_PANEL = angledClip('1.25rem');
+const ANGLED_PANEL = angledFrame('1.25rem');
 
 
 export function App() {
@@ -90,12 +98,24 @@ export function App() {
             panel an unbounded height and the document starts scrolling again,
             h-full above notwithstanding. */}
         <div className="flex min-h-0 flex-1 gap-2 p-2 pt-1">
-          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 gap-2 overflow-hidden">
+          {/*
+            The shell's width ceiling, stepped rather than fixed. 1600px is the
+            base the whole design was tuned at and stays exactly that up to
+            1920; past it the app grows so a 2560 or 3840 monitor isn't a small
+            island of UI in a sea of desktop.
+
+            It stays CAPPED rather than going full-bleed: at 3840 an
+            edge-to-edge shell would run tables and prose to ~3.8k px lines,
+            which is harder to read, not richer. 2760px is roughly the point
+            where the dashboard's three columns are generous and a line of body
+            text still scans.
+          */}
+          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 gap-2 overflow-hidden 3xl:max-w-[1820px] 4xl:max-w-[2280px] 5xl:max-w-[2760px]">
             <Sidebar />
 
             <main
               style={ANGLED_PANEL}
-              className="relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-black"
+              className={`${ANGLED_FRAME} relative flex-1 overflow-hidden border border-slate-900/10 bg-white/82 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.32)] backdrop-blur-md dark:border-white/10 dark:bg-black`}
             >
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0))] dark:bg-none" />
               {/* Signature left edge — the selected team's color, a thin accent so
@@ -137,7 +157,23 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dynasty/:id" element={<DynastyLayout />}>
-                    <Route index element={<CoachHub />} />
+                    {/* Coach Hub — five destinations behind one persistent
+                        submenu, with the Hall reached from a right-aligned
+                        action outside the glider (it's cross-coach and all-time,
+                        not a section of the current coach's profile). Overview
+                        stays the dynasty index so every existing deep link and
+                        the sidebar's "Coach" entry keep working; the other four
+                        take a `coach/` namespace because the flat dynasty
+                        namespace already owns `history` and `schedule`. */}
+                    <Route element={<CoachHubLayout />}>
+                      <Route index element={<CoachOverview />} />
+                      <Route path="coach/season" element={<CoachSeason />} />
+                      <Route path="coach/career" element={<CoachCareer />} />
+                      <Route path="coach/staff" element={<CoachStaff />} />
+                      <Route path="coach/milestones" element={<CoachMilestones />} />
+                      <Route path="coach/trophy-room" element={<TrophyRoom />} />
+                      <Route path="hall" element={<HallOfLegends />} />
+                    </Route>
                     {/* Media Hub — its own top-level section (dynasty-wide, season-scoped), not team-scoped. */}
                     <Route path="media" element={<Media />} />
                     {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
@@ -180,6 +216,7 @@ export function App() {
                     <Route element={<NcaaHubLayout />}>
                       <Route path="ncaa-hub" element={<NcaaHub />} />
                       <Route path="scores" element={<Scores />} />
+                      <Route path="playoff" element={<PlayoffBracket />} />
                       <Route path="national-stats" element={<NationalStatistics />} />
                       <Route path="players" element={<NationalPlayers />} />
                       <Route path="standings" element={<Standings />} />

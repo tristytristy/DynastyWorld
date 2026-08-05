@@ -2,12 +2,13 @@
  * How a selected cell looks — defined once so the treatment can't drift between
  * the sidebar, lists and tables.
  *
- * CURRENTLY UNREFERENCED (2026-07-29): the sidebar was its last consumer and now
- * uses the glider (components/ui/GliderNav.tsx). Kept rather than deleted
- * because it states the app's non-navigation selection contract — the 1px border
- * in both themes that app.tsx's frame comment cites, and the light/dark split
- * the glider's own CSS reasoning is built on. Delete it if a row-selection
- * surface never needs it again.
+ * The app's NON-NAVIGATION selection contract — the 1px border in both themes
+ * that app.tsx's frame comment cites, and the light/dark split the glider's own
+ * CSS reasoning is built on. The sidebar handed it over to the glider
+ * (components/ui/GliderNav.tsx) on 2026-07-29 and it sat unreferenced until the
+ * Roster's class-breakdown chips became filters (2026-08-01) and needed exactly
+ * this: a selected state that is emphatically not navigation. Navigation gets
+ * the glider; a thing you toggle gets this.
  *
  * Light and dark work differently on purpose:
  *

@@ -1,9 +1,13 @@
 ; =========================================================================
-;  DynastyOS - Image Data installer
+;  DynastyOS - Content Library installer
 ;
-;  A standalone, one-time installer for the heavy image assets (player &
-;  coach portraits, team logos, trophies). Kept SEPARATE from the app so the
-;  ~900 MB library is installed once and survives app updates.
+;  A standalone, one-time installer for the heavy artwork (player & coach
+;  portraits, team logos, trophies, helmets, jerseys). Kept SEPARATE from the
+;  app so the ~900 MB library is installed once and survives app updates.
+;
+;  NAMED FOR THE ARTIFACT, versioned by MAJOR only: the library changes when
+;  artwork is added, not when the app ships a patch, so tying it to the apps
+;  4.0.1s and 4.0.2s would imply re-downloading a gigabyte that did not change.
 ;
 ;  It lets the user choose the folder, extracts the image pack there, and
 ;  records the location under HKCU\Software\CFB Dynasty Hub\AssetsPath so the
@@ -17,15 +21,15 @@
 Unicode true
 SetCompress off            ; the payload is WebP/PNG (already compressed) — skip the wasted CPU
 
-!define APPNAME "DynastyOS Image Data"
-!define VERSION "3.0.0"
+!define APPNAME "DynastyOS Content Library"
+!define VERSION "4"
 !define REGKEY  "Software\CFB Dynasty Hub"
 ; File paths resolve relative to THIS script's folder (build\), so go up one
 ; level to the project root's public\assets.
 !define SRC     "..\public\assets"
 
 Name "${APPNAME} ${VERSION}"
-OutFile "..\release\DynastyOS Image Data ${VERSION}.exe"
+OutFile "..\release\DynastyOS-ContentLibrary-v${VERSION}.exe"
 InstallDir "$DOCUMENTS\DynastyOS Assets"
 ; If the app already knows an assets folder, default to THAT — so someone who
 ; only wants the new coach polos drops them straight into the library they
@@ -35,7 +39,7 @@ RequestExecutionLevel user
 ShowInstDetails show
 BrandingText "${APPNAME} ${VERSION}"
 
-DirText "Choose where to install the DynastyOS image data. $\r$\nIf you already have an image folder, this box is pre-filled with it — installing there simply adds the new artwork to what you have." "Image data folder"
+DirText "Choose where to install the DynastyOS content library. $\r$\nIf you already have one, this box is pre-filled with it — installing there simply adds the new artwork to what you have." "Content library folder"
 
 ; Components first, so the folder page can be skipped past quickly by someone
 ; who only needs the add-on art. The full library is ~928 MB; the coach polos are
@@ -63,7 +67,7 @@ UninstPage instfiles
 ; section they can untick — re-extracting a gigabyte to add one folder is a bad
 ; trade.
 ; -------------------------------------------------------------------------
-Section "Full image library (portraits, logos, trophies, helmets, jerseys)" SEC_FULL
+Section "Full content library (portraits, logos, trophies, helmets, jerseys)" SEC_FULL
   SetOutPath "$INSTDIR"
   ; Each folder is recreated under the chosen root, e.g. <root>\playerportrait\...
   File /r "${SRC}\playerportrait"
@@ -95,7 +99,7 @@ Section "-Finish" ; leading '-' = hidden and always run
   WriteRegStr HKCU "Software\DynastyOS" "AssetsPath" "$INSTDIR"
   WriteRegStr HKCU "Software\DynastyOS" "AssetsVersion" "${VERSION}"
 
-  WriteUninstaller "$INSTDIR\Uninstall Image Data.exe"
+  WriteUninstaller "$INSTDIR\Uninstall Content Library.exe"
 SectionEnd
 
 Section "Uninstall"
@@ -110,6 +114,9 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\helmet"
   RMDir /r "$INSTDIR\jersey"
   RMDir /r "$INSTDIR\coachpolos"
+  Delete "$INSTDIR\Uninstall Content Library.exe"
+  ; The pre-4 installer wrote this name; delete it too so upgrading in place
+  ; does not strand an uninstaller that no longer matches anything.
   Delete "$INSTDIR\Uninstall Image Data.exe"
   RMDir "$INSTDIR"
   ; Only clears a pointer if it still points here (avoids nuking a re-install elsewhere).

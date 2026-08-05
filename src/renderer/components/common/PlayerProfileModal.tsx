@@ -281,7 +281,7 @@ export function PlayerProfileModal() {
         aria-modal="true"
         aria-label="Player profile"
         tabIndex={-1}
-        className="corner-cut relative flex outline-none max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden modal-panel md:max-h-[calc(100vh-4rem)]"
+        className="corner-cut relative flex outline-none h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden modal-panel md:h-[calc(100vh-4rem)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3.5 dark:border-white/10">
           <div className="flex items-center gap-2">
@@ -332,8 +332,13 @@ export function PlayerProfileModal() {
               />
             </div>
           )}
-          <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
-            <div key={activePlayerId} className="content-enter">
+          {/* overflow-HIDDEN, not auto. The scroll moved inside
+              PlayerProfileContent so the masthead and the destination bar can
+              stay put while only the destination scrolls; a second scroller out
+              here would give the panel two scrollbars and let the whole profile
+              drift under its own header again. */}
+          <div className="min-h-0 flex-1 overflow-hidden p-5 md:p-6">
+            <div key={activePlayerId} className="content-enter h-full">
               <PlayerProfileContent
                 tab={tab}
                 onTabChange={setTab}

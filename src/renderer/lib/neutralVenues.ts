@@ -55,6 +55,7 @@ const V = {
   fordField: { stadium: 'Ford Field', city: 'Detroit', state: 'MI' },
   geraldFord: { stadium: 'Gerald J. Ford Stadium', city: 'Dallas', state: 'TX' },
   hancockWhitney: { stadium: 'Hancock Whitney Stadium', city: 'Mobile', state: 'AL' },
+  hardRock: { stadium: 'Hard Rock Stadium', city: 'Miami Gardens', state: 'FL' },
   independence: { stadium: 'Independence Stadium', city: 'Shreveport', state: 'LA' },
   lucasOil: { stadium: 'Lucas Oil Stadium', city: 'Indianapolis', state: 'IN' },
   mercedesBenz: { stadium: 'Mercedes-Benz Stadium', city: 'Atlanta', state: 'GA' },
@@ -63,8 +64,10 @@ const V = {
   nrg: { stadium: 'NRG Stadium', city: 'Houston', state: 'TX' },
   protective: { stadium: 'Protective Stadium', city: 'Birmingham', state: 'AL' },
   raymondJames: { stadium: 'Raymond James Stadium', city: 'Tampa', state: 'FL' },
+  roseBowl: { stadium: 'Rose Bowl', city: 'Pasadena', state: 'CA' },
   simmonsBank: { stadium: 'Simmons Bank Liberty Stadium', city: 'Memphis', state: 'TN' },
   snapdragon: { stadium: 'Snapdragon Stadium', city: 'San Diego', state: 'CA' },
+  stateFarm: { stadium: 'State Farm Stadium', city: 'Glendale', state: 'AZ' },
   sunBowl: { stadium: 'Sun Bowl Stadium', city: 'El Paso', state: 'TX' },
   superdome: { stadium: 'Caesars Superdome', city: 'New Orleans', state: 'LA' },
   thomasRobinson: { stadium: 'Thomas Robinson Stadium', city: 'Nassau', state: 'Bahamas' },
@@ -78,15 +81,24 @@ const V = {
  * appearing somewhere independent: 16433:99895 is the SEC Championship, a CFP
  * Quarterfinal AND a week-1 neutral kickoff (all Mercedes-Benz); 16434:85072 is
  * the Armed Forces Bowl and is also TCU's own home-stadium id.
+ *
+ * The three added for the CFP bracket (Hard Rock, State Farm, Rose Bowl) were
+ * decoded the same way: read out of two real postseasons and matched against
+ * the in-game bracket screen, which names each bowl. The three CFP venues
+ * ALREADY here — Superdome, AT&T, Mercedes-Benz — independently landed on
+ * Sugar, Cotton and Peach, which is what says the decoding is sound rather than
+ * merely self-consistent. See shared/cfpBowls.ts.
  */
 const VENUE_BY_SAVE_ID: Record<string, NeutralVenue> = {
   '16433:105920': V.nissan,
   '16433:105934': V.nrg,
+  '16433:105959': V.stateFarm, // Fiesta Bowl
   '16433:105985': V.everbank,
   '16433:99763': V.bankOfAmerica,
-  '16433:99791': V.superdome,
-  '16433:99792': V.att,
-  '16433:99895': V.mercedesBenz,
+  '16433:99791': V.superdome, // Sugar Bowl
+  '16433:99792': V.att, // Cotton Bowl
+  '16433:99847': V.hardRock, // Orange Bowl
+  '16433:99895': V.mercedesBenz, // Peach Bowl
   '16434:85067': V.alamodome,
   '16434:85072': V.amonCarter,
   '16434:85074': V.arizona,
@@ -100,6 +112,7 @@ const VENUE_BY_SAVE_ID: Record<string, NeutralVenue> = {
   '16434:85165': V.lucasOil,
   '16434:85186': V.navyMarine,
   '16434:85203': V.raymondJames,
+  '16434:85214': V.roseBowl, // Rose Bowl
   '16434:85219': V.allegiant,
   '16434:85223': V.snapdragon,
   '16434:85237': V.sunBowl,

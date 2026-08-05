@@ -146,16 +146,47 @@ const AWARD_TROPHY_FILES: Record<string, string> = {
 
 /**
  * Bowl asset filenames are keyed on the save's `BowlGame.AssetName` (a stable
- * identity, e.g. "Bahamas_Bowl") with underscores stripped - verified against
- * the real bowlgames/ folder: 30 of 32 real (non-CFP-placeholder) bowls match
- * this normalization exactly. The 2 that don't (confirmed missing from the
- * asset pack entirely, not a naming mismatch) fall back to the generic
- * bowl_Default.webp, same as any bowl whose AssetName didn't resolve at all
- * (the CFP bracket round entries, which have a blank AssetName in the save).
+ * identity, e.g. "Bahamas_Bowl") with underscores stripped — which resolves
+ * every bowl in the game except the three the art pack shipped under their
+ * SPONSOR name instead (see BOWL_ART_ALIASES).
+ *
+ * A bowl that still doesn't resolve falls back to the generic
+ * bowl_Default.webp, same as any bowl whose AssetName is blank (the CFP bracket
+ * round entries — those are drawn by getPlayoffRoundImagePath instead).
  */
 function normalizeBowlAssetName(assetName: string): string {
   return assetName.replace(/[^a-zA-Z0-9]/g, '');
 }
+
+/**
+ * Bowls whose shipped artwork is named after the current SPONSOR rather than
+ * the bowl's stable identity.
+ *
+ * Keying on `AssetName` is deliberate and stays that way: sponsors rotate, so
+ * "Xbox Bowl" is this season's branding for what is permanently the Bahamas
+ * Bowl. But three bowls were exported from the game under the sponsor name, so
+ * the correct lookup asks for a file that was never shipped — the art is
+ * present and simply unreachable. Found by auditing every bowl in a real save
+ * against the folder, after a report that the Xbox Bowl rendered nothing.
+ *
+ * LOGO AND TROPHY ARE LISTED SEPARATELY BECAUSE THE PACK IS INCONSISTENT WITH
+ * ITSELF, which a single per-bowl stem could not express:
+ *
+ * - Guaranteed Rate ships its LOGO under the stable name and only its TROPHY
+ *   under the sponsor's.
+ * - Camellia capitalises the logo `SaluteTo…` and the trophy `Saluteto…`.
+ *
+ * Values are exact on-disk stems, not derived — that inconsistency is precisely
+ * what a derivation would get wrong. Fixing this in code rather than by
+ * renaming the files: public/assets is gitignored and distributed by
+ * build/assets-installer.nsi, so a rename needs an installer change AND leaves
+ * everyone who already installed the pack still broken.
+ */
+const BOWL_ART_ALIASES: Record<string, { logo?: string; trophy?: string }> = {
+  Bahamas_Bowl: { logo: 'XboxBowl', trophy: 'XboxBowlTrophy' },
+  Camellia_Bowl: { logo: 'SaluteToVeteransBowl', trophy: 'SalutetoVeteransBowlTrophy' },
+  Guaranteed_Rate_Bowl: { trophy: 'RateBowlTrophy' },
+};
 
 export function getConferenceChampionshipTrophyPath(conferenceName: string): string | null {
   const file = CONFERENCE_TROPHY_FILES[conferenceName];
@@ -170,12 +201,15 @@ export function getConferenceChampionshipGamePath(conferenceName: string): strin
 
 export function getBowlLogoPath(bowlAssetName: string | null): string {
   if (!bowlAssetName) return BOWL_DEFAULT_LOGO;
-  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}.webp`;
+  const stem = BOWL_ART_ALIASES[bowlAssetName]?.logo ?? normalizeBowlAssetName(bowlAssetName);
+  return `${BOWL_BASE_PATH}/bowl_${stem}.webp`;
 }
 
 export function getBowlTrophyPath(bowlAssetName: string | null): string {
   if (!bowlAssetName) return BOWL_DEFAULT_LOGO;
-  return `${BOWL_BASE_PATH}/bowl_${normalizeBowlAssetName(bowlAssetName)}Trophy.webp`;
+  const stem =
+    BOWL_ART_ALIASES[bowlAssetName]?.trophy ?? `${normalizeBowlAssetName(bowlAssetName)}Trophy`;
+  return `${BOWL_BASE_PATH}/bowl_${stem}.webp`;
 }
 
 /** null if `conferenceName` isn't a recognized real conference (e.g. "Independent") - never a guessed filename. */
@@ -191,6 +225,15 @@ export function getPlayoffRoundImagePath(bowlName: string): string | null {
   return file ? `${PLAYOFF_BASE_PATH}/${file}` : null;
 }
 
+/**
+ * The national championship TROPHY itself — the physical prize, not the CFP
+ * event mark. Used where a title game is being identified as the game it is
+ * (scoreboard, game info, schedule badge): the trophy says “this one was for
+ * everything” in a way the round logo does not.
+ */
+export function getNationalChampionshipTrophyPath(): string {
+  return NATIONAL_CHAMPIONSHIP_TROPHY;
+}
 export function getNationalChampionshipAppearanceImagePath(background: 'light' | 'dark' = 'light'): string {
   return background === 'dark' ? NATIONAL_CHAMPIONSHIP_APPEARANCE.dark : NATIONAL_CHAMPIONSHIP_APPEARANCE.light;
 }
@@ -214,6 +257,13 @@ export function getTrophyImagePath(trophy: Trophy): string | null {
 }
 
 /** null for anything without dedicated trophy art (All-American tiers, weekly honors) - those render as text-only badges instead. */
+/**
+ * Every award the game hands out that has trophy art, in the order the Trophy
+ * Room displays them. Exported so that room can show the ones NOT yet won as
+ * silhouettes — a collection you can see the shape of is one you want to finish.
+ */
+export const ALL_AWARD_TYPES: string[] = Object.keys(AWARD_TROPHY_FILES);
+
 export function getAwardTrophyPath(awardType: string): string | null {
   const file = AWARD_TROPHY_FILES[awardType];
   return file ? `${AWARDS_BASE_PATH}/${file}` : null;

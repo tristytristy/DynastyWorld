@@ -79,7 +79,10 @@ async function pickImage(): Promise<string | null> {
  * userData is, and a card whose file has been deleted underneath it should come
  * back as "no photo" rather than as a path that 404s in an <img>.
  */
-async function withPhotoPaths(dynastyId: string, cards: PlayerCardRecord[]): Promise<PlayerCardRecord[]> {
+async function withPhotoPaths(
+  dynastyId: string,
+  cards: PlayerCardRecord[],
+): Promise<PlayerCardRecord[]> {
   const dir = cardPhotoDir(dynastyId);
   let present: Set<string>;
   try {
@@ -89,11 +92,15 @@ async function withPhotoPaths(dynastyId: string, cards: PlayerCardRecord[]): Pro
   }
   return cards.map((card) => ({
     ...card,
-    photoPath: card.photoFile && present.has(card.photoFile) ? path.join(dir, card.photoFile) : null,
+    photoPath:
+      card.photoFile && present.has(card.photoFile) ? path.join(dir, card.photoFile) : null,
   }));
 }
 
-async function withPhotoPath(dynastyId: string, card: PlayerCardRecord | null): Promise<PlayerCardRecord | null> {
+async function withPhotoPath(
+  dynastyId: string,
+  card: PlayerCardRecord | null,
+): Promise<PlayerCardRecord | null> {
   if (!card) return null;
   return (await withPhotoPaths(dynastyId, [card]))[0];
 }
@@ -124,20 +131,19 @@ export function registerCardHandlers(): void {
   );
 
   ipcMain.handle(
-    IPC.card.setPhotoFromPath,
-    async (_event, dynastyId: string, playerId: number, sourcePath: string): Promise<string | null> => {
-      return storePhoto(dynastyId, String(playerId), sourcePath);
+    IPC.card.getPhoto,
+    async (_event, dynastyId: string, playerId: number): Promise<string | null> => {
+      return findPhoto(dynastyId, playerId);
     },
   );
 
-  ipcMain.handle(IPC.card.getPhoto, async (_event, dynastyId: string, playerId: number): Promise<string | null> => {
-    return findPhoto(dynastyId, playerId);
-  });
-
-  ipcMain.handle(IPC.card.removePhoto, async (_event, dynastyId: string, playerId: number): Promise<void> => {
-    const existing = await findPhoto(dynastyId, playerId);
-    if (existing) await fs.unlink(existing).catch(() => {});
-  });
+  ipcMain.handle(
+    IPC.card.removePhoto,
+    async (_event, dynastyId: string, playerId: number): Promise<void> => {
+      const existing = await findPhoto(dynastyId, playerId);
+      if (existing) await fs.unlink(existing).catch(() => {});
+    },
+  );
 
   // --- Photo files, keyed by card. All three return the stored BASENAME, which
   // is what the card row keeps. ---
@@ -153,7 +159,13 @@ export function registerCardHandlers(): void {
 
   ipcMain.handle(
     IPC.card.setCardPhotoFromPath,
-    async (_event, dynastyId: string, playerId: number, cardId: number, sourcePath: string): Promise<string | null> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      cardId: number,
+      sourcePath: string,
+    ): Promise<string | null> => {
       const stored = await storePhoto(dynastyId, cardPhotoStem(playerId, cardId), sourcePath);
       return stored ? path.basename(stored) : null;
     },
@@ -170,21 +182,35 @@ export function registerCardHandlers(): void {
   );
 
   // --- Saved cards ---
-  ipcMain.handle(IPC.card.list, async (_event, dynastyId: string, playerId: number): Promise<PlayerCardRecord[]> => {
-    return withPhotoPaths(dynastyId, listPlayerCards(dynastyId, playerId));
-  });
+  ipcMain.handle(
+    IPC.card.list,
+    async (_event, dynastyId: string, playerId: number): Promise<PlayerCardRecord[]> => {
+      return withPhotoPaths(dynastyId, listPlayerCards(dynastyId, playerId));
+    },
+  );
 
-  ipcMain.handle(IPC.card.listFavorites, async (_event, dynastyId: string): Promise<PlayerCardRecord[]> => {
-    return withPhotoPaths(dynastyId, listFavoriteCards(dynastyId));
-  });
+  ipcMain.handle(
+    IPC.card.listFavorites,
+    async (_event, dynastyId: string): Promise<PlayerCardRecord[]> => {
+      return withPhotoPaths(dynastyId, listFavoriteCards(dynastyId));
+    },
+  );
 
-  ipcMain.handle(IPC.card.listCardedPlayerIds, async (_event, dynastyId: string): Promise<number[]> => {
-    return listCardedPlayerIds(dynastyId);
-  });
+  ipcMain.handle(
+    IPC.card.listCardedPlayerIds,
+    async (_event, dynastyId: string): Promise<number[]> => {
+      return listCardedPlayerIds(dynastyId);
+    },
+  );
 
   ipcMain.handle(
     IPC.card.create,
-    async (_event, dynastyId: string, playerId: number, input: PlayerCardInput): Promise<PlayerCardRecord> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      input: PlayerCardInput,
+    ): Promise<PlayerCardRecord> => {
       const card = createPlayerCard(dynastyId, playerId, input);
       return (await withPhotoPath(dynastyId, card)) as PlayerCardRecord;
     },
@@ -192,21 +218,36 @@ export function registerCardHandlers(): void {
 
   ipcMain.handle(
     IPC.card.update,
-    async (_event, dynastyId: string, id: number, input: PlayerCardInput): Promise<PlayerCardRecord | null> => {
+    async (
+      _event,
+      dynastyId: string,
+      id: number,
+      input: PlayerCardInput,
+    ): Promise<PlayerCardRecord | null> => {
       return withPhotoPath(dynastyId, updatePlayerCard(id, input));
     },
   );
 
   ipcMain.handle(
     IPC.card.setFavorite,
-    async (_event, dynastyId: string, id: number, favorite: boolean): Promise<PlayerCardRecord | null> => {
+    async (
+      _event,
+      dynastyId: string,
+      id: number,
+      favorite: boolean,
+    ): Promise<PlayerCardRecord | null> => {
       return withPhotoPath(dynastyId, setPlayerCardFavorite(id, favorite));
     },
   );
 
   ipcMain.handle(
     IPC.card.setDefault,
-    async (_event, dynastyId: string, playerId: number, id: number): Promise<PlayerCardRecord[]> => {
+    async (
+      _event,
+      dynastyId: string,
+      playerId: number,
+      id: number,
+    ): Promise<PlayerCardRecord[]> => {
       return withPhotoPaths(dynastyId, setDefaultPlayerCard(dynastyId, playerId, id));
     },
   );
@@ -219,7 +260,9 @@ export function registerCardHandlers(): void {
     async (_event, dynastyId: string, id: number): Promise<PlayerCardRecord[]> => {
       const { photoFile, remaining } = deletePlayerCard(id);
       if (photoFile) {
-        await fs.unlink(path.join(cardPhotoDir(dynastyId), path.basename(photoFile))).catch(() => {});
+        await fs
+          .unlink(path.join(cardPhotoDir(dynastyId), path.basename(photoFile)))
+          .catch(() => {});
       }
       return withPhotoPaths(dynastyId, remaining);
     },

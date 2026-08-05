@@ -11,6 +11,22 @@ module.exports = {
   content: ['./public/index.html', './src/renderer/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      /**
+       * Breakpoints ABOVE Tailwind's own. Everything the app had stopped
+       * adapting at `2xl` (1536px), so a 2560 or 3840 monitor got exactly the
+       * same layout as a 1536 one inside a fixed 1600px column — most of the
+       * screen was wallpaper. These three steps are where the shell widens and
+       * the dense surfaces (the NCAA dashboard, the Game of the Week) are
+       * allowed to grow into the room.
+       *
+       * The default breakpoints are untouched: 1024-1536 must keep looking
+       * exactly as it does today, which is the base the design was tuned at.
+       */
+      screens: {
+        '3xl': '1920px',
+        '4xl': '2560px',
+        '5xl': '3200px',
+      },
       colors: {
         // DynastyOS brand: black + SILVER, with gold reserved for accents —
         // sampled from the logo art. This replaced a blue ramp, and the reason

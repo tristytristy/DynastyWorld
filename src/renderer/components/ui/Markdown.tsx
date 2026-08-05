@@ -59,7 +59,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
             onClick={(e) => {
               // Never navigate the app itself — hand the URL to the OS browser.
               e.preventDefault();
-              window.api.update.openDownload(href);
+              window.api.update.openLink(href);
             }}
             className="text-[var(--team-accent-text)] underline underline-offset-2"
           >

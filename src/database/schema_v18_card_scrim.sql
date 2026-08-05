@@ -1,0 +1,26 @@
+-- Schema version 18 — the bottom fade belongs to the card.
+--
+-- Every card draws a dark gradient up from its bottom edge so the name and the
+-- profile line stay legible over whatever is behind them. It was a constant:
+-- transparent at 42% of the card's height, solid by 74%. Fine over a generated
+-- portrait, which is a head on a flat background with nothing in the lower half
+-- worth seeing.
+--
+-- It is not fine over a PHOTOGRAPH. A user framing their own shot is composing
+-- against a fade that eats the bottom 58% of the card, so the thing they are
+-- trying to place — a catch, a celebration, a player's own feet — either sits in
+-- the dark or has to be dragged up out of the frame to escape it. The report was
+-- exactly that: "users aren't able to properly position their images as they are
+-- fighting with the gradient."
+--
+-- So it becomes a property of the CARD, like layers and framing before it, with
+-- an on/off and a height. Height is a FRACTION of the card's height measured up
+-- from the bottom, not a start percentage, because that is the thing the user is
+-- actually setting — how much of my card is this covering.
+--
+-- Default NULL rather than a written-out value: a null means "this card has
+-- never been asked", so the reader can hand back the current default and change
+-- it later for everybody, instead of a migration freezing today's number into
+-- every row that existed before the feature.
+
+ALTER TABLE player_cards ADD COLUMN scrim_json TEXT;

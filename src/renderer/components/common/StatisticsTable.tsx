@@ -39,6 +39,7 @@ export function StatisticsTable<TLine>({
   defaultSortKey,
   defaultSortDirection = 'desc',
   emptyStateMessage,
+  displayLimit,
 }: {
   dynastyId: string;
   seasonId?: number;
@@ -47,6 +48,13 @@ export function StatisticsTable<TLine>({
   defaultSortKey: string;
   defaultSortDirection?: SortDir;
   emptyStateMessage: string;
+  /**
+   * Show only the first N rows AFTER sorting — so a national leaderboard reads
+   * "the top N in the country by the column you are looking at", which changes
+   * as you re-sort. Omitted everywhere else, where the table is a full roster
+   * and truncating it would hide players the user is looking for.
+   */
+  displayLimit?: number;
 }) {
   const { openPlayerModal } = usePlayerModal();
   // When the page is browsing another team via the team switcher, player
@@ -75,6 +83,11 @@ export function StatisticsTable<TLine>({
     return copy;
   }, [rows, columns, sortKey, sortDir]);
 
+  const visible = useMemo(
+    () => (displayLimit === undefined ? sorted : sorted.slice(0, displayLimit)),
+    [sorted, displayLimit],
+  );
+
   function handleSort(key: string) {
     if (key === sortKey) {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -87,8 +100,8 @@ export function StatisticsTable<TLine>({
   function openPlayer(playerId: number) {
     // National leaderboards carry a per-row teamIndex — resolve the player against
     // THAT team's league snapshot; single-team tables fall back to the page's viewed team.
-    const rowTeamIndex = sorted.find((row) => row.playerId === playerId)?.teamIndex;
-    openPlayerModal(dynastyId, playerId, seasonId, sorted.map((row) => row.playerId), undefined, rowTeamIndex ?? viewedTeamIndex ?? undefined);
+    const rowTeamIndex = visible.find((row) => row.playerId === playerId)?.teamIndex;
+    openPlayerModal(dynastyId, playerId, seasonId, visible.map((row) => row.playerId), undefined, rowTeamIndex ?? viewedTeamIndex ?? undefined);
   }
 
   if (rows.length === 0) {
@@ -120,7 +133,7 @@ export function StatisticsTable<TLine>({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row) => (
+          {visible.map((row) => (
             <tr
               key={row.playerId}
               onClick={() => openPlayer(row.playerId)}

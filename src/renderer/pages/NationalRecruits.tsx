@@ -457,10 +457,30 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
         return (av - bv) * dir;
       }
       if (sortKey === 'lastName') return a.lastName.localeCompare(b.lastName) * dir;
+      /*
+        A HIDDEN RATING MUST NOT ORDER THE LIST.
+
+        Sorting by OVR used to read the true rating for every prospect,
+        revealed or not — so the padlocks came back in rating order and the
+        whole list was legible without unlocking anything. The lock hid the
+        number and handed over the ranking, which is the more useful half of
+        it. Reported by a user who had house-ruled themselves out of using it.
+
+        A locked prospect therefore sorts as nothing: revealed ratings order
+        among themselves, everyone still hidden collects at the far end, and
+        national rank — which is public, and already printed next to the
+        name — breaks the tie so the order is stable and says nothing new.
+      */
+      if (sortKey === 'overallRating') {
+        const av = ovr.isUnlocked(a.playerId) ? a.overallRating : 0;
+        const bv = ovr.isUnlocked(b.playerId) ? b.overallRating : 0;
+        if (av !== bv) return (av - bv) * dir;
+        return (a.nationalRank || Infinity) - (b.nationalRank || Infinity);
+      }
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, board, interestedOnly, userTeamIndex, sortKey, sortDir, watchlistOnly, watchedIds]);
+  }, [recruits, search, position, stars, classYear, homeState, stage, board, interestedOnly, userTeamIndex, sortKey, sortDir, watchlistOnly, watchedIds, ovr]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
@@ -542,9 +562,14 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
   const filtersActive = !!(search || position || stars || classYear || homeState || stage || (!boardOnly && board) || interestedOnly);
   const shown = filtered.slice(0, RENDER_CAP);
 
-  const th = (key: SortKey, label: string, alignRight = false) => (
+  const th = (key: SortKey, label: string, alignRight = false, hint?: string) => (
     <th className={`whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] ${alignRight ? 'text-right' : 'text-left'}`}>
-      <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 transition hover:text-[var(--team-accent-text)] ${sortKey === key ? 'text-slate-900 dark:text-white' : ''}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(key)}
+        title={hint}
+        className={`inline-flex items-center gap-1 transition hover:text-[var(--team-accent-text)] ${sortKey === key ? 'text-slate-900 dark:text-white' : ''}`}
+      >
         {label}
         {sortKey === key && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
       </button>
@@ -555,16 +580,10 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     <div className="space-y-5">
       <div>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">{watchlistOnly ? 'Watchlist' : boardOnly ? 'My Board' : 'Recruits'}</p>
-        <h2 className="mt-1 font-display text-page-title font-bold text-slate-950 dark:text-white">
-          {watchlistOnly ? 'Recruits you’re watching.' : boardOnly ? 'Your recruiting board.' : 'Every prospect in the country.'}
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          {watchlistOnly
-            ? 'Prospects you’ve starred to keep an eye on — the same browser as National Recruits, filtered to your picks. Uncheck the star to drop one. Saved on this computer, not to your game save.'
-            : boardOnly
-              ? 'Every prospect on your board — filter and sort, then open one for their school interest, athletic snapshot, and the same editing + Force Commit controls as the national browser.'
-              : 'The full national recruit pool — filter and sort by anything, then open a prospect for their school interest, athletic snapshot, and commitment picture.'}
-        </p>
+        {/* The strapline and the paragraph under it are gone (user direction).
+            The eyebrow already names the page, and a description of what a
+            browser does is only worth reading once — after that it is a band of
+            text between you and the recruits every single visit. */}
       </div>
 
       {/* Dashboard — star distribution (national pool only; the board and watchlist are small enough that the count line suffices there). */}
@@ -670,7 +689,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
                     <th className="sticky left-0 z-30 bg-[var(--team-primary)] px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">
                       <button type="button" onClick={() => toggleSort('nationalRank')} className="inline-flex items-center gap-1">Prospect{sortKey === 'nationalRank' && <span className="text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}</button>
                     </th>
-                    {th('overallRating', 'OVR', true)}
+                    {th('overallRating', 'OVR', true, 'Sorts revealed ratings only — hidden ones hold their place instead of giving the number away')}
                     {th('positionRank', 'Pos', true)}
                     {th('stateRank', 'St', true)}
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Class</th>

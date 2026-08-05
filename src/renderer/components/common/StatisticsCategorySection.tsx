@@ -157,6 +157,7 @@ export function StatisticsCategorySection<TLine>({
   teamAssetName,
   collapsible = false,
   defaultOpen = true,
+  displayLimit,
 }: {
   dynastyId: string;
   seasonId?: number;
@@ -173,8 +174,17 @@ export function StatisticsCategorySection<TLine>({
   collapsible?: boolean;
   /** Initial open state when collapsible. */
   defaultOpen?: boolean;
+  /**
+   * Cap the TABLE at N rows after sorting (the leader cards still see every
+   * row). For the national leaderboards, where the pool deliberately holds the
+   * top players in several categories at once and showing all of them would
+   * bury the leaders under hundreds of rows.
+   */
+  displayLimit?: number;
 }) {
   const columns = useMemo(() => withMode(columnDefs, mode), [columnDefs, mode]);
+  // The count has to describe what is on screen, not the pool behind it.
+  const shownCount = displayLimit === undefined ? rows.length : Math.min(rows.length, displayLimit);
 
   const leaderCards = useMemo(() => {
     if (rows.length === 0) return [];
@@ -218,6 +228,7 @@ export function StatisticsCategorySection<TLine>({
           columns={columns}
           defaultSortKey={defaultSortKey}
           emptyStateMessage={emptyStateMessage}
+          displayLimit={displayLimit}
         />
       </div>
     </>
@@ -232,7 +243,7 @@ export function StatisticsCategorySection<TLine>({
           defaultOpen={defaultOpen}
           right={
             <span className="text-xs text-slate-400 dark:text-slate-500">
-              {rows.length} {rows.length === 1 ? 'player' : 'players'}
+              {shownCount} {shownCount === 1 ? 'player' : 'players'}
             </span>
           }
         >

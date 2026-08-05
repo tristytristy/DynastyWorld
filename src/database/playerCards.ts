@@ -1,6 +1,13 @@
 import { getDb, persist } from './init';
-import { ALL_CARD_LAYERS } from '../shared/types';
-import type { CardLayers, CardStatSource, PlayerCardInput, PlayerCardRecord, RosterPlayer } from '../shared/types';
+import { ALL_CARD_LAYERS, DEFAULT_CARD_SCRIM } from '../shared/types';
+import type {
+  CardLayers,
+  CardScrim,
+  CardStatSource,
+  PlayerCardInput,
+  PlayerCardRecord,
+  RosterPlayer,
+} from '../shared/types';
 
 /**
  * Saved player trading cards (schema v12). User-authored data kept out of season
@@ -27,6 +34,7 @@ interface CardRow {
   stats_json: string;
   layers_json: string;
   stat_source_json: string | null;
+  scrim_json: string | null;
   photo_file: string | null;
   photo_x: number;
   photo_y: number;
@@ -38,7 +46,7 @@ interface CardRow {
 }
 
 const SELECT_COLS =
-  'id, player_id, season_year, team_name, player_json, stats_json, layers_json, stat_source_json, photo_file, photo_x, photo_y, photo_scale, favorite, is_default, created_at, updated_at';
+  'id, player_id, season_year, team_name, player_json, stats_json, layers_json, stat_source_json, scrim_json, photo_file, photo_x, photo_y, photo_scale, favorite, is_default, created_at, updated_at';
 
 /** Parses a frozen JSON column, falling back to `fallback` rather than throwing — a card with one unreadable field is still a card. */
 function parseJson<T>(raw: string, fallback: T): T {
@@ -81,11 +89,19 @@ function mapRow(row: CardRow): PlayerCardRecord {
     // defaults to '{}', and a card that predates it must draw with everything
     // showing, exactly as it always did.
     layers: { ...ALL_CARD_LAYERS, ...parseJson<Partial<CardLayers>>(row.layers_json, {}) },
-    statSource: row.stat_source_json ? parseJson<CardStatSource | null>(row.stat_source_json, null) : null,
+    statSource: row.stat_source_json
+      ? parseJson<CardStatSource | null>(row.stat_source_json, null)
+      : null,
     photoFile: row.photo_file,
     // Resolved by the IPC layer, which is where userData lives.
     photoPath: null,
     photoTransform: { x: row.photo_x, y: row.photo_y, scale: row.photo_scale },
+    // NULL means the card predates the setting, so it reads back the CURRENT
+    // default rather than a number frozen at migration time — which is what
+    // lets the default be retuned later for every untouched card at once.
+    scrim: row.scrim_json
+      ? parseJson<CardScrim>(row.scrim_json, DEFAULT_CARD_SCRIM)
+      : DEFAULT_CARD_SCRIM,
     favorite: row.favorite === 1,
     isDefault: row.is_default === 1,
     createdAt: row.created_at,
@@ -118,15 +134,6 @@ export function listPlayerCards(dynastyId: string, playerId: number): PlayerCard
 }
 
 /**
- * The player's default card — what the hover preview pops. Falls back to the
- * oldest card if a row somehow has no default flag, so a set of cards always
- * resolves to one.
- */
-export function getDefaultPlayerCard(dynastyId: string, playerId: number): PlayerCardRecord | null {
-  return listPlayerCards(dynastyId, playerId)[0] ?? null;
-}
-
-/**
  * Every FAVOURITED card in the dynasty — the card book, exactly. Ordered by
  * season, then by the player's own name, so a page reads as a set rather than in
  * the order the cards happened to be made.
@@ -139,15 +146,19 @@ export function listFavoriteCards(dynastyId: string): PlayerCardRecord[] {
 }
 
 /** Creates a card. The player's FIRST card is automatically their default — there is nothing else it could be. */
-export function createPlayerCard(dynastyId: string, playerId: number, input: PlayerCardInput): PlayerCardRecord {
+export function createPlayerCard(
+  dynastyId: string,
+  playerId: number,
+  input: PlayerCardInput,
+): PlayerCardRecord {
   const now = new Date().toISOString();
   const db = getDb();
   const existing = listPlayerCards(dynastyId, playerId);
   db.run(
     `INSERT INTO player_cards
        (dynasty_id, player_id, season_year, team_name, player_json, stats_json, layers_json, stat_source_json,
-        photo_file, photo_x, photo_y, photo_scale, favorite, is_default, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+        scrim_json, photo_file, photo_x, photo_y, photo_scale, favorite, is_default, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     [
       dynastyId,
       playerId,
@@ -157,6 +168,7 @@ export function createPlayerCard(dynastyId: string, playerId: number, input: Pla
       JSON.stringify(input.stats),
       JSON.stringify(input.layers ?? ALL_CARD_LAYERS),
       input.statSource ? JSON.stringify(input.statSource) : null,
+      JSON.stringify(input.scrim ?? DEFAULT_CARD_SCRIM),
       input.photoFile,
       input.photoTransform.x,
       input.photoTransform.y,
@@ -195,13 +207,14 @@ export function updatePlayerCard(id: number, input: PlayerCardInput): PlayerCard
   const now = new Date().toISOString();
   getDb().run(
     `UPDATE player_cards
-        SET stats_json = ?, layers_json = ?, stat_source_json = ?,
+        SET stats_json = ?, layers_json = ?, stat_source_json = ?, scrim_json = ?,
             photo_file = ?, photo_x = ?, photo_y = ?, photo_scale = ?, updated_at = ?
       WHERE id = ?`,
     [
       JSON.stringify(input.stats),
       JSON.stringify(input.layers ?? ALL_CARD_LAYERS),
       input.statSource ? JSON.stringify(input.statSource) : null,
+      JSON.stringify(input.scrim ?? DEFAULT_CARD_SCRIM),
       input.photoFile,
       input.photoTransform.x,
       input.photoTransform.y,
@@ -226,10 +239,20 @@ export function setPlayerCardFavorite(id: number, favorite: boolean): PlayerCard
 }
 
 /** Makes this card the player's default, demoting the rest in the same breath. */
-export function setDefaultPlayerCard(dynastyId: string, playerId: number, id: number): PlayerCardRecord[] {
+export function setDefaultPlayerCard(
+  dynastyId: string,
+  playerId: number,
+  id: number,
+): PlayerCardRecord[] {
   const db = getDb();
-  db.run('UPDATE player_cards SET is_default = 0 WHERE dynasty_id = ? AND player_id = ?', [dynastyId, playerId]);
-  db.run('UPDATE player_cards SET is_default = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), id]);
+  db.run('UPDATE player_cards SET is_default = 0 WHERE dynasty_id = ? AND player_id = ?', [
+    dynastyId,
+    playerId,
+  ]);
+  db.run('UPDATE player_cards SET is_default = 1, updated_at = ? WHERE id = ?', [
+    new Date().toISOString(),
+    id,
+  ]);
   persist();
   return listPlayerCards(dynastyId, playerId);
 }
@@ -240,9 +263,14 @@ export function setDefaultPlayerCard(dynastyId: string, playerId: number, id: nu
  * resolves. Returns the deleted row's photo basename so the caller can bin the
  * file — the DB doesn't own disk.
  */
-export function deletePlayerCard(id: number): { photoFile: string | null; remaining: PlayerCardRecord[] } {
+export function deletePlayerCard(id: number): {
+  photoFile: string | null;
+  remaining: PlayerCardRecord[];
+} {
   const db = getDb();
-  const stmt = db.prepare('SELECT dynasty_id, player_id, photo_file, is_default FROM player_cards WHERE id = ?');
+  const stmt = db.prepare(
+    'SELECT dynasty_id, player_id, photo_file, is_default FROM player_cards WHERE id = ?',
+  );
   stmt.bind([id]);
   if (!stmt.step()) {
     stmt.free();

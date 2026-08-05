@@ -63,6 +63,7 @@ export function ZoomableImage({
   alt,
   saved,
   onSave,
+  filter,
 }: {
   src: string;
   alt: string;
@@ -70,6 +71,13 @@ export function ZoomableImage({
   saved?: MediaFraming | null;
   /** Omit to make the viewer look-only: the zoom still works, it just can't be kept. */
   onSave?: (framing: MediaFraming | null) => void;
+  /**
+   * A CSS `filter` chain to draw the photo under — the media darkroom's colour
+   * treatment. It has to be passed IN rather than applied by the caller to the
+   * stage, because this component owns the <img>: filtering the stage instead
+   * would also filter the zoom pill sitting on top of it.
+   */
+  filter?: string;
 }) {
   const savedFraming = saved ?? UNFRAMED;
   const [framing, setFraming] = useState<MediaFraming>(savedFraming);
@@ -210,6 +218,7 @@ export function ZoomableImage({
           style={{
             transform: `translate(${framing.x * 100}%, ${framing.y * 100}%) scale(${framing.scale})`,
             transformOrigin: 'center',
+            filter: filter || undefined,
           }}
         />
       </div>

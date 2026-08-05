@@ -1,11 +1,19 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
+import { storySeed } from '../shared/storyVariants';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
+import {
+  RANKED_LIMIT,
+  narrateCoachSpotlight,
+  narrateGameResult,
+  narrateUpcoming,
+  narrateUpset,
+} from './ncaaHubNarration';
+import { computeTeamStreak, recentForm } from './ncaaHubStreaks';
 import type { AwardsData } from '../extractors/extract-awards';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type {
-  NcaaHubCfpEntry,
   NcaaHubCoachSpotlight,
   NcaaHubConferenceLeader,
   NcaaHubGameFeature,
@@ -15,12 +23,57 @@ import type {
   NcaaHubRecruitingClassEntry,
   NcaaHubTop25Entry,
 } from '../shared/types';
+import { isGamePlayed } from '../shared/gameStatus';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** The value the poll fields carry for the non-FBS placeholder rows, not a rank. */
+const FCS_RANK_PLACEHOLDER = 255;
+
+/**
+ * Everything the story builders need beyond the games they're narrating: the
+ * season's full schedule (for streaks), its year (for stable seeds), and the
+ * leaguewide poll map.
+ */
+interface HubContext {
+  seasonYear: number;
+  schedule: GameData[];
+  rankByTeamIndex: Map<number, number | null>;
+}
 
 function normalizeRank(rank: number): number | null {
-  return rank > 0 ? rank : null;
+  return rank > 0 && rank !== FCS_RANK_PLACEHOLDER ? rank : null;
+}
+
+/**
+ * The polls rank all 138 FBS teams, so a raw rank is not a ranking — only the
+ * top 25 is. Anything past that reads as "unranked" everywhere the UI or the
+ * prose says "ranked", which is what a rank chip and a "ranked matchup" claim
+ * have always meant.
+ */
+function rankedOnly(rank: number | null): number | null {
+  return rank !== null && rank <= RANKED_LIMIT ? rank : null;
+}
+
+/**
+ * Spots gained since last week's poll. Returns nulls rather than a number
+ * whenever the comparison would be fiction: a season snapshot taken before the
+ * last-week field was captured, a week before the poll was released (0), or
+ * the FCS placeholder.
+ */
+function pollMovement(
+  currentRank: number,
+  lastWeekRank: number | undefined,
+): { movement: number | null; lastWeekRank: number | null } {
+  if (
+    lastWeekRank === undefined ||
+    lastWeekRank <= 0 ||
+    lastWeekRank === FCS_RANK_PLACEHOLDER ||
+    currentRank <= 0
+  ) {
+    return { movement: null, lastWeekRank: null };
+  }
+  return { movement: lastWeekRank - currentRank, lastWeekRank };
 }
 
 function formatKickoff(minutes: number): string {
@@ -45,20 +98,56 @@ function overallLosses(team: TeamData): number {
   return team.confLosses + team.nonConfLosses;
 }
 
-function buildTop25(teams: TeamData[], userTeamIndex: number): NcaaHubTop25Entry[] {
+type PollKey = 'media' | 'coaches' | 'cfp';
+
+function pollRank(team: TeamData, poll: PollKey): number {
+  if (poll === 'media') return team.mediaPollRank;
+  if (poll === 'coaches') return team.coachesPollRank;
+  return team.cfpRank;
+}
+
+/**
+ * Last week's rank in the SAME poll, or undefined when that poll has none
+ * worth trusting. The CFP is the deliberate undefined: its `LastWeeksRank`
+ * field exists but never differed from its current rank on any real save
+ * checked (see extract-teams.ts), so a CFP movement number would be a
+ * permanent zero dressed up as a fact.
+ */
+function pollLastWeekRank(team: TeamData, poll: PollKey): number | undefined {
+  if (poll === 'media') return team.mediaPollLastWeekRank;
+  if (poll === 'coaches') return team.coachesPollLastWeekRank;
+  return undefined;
+}
+
+/**
+ * One poll's top 25. Built per poll rather than once for the media poll with
+ * the others hung off it as extra columns — a team ranked 8th by the coaches
+ * and 30th by the media belongs in the coaches list, and the old shape simply
+ * couldn't express that.
+ */
+function buildPollTop25(teams: TeamData[], userTeamIndex: number, poll: PollKey): NcaaHubTop25Entry[] {
   return teams
-    .filter((team) => team.mediaPollRank > 0 && team.mediaPollRank <= 25)
-    .sort((a, b) => a.mediaPollRank - b.mediaPollRank)
-    .map((team) => ({
-      rank: team.mediaPollRank,
-      teamName: team.displayName,
-      conferenceName: team.conferenceName,
-      wins: overallWins(team),
-      losses: overallLosses(team),
-      coachesRank: normalizeRank(team.coachesPollRank),
-      cfpRank: normalizeRank(team.cfpRank),
-      isUserTeam: team.teamIndex === userTeamIndex,
-    }));
+    .filter((team) => {
+      const rank = pollRank(team, poll);
+      return rank > 0 && rank <= RANKED_LIMIT;
+    })
+    .sort((a, b) => pollRank(a, poll) - pollRank(b, poll))
+    .map((team) => {
+      const rank = pollRank(team, poll);
+      const { movement, lastWeekRank } = pollMovement(rank, pollLastWeekRank(team, poll));
+      return {
+        rank,
+        teamName: team.displayName,
+        conferenceName: team.conferenceName,
+        wins: overallWins(team),
+        losses: overallLosses(team),
+        coachesRank: normalizeRank(team.coachesPollRank),
+        cfpRank: normalizeRank(team.cfpRank),
+        isUserTeam: team.teamIndex === userTeamIndex,
+        rankMovement: movement,
+        lastWeekRank,
+      };
+    });
 }
 
 function buildHeismanFeature(awards: AwardsData | undefined): NcaaHubHeismanFeature | null {
@@ -74,21 +163,6 @@ function buildHeismanFeature(awards: AwardsData | undefined): NcaaHubHeismanFeat
     position: winner.position,
     teamDisplayName: winner.teamDisplayName,
   };
-}
-
-function buildPlayoffPicture(teams: TeamData[], userTeamIndex: number): NcaaHubCfpEntry[] {
-  return teams
-    .filter((team) => team.cfpRank > 0)
-    .sort((a, b) => a.cfpRank - b.cfpRank)
-    .slice(0, 12)
-    .map((team) => ({
-      rank: team.cfpRank,
-      teamName: team.displayName,
-      conferenceName: team.conferenceName,
-      wins: overallWins(team),
-      losses: overallLosses(team),
-      isUserTeam: team.teamIndex === userTeamIndex,
-    }));
 }
 
 function buildRecruitingBuzz(teams: TeamData[], userTeamIndex: number): NcaaHubRecruitingClassEntry[] {
@@ -199,6 +273,7 @@ function toGameFeature(
   game: GameData,
   rankByTeamIndex: Map<number, number | null>,
   summary: string,
+  rankSwing: number | null = null,
 ): NcaaHubGameFeature | null {
   if (!game.homeTeamName || !game.awayTeamName) return null;
   const { homeRank, awayRank } = gameRanks(game, rankByTeamIndex);
@@ -211,17 +286,35 @@ function toGameFeature(
     broadcastScope: game.broadcastScope,
     homeTeamName: game.homeTeamName,
     awayTeamName: game.awayTeamName,
-    homeRank,
-    awayRank,
-    homeScore: game.status !== 'Unplayed' ? game.homeScore : null,
-    awayScore: game.status !== 'Unplayed' ? game.awayScore : null,
+    // Displayed ranks are top-25 only: a chip reading "#112" claims a ranking
+    // the team does not have.
+    homeRank: rankedOnly(homeRank),
+    awayRank: rankedOnly(awayRank),
+    homeScore: isGamePlayed(game.status) ? game.homeScore : null,
+    awayScore: isGamePlayed(game.status) ? game.awayScore : null,
     isBowlGame: game.isBowlGame,
     isNationalChampionship: game.isNationalChampionship,
     bowlName: game.bowlName,
     bowlAssetName: game.bowlAssetName,
     isNeutralSite: game.isNeutralSite,
     summary,
+    rankSwing,
   };
+}
+
+/** A game's seed: the event itself, so the same matchup in the same week always narrates the same way. */
+function gameSeed(game: GameData, seasonYear: number): string {
+  return storySeed(seasonYear, game.week, game.awayTeamName, game.homeTeamName);
+}
+
+/** The streak the team carried INTO this game — `week - 1`, so a result never counts itself twice. */
+function streakEntering(ctx: HubContext, teamIndex: number | null, week: number) {
+  return computeTeamStreak(ctx.schedule, teamIndex, week - 1);
+}
+
+/** How many of a game's teams are actually ranked — top 25, not "has a poll number", which every FBS team does. */
+function rankedSideCount(ranks: { homeRank: number | null; awayRank: number | null }): number {
+  return Number(rankedOnly(ranks.homeRank) !== null) + Number(rankedOnly(ranks.awayRank) !== null);
 }
 
 function compareUpcomingGames(
@@ -231,8 +324,8 @@ function compareUpcomingGames(
 ): number {
   const aRanks = gameRanks(a, rankByTeamIndex);
   const bRanks = gameRanks(b, rankByTeamIndex);
-  const aRanked = Number(aRanks.homeRank !== null) + Number(aRanks.awayRank !== null);
-  const bRanked = Number(bRanks.homeRank !== null) + Number(bRanks.awayRank !== null);
+  const aRanked = rankedSideCount(aRanks);
+  const bRanked = rankedSideCount(bRanks);
   if (aRanked !== bRanked) return bRanked - aRanked;
 
   const aCombined = (aRanks.homeRank ?? 40) + (aRanks.awayRank ?? 40);
@@ -244,17 +337,15 @@ function compareUpcomingGames(
   return (a.homeTeamName ?? '').localeCompare(b.homeTeamName ?? '');
 }
 
-function buildGameOfTheWeek(
-  games: GameData[],
-  rankByTeamIndex: Map<number, number | null>,
-): NcaaHubGameFeature | null {
+function buildGameOfTheWeek(games: GameData[], ctx: HubContext): NcaaHubGameFeature | null {
   if (games.length === 0) return null;
+  const { rankByTeamIndex } = ctx;
 
   const picked = [...games].sort((a, b) => {
     const aRanks = gameRanks(a, rankByTeamIndex);
     const bRanks = gameRanks(b, rankByTeamIndex);
-    const aRanked = Number(aRanks.homeRank !== null) + Number(aRanks.awayRank !== null);
-    const bRanked = Number(bRanks.homeRank !== null) + Number(bRanks.awayRank !== null);
+    const aRanked = rankedSideCount(aRanks);
+    const bRanked = rankedSideCount(bRanks);
     if (aRanked !== bRanked) return bRanked - aRanked;
 
     const aCombined = (aRanks.homeRank ?? 40) + (aRanks.awayRank ?? 40);
@@ -268,20 +359,29 @@ function buildGameOfTheWeek(
     return b.homeScore + b.awayScore - (a.homeScore + a.awayScore);
   })[0];
 
-  const winner =
-    picked.homeScore > picked.awayScore ? picked.homeTeamName : picked.awayScore > picked.homeScore ? picked.awayTeamName : null;
-  const summary =
-    winner && picked.homeTeamName && picked.awayTeamName
-      ? `${winner} won ${Math.max(picked.homeScore, picked.awayScore)}-${Math.min(picked.homeScore, picked.awayScore)}`
-      : `Finished ${picked.homeScore}-${picked.awayScore}`;
+  const homeWon = picked.homeScore > picked.awayScore;
+  const tied = picked.homeScore === picked.awayScore;
+  const ranks = gameRanks(picked, rankByTeamIndex);
+  const winnerIndex = homeWon ? picked.homeTeamIndex : picked.awayTeamIndex;
+
+  const summary = narrateGameResult({
+    seed: gameSeed(picked, ctx.seasonYear),
+    winnerName: tied ? null : homeWon ? picked.homeTeamName : picked.awayTeamName,
+    loserName: tied ? null : homeWon ? picked.awayTeamName : picked.homeTeamName,
+    homeTeamName: picked.homeTeamName ?? 'Home',
+    awayTeamName: picked.awayTeamName ?? 'Away',
+    winnerScore: Math.max(picked.homeScore, picked.awayScore),
+    loserScore: Math.min(picked.homeScore, picked.awayScore),
+    winnerRank: rankedOnly(homeWon ? ranks.homeRank : ranks.awayRank),
+    loserRank: rankedOnly(homeWon ? ranks.awayRank : ranks.homeRank),
+    winnerStreak: tied ? null : streakEntering(ctx, winnerIndex, picked.week),
+  });
 
   return toGameFeature(picked, rankByTeamIndex, summary);
 }
 
-function buildUpsetOfTheWeek(
-  games: GameData[],
-  rankByTeamIndex: Map<number, number | null>,
-): NcaaHubGameFeature | null {
+function buildUpsetOfTheWeek(games: GameData[], ctx: HubContext): NcaaHubGameFeature | null {
+  const { rankByTeamIndex } = ctx;
   const candidates = games
     .map((game) => {
       if (!game.homeTeamName || !game.awayTeamName) return null;
@@ -298,41 +398,50 @@ function buildUpsetOfTheWeek(
       const swing = winnerRank - loserRank;
       if (swing <= 0) return null;
 
+      // The swing is measured on the FULL poll (all 138 teams), because that
+      // gap is what makes an upset an upset — a No. 96 beating a No. 4 is a
+      // bigger story than a No. 20 beating a No. 12, and clamping both sides
+      // to the top 25 would flatten them into the same sentence.
       const winnerName = homeWon ? game.homeTeamName : game.awayTeamName;
       const loserName = homeWon ? game.awayTeamName : game.homeTeamName;
-      return {
-        game,
-        swing,
-        summary: `${winnerName} upset ${loserName} ${Math.max(game.homeScore, game.awayScore)}-${Math.min(game.homeScore, game.awayScore)}`,
-      };
+      const summary = narrateUpset({
+        seed: gameSeed(game, ctx.seasonYear),
+        winnerName,
+        loserName,
+        winnerScore: Math.max(game.homeScore, game.awayScore),
+        loserScore: Math.min(game.homeScore, game.awayScore),
+        winnerRank: homeWon ? homeRank : awayRank,
+        loserRank: homeWon ? awayRank : homeRank,
+        rankSwing: swing,
+        winnerStreak: streakEntering(ctx, homeWon ? game.homeTeamIndex : game.awayTeamIndex, game.week),
+      });
+      return { game, swing, summary };
     })
     .filter((candidate): candidate is { game: GameData; swing: number; summary: string } => candidate !== null)
     .sort((a, b) => b.swing - a.swing);
 
   if (candidates.length === 0) return null;
-  return toGameFeature(candidates[0].game, rankByTeamIndex, candidates[0].summary);
+  return toGameFeature(candidates[0].game, rankByTeamIndex, candidates[0].summary, candidates[0].swing);
 }
 
-function buildUpcomingGames(
-  games: GameData[],
-  rankByTeamIndex: Map<number, number | null>,
-): NcaaHubGameFeature[] {
+function buildUpcomingGames(games: GameData[], ctx: HubContext): NcaaHubGameFeature[] {
+  const { rankByTeamIndex } = ctx;
   return [...games]
     .sort((a, b) => compareUpcomingGames(a, b, rankByTeamIndex))
     .slice(0, 5)
     .map((game) => {
       const ranks = gameRanks(game, rankByTeamIndex);
-      const rankedTeams = [ranks.homeRank, ranks.awayRank].filter((rank): rank is number => rank !== null);
-      const summary =
-        game.isNationalChampionship
-          ? 'The national title game is on deck.'
-          : game.isBowlGame && game.bowlName
-            ? `${game.bowlName} spotlight`
-            : rankedTeams.length > 0
-              ? `${rankedTeams.length} ranked team${rankedTeams.length > 1 ? 's' : ''} in the matchup`
-              : game.isNeutralSite
-                ? 'Neutral-site watchlist matchup'
-                : 'Next-week watchlist matchup';
+      const summary = narrateUpcoming({
+        seed: gameSeed(game, ctx.seasonYear),
+        homeTeamName: game.homeTeamName ?? 'the home side',
+        awayTeamName: game.awayTeamName ?? 'the visitors',
+        homeRank: rankedOnly(ranks.homeRank),
+        awayRank: rankedOnly(ranks.awayRank),
+        isNationalChampionship: game.isNationalChampionship,
+        isBowlGame: game.isBowlGame,
+        bowlName: game.bowlName,
+        isNeutralSite: game.isNeutralSite,
+      });
       return toGameFeature(game, rankByTeamIndex, summary);
     })
     .filter((game): game is NcaaHubGameFeature => game !== null);
@@ -341,6 +450,8 @@ function buildUpcomingGames(
 function buildCoachSpotlight(
   coaches: CoachData[],
   teams: TeamData[],
+  ctx: HubContext,
+  throughWeek: number | null,
 ): NcaaHubCoachSpotlight | null {
   const teamByIndex = new Map(teams.map((team) => [team.teamIndex, team]));
   const candidates = coaches
@@ -351,7 +462,7 @@ function buildCoachSpotlight(
 
       const wins = overallWins(team);
       const losses = overallLosses(team);
-      const rank = normalizeRank(team.mediaPollRank);
+      const rank = rankedOnly(normalizeRank(team.mediaPollRank));
       const prestige = team.teamPrestige > 0 ? team.teamPrestige : null;
       const score =
         wins * 3 -
@@ -379,17 +490,33 @@ function buildCoachSpotlight(
   const picked = candidates[0];
   if (!picked) return null;
 
-  const prestigeText = picked.prestige === null ? 'unknown prestige' : `prestige ${picked.prestige}`;
-  const rankText = picked.rank ? ` and sits at #${picked.rank}` : '';
+  const coachName = `${picked.coach.firstName} ${picked.coach.lastName}`;
+  // Season-long form, so this reads as "where the program stands" rather than
+  // as a comment on one result: the streak and last-five run both count
+  // through the most recent completed week.
+  const week = throughWeek ?? 0;
+  const reason = narrateCoachSpotlight({
+    seed: storySeed(ctx.seasonYear, week, coachName),
+    coachName,
+    teamName: picked.team.displayName,
+    wins: picked.wins,
+    losses: picked.losses,
+    rank: picked.rank,
+    prestige: picked.prestige,
+    streak: computeTeamStreak(ctx.schedule, picked.team.teamIndex, week),
+    recentForm: recentForm(ctx.schedule, picked.team.teamIndex, week, 5),
+    rankMovement: pollMovement(picked.team.mediaPollRank, picked.team.mediaPollLastWeekRank).movement,
+  });
+
   return {
-    coachName: `${picked.coach.firstName} ${picked.coach.lastName}`,
+    coachName,
     coachPortraitAssetName: picked.coach.portraitAssetName,
     teamName: picked.team.displayName,
     overallWins: picked.wins,
     overallLosses: picked.losses,
     mediaRank: picked.rank,
     teamPrestige: picked.prestige,
-    reason: `${picked.team.displayName} is ${picked.wins}-${picked.losses}${rankText} with ${prestigeText}.`,
+    reason,
   };
 }
 
@@ -409,35 +536,41 @@ export function getNcaaHub(dynastyId: string, seasonId?: number): NcaaHubOvervie
   const awards = getSnapshot<AwardsData>(season.id, 'awards');
 
   const rankByTeamIndex = new Map(teams.map((team) => [team.teamIndex, normalizeRank(team.mediaPollRank)]));
-  const top25 = buildTop25(teams, userTeamId);
+  const top25 = buildPollTop25(teams, userTeamId, 'media');
+  const coachesTop25 = buildPollTop25(teams, userTeamId, 'coaches');
+  const cfpTop25 = buildPollTop25(teams, userTeamId, 'cfp');
   const heismanFeature = buildHeismanFeature(awards);
-  const playoffPicture = buildPlayoffPicture(teams, userTeamId);
   const recruitingBuzz = buildRecruitingBuzz(teams, userTeamId);
   const undefeatedWatch = buildRecordWatch(teams, userTeamId, 0, 8);
   const oneLossWatch = buildRecordWatch(teams, userTeamId, 1, 8);
   const conferenceLeaders = buildConferenceLeaders(teams, userTeamId);
 
-  const playedWeeks = schedule.filter((game) => game.status !== 'Unplayed').map((game) => game.week);
+  const playedWeeks = schedule.filter((game) => isGamePlayed(game.status)).map((game) => game.week);
   const latestPlayedWeek = playedWeeks.length > 0 ? Math.max(...playedWeeks) : null;
   const latestWeekGames =
-    latestPlayedWeek === null ? [] : schedule.filter((game) => game.status !== 'Unplayed' && game.week === latestPlayedWeek);
+    latestPlayedWeek === null ? [] : schedule.filter((game) => isGamePlayed(game.status) && game.week === latestPlayedWeek);
 
-  const unplayedWeeks = schedule.filter((game) => game.status === 'Unplayed').map((game) => game.week);
+  const unplayedWeeks = schedule.filter((game) => !isGamePlayed(game.status)).map((game) => game.week);
   const upcomingWeek = unplayedWeeks.length > 0 ? Math.min(...unplayedWeeks) : null;
   const upcomingWeekGames =
-    upcomingWeek === null ? [] : schedule.filter((game) => game.status === 'Unplayed' && game.week === upcomingWeek);
+    upcomingWeek === null ? [] : schedule.filter((game) => !isGamePlayed(game.status) && game.week === upcomingWeek);
+
+  // Seeded off the season YEAR rather than its row id: the year survives a
+  // delete-and-reimport, so a season's prose stays put across one.
+  const ctx: HubContext = { seasonYear: season.seasonYear, schedule, rankByTeamIndex };
 
   return {
     seasonYear: season.seasonYear,
     lastSyncedAt: season.extractedAt,
     top25,
+    coachesTop25,
+    cfpTop25,
     heismanFeature,
-    gameOfTheWeek: buildGameOfTheWeek(latestWeekGames, rankByTeamIndex),
-    upsetOfTheWeek: buildUpsetOfTheWeek(latestWeekGames, rankByTeamIndex),
+    gameOfTheWeek: buildGameOfTheWeek(latestWeekGames, ctx),
+    upsetOfTheWeek: buildUpsetOfTheWeek(latestWeekGames, ctx),
     upcomingWeek,
-    upcomingGames: buildUpcomingGames(upcomingWeekGames, rankByTeamIndex),
-    coachSpotlight: buildCoachSpotlight(coaches, teams),
-    playoffPicture,
+    upcomingGames: buildUpcomingGames(upcomingWeekGames, ctx),
+    coachSpotlight: buildCoachSpotlight(coaches, teams, ctx, latestPlayedWeek),
     recruitingBuzz,
     undefeatedWatch,
     oneLossWatch,

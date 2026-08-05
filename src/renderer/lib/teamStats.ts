@@ -1,3 +1,4 @@
+import { offenseYards, returnYards } from '../../shared/teamYards';
 import type { TeamGameStat } from '../../shared/types';
 
 /**
@@ -46,9 +47,19 @@ export interface TeamAggregate {
   games: number;
   points: number;
   pointsAllowed: number;
+  /**
+   * ALL-PURPOSE yards — offense plus kick and punt returns, the save's own
+   * TOTALYARDS. Kept as its own statistic, but never as "offense": see
+   * offenseYards below and shared/teamYards.ts.
+   */
   totalYards: number;
+  /** Total offense (pass + rush) — what the game's box score calls Total Offense. */
+  offenseYards: number;
+  /** Kick + punt return yardage. */
+  returnYards: number;
   passYards: number;
   rushYards: number;
+  /** Yards ALLOWED — the opponent's total OFFENSE, not their all-purpose total: a defence is not on the field for the other side's kick returns. */
   defTotalYards: number;
   defPassYards: number;
   defRushYards: number;
@@ -74,7 +85,7 @@ export interface TeamAggregate {
 function emptyAggregate(): TeamAggregate {
   return {
     games: 0, points: 0, pointsAllowed: 0,
-    totalYards: 0, passYards: 0, rushYards: 0,
+    totalYards: 0, offenseYards: 0, returnYards: 0, passYards: 0, rushYards: 0,
     defTotalYards: 0, defPassYards: 0, defRushYards: 0,
     firstDowns: 0, thirdDownConv: 0, thirdDownAtt: 0, fourthDownConv: 0, fourthDownAtt: 0,
     defThirdDownConv: 0, defThirdDownAtt: 0,
@@ -91,6 +102,8 @@ export function aggregateTeamGames(games: TeamGameStat[]): TeamAggregate {
     const t = g.teamStats;
     if (t) {
       a.totalYards += t.totalYards;
+      a.offenseYards += offenseYards(t);
+      a.returnYards += returnYards(t);
       a.passYards += t.passYards;
       a.rushYards += t.rushYards;
       a.firstDowns += t.firstDowns;
@@ -110,7 +123,7 @@ export function aggregateTeamGames(games: TeamGameStat[]): TeamAggregate {
     }
     const o = g.opponentStats;
     if (o) {
-      a.defTotalYards += o.totalYards;
+      a.defTotalYards += offenseYards(o);
       a.defPassYards += o.passYards;
       a.defRushYards += o.rushYards;
       a.defThirdDownConv += o.thirdDownConversions;

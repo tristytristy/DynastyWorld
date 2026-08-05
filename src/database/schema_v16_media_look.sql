@@ -1,0 +1,27 @@
+-- Schema version 16 — a saved LOOK for a media photo.
+--
+-- Framing (v14) answered "which part of this photo", and this answers "how does
+-- it read": a colour treatment, a vignette, and which of the plate's two marks
+-- are printed on it.
+--
+-- ONE JSON COLUMN, NOT SIX. Framing got three real columns because its three
+-- numbers are fixed and load-bearing — the pan limits are derived from them and
+-- the thumbnails read them on every tile. A look is a bag of presentation
+-- settings that will keep growing (the first version already carries a filter,
+-- an intensity, two vignette numbers, a grain and two mark toggles), none of it
+-- is ever queried or sorted on, and a column per knob would mean a migration
+-- every time a new one is added. The whole thing is read, applied to a style,
+-- and written back as a unit.
+--
+-- NULL MEANS UNTOUCHED, which is what every existing row is and stays: no
+-- filter, no vignette, and both marks printed, because that is what the plate
+-- has been doing since the marks shipped. A photo has to be deliberately
+-- treated to carry a look, and clearing it removes the column value rather than
+-- storing a "none" that would have to be kept in step with the default.
+--
+-- THE FILE ON DISK IS NEVER TOUCHED. Same contract as framing: this is three
+-- lines of metadata next to the row, so the original is still the original, the
+-- treatment can be changed or removed forever after, and a trading card built
+-- from the same shot keeps its own independent look.
+
+ALTER TABLE media_items ADD COLUMN look_json TEXT;

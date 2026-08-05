@@ -1,16 +1,14 @@
+import { CFP_ROUND_NAMES, resolveCfpBowl } from '../../shared/cfpBowls';
 import {
   getBowlLogoPath,
   getConferenceChampionshipGamePath,
   getConferenceLogoPath,
-  getNationalChampionshipAppearanceImagePath,
+  getNationalChampionshipTrophyPath,
   getPlayoffRoundImagePath,
 } from './trophyAssetMapping';
 import { getBowlVenue, getChampionshipVenue, getNeutralVenue } from './neutralVenues';
 import type { StadiumInfo } from './stadiumData';
 import type { ScheduleGame } from '../../shared/types';
-
-/** The real BowlGame.Name strings the save uses for the three CFP bracket rounds. */
-const CFP_ROUND_NAMES = new Set(['CFP First Round', 'CFP Quarterfinal', 'CFP Semifinal']);
 
 /**
  * The fields these helpers actually read. Structural rather than
@@ -26,6 +24,8 @@ export interface GameTypeFields {
   isConferenceChampionship: boolean;
   bowlName: string | null;
   bowlAssetName: string | null;
+  /** Venue reference — what identifies WHICH bowl a playoff game is. See shared/cfpBowls.ts. */
+  neutralVenueId?: string | null;
 }
 
 /**
@@ -175,7 +175,29 @@ export function getGameTypeImagePath(game: GameTypeFields, background: 'light' |
   }
   if (game.gameType !== 'bowl') return null;
 
-  if (game.isNationalChampionship) return getNationalChampionshipAppearanceImagePath(background);
+  // The TROPHY, not the CFP event mark: on a scoreboard or a game header the
+  // title game is being identified as the game it is, and the trophy says
+  // "this one was for everything" in a way the round logo doesn't.
+  if (game.isNationalChampionship) return getNationalChampionshipTrophyPath();
   if (game.bowlName && CFP_ROUND_NAMES.has(game.bowlName)) return getPlayoffRoundImagePath(game.bowlName);
   return getBowlLogoPath(game.bowlAssetName);
+}
+
+/**
+ * The BOWL a playoff game is, as a second mark shown beside the CFP round
+ * graphic — Rose Bowl next to "CFP Quarterfinal" rather than instead of it.
+ *
+ * Both marks earn their place: the round says how far into the bracket this is,
+ * the bowl says which trophy is on the table. Neither answers the other's
+ * question, which is why this returns a companion rather than replacing
+ * getGameTypeImagePath's result.
+ *
+ * Null for everything else — the first round is on campus and has no bowl, the
+ * national championship is a neutral site rather than anybody's bowl (and its
+ * own mark is already the trophy), and a traditional bowl's logo is the primary
+ * mark, so pairing it with itself would just print it twice.
+ */
+export function getCfpBowlImagePath(game: GameTypeFields): string | null {
+  const bowl = resolveCfpBowl(game.bowlName, game.neutralVenueId);
+  return bowl ? getBowlLogoPath(bowl.assetName) : null;
 }

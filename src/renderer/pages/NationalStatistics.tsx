@@ -36,11 +36,12 @@ interface TeamStatCol {
 
 const TEAM_COLS: TeamStatCol[] = [
   { key: 'points', label: 'PF', value: (r) => r.points, perGameable: true, format: (v, pg) => (pg ? v.toFixed(1) : intFmt(v)) },
-  { key: 'totalYards', label: 'Total O', value: (r) => r.totalYards, perGameable: true, format: (v) => intFmt(v) },
+  { key: 'offenseYards', label: 'Total O', value: (r) => r.offenseYards, perGameable: true, format: (v) => intFmt(v) },
   { key: 'passYards', label: 'Pass', value: (r) => r.passYards, perGameable: true, format: (v) => intFmt(v) },
   { key: 'rushYards', label: 'Rush', value: (r) => r.rushYards, perGameable: true, format: (v) => intFmt(v) },
   { key: 'pointsAllowed', label: 'PA', value: (r) => r.pointsAllowed, perGameable: true, format: (v, pg) => (pg ? v.toFixed(1) : intFmt(v)) },
   { key: 'defTotalYards', label: 'Total D', value: (r) => r.defTotalYards, perGameable: true, format: (v) => intFmt(v) },
+  { key: 'totalYards', label: 'All-P', value: (r) => r.totalYards, perGameable: true, format: (v) => intFmt(v) },
   {
     key: 'thirdDown',
     label: '3rd %',
@@ -251,6 +252,7 @@ export function NationalStatistics() {
             columnDefs={PASSING_COLUMNS}
             mode={mode}
             collapsible
+            displayLimit={100}
             defaultSortKey="passYards"
             leaders={[
               { label: 'Passing Yards', value: (l) => l.passYards, format: (v) => v.toLocaleString() },
@@ -266,6 +268,7 @@ export function NationalStatistics() {
             columnDefs={RUSHING_COLUMNS}
             mode={mode}
             collapsible
+            displayLimit={100}
             defaultSortKey="rushYards"
             leaders={[
               { label: 'Rushing Yards', value: (l) => l.rushYards, format: (v) => v.toLocaleString() },
@@ -282,6 +285,7 @@ export function NationalStatistics() {
             columnDefs={RECEIVING_COLUMNS}
             mode={mode}
             collapsible
+            displayLimit={100}
             defaultSortKey="receivingYards"
             leaders={[
               { label: 'Receiving Yards', value: (l) => l.receivingYards, format: (v) => v.toLocaleString() },
@@ -298,6 +302,7 @@ export function NationalStatistics() {
             columnDefs={DEFENSE_COLUMNS}
             mode={mode}
             collapsible
+            displayLimit={100}
             defaultSortKey="tackles"
             leaders={[
               { label: 'Tackles', value: (l) => l.tackles, format: (v) => v.toLocaleString() },

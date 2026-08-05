@@ -73,8 +73,14 @@ export function ensureContrastText(hex: string, surfaceHex: string, minContrast 
   return rgbToHex(target);
 }
 
-/** White or near-black, whichever contrasts better as text on a solid fill of `hex`. */
-function textColorOn(hex: string): string {
+/**
+ * White or near-black, whichever contrasts better as text on a solid fill of
+ * `hex`. Exported because any surface painting a SPECIFIC team's colour has to
+ * compute its own text colour: `var(--team-on-primary)` belongs to the user's
+ * own dynasty theme, and reading it over another team's fill is how a navy
+ * button ends up with near-black text on it.
+ */
+export function textColorOn(hex: string): string {
   const rgb = hexToRgb(hex);
   const white: Rgb = [255, 255, 255];
   const nearBlack: Rgb = [15, 23, 42]; // tailwind slate-900

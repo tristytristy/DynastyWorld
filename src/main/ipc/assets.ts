@@ -29,9 +29,4 @@ export function registerAssetHandlers(): void {
     setAssetsPath(chosen);
     return { ...getAssetStatus(), picked: true };
   });
-
-  ipcMain.handle(IPC.assets.clearPath, (): AssetStatus => {
-    setAssetsPath(null);
-    return getAssetStatus();
-  });
 }

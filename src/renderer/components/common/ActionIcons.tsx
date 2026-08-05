@@ -28,6 +28,25 @@ function Glyph({ className = 'h-4 w-4', children }: { className?: string; childr
   );
 }
 
+/** Two arrows passing — swap one thing for another (the Hall's slot change). */
+export function SwapIcon({ className }: { className?: string }) {
+  return (
+    <Glyph className={className}>
+      <path d="M4 7.5h12M13 4.5 16 7.5 13 10.5" />
+      <path d="M16 12.5H4M7 9.5 4 12.5 7 15.5" />
+    </Glyph>
+  );
+}
+
+/** A plus. Adds the thing the surface is about — an empty slot, an empty row. */
+export function PlusIcon({ className }: { className?: string }) {
+  return (
+    <Glyph className={className}>
+      <path d="M10 4.5v11M4.5 10h11" />
+    </Glyph>
+  );
+}
+
 /** Pencil. */
 export function EditIcon({ className }: { className?: string }) {
   return (

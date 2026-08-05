@@ -12,7 +12,7 @@ import type {
   StorageUsage,
 } from '../../../shared/types';
 import { CenteredModalPanel } from './CenteredModalPanel';
-import { getCheckUpdatesOnStartup, setCheckUpdatesOnStartup } from '../../lib/updatePrefs';
+import { getUpdatePrefs, setCheckUpdatesOnStartup } from '../../lib/updatePrefs';
 import { formatBytes } from '../../lib/formatBytes';
 import {
   HOVER_DELAY_MAX,
@@ -163,7 +163,21 @@ export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?:
     }
   };
   const [isOpen, setIsOpen] = useState(false);
-  const [checkOnStartup, setCheckOnStartupState] = useState(getCheckUpdatesOnStartup());
+  /*
+    Defaults to true so the checkbox never flashes "off" before the real value
+    arrives; the setting now lives in the main process (see lib/updatePrefs).
+  */
+  const [checkOnStartup, setCheckOnStartupState] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getUpdatePrefs().then((prefs) => {
+      if (!cancelled) setCheckOnStartupState(prefs.checkOnStartup);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [cardHoverEnabled, setCardHoverEnabledState] = useState(getPlayerCardHoverEnabled());
   const [cardHoverDelay, setCardHoverDelayState] = useState(getPlayerCardHoverDelayMs());
   const isDark = appearance === 'dark';
@@ -687,7 +701,7 @@ export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?:
                   checked={checkOnStartup}
                   onChange={(e) => {
                     setCheckOnStartupState(e.target.checked);
-                    setCheckUpdatesOnStartup(e.target.checked);
+                    void setCheckUpdatesOnStartup(e.target.checked);
                   }}
                   className="h-5 w-5 shrink-0 cursor-pointer accent-[var(--team-primary)]"
                   aria-label="Check for updates on startup"
@@ -695,9 +709,10 @@ export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?:
               }
             >
               <label htmlFor="pref-check-updates" className={`block cursor-pointer text-xs leading-5 ${subtleTextClass}`}>
-                When on, the app quietly checks for a newer version each time it launches and shows a one-time notice if
-                one is available (it never interrupts if you&apos;re offline). Turn it off to launch without checking —
-                you can always check manually from the About panel.
+                When on, the app quietly checks for a newer version a few seconds after it launches and shows a small
+                notice in the corner if one is available. Nothing ever downloads or installs on its own — that is
+                always your click. Turn it off and DynastyOS contacts nothing at startup; you can still check whenever
+                you like from the About panel.
               </label>
             </CollapsibleSection>
           </div>

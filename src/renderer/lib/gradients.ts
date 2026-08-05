@@ -44,13 +44,3 @@ export const GRADIENT_HEADER =
  */
 export const GRADIENT_TEAM_BLOCK =
   'bg-gradient-to-b from-[var(--team-primary)] to-[color-mix(in_srgb,var(--team-primary)_62%,#000)]';
-
-/** The primary action fill — brand gold, deliberately the loudest gradient here. */
-export const GRADIENT_ACTION = 'bg-gradient-to-b from-gold-100 via-gold-300 to-gold-500';
-
-/**
- * A hairline that fades out at both ends instead of stopping dead — for
- * separators that shouldn't draw a hard line across a dark panel.
- */
-export const GRADIENT_RULE =
-  'bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-white/15';

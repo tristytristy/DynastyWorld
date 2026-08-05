@@ -11,6 +11,13 @@ import { usePlayerModal } from '../data/PlayerModalProvider';
 
 /** NFL declarations + graduations (players who left the LEAGUE, not to another school). */
 function DeparturesCard({ departures, teamAssetName }: { departures: PlayerDeparture[]; teamAssetName?: string | null }) {
+  /*
+    Unconfirmed = the following season hasn't been synced, so this is still the
+    game's declaration list rather than what happened. It matters enough to
+    change the wording: a declared player can withdraw (and one did — see
+    getDepartures), so the card must not present a projection as a fact.
+  */
+  const unconfirmed = departures.some((d) => !d.confirmed);
   return (
     <SurfaceCard>
       <div className="flex items-center justify-between gap-3">
@@ -20,7 +27,9 @@ function DeparturesCard({ departures, teamAssetName }: { departures: PlayerDepar
         </span>
       </div>
       <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-        NFL declarations (projected round only — the game doesn&apos;t simulate the draft) and graduating seniors.
+        {unconfirmed
+          ? 'Declared for the NFL or the portal at the offseason “Players Leaving” step — not final until next season is synced, since players can withdraw.'
+          : 'NFL declarations (projected round only — the game doesn’t record draft results) and everyone else off the roster.'}
       </p>
       {departures.length === 0 ? (
         <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
@@ -47,8 +56,11 @@ function DeparturesCard({ departures, teamAssetName }: { departures: PlayerDepar
                   NFL{d.projectedRound ? ` · Proj. Rd ${d.projectedRound}` : ''}
                 </span>
               ) : (
+                /* "Graduated" is only said about a senior. Everyone else who
+                   dropped off FBS gets the honest label — the game records no
+                   reason for them, and a departing freshman didn't graduate. */
                 <span className="shrink-0 border border-slate-300/70 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                  Graduated
+                  {d.type === 'graduated' ? 'Graduated' : 'Left FBS'}
                 </span>
               )}
             </div>
@@ -112,6 +124,7 @@ function TransferColumn({
   accent,
   entries,
   direction,
+  emptyMessage,
   reasonByPlayer,
   onOpen,
 }: {
@@ -119,6 +132,7 @@ function TransferColumn({
   accent: string;
   entries: TransferEntry[];
   direction: 'in' | 'out';
+  emptyMessage: string;
   reasonByPlayer?: Map<number, string>;
   onOpen: (entry: TransferEntry) => void;
 }) {
@@ -129,7 +143,7 @@ function TransferColumn({
         <span className={`tnum border px-2.5 py-0.5 text-sm font-semibold ${accent}`}>{entries.length}</span>
       </div>
       {entries.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">None across the archived seasons.</p>
+        <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">{emptyMessage}</p>
       ) : (
         <div className="mt-4 space-y-2">
           {entries.map((e) => (
@@ -150,7 +164,7 @@ function TransferColumn({
 export function Transfers() {
   const { id } = useParams<{ id: string }>();
   const { viewedTeamIndex, leagueTeams, userTeamName } = useViewedTeam();
-  const { selectedSeasonId } = useSelectedSeason();
+  const { selectedSeasonId, seasons } = useSelectedSeason();
   const { openPlayerModal } = usePlayerModal();
   const [data, setData] = useState<TeamTransfers | null | undefined>(undefined);
   const [departures, setDepartures] = useState<PlayerDeparture[]>([]);
@@ -189,6 +203,41 @@ export function Transfers() {
       cancelled = true;
     };
   }, [id, focusTeamIndex, selectedSeasonId]);
+
+  /*
+    SCOPED TO THE SELECTED SEASON — the whole point of this page is "who came
+    and went THIS year", and it was rendering every transfer the archive had
+    ever detected in one accumulating list.
+
+    The two directions key off different seasons, and that isn't an
+    inconsistency: an ARRIVAL is news in the season he turns up, a DEPARTURE is
+    news in the season he left, which is the season before he appears elsewhere.
+    Filtering both on the arrival year put "transferred out" a season ahead of
+    the departures card below it, and stopped the reason annotations joining.
+  */
+  const transfersIn = useMemo(
+    () => (data?.transfersIn ?? []).filter((e) => e.toSeasonId === selectedSeasonId),
+    [data, selectedSeasonId],
+  );
+  const transfersOut = useMemo(
+    () => (data?.transfersOut ?? []).filter((e) => e.fromSeasonId === selectedSeasonId),
+    [data, selectedSeasonId],
+  );
+
+  /*
+    "No arrivals" and "we can't know yet" are different answers and must read
+    differently. The earliest archived season has no prior roster to diff, so
+    arrivals are unknowable; the latest has no following season, so departures
+    are. Reporting either as a confident zero would be a lie.
+  */
+  const { hasPriorSeason, hasNextSeason } = useMemo(() => {
+    const ordered = [...seasons].sort((a, b) => a.seasonYear - b.seasonYear);
+    const index = ordered.findIndex((s) => s.id === selectedSeasonId);
+    return {
+      hasPriorSeason: index > 0,
+      hasNextSeason: index >= 0 && index < ordered.length - 1,
+    };
+  }, [seasons, selectedSeasonId]);
 
   const reasonByPlayer = useMemo(
     () =>
@@ -239,15 +288,25 @@ export function Transfers() {
           <TransferColumn
             title="Transferred in"
             accent="border-emerald-300/70 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300"
-            entries={data.transfersIn}
+            entries={transfersIn}
             direction="in"
+            emptyMessage={
+              hasPriorSeason
+                ? 'Nobody transferred in for this season.'
+                : 'Arrivals need the previous season to compare against — this is the earliest season in the archive.'
+            }
             onOpen={openPlayer}
           />
           <TransferColumn
             title="Transferred out"
             accent="border-red-300/70 text-red-700 dark:border-red-500/40 dark:text-red-300"
-            entries={data.transfersOut}
+            entries={transfersOut}
             direction="out"
+            emptyMessage={
+              hasNextSeason
+                ? 'Nobody transferred out after this season.'
+                : "Who leaves after this season isn't known until next season is synced."
+            }
             reasonByPlayer={reasonByPlayer}
             onOpen={openPlayer}
           />

@@ -26,7 +26,13 @@ export interface ShortcutTarget {
 export const SHORTCUT_TARGETS: ShortcutTarget[] = [
   { id: 'dashboard', label: 'Dashboard', group: 'App', path: '/', dynastyScoped: false },
 
-  { id: 'coach-hub', label: 'Coach Hub', group: 'Coach', path: '', dynastyScoped: true },
+  { id: 'coach-hub', label: 'Overview', group: 'Coach', path: '', dynastyScoped: true },
+  { id: 'coach-season', label: 'Season', group: 'Coach', path: 'coach/season', dynastyScoped: true },
+  { id: 'coach-career', label: 'Career', group: 'Coach', path: 'coach/career', dynastyScoped: true },
+  { id: 'coach-staff', label: 'Staff', group: 'Coach', path: 'coach/staff', dynastyScoped: true },
+  { id: 'coach-legacy', label: 'Milestones', group: 'Coach', path: 'coach/milestones', dynastyScoped: true },
+  { id: 'coach-trophy-room', label: 'Trophy Room', group: 'Coach', path: 'coach/trophy-room', dynastyScoped: true },
+  { id: 'coach-hall', label: 'Hall of Champions', group: 'Coach', path: 'hall', dynastyScoped: true },
 
   { id: 'team-overview', label: 'Overview', group: 'Team', path: 'team-hub', dynastyScoped: true },
   { id: 'team-roster', label: 'Roster', group: 'Team', path: 'roster', dynastyScoped: true },

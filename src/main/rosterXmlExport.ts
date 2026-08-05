@@ -38,7 +38,8 @@ function tag(name: string, value: string | number | boolean | null, indent: stri
   return `${indent}<${name}>${escapeXml(String(value))}</${name}>`;
 }
 
-export interface RosterXmlOptions {
+/** Shared by both writers — the CSV in `rosterCsvExport.ts` renders the same material as a table. */
+export interface RosterExportOptions {
   teamName: string;
   seasonYear: number;
   /** Ratings by player id — absent entries simply export without a <ratings> block. */
@@ -47,7 +48,7 @@ export interface RosterXmlOptions {
   ratingsNote: string | null;
 }
 
-export function buildRosterXml(players: RosterPlayer[], options: RosterXmlOptions): string {
+export function buildRosterXml(players: RosterPlayer[], options: RosterExportOptions): string {
   const { teamName, seasonYear, ratingsByPlayer, ratingsNote } = options;
   const lines: string[] = [];
 

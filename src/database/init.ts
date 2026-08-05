@@ -129,6 +129,32 @@ export function withBatchedPersist<T>(fn: () => T): T {
 }
 
 /**
+ * Is a bulk write open right now?
+ *
+ * `deferDepth` is the honest answer to "is it safe to close the app": while a
+ * batch is open the file on disk is deliberately BEHIND the in-memory database,
+ * and quitting there loses whatever the batch had accumulated. The updater's
+ * pre-install check reads this before it agrees to restart (see
+ * main/updater/updateService.ts).
+ */
+export function isDatabaseWriteInProgress(): boolean {
+  return deferDepth > 0;
+}
+
+/**
+ * Writes anything a batch left pending, if a batch somehow ended without
+ * flushing. A no-op in the normal case — `withBatchedPersist` flushes in its
+ * own `finally` — so this is a belt-and-braces call for shutdown paths, not a
+ * routine one.
+ */
+export function flushPendingWrites(): void {
+  if (deferDepth === 0 && pendingWrite) {
+    pendingWrite = false;
+    persist();
+  }
+}
+
+/**
  * Space SQLite has already freed internally but has NOT returned to the file —
  * pages emptied by past deletions and kept for reuse. Invisible to the user,
  * who just sees an archive that never shrinks. Exact, and costs two pragmas.

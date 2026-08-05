@@ -1027,7 +1027,7 @@ function TeamStatsView({
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label={`Points${sfx}`} value={points(agg.points)} />
-        <StatTile label={`Total Offense${sfx}`} value={yards(agg.totalYards)} />
+        <StatTile label={`Total Offense${sfx}`} value={yards(agg.offenseYards)} />
         <StatTile label={`Passing${sfx}`} value={yards(agg.passYards)} />
         <StatTile label={`Rushing${sfx}`} value={yards(agg.rushYards)} />
         <StatTile label={`Points Allowed${sfx}`} value={points(agg.pointsAllowed)} />
@@ -1049,7 +1049,7 @@ function TeamStatsView({
           <CollapsibleSection title="Offense">
             <dl className="space-y-2 text-sm">
               <StatRow label={`Points${sfx}`} value={points(agg.points)} />
-              <StatRow label={`Total Yards${sfx}`} value={yardsPlain(agg.totalYards)} />
+              <StatRow label={`Total Offense${sfx}`} value={yardsPlain(agg.offenseYards)} />
               <StatRow label={`Passing Yards${sfx}`} value={yardsPlain(agg.passYards)} />
               <StatRow label={`Rushing Yards${sfx}`} value={yardsPlain(agg.rushYards)} />
               <StatRow label={`First Downs${sfx}`} value={count(agg.firstDowns)} />
@@ -1091,6 +1091,10 @@ function TeamStatsView({
               <StatRow label={`Penalty Yards${sfx}`} value={yardsPlain(agg.penaltyYards)} />
               <StatRow label="Kick Return Yards" note={seasonNote} value={seasonYds((t) => t.kickReturnYards)} />
               <StatRow label="Punt Return Yards" note={seasonNote} value={seasonYds((t) => t.puntReturnYards)} />
+              {/* Offense plus returns — the save's own TOTALYARDS, which is what
+                  it has always meant. It sits here rather than under Offense
+                  because the returns in it are special teams. */}
+              <StatRow label={`All-Purpose Yards${sfx}`} value={yardsPlain(agg.totalYards)} />
             </dl>
           </CollapsibleSection>
         </div>

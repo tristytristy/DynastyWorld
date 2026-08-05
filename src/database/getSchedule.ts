@@ -1,3 +1,5 @@
+import { isGamePlayed } from '../shared/gameStatus';
+import { displayRank } from '../shared/pollRank';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { getSeasonGameContext } from './gameContext';
 import { isBowlSlateSet } from '../shared/syncPhase';
@@ -60,7 +62,7 @@ function toScheduleGame(
   const opponent = (isHome ? game.awayTeamName : game.homeTeamName) ?? 'TBD';
   const teamScore = isHome ? game.homeScore : game.awayScore;
   const opponentScore = isHome ? game.awayScore : game.homeScore;
-  const played = game.status !== 'Unplayed';
+  const played = isGamePlayed(game.status);
 
   let result: ScheduleGame['result'] = null;
   if (played) {
@@ -72,8 +74,21 @@ function toScheduleGame(
   // Prefer the rank CAPTURED around kickoff over the opponent's rank today —
   // otherwise beating a #7 in September reads as beating a #40 by December.
   // Falls back to live when this game predates context tracking.
-  const capturedRank = isHome ? context?.awayMediaRank : context?.homeMediaRank;
-  const opponentRank = capturedRank ?? (opponentIndex !== null ? rankByTeam.get(opponentIndex) : undefined);
+  // Both polls from the same moment — see shared/pollRank.ts. The CFP number
+  // leads once released, matching the game's own scoreboard.
+  //
+  // The "was anything captured" test stays SEPARATE from the resolved value: a
+  // team captured as genuinely unranked resolves to null, and collapsing that
+  // into a `??` chain would fall through and print its rank TODAY — the very
+  // thing this capture exists to prevent.
+  const capturedMedia = isHome ? context?.awayMediaRank : context?.homeMediaRank;
+  const capturedCfp = isHome ? context?.awayCfpRank : context?.homeCfpRank;
+  const hasCapturedRank = capturedMedia != null || capturedCfp != null;
+  const opponentRank = hasCapturedRank
+    ? displayRank(capturedMedia, capturedCfp)
+    : opponentIndex !== null
+      ? rankByTeam.get(opponentIndex)
+      : undefined;
   const capturedRecord = isHome ? context?.awayRecord : context?.homeRecord;
   const teamQuarterScores = isHome ? game.homeQuarterScores : game.awayQuarterScores;
   const opponentQuarterScores = isHome ? game.awayQuarterScores : game.homeQuarterScores;
@@ -103,7 +118,7 @@ function toScheduleGame(
     opponentCurrentRank: opponentRank && opponentRank > 0 ? opponentRank : null,
     // true  = captured around kickoff (historical)
     // false = no capture for this game, so these are today's values
-    opponentContextCaptured: !!context && !context.approximate && (capturedRank !== undefined || !!capturedRecord),
+    opponentContextCaptured: !!context && !context.approximate && (hasCapturedRank || !!capturedRecord),
     teamQuarterScores,
     opponentQuarterScores,
     teamStats,
@@ -177,7 +192,7 @@ export function getSchedule(dynastyId: string, seasonId?: number): ScheduleOverv
   const userTeam = teams.find((t) => t.teamIndex === userTeamIndex);
   if (!userTeam) return undefined;
 
-  const rankByTeam = new Map(teams.map((t) => [t.teamIndex, t.mediaPollRank]));
+  const rankByTeam = new Map(teams.map((t) => [t.teamIndex, displayRank(t.mediaPollRank, t.cfpRank) ?? 0]));
   const conferenceByTeamIndex = new Map(teams.map((t) => [t.teamIndex, t.conferenceName]));
   const rivalries = getSnapshot<RivalryData[]>(season.id, 'rivalries') ?? [];
   const rivalryByOpponent = new Map(rivalries.map((r) => [r.opponentTeamIndex, r.name]));
@@ -194,7 +209,7 @@ export function getSchedule(dynastyId: string, seasonId?: number): ScheduleOverv
   const bowlsVisible = isBowlSlateSet(season.syncedWeekType);
   const teamGames = allGames
     .filter((g) => g.homeTeamIndex === userTeamIndex || g.awayTeamIndex === userTeamIndex)
-    .filter((g) => !g.isBowlGame || bowlsVisible || g.status !== 'Unplayed')
+    .filter((g) => !g.isBowlGame || bowlsVisible || isGamePlayed(g.status))
     .sort((a, b) => a.week - b.week);
 
   // Derived from the LEAGUEWIDE game list, not the user's own — a team that

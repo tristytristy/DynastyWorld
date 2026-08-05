@@ -3,6 +3,7 @@ import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
 import { getRoster } from './getRoster';
 import { getSchedule } from './getSchedule';
 import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer } from '../shared/types';
+import type { MediaLook } from '../shared/mediaLook';
 
 /** Resolved display shape minus the absolute path — the media IPC layer adds the path (it owns the on-disk library location; see withPath in src/main/ipc/media.ts). */
 export type MediaItemDisplay = Omit<MediaItemResolved, 'absolutePath'>;
@@ -26,12 +27,13 @@ interface MediaRow {
   frame_x: number | null;
   frame_y: number | null;
   frame_scale: number | null;
+  look_json: string | null;
   created_at: string;
 }
 
 /** The one column list every read uses, so a new column can't be added to three of four queries. */
 const MEDIA_COLS =
-  'id, season_id, file_name, media_type, game_id, description, player_ids_json, frame_x, frame_y, frame_scale, created_at';
+  'id, season_id, file_name, media_type, game_id, description, player_ids_json, frame_x, frame_y, frame_scale, look_json, created_at';
 
 function mapRow(row: MediaRow): MediaItem {
   let playerIds: number[] = [];
@@ -54,8 +56,21 @@ function mapRow(row: MediaRow): MediaItem {
       row.frame_scale === null
         ? null
         : { x: row.frame_x ?? 0, y: row.frame_y ?? 0, scale: row.frame_scale },
+    // Presentation only, so bad JSON degrades to "untreated" rather than taking
+    // the photo down with it.
+    look: parseLook(row.look_json),
     createdAt: row.created_at,
   };
+}
+
+function parseLook(raw: string | null): Partial<MediaLook> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<MediaLook>) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[] | undefined {
@@ -204,6 +219,7 @@ export function addMediaItem(
     description: '',
     playerIds: [],
     framing: null,
+    look: null,
     createdAt,
   };
 }
@@ -234,6 +250,19 @@ export function setMediaFraming(id: number, framing: MediaFraming | null): void 
     framing?.scale ?? null,
     id,
   ]);
+  persist();
+}
+
+/**
+ * Saves (or clears) a photo's look — its own call for the same reason framing
+ * is: this is a live control surface, not the details form, and the two must
+ * not overwrite each other.
+ *
+ * Null clears the column, which is what an untreated photo stores. See
+ * schema_v16 for why one JSON column rather than a column per knob.
+ */
+export function setMediaLook(id: number, look: MediaLook | null): void {
+  getDb().run('UPDATE media_items SET look_json = ? WHERE id = ?', [look ? JSON.stringify(look) : null, id]);
   persist();
 }
 

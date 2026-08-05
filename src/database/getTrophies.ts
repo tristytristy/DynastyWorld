@@ -1,12 +1,11 @@
+import { CFP_ROUND_NAMES, resolveCfpBowl } from '../shared/cfpBowls';
+import { isGamePlayed } from '../shared/gameStatus';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { GameData } from '../extractors/extract-schedule';
 import type { ConferenceChampionshipData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
 import { rivalryTrophyFor, rivalryTrophyLabel } from '../shared/rivalryTrophies';
 import type { BowlAppearance, PostseasonKind, Trophy, TeamTrophies } from '../shared/types';
-
-/** The real BowlGame.Name strings the save uses for the three CFP bracket rounds - verified directly, not guessed. */
-const CFP_ROUND_NAMES = new Set(['CFP First Round', 'CFP Quarterfinal', 'CFP Semifinal']);
 
 type LegacyConferenceChampionshipData = {
   conferenceName: string;
@@ -35,7 +34,7 @@ function normalizeConferenceChampionships(
 }
 
 function gameResult(game: GameData, userTeamIndex: number): 'W' | 'L' | 'T' | null {
-  if (game.status === 'Unplayed') return null;
+  if (!isGamePlayed(game.status)) return null;
   const isHome = game.homeTeamIndex === userTeamIndex;
   const teamScore = isHome ? game.homeScore : game.awayScore;
   const opponentScore = isHome ? game.awayScore : game.homeScore;
@@ -51,8 +50,31 @@ function opponentName(game: GameData, userTeamIndex: number): string {
 
 function classifyPostseasonKind(game: GameData): PostseasonKind {
   if (game.isNationalChampionship) return 'national-championship';
-  if (game.bowlName && CFP_ROUND_NAMES.has(game.bowlName)) return 'cfp-round';
+  // A CFP round played at one of the six New Year's Six venues IS that bowl —
+  // a quarterfinal at the Rose Bowl is the Rose Bowl, and the game awards its
+  // trophy. Only a round with no bowl behind it (the first round, played on
+  // campus) stays a bare bracket round.
+  if (game.bowlName && CFP_ROUND_NAMES.has(game.bowlName)) {
+    return resolveCfpBowl(game.bowlName, game.neutralVenueId) ? 'bowl' : 'cfp-round';
+  }
   return 'bowl';
+}
+
+/**
+ * The bowl a postseason game actually is, traditional or playoff.
+ *
+ * A traditional bowl carries its own AssetName. A CFP quarterfinal or semifinal
+ * carries a placeholder, and its real identity has to be resolved from the
+ * venue (see shared/cfpBowls.ts). Null for the first round — played on the
+ * higher seed's campus, so there is no bowl to win — and for the national
+ * championship, which is a neutral site rather than anybody's bowl.
+ */
+function bowlIdentity(game: GameData): { name: string; assetName: string | null } | null {
+  if (game.isNationalChampionship) return null;
+  const cfp = resolveCfpBowl(game.bowlName, game.neutralVenueId);
+  if (cfp) return { name: cfp.name, assetName: cfp.assetName };
+  if (game.bowlName && CFP_ROUND_NAMES.has(game.bowlName)) return null;
+  return game.bowlName ? { name: game.bowlName, assetName: game.bowlAssetName } : null;
 }
 
 /**
@@ -79,7 +101,7 @@ export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies 
 
   const trophies: Trophy[] = [];
 
-  const ncGame = teamGames.find((g) => g.isNationalChampionship && g.status !== 'Unplayed');
+  const ncGame = teamGames.find((g) => g.isNationalChampionship && isGamePlayed(g.status));
   if (ncGame && gameResult(ncGame, userTeamIndex) === 'W') {
     trophies.push({ kind: 'national-championship', label: 'National Champions', assetKey: null });
   }
@@ -107,33 +129,56 @@ export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies 
   // Every postseason game played, not just traditional bowls - a team that
   // makes the CFP plays several of these before (maybe) reaching the national
   // championship. The furthest one (highest week) is "how the postseason
-  // went" for the single appearance badge; a bowl-win trophy only fires for a
-  // genuine named bowl, not for winning a CFP bracket round (that's
-  // progression, not a trophy - the championship win above covers the actual
-  // prize).
+  // went" for the single appearance badge.
   const postseasonGames = teamGames
-    .filter((g) => g.isBowlGame && g.status !== 'Unplayed' && g.bowlName)
+    .filter((g) => g.isBowlGame && isGamePlayed(g.status) && g.bowlName)
     .sort((a, b) => b.week - a.week);
 
   let bowlAppearance: BowlAppearance | null = null;
   const latest = postseasonGames[0];
   if (latest && latest.bowlName) {
-    const kind = classifyPostseasonKind(latest);
-    const result = gameResult(latest, userTeamIndex);
+    const identity = bowlIdentity(latest);
     bowlAppearance = {
-      kind,
-      bowlName: latest.bowlName,
-      bowlAssetName: latest.bowlAssetName,
+      kind: classifyPostseasonKind(latest),
+      /*
+        A resolved playoff bowl reports itself as the bowl, so the badge reads
+        "Rose Bowl" and carries the Rose Bowl's own art rather than the generic
+        "CFP Quarterfinal" mark. Falls back to the save's own naming when there
+        is no bowl behind the round — the first round, played on campus.
+      */
+      bowlName: identity?.name ?? latest.bowlName,
+      bowlAssetName: identity?.assetName ?? latest.bowlAssetName,
       opponent: opponentName(latest, userTeamIndex),
-      result,
+      result: gameResult(latest, userTeamIndex),
     };
-    if (kind === 'bowl' && result === 'W') {
-      trophies.push({
-        kind: 'bowl-win',
-        label: `${latest.bowlName} Champions`,
-        assetKey: latest.bowlAssetName,
-      });
-    }
+  }
+
+  /*
+    BOWL TROPHIES, INCLUDING THE ONES WON INSIDE THE PLAYOFF.
+
+    This used to award nothing for a CFP round, reasoning that winning a bracket
+    round is progression rather than a prize. That held only while the app
+    couldn't tell WHICH bowl a quarterfinal was — now that the venue resolves
+    it, a quarterfinal at the Rose Bowl IS the Rose Bowl, and the game hands
+    over that trophy on the way to the title.
+
+    Iterated over every postseason game rather than only the furthest, because a
+    playoff run can collect more than one: win the Rose Bowl quarterfinal and
+    the Orange Bowl semifinal and both belong in the case. Deduped by asset so a
+    bowl can't appear twice, and the national championship is excluded — it is a
+    neutral site rather than anybody's bowl, and the title trophy above already
+    covers it.
+  */
+  for (const game of postseasonGames) {
+    if (gameResult(game, userTeamIndex) !== 'W') continue;
+    const identity = bowlIdentity(game);
+    if (!identity) continue;
+    if (trophies.some((t) => t.kind === 'bowl-win' && t.assetKey === identity.assetName)) continue;
+    trophies.push({
+      kind: 'bowl-win',
+      label: `${identity.name} Champions`,
+      assetKey: identity.assetName,
+    });
   }
 
   /*
@@ -149,7 +194,7 @@ export function getTrophies(dynastyId: string, seasonId?: number): TeamTrophies 
   */
   if (userTeam) {
     for (const game of teamGames) {
-      if (game.status === 'Unplayed' || gameResult(game, userTeamIndex) !== 'W') continue;
+      if (!isGamePlayed(game.status) || gameResult(game, userTeamIndex) !== 'W') continue;
       const stem = rivalryTrophyFor(userTeam.displayName, opponentName(game, userTeamIndex));
       if (!stem || trophies.some((t) => t.assetKey === stem)) continue;
       trophies.push({

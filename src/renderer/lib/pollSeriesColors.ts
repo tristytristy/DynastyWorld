@@ -121,11 +121,6 @@ export interface ThemedColor {
   dark: string;
 }
 
-/** One team colour, resolved for both surfaces at once. */
-export function themedTeamColor(hex: string | null): ThemedColor {
-  return { light: teamLineColor(hex, false), dark: teamLineColor(hex, true) };
-}
-
 /**
  * The ordered series palette for a team-themed chart: the program's own two
  * colours first, then on-brand neutrals (the logo's gold, then greys) for any
@@ -181,7 +176,8 @@ export function resolvePollLineColors(
     isDark ? GRAPHITE.dark : GRAPHITE.light,
     isDark ? '#ffffff' : '#0a0a0a',
   ];
-  const cfp = cfpCandidates.find((c) => !tooClose(c, ap) && !tooClose(c, coaches)) ?? cfpCandidates[0];
+  const cfp =
+    cfpCandidates.find((c) => !tooClose(c, ap) && !tooClose(c, coaches)) ?? cfpCandidates[0];
 
   return { ap, coaches, cfp, cfpIsNeutral: teamOwnsGold };
 }

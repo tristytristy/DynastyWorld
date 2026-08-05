@@ -4,11 +4,12 @@ import { CardFocusModal } from './CardFocusModal';
 import { CardGrid } from './CardGrid';
 import { useConfirm } from '../../data/ConfirmDialogProvider';
 import { useTeamThemeVars } from '../../lib/cardTheme';
-import { ALL_CARD_LAYERS } from '../../../shared/types';
+import { ALL_CARD_LAYERS, DEFAULT_CARD_SCRIM } from '../../../shared/types';
 import type { CardFocusEditor } from './CardFocusModal';
 import type {
   CardLayers,
   CardPhotoTransform,
+  CardScrim,
   CardStatSource,
   CardStatSourceOption,
   PlayerCardInput,
@@ -183,6 +184,7 @@ export function PlayerCardTab({
               : null,
             photoFile: legacyPhoto ? baseName(legacyPhoto) : null,
             photoTransform: legacyTransform ?? DEFAULT_TRANSFORM,
+            scrim: DEFAULT_CARD_SCRIM,
           });
           loadedCards = [created];
         }
@@ -228,6 +230,7 @@ export function PlayerCardTab({
       photoFile: null,
       photoPath: null,
       photoTransform: DEFAULT_TRANSFORM,
+      scrim: DEFAULT_CARD_SCRIM,
       favorite: false,
       isDefault: true,
       createdAt: now,
@@ -248,6 +251,7 @@ export function PlayerCardTab({
         : null,
       photoFile: null,
       photoTransform: DEFAULT_TRANSFORM,
+      scrim: DEFAULT_CARD_SCRIM,
       ...over,
     }),
     [seasonYear, teamName, player, seasonSource],
@@ -289,6 +293,7 @@ export function PlayerCardTab({
         statSource: card.statSource,
         photoFile: card.photoFile,
         photoTransform: card.photoTransform,
+        scrim: card.scrim,
         ...over,
       });
       if (updated) mergeCard(updated);
@@ -373,6 +378,9 @@ export function PlayerCardTab({
     },
     setStats: (card, statSource: CardStatSource, stats) => {
       void saveCard(card, { statSource, stats });
+    },
+    setScrim: (card, scrim: CardScrim) => {
+      void saveCard(card, { scrim });
     },
     setLayers: (card, layers: CardLayers) => {
       void saveCard(card, { layers });

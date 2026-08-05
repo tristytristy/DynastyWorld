@@ -1,4 +1,7 @@
-import { getDynastyById, getSeasonsByDynasty, getSnapshot } from './helpers';
+import { CFP_ROUND_NAMES } from '../shared/cfpBowls';
+import { displayRank } from '../shared/pollRank';
+import { getDynastyById, getRankingHistory, getSeasonsByDynasty, getSnapshot } from './helpers';
+import { getSeasonGameContext } from './gameContext';
 import type { AwardsData } from '../extractors/extract-awards';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { ChampionSummary, ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
@@ -15,6 +18,7 @@ import type {
   ProgramHistoryRecordHolder,
   ProgramHistorySeasonEntry,
 } from '../shared/types';
+import { isGamePlayed } from '../shared/gameStatus';
 
 function toLeagueChampion(champion: ChampionSummary | null): LeagueHistoryYearEntry['nationalChampion'] {
   if (!champion) return null;
@@ -28,8 +32,6 @@ function toLeagueChampion(champion: ChampionSummary | null): LeagueHistoryYearEn
     coachLastName: champion.coachLastName,
   };
 }
-
-const CFP_ROUND_NAMES = new Set(['CFP First Round', 'CFP Quarterfinal', 'CFP Semifinal']);
 
 type LegacyConferenceChampionshipData = {
   conferenceName: string;
@@ -75,7 +77,7 @@ function normalizeConferenceChampionships(
 }
 
 function gameResult(game: GameData, userTeamIndex: number): 'W' | 'L' | 'T' | null {
-  if (game.status === 'Unplayed') return null;
+  if (!isGamePlayed(game.status)) return null;
   const isHome = game.homeTeamIndex === userTeamIndex;
   const teamScore = isHome ? game.homeScore : game.awayScore;
   const opponentScore = isHome ? game.awayScore : game.homeScore;
@@ -107,6 +109,27 @@ function postseasonSummary(game: GameData | undefined, result: 'W' | 'L' | 'T' |
 function addMilestone(milestones: ProgramHistoryMilestone[], seasonYear: number, label: string, detail: string): void {
   milestones.push({ seasonYear, label, detail });
 }
+
+/**
+ * The rank a team carried into a game, from the point-in-time capture.
+ *
+ * The CFP number now leads once the committee has released one, with the media
+ * poll carrying the rest of the season — the rule the game's own scoreboard
+ * follows, and shared with every other rank surface so they cannot disagree.
+ * This used to prefer the media poll, which made a program's history describe
+ * late-season games with a different number than the game itself showed.
+ */
+function rankAtKickoff(mediaRank: number | null, cfpRank: number | null): number | null {
+  return displayRank(mediaRank, cfpRank);
+}
+
+/** Poll thresholds a program crosses ONCE, best first — the climb, not a per-season report. */
+const POLL_MILESTONES: { rank: number; label: string; detail: (teamName: string) => string }[] = [
+  { rank: 1, label: 'Number One', detail: (t) => `${t} reached #1 in the country.` },
+  { rank: 5, label: 'Top Five', detail: (t) => `${t} broke into the top five.` },
+  { rank: 10, label: 'Top Ten', detail: (t) => `${t} broke into the top ten.` },
+  { rank: 25, label: 'Ranked', detail: (t) => `${t} entered the national polls.` },
+];
 
 function ensureCoachSummary(map: Map<string, CoachAccumulator>, coachName: string): CoachAccumulator {
   const existing = map.get(coachName);
@@ -163,6 +186,14 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
   let dynastyUndefeatedSeasons = 0;
   let bestMediaRank: number | null = null;
   let bestRecruitingClassRank: number | null = null;
+  /**
+   * Best rank reached in any PRIOR season — the gate for the poll milestones,
+   * kept separate from `bestMediaRank` because that one is updated inside the
+   * loop before the milestone check and so already includes the season being
+   * judged. This one also counts mid-season weeks, which is where a program
+   * usually touches its high-water mark before losing a game.
+   */
+  let bestRankBeforeThisSeason: number | null = null;
 
   for (const season of seasons) {
     if (season.userTeamId === null) continue;
@@ -213,11 +244,11 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
       (game) => game.homeTeamIndex === seasonTeamId || game.awayTeamIndex === seasonTeamId,
     );
     const postseasonGames = teamGames
-      .filter((game) => game.isBowlGame && game.status !== 'Unplayed' && game.bowlName)
+      .filter((game) => game.isBowlGame && isGamePlayed(game.status) && game.bowlName)
       .sort((a, b) => b.week - a.week);
     const latestPostseason = postseasonGames[0];
     const latestPostseasonResult = latestPostseason ? gameResult(latestPostseason, seasonTeamId) : null;
-    const nationalChampionshipGame = teamGames.find((game) => game.isNationalChampionship && game.status !== 'Unplayed');
+    const nationalChampionshipGame = teamGames.find((game) => game.isNationalChampionship && isGamePlayed(game.status));
     const nationalChampion = nationalChampionshipGame
       ? gameResult(nationalChampionshipGame, seasonTeamId) === 'W'
       : false;
@@ -257,9 +288,90 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
       dynastyTenWinSeasons++;
       addMilestone(milestones, season.seasonYear, '10-Win Season', `Finished ${wins}-${losses}.`);
     }
-    if (wins > 0 && losses === 0) {
+    /*
+      UNDEFEATED ONLY ONCE THE SEASON IS ACTUALLY OVER (user report 2026-08-02).
+      This fired on `losses === 0` alone, so a team that had played one game and
+      won it was already being told it "ran the table at 1-0" — and the counter
+      was incremented on the strength of it too.
+
+      The gate is the schedule itself: no games left unplayed. That's the honest
+      definition of "after the last game of your season", and it needs no guess
+      about how long a season is.
+    */
+    const gamesRemaining = teamGames.filter((game) => !isGamePlayed(game.status)).length;
+    if (wins > 0 && losses === 0 && gamesRemaining === 0) {
       dynastyUndefeatedSeasons++;
       addMilestone(milestones, season.seasonYear, 'Undefeated Season', `Ran the table at ${wins}-${losses}.`);
+    }
+
+    /*
+      SIGNATURE WINS.
+
+      A milestone list that only counts titles and ten-win seasons describes a
+      blue blood. Most dynasties are not that, and the moment they turn on is a
+      single Saturday — the user's was beating #1 as an unranked team, and it
+      appeared nowhere.
+
+      The ranks have to be the ones that were true AT KICKOFF, which is exactly
+      what `game_context` was built to keep: the save only ever holds current
+      values, so beating #1 in September and reading their rank in January would
+      call it a win over an unranked team. Seasons captured before that table
+      existed simply have no context rows and produce no signature wins, rather
+      than producing wrong ones.
+
+      Two bars, deliberately high, so this stays a highlight reel:
+        · beating the #1 team, whoever you are
+        · beating a top-ten team while unranked yourself
+      A ranked team beating another ranked team is a good win, not a milestone.
+    */
+    const context = getSeasonGameContext(season.id);
+    for (const game of teamGames) {
+      if (!isGamePlayed(game.status)) continue;
+      if (gameResult(game, seasonTeamId) !== 'W') continue;
+      const ctx = context.get(game.gameId);
+      if (!ctx) continue;
+      const weAreHome = game.homeTeamIndex === seasonTeamId;
+      const ourRank = weAreHome
+        ? rankAtKickoff(ctx.homeMediaRank, ctx.homeCfpRank)
+        : rankAtKickoff(ctx.awayMediaRank, ctx.awayCfpRank);
+      const theirRank = weAreHome
+        ? rankAtKickoff(ctx.awayMediaRank, ctx.awayCfpRank)
+        : rankAtKickoff(ctx.homeMediaRank, ctx.homeCfpRank);
+      if (theirRank === null) continue;
+      const opponent = (weAreHome ? game.awayTeamName : game.homeTeamName) ?? 'a ranked opponent';
+      const us = ourRank === null ? `Unranked ${userTeam.displayName}` : `#${ourRank} ${userTeam.displayName}`;
+
+      if (theirRank === 1) {
+        addMilestone(milestones, season.seasonYear, 'Beat the #1 Team', `${us} over #1 ${opponent}.`);
+      } else if (ourRank === null && theirRank <= 10) {
+        addMilestone(milestones, season.seasonYear, 'Signature Win', `${us} over #${theirRank} ${opponent}.`);
+      }
+    }
+
+    /*
+      THE CLIMB. Best rank the program can be PROVEN to have held this season:
+      every synced week of the poll history, plus the rank standing in the teams
+      snapshot. A week never synced simply isn't claimed.
+    */
+    const weeklyBest = getRankingHistory(season.id)
+      .map((snapshot) => rankAtKickoff(snapshot.mediaPollRank, snapshot.cfpRank))
+      .filter((rank): rank is number => rank !== null);
+    if (userTeam.mediaPollRank > 0) weeklyBest.push(userTeam.mediaPollRank);
+    const seasonBestRank = weeklyBest.length ? Math.min(...weeklyBest) : null;
+    if (seasonBestRank !== null) {
+      // Fired the FIRST time the dynasty reaches each tier and never again —
+      // "Ranked" every year for a program that is always ranked is noise, not a
+      // milestone. Best tier first, so one season can only claim its highest.
+      // NOT `bestMediaRank`: that one has already taken this season's rank a few
+      // lines above, so every tier would look like it had been reached before.
+      const tier = POLL_MILESTONES.find(
+        (m) => seasonBestRank <= m.rank && (bestRankBeforeThisSeason === null || bestRankBeforeThisSeason > m.rank),
+      );
+      if (tier) {
+        addMilestone(milestones, season.seasonYear, tier.label, tier.detail(userTeam.displayName));
+      }
+      bestRankBeforeThisSeason =
+        bestRankBeforeThisSeason === null ? seasonBestRank : Math.min(bestRankBeforeThisSeason, seasonBestRank);
     }
 
     const headCoach = coaches.find(

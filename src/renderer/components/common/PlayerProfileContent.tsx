@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SurfaceCard } from '../ui/SurfaceCard';
 import { GliderNav, gliderItemClass } from '../ui/GliderNav';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
+import { ClassBadge } from './ClassBadge';
 import { PlayerPortrait } from './PlayerPortrait';
+import { MediaBackdrop, mediaPhotoUrls } from './MediaBackdrop';
 import { TeamLogo } from './TeamLogo';
-import { CLASS_ORDER, abbreviateClass } from '../../lib/rosterOrder';
+import { CLASS_ORDER } from '../../lib/rosterOrder';
 import { formatAwardLabel, groupWeeklyHonors } from '../../lib/awardFormat';
 import { getAwardTrophyPath } from '../../lib/trophyAssetMapping';
 import { gameImpactScore, gameResultLine } from '../../../shared/gameImpactScore';
@@ -12,6 +14,7 @@ import type { PlayerModalFallback } from '../../data/PlayerModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
 import { useGameModal } from '../../data/GameModalProvider';
 import { EditButton } from './CoachCard';
+import { HallAction } from './HallAction';
 import { MediaGallery } from './MediaGallery';
 import { PlayerNotesTab } from './PlayerNotesTab';
 import { PlayerCardTab } from './PlayerCardTab';
@@ -31,6 +34,7 @@ import type {
   OffensiveGameLine,
   OffensiveStatLine,
   PlayerDevelopmentSeason,
+  PlayerStatSeason,
   PlayerEditFields,
   PlayerStats,
   RosterPlayer,
@@ -384,7 +388,7 @@ function ImportedSeasonHistorySection({
                   })()}
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                  {season.schoolYear ? abbreviateClass(season.schoolYear) : '-'}
+                  {season.schoolYear ? <ClassBadge schoolYear={season.schoolYear} /> : '-'}
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{season.position ?? '-'}</td>
                 <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{season.line.gamesPlayed}</td>
@@ -1403,6 +1407,8 @@ export function PlayerProfileContent({
   const [schedule, setSchedule] = useState<ScheduleOverview | null | undefined>(undefined);
   const [awardHistory, setAwardHistory] = useState<AwardsBySeason[] | undefined>(undefined);
   const [statsHistory, setStatsHistory] = useState<PlayerStatsBySeason[] | undefined>(undefined);
+  /** Season-by-season production INCLUDING years at other schools — see getPlayerStatHistory. */
+  const [statSeasons, setStatSeasons] = useState<PlayerStatSeason[]>([]);
   const [teamAwardWins, setTeamAwardWins] = useState<PlayerTeamAwardWin[]>([]);
   /** The season this component actually resolved and is rendering — may differ from the `seasonId` prop if that season's roster didn't have the player and a fallback scan found them in an older one. Drives the Edit button's current-season-only restriction below. */
   const [resolvedSeasonId, setResolvedSeasonId] = useState<number | undefined>(seasonId);
@@ -1458,6 +1464,24 @@ export function PlayerProfileContent({
     setDevelopment([]);
     window.api.db.getPlayerDevelopment(dynastyId, playerId).then((rows) => {
       if (!cancelled) setDevelopment(rows ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, playerId]);
+
+  /*
+    The season-by-season stat breakdown, from the LEAGUEWIDE snapshot so a
+    transfer's years at previous schools are in it. The user's own roster
+    snapshots can't supply those — a transfer's career TOTAL already counts them
+    (the save accumulates across schools) while the breakdown underneath showed
+    only the seasons he spent with you, so the totals never added up.
+  */
+  useEffect(() => {
+    let cancelled = false;
+    setStatSeasons([]);
+    window.api.db.getPlayerStatHistory(dynastyId, playerId).then((rows) => {
+      if (!cancelled) setStatSeasons(rows ?? []);
     });
     return () => {
       cancelled = true;
@@ -1838,6 +1862,31 @@ export function PlayerProfileContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynastyId, seasonId, playerId, leagueTeamIndex, fallback?.teamDisplayName]);
 
+  /*
+    THE PLAYER STANDS IN HIS OWN PHOTOGRAPHS. Same treatment as the Trophy
+    Room — black and white, high contrast, the jumbotron grid, a slow drift —
+    because it is literally the same component and the same stylesheet.
+
+    Anything tagged to this player anywhere, not scoped to a season or a game:
+    a masthead is about the person, not an occasion. No photographs and the
+    hero is exactly the neutral field it has always been.
+
+    ABOVE THE EARLY RETURNS, deliberately: this component bails out while the
+    roster is loading and again when no player resolves, so a hook placed with
+    the render code runs on some passes and not others.
+  */
+  const [heroMedia, setHeroMedia] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    setHeroMedia([]);
+    window.api.media.listForPlayer(dynastyId, playerId).then((items) => {
+      if (!cancelled) setHeroMedia(mediaPhotoUrls(items));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId, playerId]);
+
   if (roster === undefined) {
     return <p className="text-slate-500 dark:text-slate-400">Loading player...</p>;
   }
@@ -1889,7 +1938,18 @@ export function PlayerProfileContent({
   const stats = allStats?.find((item) => item.playerId === playerId);
   const playerGamelog = playerSeasonGamelog ?? [];
   const honorSeasons = buildPlayerHonorSeasons(awardHistory ?? [], playerId);
+  /*
+    Prefer the leaguewide history; fall back to the user-team build only if it
+    hasn't loaded (or a legacy archive has no leagueRoster snapshot), so an
+    older dynasty still shows the seasons it can rather than nothing.
+  */
   const importedStatSeasons = buildImportedStatSeasons(statsHistory ?? [], playerId);
+  const seasonBreakdown = statSeasons.length > 0 ? statSeasons : importedStatSeasons;
+  const teamByYear = new Map<number, string | null>(
+    statSeasons.length > 0
+      ? statSeasons.map((row) => [row.seasonYear, row.teamName])
+      : development.map((row) => [row.seasonYear, row.teamName]),
+  );
 
   // Editing is only ever allowed while looking at the live, current season —
   // a historical season's roster is a frozen snapshot, and the save file
@@ -1992,11 +2052,24 @@ export function PlayerProfileContent({
     : (teamAwardWins[0]?.awardName ?? null);
 
   return (
-    <div className="space-y-5">
+    /*
+      A COLUMN, NOT A STACK, so the masthead and the destination bar can hold
+      still while the destination itself scrolls.
+
+      Everything used to sit in one block inside the modal's single scroll area,
+      which meant scrolling Performance far enough took the player's own name and
+      the tabs off the top of the screen — you could be deep in a page with
+      nothing on screen saying whose page it was, and no way back to the tabs
+      without scrolling up. The identity of a profile and the way out of it are
+      exactly the two things that should never leave.
+    */
+    <div className="flex h-full min-h-0 flex-col gap-5">
       {/* Hero — unboxed portrait over a neutral field (black base; team color stays in accents, not the ground). */}
       <div
         className="corner-cut relative overflow-hidden border border-slate-200/70 bg-slate-100/60 dark:border-white/10 dark:bg-white/[0.03]"
+        data-lit={heroMedia.length > 0 ? 'true' : undefined}
       >
+        {heroMedia.length > 0 && <MediaBackdrop photos={heroMedia} />}
         {/*
           TIGHTENED (Phase 2). The hero was ~390px before a single line of
           Overview appeared, most of it empty field to the right of the name —
@@ -2025,7 +2098,15 @@ export function PlayerProfileContent({
           re-split the PNG's transparent top evenly above and below, which is
           what left a gap over the head AND a hard slice through the jersey.
         */}
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:gap-6">
+        {/*
+          POSITIONED, so it paints ABOVE the backdrop. An absolutely positioned
+          element outranks static in-flow content in the same stacking context
+          however late that content appears in the DOM — which is why the
+          jumbotron grid was landing on top of the name, the logo and the OVR.
+          The Trophy Room's display case solves it the same way, with a
+          `relative z-[1]` wrapper around everything it draws.
+        */}
+        <div className="relative z-[1] flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:gap-6">
           {/*
             THE PORTRAIT IS FULL SIZE AGAIN, and the masthead ignores its bounds
             — the same trick the matchup helmets use.
@@ -2069,7 +2150,15 @@ export function PlayerProfileContent({
           </div>
           <div className="min-w-0 self-center">
             <div className="flex items-center gap-3">
-              <span className="corner-cut-sm inline-flex h-10 min-w-[2.6rem] items-center justify-center bg-[var(--team-primary)] px-3 font-display text-lg font-bold text-[var(--team-on-primary)]">
+              {/* The number is part of the NAME LINE now, not a chip beside it:
+                  same display face, bigger, white, no fill. A filled badge was
+                  competing with the name for the same glance, and over a
+                  photograph it would read as a sticker. */}
+              <span
+                className={`font-display text-3xl font-bold leading-none ${
+                  heroMedia.length > 0 ? 'text-white' : 'text-slate-950 dark:text-white'
+                }`}
+              >
                 {player.jerseyNumber}
               </span>
               {heroTeamName && (
@@ -2078,8 +2167,15 @@ export function PlayerProfileContent({
                   <span className="type-eyebrow text-slate-500 dark:text-slate-400">{heroTeamName}</span>
                 </span>
               )}
-              <span className="type-eyebrow text-slate-500 dark:text-slate-400">
-                {player.position} · {abbreviateClass(player.schoolYear)}
+              {/* A FLEX ROW rather than a text run with an icon dropped into it.
+                  Mixing an inline-flex badge into flowing text leaves the whole
+                  group sitting on a baseline the icon has moved, which is what
+                  threw this line out of line with the jersey number and the
+                  season chip beside it. */}
+              <span className="type-eyebrow inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                <span>{player.position}</span>
+                <span aria-hidden="true">·</span>
+                <ClassBadge schoolYear={player.schoolYear} redshirtStatus={player.redshirtStatus} />
               </span>
               {viewedSeason && !viewedSeason.isCurrent && (
                 <span className="type-eyebrow bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
@@ -2110,10 +2206,16 @@ export function PlayerProfileContent({
               owns the supporting bio.
             */}
           </div>
+          {/* The Hall control sits between the identity and the OVR, and draws
+              nothing at all unless this coach actually coached him — see
+              HallAction for why absent beats greyed out. */}
+          <div className="shrink-0 self-center sm:ml-auto">
+            <HallAction dynastyId={dynastyId} playerId={playerId} />
+          </div>
           {/* Far right (user direction, reverted from the snug placement): the
               OVR anchors the opposite end of the bar, which is how it read
               before and how a scoreboard reads. */}
-          <div className="shrink-0 self-center text-center sm:ml-auto sm:pr-4">
+          <div className="shrink-0 self-center text-center sm:pr-4">
             <p className="type-eyebrow text-slate-400 dark:text-slate-500">Overall</p>
             <p className="type-stat-xl mt-1 text-slate-950 dark:text-white">{player.overallRating}</p>
           </div>
@@ -2130,7 +2232,7 @@ export function PlayerProfileContent({
       */}
       <GliderNav
         activeIndex={PROFILE_TABS.findIndex((t) => t.key === tab)}
-        className="w-full"
+        className="w-full shrink-0"
         ariaLabel="Player profile sections"
         itemsClassName="flex-wrap gap-1.5"
       >
@@ -2150,7 +2252,9 @@ export function PlayerProfileContent({
         ))}
       </GliderNav>
 
-      <div key={tab} className="space-y-5">
+      {/* THE ONLY SCROLLER. -mr/pr so the scrollbar sits in the panel padding
+          rather than cutting into the content. */}
+      <div key={tab} className="-mr-2 min-h-0 flex-1 space-y-5 overflow-y-auto pr-2">
         {tab === 'overview' && (
           <PlayerOverview
             player={player}
@@ -2240,8 +2344,8 @@ export function PlayerProfileContent({
                   emptyMessage="No career stats yet. These appear once games have been played and re-imported."
                 />
                 <ImportedSeasonHistorySection
-                  seasons={importedStatSeasons}
-                  teamByYear={new Map(development.map((d) => [d.seasonYear, d.teamName]))}
+                  seasons={seasonBreakdown}
+                  teamByYear={teamByYear}
                   position={player.position}
                 />
               </>

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { CenteredModalPanel } from './CenteredModalPanel';
-import { Markdown } from '../ui/Markdown';
-import { getCheckUpdatesOnStartup } from '../../lib/updatePrefs';
-import type { UpdateCheckResult } from '../../../shared/types';
+import { UpdatePanel } from './UpdatePanel';
+import { useUpdater } from '../../data/useUpdater';
+import { getUpdatePrefs, migrateLegacyUpdatePref } from '../../lib/updatePrefs';
 
 /** Remembers which version the user chose "Later" on, so it doesn't nag again for the same one. */
 const DISMISS_KEY = 'cfbhub.dismissedUpdateVersion';
@@ -16,83 +15,78 @@ function readDismissed(): string | null {
 }
 
 /**
- * Quiet, once-per-launch update check. On mount it asks the main process (which
- * polls the GitHub Releases API); if a newer version exists AND the user hasn't
- * already dismissed that exact version, a modal offers the download. Any failure
- * (offline, rate-limited) is swallowed — this never interrupts a normal launch.
- * The manual "Check for updates" button in the About panel is the always-on path.
+ * The quiet "there's an update" notice.
+ *
+ * A CARD IN THE CORNER, not a modal. This is the first thing a user sees after
+ * launching, and a dialog across the middle of the window makes an optional
+ * update feel like a demand — you have to deal with it before you can look at
+ * your dynasty. The card says the same thing, leaves the app usable behind it,
+ * and goes away for that version once dismissed.
+ *
+ * It appears for exactly two states: an update is available, or one has finished
+ * downloading and is waiting to install. Checking, errors and "you're up to
+ * date" belong in About, where someone went looking for them.
  */
 export function UpdateNotice() {
-  const [result, setResult] = useState<UpdateCheckResult | null>(null);
-  const [open, setOpen] = useState(false);
+  const { state } = useUpdater();
+  const [dismissed, setDismissed] = useState<string | null>(() => readDismissed());
+
+  /*
+    The main process already refuses to check when this is off, so the card
+    would never have anything to show — but it is read here too, so a manual
+    check from About doesn't also throw a card into the corner of someone who
+    asked to be left alone.
+
+    The migration runs first and once: anyone who had turned the old
+    localStorage flag off keeps that choice instead of silently getting the
+    launch check back.
+  */
+  const [optedIn, setOptedIn] = useState(false);
 
   useEffect(() => {
-    if (!getCheckUpdatesOnStartup()) return; // user turned off the launch check (About panel still checks manually)
     let cancelled = false;
-    window.api.update
-      .check()
-      .then((r) => {
-        if (cancelled || !r.updateAvailable || !r.latest) return;
-        if (r.latest === readDismissed()) return;
-        setResult(r);
-        setOpen(true);
+    void migrateLegacyUpdatePref()
+      .then(getUpdatePrefs)
+      .then((prefs) => {
+        if (!cancelled) setOptedIn(prefs.checkOnStartup);
       })
       .catch(() => {
-        /* stay silent on any check failure */
+        /* leave the card hidden rather than guessing */
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (!result) return null;
+  useEffect(() => {
+    // Dismissing "available" shouldn't also hide the far more useful "ready to
+    // install" card for the same version — that one is one click from done.
+    if (state?.status === 'downloaded' && state.availableVersion === dismissed) {
+      setDismissed(null);
+    }
+  }, [state?.status, state?.availableVersion, dismissed]);
+
+  if (!optedIn || !state || !state.supported) return null;
+  if (state.status !== 'available' && state.status !== 'downloaded') return null;
+  if (state.availableVersion && state.availableVersion === dismissed) return null;
 
   const dismiss = () => {
+    const version = state.availableVersion ?? null;
     try {
-      if (result.latest) window.localStorage.setItem(DISMISS_KEY, result.latest);
+      if (version) window.localStorage.setItem(DISMISS_KEY, version);
     } catch {
-      /* non-fatal */
+      /* non-fatal — it just means we ask again next launch */
     }
-    setOpen(false);
-  };
-
-  const download = () => {
-    if (result.url) window.api.update.openDownload(result.url);
-    dismiss();
+    setDismissed(version);
   };
 
   return (
-    <CenteredModalPanel open={open} onClose={dismiss} widthRem={26} eyebrow="Update available" title={`Version ${result.latest} is out`}>
-      <div className="space-y-4">
-        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-          You&apos;re on v{result.current}. A newer version is available — download it and run the installer to update.
-        </p>
-        {result.notes ? (
-          // Rendered as Markdown rather than raw text — GitHub release bodies are
-          // written in it, and the hashes and asterisks read as noise otherwise.
-          // The cap is a sanity bound on remote input, not a display choice; it's
-          // generous enough that real notes are never cut.
-          <div className="max-h-56 overflow-y-auto border border-slate-200/70 bg-slate-50/70 p-3 text-xs leading-5 text-slate-500 dark:border-white/5 dark:bg-white/5 dark:text-slate-400">
-            <Markdown source={result.notes.slice(0, 20000)} />
-          </div>
-        ) : null}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={dismiss}
-            className="border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            Later
-          </button>
-          <button
-            type="button"
-            onClick={download}
-            className="border border-[var(--team-primary)] bg-[var(--team-primary)] px-4 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:opacity-90"
-          >
-            Download
-          </button>
-        </div>
-      </div>
-    </CenteredModalPanel>
+    <div
+      role="status"
+      aria-live="polite"
+      className="corner-cut fixed bottom-4 right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] border border-[var(--surface-raised-border)] bg-[var(--surface-raised)] p-4 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.8)]"
+    >
+      <UpdatePanel onDismiss={dismiss} />
+    </div>
   );
 }

@@ -12,9 +12,11 @@ import {
   getBowlLogoPath,
   getConferenceChampionshipGamePath,
   getConferenceLogoPath,
+  getNationalChampionshipTrophyPath,
   getPlayoffRoundImagePath,
 } from '../lib/trophyAssetMapping';
 import { conferenceChampionshipWeek } from '../../shared/championshipWeek';
+import { getCfpBowlImagePath } from '../lib/scheduleFormat';
 import type { LeagueScoreGame, LeagueScoresView } from '../../shared/types';
 
 /** Scope options that aren't a conference. */
@@ -76,7 +78,8 @@ function GameMark({ game, championshipWeek }: { game: LeagueScoreGame; champions
     sharedConference !== null && championshipWeek !== null && game.week === championshipWeek && !game.isBowlGame;
 
   const src = game.isNationalChampionship
-    ? (game.bowlName ? getPlayoffRoundImagePath(game.bowlName) : null) ?? getBowlLogoPath(game.bowlAssetName)
+    ? // The trophy, not the CFP event mark — this is the game everything was for.
+      getNationalChampionshipTrophyPath()
     : game.bowlName && getPlayoffRoundImagePath(game.bowlName)
       ? getPlayoffRoundImagePath(game.bowlName)
       : game.isBowlGame
@@ -86,15 +89,30 @@ function GameMark({ game, championshipWeek }: { game: LeagueScoreGame; champions
           : getRivalryLogoPath(game.awayTeamName, game.homeTeamName) ??
             (sharedConference ? getConferenceLogoPath(sharedConference, appearance) : null);
 
+  /*
+    A playoff quarterfinal or semifinal carries TWO marks: the CFP round graphic
+    saying how deep into the bracket this is, and the bowl's own logo saying
+    which trophy is on the table. Neither answers the other's question, so the
+    bowl sits beside the round rather than replacing it.
+  */
+  const bowlSrc = getCfpBowlImagePath({
+    gameType: game.isBowlGame ? 'bowl' : 'non-conference',
+    conferenceName: null,
+    isNationalChampionship: game.isNationalChampionship,
+    isConferenceChampionship: false,
+    bowlName: game.bowlName,
+    bowlAssetName: game.bowlAssetName,
+    neutralVenueId: game.neutralVenueId,
+  });
+
   if (!src) return null;
   return (
-    <img
-      src={src}
-      alt=""
-      aria-hidden
-      loading="lazy"
-      className="h-12 w-12 shrink-0 object-contain"
-    />
+    <div className="flex shrink-0 items-center gap-1.5">
+      <img src={src} alt="" aria-hidden loading="lazy" className="h-12 w-12 shrink-0 object-contain" />
+      {bowlSrc && (
+        <img src={bowlSrc} alt="" aria-hidden loading="lazy" className="h-10 w-10 shrink-0 object-contain" />
+      )}
+    </div>
   );
 }
 
@@ -228,7 +246,7 @@ export function Scores() {
           {scope === ALL ? 'No games this week.' : 'No games this week match that filter.'}
         </SurfaceCard>
       ) : (
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 5xl:grid-cols-5">
           {weekGames.map((g) => {
             const played = g.homeScore !== null && g.awayScore !== null;
             const awayWon = played && (g.awayScore ?? 0) > (g.homeScore ?? 0);

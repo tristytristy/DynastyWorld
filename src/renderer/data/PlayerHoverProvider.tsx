@@ -35,6 +35,28 @@ const CARD_H = Math.round((CARD_W * 496) / 330);
 
 const NO_TRANSFORM: CardPhotoTransform = { x: 0, y: 0, scale: 1 };
 
+/**
+ * The hover card shows the name, the school's mark and the OVR — and nothing
+ * else.
+ *
+ * The reason is the size. The card is designed at 330px with type in FIXED
+ * pixels (a 46px surname, an 11px profile line), and everywhere else it is
+ * drawn at that width and SCALED — see ScaledSavedPlayerCard. The hover is the
+ * one place that lays it out at 250px instead, so every text element arrives a
+ * third too big for the box it is in: the profile line wraps or clips, and the
+ * stat row runs into the team logo.
+ *
+ * Dropping the two crowded layers leaves the three that are legible at any size
+ * and are all a preview is for — who, where, how good. What the card actually
+ * looks like is a click away in the modal, at its proper size.
+ *
+ * These override the SAVED card's own layer choices in one direction only: a
+ * layer the user switched off on their card stays off.
+ */
+// The opponent goes with the profile and the stats: a hover preview is name,
+// team and OVR, and a matchup line is exactly the detail that trim removed.
+const HOVER_LAYERS = { profile: false, stats: false, opponent: false } as const;
+
 /** Pre-v12 framing, kept only as the fallback for a player who has a legacy photo file but no saved card row. */
 function readLegacyTransform(dynastyId: string, playerId: number): CardPhotoTransform {
   try {
@@ -100,13 +122,14 @@ function HoverCard({ data, rect }: HoverState) {
       style={{ left, top, width: CARD_W, ...colorVars }}
     >
       {card ? (
-        <SavedPlayerCard dynastyId={data.dynastyId} card={card} />
+        <SavedPlayerCard dynastyId={data.dynastyId} card={card} layerOverrides={HOVER_LAYERS} />
       ) : (
         <PlayerCard
           player={data.player}
           teamName={data.teamName}
           seasonYear={data.seasonYear}
           stats={data.stats ?? []}
+          layers={HOVER_LAYERS}
           photoUrl={legacyPhotoUrl}
           photoTransform={legacyPhotoUrl ? legacyTransform : undefined}
         />

@@ -5,7 +5,7 @@ import { CardLayerToggles } from './CardLayerToggles';
 import { mediaFileUrl } from './MediaGallery';
 import { useTeamThemeVars } from '../../lib/cardTheme';
 import { ALL_CARD_LAYERS } from '../../../shared/types';
-import type { CardLayers, CardPhotoTransform, PlayerCardRecord, RosterPlayer } from '../../../shared/types';
+import type { CardLayers, CardPhotoTransform, CardStatSource, PlayerCardRecord, RosterPlayer } from '../../../shared/types';
 
 /**
  * One card, ready to be drawn and saved — the single shape both callers speak.
@@ -26,6 +26,8 @@ export interface ExportableCard {
   stats: { label: string; value: string }[];
   /** What the card itself says it shows — the dialog opens on this rather than on all-on. */
   layers: CardLayers;
+  /** Carried so an EXPORT shows the same opponent line the card does on screen. */
+  statSource: CardStatSource | null;
   photoUrl: string | null;
   photoTransform: CardPhotoTransform;
 }
@@ -41,6 +43,7 @@ export function exportableFromCard(card: PlayerCardRecord): ExportableCard {
     seasonYear: card.seasonYear,
     stats: card.stats,
     layers: card.layers,
+    statSource: card.statSource,
     photoUrl: card.photoPath
       ? // Busted on updatedAt — a replaced photo reuses its filename, so an
         // un-busted src would export the image it replaced.
@@ -80,6 +83,7 @@ function CaptureCard({ item, layers }: { item: ExportableCard; layers: CardLayer
       photoUrl={item.photoUrl}
       photoTransform={item.photoTransform}
       layers={layers}
+      statSource={item.statSource}
     />
   );
 }

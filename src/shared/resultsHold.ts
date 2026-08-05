@@ -1,4 +1,5 @@
 import { deriveSyncPhase, type SyncPhaseInput } from './syncPhase';
+import { isGamePlayed } from './gameStatus';
 
 /**
  * Results hold (2026-07-27) — keeps the hub from spoiling scores the game
@@ -73,7 +74,7 @@ export function resolveHeldWeek(input: ResultsHoldInput): number | null {
     (game) =>
       game.week === input.currentWeek &&
       involvesTeam(game, input.userTeamIndex) &&
-      game.status !== 'Unplayed',
+      isGamePlayed(game.status),
   );
   if (userPlayedThisWeek) return null;
 
@@ -114,8 +115,12 @@ interface HoldableGame extends HeldGameIdentity {
 /**
  * Rewrites a held game to look exactly like one that hasn't kicked off — same
  * shape the extractor produces for a genuinely unplayed game — so every
- * downstream `status !== 'Unplayed'` / `homeScore !== null` check behaves
- * correctly with no further changes.
+ * downstream `isGamePlayed()` / `homeScore !== null` check behaves correctly
+ * with no further changes.
+ *
+ * `'Unplayed'` specifically, rather than any of the save's other not-played
+ * values: this is a game we are choosing to hide, not a bracket slot awaiting
+ * a matchup, and it should read as an ordinary upcoming fixture everywhere.
  */
 export function holdGameResult<T extends HoldableGame>(game: T): T {
   return {

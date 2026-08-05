@@ -1,8 +1,10 @@
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
+import { offenseYards } from '../shared/teamYards';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type { NationalTeamStatRow } from '../shared/types';
+import { isGamePlayed } from '../shared/gameStatus';
 
 
 /**
@@ -38,7 +40,7 @@ export function getNationalTeamStats(dynastyId: string, seasonId?: number): Nati
         teamName: team.displayName,
         conferenceName: team.conferenceName,
         games: 0, points: 0, pointsAllowed: 0,
-        totalYards: 0, passYards: 0, rushYards: 0,
+        totalYards: 0, offenseYards: 0, passYards: 0, rushYards: 0,
         defTotalYards: 0, defPassYards: 0, defRushYards: 0,
         thirdDownConv: 0, thirdDownAtt: 0, turnovers: 0, takeaways: 0, sacks: 0,
       };
@@ -62,6 +64,7 @@ export function getNationalTeamStats(dynastyId: string, seasonId?: number): Nati
     row.pointsAllowed += oppScore;
     if (self) {
       row.totalYards += self.totalYards;
+      row.offenseYards += offenseYards(self);
       row.passYards += self.passYards;
       row.rushYards += self.rushYards;
       row.thirdDownConv += self.thirdDownConversions;
@@ -71,14 +74,16 @@ export function getNationalTeamStats(dynastyId: string, seasonId?: number): Nati
       row.sacks += self.sacks;
     }
     if (opp) {
-      row.defTotalYards += opp.totalYards;
+      // Yards ALLOWED = the opponent's offense. A defence is not on the field
+      // for the other side's kick returns.
+      row.defTotalYards += offenseYards(opp);
       row.defPassYards += opp.passYards;
       row.defRushYards += opp.rushYards;
     }
   };
 
   for (const g of games) {
-    if (g.status === 'Unplayed') continue;
+    if (!isGamePlayed(g.status)) continue;
     addSide(g.homeTeamIndex, g.homeScore, g.awayScore, g.homeTeamStats, g.awayTeamStats);
     addSide(g.awayTeamIndex, g.awayScore, g.homeScore, g.awayTeamStats, g.homeTeamStats);
   }

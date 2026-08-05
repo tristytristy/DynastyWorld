@@ -191,12 +191,28 @@ const rendererConfig = {
               // into every app installer. Excluded from the BUILD only — the
               // files stay in the repo, and the image-data installer reads
               // public/assets directly, so it is unaffected either way.
-              //   Stickers      37.5 MB — unused overlay art
+              //   schoolstuff   39.0 MB — per-school sticker sheets
+              //   stickers       1.4 MB — award/dynasty sticker art
+              //   coachhat       0.9 MB — unused coach headwear overlay
+              //   coachvisor     0.8 MB — unused coach visor overlay
               //   GameShots      2.3 MB — a single reference screenshot
               //   Screenshots    1.7 MB — marketing/documentation captures
               //   coaches_added  0.1 MB — input for scripts/convert-added-portraits.js
               //   NFL              ~0 MB — one stray logo
-              '**/public/assets/Stickers/**',
+              //
+              // THE PATTERNS ARE CASE-SENSITIVE, and that had quietly cost
+              // 40 MB: the list said `Stickers` while the folder on disk is
+              // `stickers`, so the rule matched nothing and the art shipped
+              // anyway — and `schoolstuff`, the biggest unused folder of the
+              // lot, was never listed at all. Verified unreferenced by grepping
+              // the whole repo for each folder name, not just for `assets/<x>`:
+              // every real asset path in this app is built from an explicit
+              // base-path constant (assetMapping.ts and friends), so a folder
+              // with no constant naming it cannot be reached at runtime.
+              '**/public/assets/schoolstuff/**',
+              '**/public/assets/stickers/**',
+              '**/public/assets/coachhat/**',
+              '**/public/assets/coachvisor/**',
               '**/public/assets/GameShots/**',
               '**/public/assets/Screenshots/**',
               '**/public/assets/coaches_added/**',

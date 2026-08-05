@@ -6,17 +6,31 @@ import { TeamLink } from '../components/common/TeamLink';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { StatisticsCategorySection, type ColumnDef, type LeaderCardRow, type LeaderMetric } from '../components/common/StatisticsCategorySection';
 import type { StatTableRow } from '../components/common/StatisticsTable';
-import { gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
+import { gameTypeLabel, getCfpBowlImagePath, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
 import { getBowlLogoPath, getConferenceChampionshipGamePath, getConferenceLogoPath } from '../lib/trophyAssetMapping';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
-import { getHelmetPath, DEFAULT_HELMET_PATH, type HelmetSide } from '../lib/helmetAssetMapping';
-import { useProgramArt, useProgramStadium } from '../data/ProgramArtProvider';
-import { isProgramArtPath } from '../lib/programArt';
+import { HelmetImg } from '../components/common/HelmetImg';
+import type { HelmetSide } from '../lib/helmetAssetMapping';
+import { useProgramStadium } from '../data/ProgramArtProvider';
 import { buildTeamColorVars, type TeamColorVars } from '../lib/teamTheme';
 import { gameImpactScore } from '../../shared/gameImpactScore';
+import { offenseYards, returnYards } from '../../shared/teamYards';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
+import { GliderNav, gliderItemClass } from '../components/ui/GliderNav';
+
+/**
+ * The three things a game HAS. A SUB-MENU rather than a mode switch (user
+ * direction): these are destinations within the game, and the app marks a
+ * destination with the glider — the filled toggle is for modes.
+ */
+type GameView = 'team' | 'player' | 'media';
+const GAME_VIEWS: { key: GameView; label: string }[] = [
+  { key: 'team', label: 'Team' },
+  { key: 'player', label: 'Player' },
+  { key: 'media', label: 'Media' },
+];
 import type {
   DefensiveGameLine,
   GameDetailData,
@@ -41,38 +55,80 @@ function teamTextColor(colors: TeamColorVars, appearance: 'light' | 'dark'): str
   return appearance === 'dark' ? colors['--team-text-dark'] : colors['--team-text-light'];
 }
 
+/** Center-anchored diverging bar: left/right fills meet at the leader's share, with a 50% reference tick. */
 /**
- * A team's helmet, loaded from the external image pack. `side` is the physical
- * screen position (the art in each folder faces INWARD): 'left' art faces right
- * so it belongs on the left, 'right' art faces left so it belongs on the right.
- * Falls back once to the generic Default helmet if a team's file 404s.
+ * How far apart two team colours are, 0-1, in plain RGB distance.
+ *
+ * Crude on purpose. The question is not whether these are the same hue but
+ * whether a reader can tell a 10px bar into two halves, and for that a
+ * straight-line distance through RGB is both good enough and predictable —
+ * unlike a perceptual space, where two navies can score further apart than they
+ * look and the fix would fire on the wrong pairs.
  */
-function HelmetImg({ teamName, side, className }: { teamName: string; side: HelmetSide; className?: string }) {
-  const { version } = useProgramArt();
-  const src = getHelmetPath(teamName, side);
-  // ONE uploaded helmet serves both sides, so the right-hand one is flipped
-  // here — otherwise a matchup would show two helmets facing the same way.
-  // Shipped art already has a real right-side render and is left alone.
-  const mirrored = side === 'right' && isProgramArtPath(src);
-  return (
-    <img
-      key={version}
-      src={src}
-      style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
-      alt=""
-      onError={(event) => {
-        const img = event.currentTarget;
-        if (img.dataset.fellBack) return;
-        img.dataset.fellBack = '1';
-        img.src = DEFAULT_HELMET_PATH[side];
-      }}
-      className={className}
-      draggable={false}
-    />
-  );
+function colorDistance(a: string, b: string): number {
+  const rgb = (hex: string): [number, number, number] => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return [0, 0, 0];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [r1, g1, b1] = rgb(a);
+  const [r2, g2, b2] = rgb(b);
+  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2) / 441.67;
 }
 
-/** Center-anchored diverging bar: left/right fills meet at the leader's share, with a 50% reference tick. */
+/**
+ * Below this, two primaries are close enough that a flat diverging bar reads as
+ * one solid block. Tuned against the reported case: UTSA against UTEP, two blues.
+ */
+const COLOR_CLASH = 0.22;
+
+/**
+ * A colour that will actually SHOW on a given fill.
+ *
+ * MEASURED, NOT ASSUMED: of the 138 real FBS teams in the save, four — Ball
+ * State, Georgia, Hawai'i and Louisville — carry a black or empty secondary, and
+ * App State has no usable primary. A rule painted in a missing secondary is a
+ * black line on a dark bar: the mark silently fails on exactly the matchups it
+ * was added for.
+ *
+ * So the team's own secondary is used when it is real and reads against the
+ * fill, and otherwise the rule falls back to whichever of white or black
+ * separates further from that fill. It never returns something invisible.
+ */
+function readableRule(secondary: string | null | undefined, against: string): string {
+  const usable = secondary && /^#?[0-9a-f]{6}$/i.test(secondary.trim());
+  if (usable && colorDistance(secondary!, against) >= 0.18) return secondary!;
+  return colorDistance('#ffffff', against) >= colorDistance('#000000', against) ? '#ffffff' : '#000000';
+}
+
+/**
+ * The fill for the side that YIELDS, given what the anchored side is wearing.
+ *
+ * ONE SIDE IS FIXED AND ONLY THE OTHER MOVES. That is what makes the swap
+ * legible rather than confusing — a reader always has something stable to read
+ * against. Which side is anchored is decided by `anchorIsHome` below, not here.
+ *
+ * The yielding side keeps its primary too, until the two are close enough to
+ * read as one block; then it takes its own SECONDARY, which is still genuinely
+ * that team's colour. UTSA blue against UTEP blue becomes UTSA blue against
+ * UTEP's orange, and the bar splits.
+ *
+ * REPLACES A MARK ON THE FILL. Hatching, then a centre rule, both tried to
+ * annotate two colours that looked alike; changing the colour removes the
+ * problem instead of labelling it, and needs no extra ink on a 10px bar.
+ *
+ * The last resort is white or black — for the case where the yielding side's
+ * SECONDARY is also too close to the anchor, which no current matchup hits but
+ * which two black-and-red teams would.
+ */
+function yieldingFill(primary: string, secondary: string | null | undefined, anchor: string): string {
+  if (colorDistance(primary, anchor) >= COLOR_CLASH) return primary;
+  const usable = secondary && /^#?[0-9a-f]{6}$/i.test(secondary.trim());
+  if (usable && colorDistance(secondary!, anchor) >= COLOR_CLASH) return secondary!;
+  return readableRule(null, anchor);
+}
+
 function StatBar({
   label,
   leftShare,
@@ -408,6 +464,7 @@ export function GameDetailContent({
   const [detail, setDetail] = useState<GameDetailData | null | undefined>(undefined);
   const [roster, setRoster] = useState<RosterPlayer[] | null | undefined>(undefined);
   const [media, setMedia] = useState<MediaItemResolved[]>([]);
+  const [view, setView] = useState<GameView>('team');
   // Which side's player box score is shown ('primary' = user's side, or the away
   // team for a non-user game; 'secondary' = the other team).
   const [side, setSide] = useState<'primary' | 'secondary'>('primary');
@@ -452,7 +509,35 @@ export function GameDetailContent({
   const awayColors = buildTeamColorVars(away.primaryColor, away.secondaryColor);
   const homeColors = buildTeamColorVars(home.primaryColor, home.secondaryColor);
   const awayColor = awayColors['--team-primary'];
+  /*
+    THE BAR'S visiting COLOUR, which is not always that team's primary.
+
+    Only the STAT BARS and their key use this — the helmets, the score and the
+    glows above keep true team colour, because a helmet identifies a team on its
+    own and there is nothing to disambiguate up there. Down here the two fills
+    are the only thing telling the halves apart, so the visitor yields when it
+    has to.
+  */
   const homeColor = homeColors['--team-primary'];
+  /*
+    THE USER'S TEAM NEVER CHANGES COLOUR (user direction 2026-08-03).
+
+    Anchoring on HOME was wrong the moment the user played away: their own team
+    became the side that yielded, and the whole point of this is that a user can
+    find their team on a bar without reading the key. So the anchor is the USER's
+    side whenever this game has one, and only falls back to home for a
+    CPU-vs-CPU game, where neither side is anyone's team and home is the
+    conventional anchor.
+
+    Reported after seeing it happen in a real game — the rule was right, the
+    thing it was pinned to was not.
+  */
+  const anchorIsHome = home.isUser || !away.isUser;
+  const anchorColor = anchorIsHome ? homeColor : awayColors['--team-primary'];
+  const yielder = anchorIsHome ? awayColors : homeColors;
+  const yielderColor = yieldingFill(yielder['--team-primary'], yielder['--team-secondary'], anchorColor);
+  const awayBarColor = anchorIsHome ? yielderColor : awayColors['--team-primary'];
+  const homeBarColor = anchorIsHome ? homeColor : yielderColor;
   const awayWon = played && away.score > home.score;
   const homeWon = played && home.score > away.score;
   const winnerColor = homeWon ? homeColor : awayWon ? awayColor : null;
@@ -541,10 +626,24 @@ export function GameDetailContent({
           const num = (v: number) => v.toLocaleString();
           const aThird = a.thirdDownAttempts > 0 ? a.thirdDownConversions / a.thirdDownAttempts : 0;
           const hThird = h.thirdDownAttempts > 0 ? h.thirdDownConversions / h.thirdDownAttempts : 0;
+          /*
+            Total Offense, not the save's TOTALYARDS — that field is ALL-PURPOSE
+            (offense + kick + punt returns), so this row used to disagree with
+            the game's own box score by exactly a team's return yardage while
+            the Pass and Rush rows beneath it already summed to the right
+            number. Return Yards now carries the remainder explicitly, so the
+            all-purpose figure is still on the page and honestly labelled.
+            See shared/teamYards.ts.
+          */
+          const aOff = offenseYards(a);
+          const hOff = offenseYards(h);
+          const aRet = returnYards(a);
+          const hRet = returnYards(h);
           return [
-            { label: 'Total Yards', leftShare: share(a.totalYards, h.totalYards), leftDisplay: num(a.totalYards), rightDisplay: num(h.totalYards) },
+            { label: 'Total Offense', leftShare: share(aOff, hOff), leftDisplay: num(aOff), rightDisplay: num(hOff) },
             { label: 'Pass Yards', leftShare: share(a.passYards, h.passYards), leftDisplay: num(a.passYards), rightDisplay: num(h.passYards) },
             { label: 'Rush Yards', leftShare: share(a.rushYards, h.rushYards), leftDisplay: num(a.rushYards), rightDisplay: num(h.rushYards) },
+            { label: 'Return Yards', leftShare: share(aRet, hRet), leftDisplay: num(aRet), rightDisplay: num(hRet) },
             { label: 'First Downs', leftShare: share(a.firstDowns, h.firstDowns), leftDisplay: num(a.firstDowns), rightDisplay: num(h.firstDowns) },
             {
               label: 'Third Down',
@@ -584,17 +683,35 @@ export function GameDetailContent({
         getConferenceLogoPath(game.conferenceName, appearance)
       : null;
   const gameTypeImgSrc = getGameTypeImagePath(game, appearance);
+  const cfpBowlImgSrc = getCfpBowlImagePath(game);
   const nonBowlLogoSrc = game.gameType === 'bowl' ? null : rivalryLogoSrc ?? conferenceLogoSrc;
   const gameLogo = nonBowlLogoSrc ? (
     <img src={nonBowlLogoSrc} alt="" className="h-32 w-32 object-contain sm:h-44 sm:w-44" draggable={false} />
   ) : gameTypeImgSrc ? (
-    <img
-      src={gameTypeImgSrc ?? undefined}
-      alt=""
-      onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
-      className="h-32 w-32 object-contain sm:h-44 sm:w-44"
-      draggable={false}
-    />
+    /*
+      A playoff quarterfinal or semifinal shows TWO marks: the CFP round graphic
+      for how deep into the bracket this is, and the bowl's own logo for which
+      trophy is on the table. Neither answers the other's question. The bowl is
+      the smaller of the two — the round is the primary identity here, the bowl
+      the qualifier.
+    */
+    <div className="flex items-center gap-2 sm:gap-3">
+      <img
+        src={gameTypeImgSrc ?? undefined}
+        alt=""
+        onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
+        className="h-32 w-32 object-contain sm:h-44 sm:w-44"
+        draggable={false}
+      />
+      {cfpBowlImgSrc && (
+        <img
+          src={cfpBowlImgSrc}
+          alt=""
+          className="h-20 w-20 object-contain sm:h-28 sm:w-28"
+          draggable={false}
+        />
+      )}
+    </div>
   ) : null;
 
   /*
@@ -719,6 +836,11 @@ export function GameDetailContent({
               >
                 {home.score}
               </span>
+              {/* The scoreboard convention: the marker rides beside the score,
+                  because "20–23" and "20–23 OT" are different games. */}
+              {detail.isOvertime && (
+                <span className="type-eyebrow self-center text-slate-400 dark:text-slate-500">OT</span>
+              )}
             </div>
           ) : (
             <p className="font-display text-5xl font-bold tracking-tight text-slate-300 dark:text-slate-600">VS</p>
@@ -732,6 +854,33 @@ export function GameDetailContent({
         <TeamFlank team={home} sideName="right" teamColor={homeColor} />
       </div>
 
+      {/*
+        THE BODY IS THREE DESTINATIONS, NOT ONE COLUMN. Team stats, player
+        stats and the photographs used to stack, so a game's media was always a
+        scroll away and the player box score sat below a wall of team bars. A
+        SUB-MENU rather than a mode switch: these are places within the game,
+        and the app marks a place with the glider.
+      */}
+      <div className="overflow-x-auto">
+        <GliderNav
+          activeIndex={GAME_VIEWS.findIndex((v) => v.key === view)}
+          emphasis="quiet"
+          ariaLabel="Game sections"
+          itemsClassName="gap-1.5"
+        >
+          {GAME_VIEWS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setView(v.key)}
+              className={gliderItemClass(v.key === view, 'px-3.5 py-1.5')}
+            >
+              {v.label}
+            </button>
+          ))}
+        </GliderNav>
+      </div>
+
       {!played || !statBars ? (
         <SurfaceCard>
           <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
@@ -740,10 +889,24 @@ export function GameDetailContent({
         </SurfaceCard>
       ) : (
         <>
+          {view === 'team' && (
+          <>
           {/* Quarter by quarter — away/home rows, each keyed with its team color */}
           <SurfaceCard className="overflow-hidden p-0">
             <div className="border-b border-slate-200/80 px-5 py-4 dark:border-white/5">
               <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Quarter by quarter</h3>
+              {/*
+                Said once, here, because it's the question the OT column raises:
+                the save stores one overtime total per side, not a period-by-
+                period split, so a double overtime is one column. Better to
+                explain the column than to leave someone counting periods that
+                aren't there.
+              */}
+              {detail.isOvertime && (
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                  Overtime is a single total — the save doesn&apos;t break it out by period.
+                </p>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-sm">
@@ -754,6 +917,9 @@ export function GameDetailContent({
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">Q2</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">Q3</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">Q4</th>
+                    {detail.isOvertime && (
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">OT</th>
+                    )}
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.22em]">Final</th>
                   </tr>
                 </thead>
@@ -767,6 +933,11 @@ export function GameDetailContent({
                       {entry.row.quarterScores.map((score, index) => (
                         <td key={index} className="proportional-nums px-4 py-3 text-center text-slate-900 dark:text-white">{score}</td>
                       ))}
+                      {detail.isOvertime && (
+                        <td className="proportional-nums px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">
+                          {entry.row.overtimePoints}
+                        </td>
+                      )}
                       <td className="proportional-nums px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{entry.row.score}</td>
                     </tr>
                   ))}
@@ -780,17 +951,28 @@ export function GameDetailContent({
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Team stats</h3>
               <div className="flex items-center gap-4 type-eyebrow text-slate-500 dark:text-slate-400">
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: awayColor }} />{away.name}</span>
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: homeColor }} />{home.name}</span>
+                {/* The key has to use the SAME fill the bars do, or it names the
+                    wrong team the moment the visitor falls back. */}
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: awayBarColor }} />{away.name}</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5" style={{ backgroundColor: homeBarColor }} />{home.name}</span>
               </div>
             </div>
             <div className="divide-y divide-slate-200/70 border border-slate-200/80 bg-slate-50/60 dark:divide-white/5 dark:border-slate-800 dark:bg-white/5">
               {statBars.map((bar) => (
-                <StatBar key={bar.label} {...bar} leftColor={awayColor} rightColor={homeColor} />
+                <StatBar
+                  key={bar.label}
+                  {...bar}
+                  leftColor={awayBarColor}
+                  rightColor={homeBarColor}
+                />
               ))}
             </div>
           </SurfaceCard>
+          </>
+          )}
 
+          {view === 'player' && (
+          <>
           {/* Top performers — one per team (or a single card on legacy seasons) */}
           {awayTop || homeTop ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -903,18 +1085,26 @@ export function GameDetailContent({
               )}
             </>
           )}
+          </>
+          )}
         </>
       )}
 
       {/* Auto-populated from Media-page tags: every upload linked to this game. Hidden when empty — the Media page is the hub; this is a bonus surface. */}
-      {media.length > 0 && (
-        <SurfaceCard>
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Media</p>
-          <div className="mt-3">
+      {view === 'media' &&
+        (media.length > 0 ? (
+          <SurfaceCard>
             <MediaGallery dynastyId={id} items={media} hideGameChip />
-          </div>
-        </SurfaceCard>
-      )}
+          </SurfaceCard>
+        ) : (
+          /* A destination that leads nowhere is worse than one that says why. */
+          <SurfaceCard>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Media</p>
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+              No photographs are tagged to this game yet. Tag an upload to it on the Media page and it appears here.
+            </p>
+          </SurfaceCard>
+        ))}
     </div>
   );
 }

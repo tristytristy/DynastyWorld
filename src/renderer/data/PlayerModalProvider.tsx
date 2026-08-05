@@ -81,6 +81,31 @@ export function PlayerModalProvider({ children }: { children: ReactNode }) {
       leagueTeamIndex?: number,
     ) => {
       void (async () => {
+        /*
+          THE REROUTE NEEDS A SEASON, and without one it does not happen.
+
+          Player ids are NOT unique across seasons — the save re-uses them.
+          Measured on the UCLA archive: 2 of 14 enshrined legends held ids the
+          2028 recruit class had since handed to somebody else, so clicking Nico
+          Iamaleava (#9147) in the Hall opened the RECRUIT modal for Rudy Bass.
+          Wrong modal and wrong person, from one line that asked "is this id a
+          prospect?" before opening a player.
+
+          A career-spanning surface — the Hall, the Trophy Room, a milestone —
+          has no single season to scope an id to, so it passed none, and
+          `getRecruitById` fell back to the CURRENT season's pool and answered
+          about a different human being. The id was never ambiguous; the question
+          was, and asking it anyway is what produced a confident wrong answer.
+
+          So: no season, no reroute. The player modal is the correct destination
+          for every id the recruit pool doesn't legitimately claim, and every
+          surface that genuinely opens prospects (the Recruit Hub and its
+          boards) is season-scoped by nature and passes one.
+        */
+        if (seasonId === undefined) {
+          setState({ dynastyId, playerId, seasonId, navigationIds, fallback, leagueTeamIndex });
+          return;
+        }
         try {
           const recruit = await window.api.db.getRecruitById(dynastyId, playerId, seasonId);
           if (recruit) {
