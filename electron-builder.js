@@ -1,12 +1,25 @@
 // The heavy image data (portraits, logos, trophies, helmets, jerseys) can ship
 // two ways:
-//   • COMPLETE (default): everything bundled in one installer — app + graphics.
-//   • SLIM (SLIM_INSTALLER=1): the media is EXCLUDED and ships separately via the
-//     one-time Asset Installer (build/assets-installer.nsi + npm run package:assets);
-//     the app then serves it over cfbmedia:// from the user's external folder.
-// 0.6.0 ships COMPLETE (the graphics library just expanded — helmets + jerseys —
-// so one download is simpler); the slim path stays wired for a future update.
-const SLIM = process.env.SLIM_INSTALLER === '1';
+//   • SLIM (the default): the media is EXCLUDED and ships separately via the
+//     one-time Asset Installer (build/assets-installer.nsi + npm run
+//     package:assets); the app serves it over cfbmedia:// from the user's
+//     external folder. ~105 MB.
+//   • COMPLETE (COMPLETE_INSTALLER=1): everything in one installer, app +
+//     graphics. ~1 GB.
+//
+// SLIM IS THE DEFAULT BECAUSE IT IS WHAT SHIPS. Every release since 3.0.1 has
+// been slim — the ~927 MB library is published once (last at v3.0) and survives
+// app updates, so re-shipping it on every point release costs a gigabyte of
+// download to change nothing. It used to be the other way round, with slim
+// behind an opt-in env var and a comment claiming "0.6.0 ships COMPLETE"; that
+// comment outlived the decision by five releases and duly produced a 1 GB
+// 4.3.0 build. The default now matches reality, and the exception is the thing
+// you have to ask for.
+//
+// Rebuild the asset installer ONLY when a folder in MEDIA_GLOBS actually gained
+// or changed files. Art that lives outside those globs (teammaps, rivalry,
+// conf, fonts, splash) travels inside the app either way and needs nothing.
+const SLIM = process.env.COMPLETE_INSTALLER !== '1';
 const MEDIA_GLOBS = [
   'dist/renderer/assets/playerportrait/**',
   'dist/renderer/assets/coaches/**',
@@ -77,7 +90,14 @@ module.exports = {
     },
   ],
   win: {
-    target: ['nsis', 'portable'],
+    /*
+      NSIS ONLY (user direction, 4.3.0). The portable exe was dropped: it runs
+      noticeably worse — every launch unpacks the whole app to a temp folder
+      first — and it cannot be updated in place, so it also sits outside the
+      in-app updater this project spent real effort on. One artifact, one
+      install path, one update story.
+    */
+    target: ['nsis'],
     // Generated from public/Icon/ICON.png by scripts/make-icon.js — rerun that after changing the source art.
     icon: 'build/icon.ico',
   },
@@ -98,9 +118,10 @@ module.exports = {
     what the feed asks for, and what lands on the release are the same string
     whether the upload is automated or manual.
 
-    Set PER TARGET, not globally: nsis and portable would otherwise collide on
-    one name. Single-quoted so `${...}` reaches electron-builder as its own
-    template syntax rather than being interpolated by JavaScript.
+    Set PER TARGET rather than globally — the shape this had when nsis and
+    portable would otherwise have collided on one name. Single-quoted so
+    `${...}` reaches electron-builder as its own template syntax rather than
+    being interpolated by JavaScript.
   */
   nsis: {
     artifactName: '${productName}-Setup-${version}.${ext}',
@@ -113,8 +134,5 @@ module.exports = {
       lock, which reads to the user as "the update didn't reopen".
     */
     runAfterFinish: false,
-  },
-  portable: {
-    artifactName: '${productName}-${version}.${ext}',
   },
 };

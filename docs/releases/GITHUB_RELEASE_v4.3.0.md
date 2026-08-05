@@ -105,10 +105,22 @@ install in place — your dynasties, cards, media and settings are untouched.
 
 Already running 4.2.0? The app will offer this update itself.
 
+**First time installing DynastyOS?** You also need the one-time image library —
+**DynastyOS.Image.Data.3.0.0.exe** on the [3.0 release][imgdata]. It is a
+separate ~927 MB download that installs once, lives outside the app, and
+survives every update, which is why the app itself is only ~105 MB. This release
+does not change it: nothing in the image library was added or altered, so if you
+already have it, there is nothing to re-download.
+
+[imgdata]: https://github.com/matevanz/DynastyHub/releases/tag/v3.0
+
 ## Notes
 
 Your archive upgrades automatically (schema v20 adds one table for custom
 rivalries and touches nothing that was already there — verified against a real
 45 MB archive with no existing row changed). No re-sync is needed for anything
-in this release except the Team Hub maps, which are artwork and appear
+in this release; the new Team Hub maps ship inside the app and appear
 immediately.
+
+**DynastyOS is not code-signed.** Updates download and install normally, but
+Windows SmartScreen may still warn on the installer.
