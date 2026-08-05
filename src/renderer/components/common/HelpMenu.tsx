@@ -433,9 +433,14 @@ const HELP_TOPICS: HelpTopic[] = [
           and lays every photo out at once, for when you want a picture rather than a Saturday.
         </p>
         <p>
-          <strong>Rename a folder</strong> by hovering it and clicking <strong>Rename album</strong> — call it
-          &ldquo;Senior Day&rdquo; and the game it came from stays underneath, so you never lose which one it was.
-          Clearing the name hands the folder back to the game.
+          <strong>Rename a folder</strong> by hovering it and clicking the pencil beside its name — in either view.
+          Call it &ldquo;Senior Day&rdquo; and the game it came from stays underneath, so you never lose which one it
+          was. Clearing the name hands the folder back to the game.
+        </p>
+        <p>
+          In <strong>Grid</strong>, clicking an album opens it in place — the other albums step aside and that
+          album&apos;s photos fill the grid; <strong>← All albums</strong> brings them back. Hover any photo and click{' '}
+          <strong>Cover</strong> to make it the picture that album shows.
         </p>
         <p>
           <strong>Select</strong> turns on multi-select. Tick photos (or <em>Select all</em>), then set the game for

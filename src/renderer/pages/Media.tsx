@@ -327,6 +327,66 @@ function MediaTile({
 }
 
 /**
+ * The rename editor for one folder — used by the list row, the album box on
+ * the shelf, and the header of an album opened in grid. Three places, one
+ * control: a folder is renamed the same way wherever you happen to be looking
+ * at it.
+ */
+function RollRenamer({
+  roll,
+  draft,
+  onDraft,
+  onSave,
+  onUseGameName,
+  onDelete,
+  onCancel,
+}: {
+  roll: { defaultLabel: string; custom: string | null; albumId?: number };
+  draft: string;
+  onDraft: (next: string) => void;
+  onSave: () => void;
+  onUseGameName: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        onChange={(e) => onDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSave();
+          if (e.key === 'Escape') onCancel();
+        }}
+        placeholder={roll.defaultLabel}
+        aria-label={`Name for ${roll.defaultLabel}`}
+        className="min-w-0 flex-1 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      />
+      <Button compact onClick={onSave}>
+        Save
+      </Button>
+      {/* Only a GAME folder can be handed back — an album you made has no other
+          name to fall back to. */}
+      {roll.custom && roll.albumId === undefined && (
+        <Button variant="tertiary" compact onClick={onUseGameName}>
+          Use game name
+        </Button>
+      )}
+      {roll.albumId !== undefined && (
+        <Button variant="tertiary" compact onClick={onDelete}>
+          Delete
+        </Button>
+      )}
+      <Button variant="secondary" compact onClick={onCancel}>
+        Cancel
+      </Button>
+    </span>
+  );
+}
+
+/**
  * The roster list with its search box — the same control the photo's own detail
  * editor uses, lifted out so batch tagging is the SAME interaction rather than
  * a second one that drifts. Number search (`#17`), position search and the
@@ -1409,6 +1469,13 @@ export function Media() {
   /** Which folder is being renamed, keyed the way the rolls are. */
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  /*
+    WHICH ALBUM IS OPEN IN GRID VIEW (user direction) — opening one must not
+    throw you into the list. The shelf steps aside and the album's own
+    photographs take the grid; closing brings the shelf back, still in grid.
+    Null is the shelf.
+  */
+  const [gridOpenKey, setGridOpenKey] = useState<string | null>(null);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
@@ -1506,6 +1573,12 @@ export function Media() {
     // The one that wasn't there before. Falls back to a name match, which
     // matters only if two albums share a name — in which case either is right.
     return rows.find((a) => !before.has(a.id))?.id ?? rows.find((a) => a.name === trimmed)?.id ?? null;
+  }
+
+  /** Opens the rename editor on a roll, seeded with whatever it is called now. */
+  function startRename(roll: { key: string; label: string; custom: string | null; albumId?: number }) {
+    setRenamingKey(roll.key);
+    setRenameDraft(roll.albumId !== undefined ? roll.label : roll.custom ?? '');
   }
 
   async function createAlbum() {
@@ -2104,8 +2177,8 @@ export function Media() {
         same way. The title sits at the bottom over a scrim, where it is legible
         against whatever the picture happens to be doing.
       */}
-      {items && items.length > 0 && view === 'grid' && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {items && items.length > 0 && view === 'grid' && gridOpenKey === null && (
+        <div className="media-fade-in grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rolls.map((roll) => {
             const cover =
               roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
@@ -2122,18 +2195,11 @@ export function Media() {
               .slice(0, 8)
               .map((item) => fileUrl(item.absolutePath));
             return (
+              <div key={roll.key} className="group/roll relative">
               <button
-                key={roll.key}
                 type="button"
-                onClick={() => {
-                  // Opening a box means "show me this one" — switch to the
-                  // shelf with only it expanded, rather than inventing a third
-                  // arrangement that exists nowhere else.
-                  setOpenRolls(new Set([roll.key]));
-                  setView('list');
-                  saveMediaView('list');
-                }}
-                className="corner-cut group/box relative aspect-[16/10] overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
+                onClick={() => setGridOpenKey(roll.key)}
+                className="corner-cut group/box relative aspect-[16/10] w-full overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
               >
                 {photos.length > 0 ? (
                   <MediaBackdrop photos={photos} tone="cover" />
@@ -2154,8 +2220,125 @@ export function Media() {
                   </span>
                 </span>
               </button>
+
+              {/* RENAMEABLE FROM THE SHELF TOO (user direction) — outside the
+                  box's own button for the usual reason, so it rides on top in
+                  the corner rather than nesting. */}
+              {renamingKey === roll.key ? (
+                <div className="absolute inset-x-2 bottom-2 flex items-center gap-1.5 bg-slate-950/90 p-1.5">
+                  <RollRenamer
+                    roll={roll}
+                    draft={renameDraft}
+                    onDraft={setRenameDraft}
+                    onSave={() => void renameRoll(roll, renameDraft)}
+                    onUseGameName={() => void renameAlbum(roll.game?.gameId ?? null, '')}
+                    onDelete={() => void deleteAlbum(roll.albumId as number, roll.label)}
+                    onCancel={() => setRenamingKey(null)}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startRename(roll)}
+                  title={`Rename ${roll.label}`}
+                  aria-label={`Rename ${roll.label}`}
+                  className="absolute right-2 top-2 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 opacity-0 transition hover:border-[var(--team-primary)] focus-visible:opacity-100 group-hover/roll:opacity-100"
+                >
+                  <EditIcon />
+                </button>
+              )}
+              </div>
             );
           })}
+        </div>
+      )}
+
+      {/*
+        AN ALBUM OPENED IN GRID. Its photographs take the whole grid and the
+        shelf steps aside — the same tiles the folder view uses, so selection,
+        drag-reorder, the bin and (crucially) the cover control are all here
+        too. Choosing a cover used to be reachable only from an open folder in
+        LIST view, which is why it looked like it did not work at all if this is
+        the view you live in.
+      */}
+      {items && items.length > 0 && view === 'grid' && gridOpenKey !== null && (
+        <div className="media-fade-in space-y-3">
+          {(() => {
+            const roll = rolls.find((r) => r.key === gridOpenKey);
+            if (!roll) return null;
+            const cover =
+              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
+            return (
+              <>
+                <div className="group/roll flex flex-wrap items-center gap-3">
+                  <Button variant="secondary" compact onClick={() => setGridOpenKey(null)}>
+                    ← All albums
+                  </Button>
+                  <span className="min-w-0">
+                    <span className="block truncate font-display text-lg font-bold text-slate-950 dark:text-white">
+                      {roll.label}
+                    </span>
+                    {roll.custom && (
+                      <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
+                        {roll.defaultLabel}
+                      </span>
+                    )}
+                  </span>
+                  {renamingKey === roll.key ? (
+                    <RollRenamer
+                      roll={roll}
+                      draft={renameDraft}
+                      onDraft={setRenameDraft}
+                      onSave={() => void renameRoll(roll, renameDraft)}
+                      onUseGameName={() => void renameAlbum(roll.game?.gameId ?? null, '')}
+                      onDelete={() => void deleteAlbum(roll.albumId as number, roll.label)}
+                      onCancel={() => setRenamingKey(null)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startRename(roll)}
+                      title={`Rename ${roll.label}`}
+                      aria-label={`Rename ${roll.label}`}
+                      className="p-1 text-slate-400 transition hover:text-slate-800 dark:text-slate-500 dark:hover:text-white"
+                    >
+                      <EditIcon />
+                    </button>
+                  )}
+                  <span className="tnum ml-auto text-xs font-semibold text-slate-400 dark:text-slate-500">
+                    {roll.entries.length} {roll.entries.length === 1 ? 'photo' : 'photos'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                  {roll.entries.map(({ item, index }) => (
+                    <MediaTile
+                      key={item.id}
+                      item={item}
+                      index={index}
+                      caption={item.description || (roll.game ? gameLabel(roll.game) : 'Add details')}
+                      selectMode={selectMode}
+                      selected={selectedIds.has(item.id)}
+                      onOpen={() => setLightboxIndex(index)}
+                      onToggleSelect={() => toggleSelect(item.id)}
+                      onDragStartTile={() => (dragIndexRef.current = index)}
+                      onDragEndTile={() => (dragIndexRef.current = null)}
+                      onDropTile={(e) => onTileDrop(e, index)}
+                      canReorder={dragIndexRef.current !== null}
+                      onDelete={() => void confirmDelete(item)}
+                      isCover={cover?.id === item.id}
+                      onMakeCover={() => void setCover(roll, item.id)}
+                    />
+                  ))}
+                  {roll.entries.length === 0 && (
+                    <p className="col-span-full py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                      Nothing in this album yet. Open a photo, choose <strong>Album</strong> and pick this one.
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -2183,6 +2366,15 @@ export function Media() {
                 key={roll.key}
                 className="group/roll border border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-white/[0.03]"
               >
+                {/*
+                  THE ROW IS A ROW, NOT ONE BIG BUTTON (user direction). The
+                  pencil has to sit immediately after the title, and a <button>
+                  cannot contain another button — so the toggle shrinks to just
+                  the part that IS the toggle (arrow, cover, title) and the
+                  pencil becomes its sibling. The count keeps the right edge
+                  with `ml-auto`.
+                */}
+                <div className="flex w-full items-center gap-3 px-3 py-2.5 transition hover:bg-white/60 dark:hover:bg-white/[0.04]">
                 <button
                   type="button"
                   onClick={() =>
@@ -2194,7 +2386,7 @@ export function Media() {
                     })
                   }
                   aria-expanded={open}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/60 dark:hover:bg-white/[0.04]"
+                  className="flex min-w-0 items-center gap-3 text-left"
                 >
                   <span
                     aria-hidden
@@ -2236,10 +2428,34 @@ export function Media() {
                       </span>
                     )}
                   </span>
-                  <span className="tnum shrink-0 text-xs font-semibold text-slate-400 dark:text-slate-500">
-                    {photos} {photos === 1 ? 'photo' : 'photos'}
-                  </span>
                 </button>
+
+                {renamingKey === roll.key ? (
+                  <RollRenamer
+                    roll={roll}
+                    draft={renameDraft}
+                    onDraft={setRenameDraft}
+                    onSave={() => void renameRoll(roll, renameDraft)}
+                    onUseGameName={() => void renameAlbum(roll.game?.gameId ?? null, '')}
+                    onDelete={() => void deleteAlbum(roll.albumId as number, roll.label)}
+                    onCancel={() => setRenamingKey(null)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startRename(roll)}
+                    title={`Rename ${roll.label}`}
+                    aria-label={`Rename ${roll.label}`}
+                    className="shrink-0 p-1 text-slate-400 opacity-0 transition hover:text-slate-800 focus-visible:opacity-100 group-hover/roll:opacity-100 dark:text-slate-500 dark:hover:text-white"
+                  >
+                    <EditIcon />
+                  </button>
+                )}
+
+                <span className="tnum ml-auto shrink-0 text-xs font-semibold text-slate-400 dark:text-slate-500">
+                  {photos} {photos === 1 ? 'photo' : 'photos'}
+                </span>
+                </div>
 
                 {/*
                   OUTSIDE THE HEADER BUTTON, not inside it — a <button> cannot
@@ -2247,77 +2463,6 @@ export function Media() {
                   browser silently reflows and a keyboard cannot reach. It rides
                   the same row visually via the negative top margin.
                 */}
-                {/*
-                  THE PENCIL SITS BESIDE THE TITLE (user direction), not on a
-                  strip of its own underneath — renaming is an edit to that
-                  line, and a separate row of link text under every folder was
-                  a row of chrome per folder. It has to live OUTSIDE the header
-                  button, because a button cannot contain another button; the
-                  negative margin pulls it back onto the same line.
-                */}
-                <div
-                  className={`-mt-9 mb-1 flex items-center justify-end gap-2 pr-3 transition-opacity duration-base ease-standard focus-within:opacity-100 group-hover/roll:opacity-100 ${
-                    renamingKey === roll.key ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  {renamingKey === roll.key ? (
-                    <>
-                      <input
-                        autoFocus
-                        type="text"
-                        value={renameDraft}
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') void renameRoll(roll, renameDraft);
-                          if (e.key === 'Escape') setRenamingKey(null);
-                        }}
-                        placeholder={roll.defaultLabel}
-                        aria-label={`Name for ${roll.defaultLabel}`}
-                        className="w-56 border border-slate-200/80 bg-white px-2 py-1 text-sm text-slate-800 outline-none focus:border-[var(--team-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      />
-                      <Button compact onClick={() => void renameRoll(roll, renameDraft)}>
-                        Save
-                      </Button>
-                      {/* Only a GAME folder can be handed back — a user-made
-                          album has no other name to fall back to. */}
-                      {roll.custom && roll.albumId === undefined && (
-                        <Button
-                          variant="tertiary"
-                          compact
-                          onClick={() => void renameAlbum(roll.game?.gameId ?? null, '')}
-                        >
-                          Use game name
-                        </Button>
-                      )}
-                      {roll.albumId !== undefined && (
-                        <Button
-                          variant="tertiary"
-                          compact
-                          onClick={() => void deleteAlbum(roll.albumId as number, roll.label)}
-                        >
-                          Delete album
-                        </Button>
-                      )}
-                      <Button variant="secondary" compact onClick={() => setRenamingKey(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRenamingKey(roll.key);
-                        setRenameDraft(roll.albumId !== undefined ? roll.label : roll.custom ?? '');
-                      }}
-                      title={`Rename ${roll.label}`}
-                      aria-label={`Rename ${roll.label}`}
-                      className="p-1 text-slate-400 transition hover:text-slate-800 dark:text-slate-500 dark:hover:text-white"
-                    >
-                      <EditIcon />
-                    </button>
-                  )}
-                </div>
-
                 {open && (
                   <div className="grid grid-cols-2 gap-3 border-t border-slate-200/80 p-3 md:grid-cols-3 xl:grid-cols-4 dark:border-slate-800">
                     {roll.entries.map(({ item, index }) => (

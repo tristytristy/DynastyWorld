@@ -1248,17 +1248,18 @@
     opacity: 0.33;
   }
 
-  /*
-    COVER TONE — the photograph as the subject rather than the wallpaper. Full
-    opacity and its own colours, with only a touch of contrast so a title laid
-    over the bottom of it still reads. Used by the media album boxes.
-  */
-  .trophy-backdrop--cover .trophy-backdrop-layer {
-    filter: contrast(1.04) saturate(1.02);
+  /* The shelf stepping aside for one album, and back again. */
+  .media-fade-in {
+    animation: media-fade-in 220ms var(--ease-standard, ease-out) both;
   }
 
-  .trophy-backdrop--cover .trophy-backdrop-layer[data-visible='true'] {
-    opacity: 1;
+  @keyframes media-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes trophy-backdrop-drift {
@@ -1408,6 +1409,31 @@
     background-image:
       repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0 1px, transparent 1px 3px),
       repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.45) 0 1px, transparent 1px 3px);
+  }
+
+  /*
+    COVER TONE — the photograph as the SUBJECT rather than as wallpaper.
+
+    These sit HERE, after the Trophy Room's own grade, and not up beside the
+    base `.trophy-backdrop` rules where they were first written. Both selectors
+    tie with the ones above on specificity, so source order decides — and from
+    up there the room's grayscale and its LED grid won every time. The album
+    boxes came out grey and dotted, which read as a rendering fault.
+
+    NO JUMBOTRON TEXTURE (user direction). That grid belongs to the Trophy
+    Room, where the photograph is a picture being shown ON something; an album
+    cover is just the photograph, and the dots read as dirt on it.
+  */
+  .trophy-backdrop--cover .trophy-backdrop-layer {
+    filter: contrast(1.04) saturate(1.02);
+  }
+
+  .trophy-backdrop--cover .trophy-backdrop-layer[data-visible='true'] {
+    opacity: 1;
+  }
+
+  .trophy-backdrop--cover::after {
+    content: none;
   }
 }
 

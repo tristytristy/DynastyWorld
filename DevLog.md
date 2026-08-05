@@ -9651,3 +9651,61 @@ deleting an album released its photo and left all 470 in place, and cascade took
 3 albums with the dynasty.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 (final pass) — Albums open in grid, and two CSS-order bugs
+
+### "Cover selection is not working" — it worked, it was unreachable
+
+Probed live rather than reasoned about: in list view the control moves the cover
+and it survives the re-render (`aria-pressed` walks from tile 0 to tile 3). The
+report was true from where the user was standing, though — the Cover button
+only ever existed inside an OPEN FOLDER IN LIST VIEW, and the view preference
+now persists, so anyone living in grid never saw it at all.
+
+Fixed by the change they asked for anyway: an album opened in grid shows its
+photographs as tiles, which carry the cover control with them.
+
+Two false starts worth recording, both from probes rather than the app:
+`button[aria-expanded]` matched the SEASON SWITCHER before any folder header, so
+the first probe opened nothing; and the second probe ran against a persisted
+`grid` preference left behind by an earlier capture, so there were no folders on
+screen to open. Neither was a defect — but both looked exactly like one, which
+is the argument for reading what the probe actually clicked.
+
+### Albums open IN grid
+
+Grid had been switching to list to show an album's contents, which threw you out
+of the arrangement you chose. Now the shelf steps aside, the album's photos take
+the grid, and **← All albums** brings it back — still in grid. `gridOpenKey` is
+the whole mechanism; null is the shelf.
+
+### The pencil is beside the title
+
+The header row had been ONE full-width button, so the pencil could only live
+outside it — parked at the right-hand edge, reading as an action on the folder
+rather than an edit to its name. The toggle now shrinks to the part that IS the
+toggle (arrow, cover, title) and the pencil is its sibling immediately after,
+with the count taking the right edge via `ml-auto`. `RollRenamer` is one shared
+component across the list row, the album box and the opened-album header, so a
+folder is renamed the same way wherever you are looking at it.
+
+### Two CSS ordering bugs, same cause
+
+`.trophy-backdrop--cover`'s overrides were written next to the base
+`.trophy-backdrop` rules — but the Trophy Room's own grade (`grayscale(1)
+contrast(1.5) brightness(0.68)`) and its LED grid (`.trophy-backdrop::after`)
+are declared ~170 lines LATER in the same layer, and both tie on specificity.
+Source order therefore decided, and the later rules won: the album covers came
+out grey and dotted.
+
+The grade half was caught in the first capture and patched by adding a
+`--cover` class; the TEXTURE half survived that fix and was only caught in the
+second capture, because a dot grid over a photograph of a jumbotron looks
+plausible. Both overrides now sit after the block that was beating them, with a
+comment saying why they cannot move back.
+
+The texture is gone from album covers entirely (user direction): that grid
+belongs to the Trophy Room, where the photograph is a picture shown ON
+something. An album cover is just the photograph.
+
+typecheck / eslint / check:refs / build:prod clean.
