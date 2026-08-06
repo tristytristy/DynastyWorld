@@ -9847,3 +9847,28 @@ to fail — "onto a tile" and "dragged away" — are the two the earlier attempt
 each got wrong.
 
 typecheck / eslint / build:prod clean.
+
+## 2026-08-05 — Release 4.3.1
+
+Version bumped 4.3.0 → **4.3.1** in `package.json` and both root entries of
+`package-lock.json`. Release notes at `docs/releases/GITHUB_RELEASE_v4.3.1.md`,
+covering everything since 4.3.0 — which is the whole Media rework.
+
+**A patch number for two migrations, and that is the user's call made
+knowingly.** Schema moves v20 → **v22**: v21 adds folder names, v22 adds
+user-made albums, album membership on `media_items`, and cover columns. Strictly
+this is feature work and semver would say minor. What a user experiences is "the
+Media page got better", which is the reading that was chosen. Both migrations
+were verified additive against a copy of the real 45.8 MB archive — no existing
+row changed, all 470 media items intact, and every constraint, cascade and
+exclusivity rule exercised.
+
+**No asset-pack rebuild.** Nothing in `MEDIA_GLOBS` gained or changed a file
+this cycle: the only new art since 4.2.0 is `teammaps`, which is outside those
+globs and travels inside the app either way. The ~927 MB Image Data installer
+last published at v3.0 still stands.
+
+**Slim by default now**, so this build needed no flag — the 4.3.0 release was
+where that default was corrected after a 1 GB build went out by mistake.
+
+typecheck / eslint / check:refs / build:prod clean.
