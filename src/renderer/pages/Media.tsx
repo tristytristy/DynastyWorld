@@ -87,6 +87,13 @@ const GOLD_MARK_KEY = 'cfb.mediaPlateGoldMark';
  */
 const MEDIA_VIEW_KEY = 'cfb.mediaView';
 
+/**
+ * How long the drop overlay survives without a `dragover`. Chromium fires them
+ * many times a second while a drag is over the page, so this only ever elapses
+ * once the drag has genuinely gone.
+ */
+const DRAG_IDLE_MS = 180;
+
 const VIEW_LABELS: Record<'list' | 'grid' | 'all', string> = {
   list: 'List view',
   grid: 'Album view',
@@ -1694,18 +1701,74 @@ export function Media() {
     if (picked) importFiles(picked);
   }
 
-  // --- Drag-and-drop upload (drop OS files anywhere on the grid) ---
-  function onGridDragOver(event: ReactDragEvent) {
-    if (!importing && event.dataTransfer.types.includes('Files')) {
-      event.preventDefault();
-      setDragOverUpload(true);
+  /*
+    DRAG-AND-DROP UPLOAD, and specifically GETTING THE OVERLAY BACK OFF AGAIN.
+
+    This is the third attempt and the first one that can't strand, so the two
+    dead ends are worth recording — both are the standard advice.
+
+      1. "Hide on dragleave." `dragleave` fires for every element the pointer
+         crosses, so the overlay strobes the whole way in.
+      2. "Hide on dragleave only when currentTarget === target." Fixes the
+         strobe and introduces the bug the user hit: leave the panel while over
+         a child tile and the panel never hears a leave of its own, so the
+         overlay stays up over the entire page with no way to dismiss it.
+      3. "Count dragenter/dragleave pairs." Correct in principle. But the
+         window-level net it needs — hide when a `dragleave` has a null
+         `relatedTarget`, i.e. the pointer left the window — is wrong in
+         Chromium, which leaves `relatedTarget` null on EVERY dragleave. The
+         first move onto a tile cleared it. Measured, not guessed.
+
+    WHAT ACTUALLY HOLDS: `dragover` fires continuously — many times a second —
+    for as long as a drag is over the panel, and stops the instant it isn't, for
+    ANY reason: left the panel, left the window, dropped somewhere else,
+    cancelled with Escape. So the overlay is kept alive by a heartbeat rather
+    than dismissed by an event. Each dragover restarts a short timer; when the
+    heartbeat stops, the timer finally runs and the overlay goes.
+
+    The timeout is comfortably longer than the gap between dragover events and
+    short enough to feel immediate.
+  */
+  const dragIdleTimer = useRef<number | null>(null);
+
+  const clearDragOverlay = useCallback(() => {
+    if (dragIdleTimer.current !== null) {
+      window.clearTimeout(dragIdleTimer.current);
+      dragIdleTimer.current = null;
     }
+    setDragOverUpload(false);
+  }, []);
+
+  useEffect(() => {
+    // A drop or a cancelled drag ends it at once rather than after the grace
+    // period — those we DO get told about reliably.
+    window.addEventListener('drop', clearDragOverlay);
+    window.addEventListener('dragend', clearDragOverlay);
+    return () => {
+      window.removeEventListener('drop', clearDragOverlay);
+      window.removeEventListener('dragend', clearDragOverlay);
+      if (dragIdleTimer.current !== null) window.clearTimeout(dragIdleTimer.current);
+    };
+  }, [clearDragOverlay]);
+
+  function onGridDragOver(event: ReactDragEvent) {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    // Required, and required on EVERY dragover — without it the drop is
+    // rejected and the OS animates the file back to where it came from.
+    event.preventDefault();
+    setDragOverUpload(true);
+    if (dragIdleTimer.current !== null) window.clearTimeout(dragIdleTimer.current);
+    dragIdleTimer.current = window.setTimeout(() => {
+      dragIdleTimer.current = null;
+      setDragOverUpload(false);
+    }, DRAG_IDLE_MS);
   }
+
   function onGridDrop(event: ReactDragEvent) {
     const files = Array.from(event.dataTransfer.files ?? []);
     if (files.length === 0) return; // an internal reorder drop — handled on the tile
     event.preventDefault();
-    setDragOverUpload(false);
+    clearDragOverlay();
     /*
       EVERY FILE IN THE DROP, which is what makes this a batch import — a drop
       of forty screenshots is one gesture and forty rows.
@@ -2007,11 +2070,6 @@ export function Media() {
     <div
       className="relative space-y-6"
       onDragOver={onGridDragOver}
-      onDragLeave={(e) => {
-        // Only when the pointer leaves the PANEL, not on every child boundary
-        // it crosses on the way in — otherwise the overlay strobes.
-        if (e.currentTarget === e.target) setDragOverUpload(false);
-      }}
       onDrop={onGridDrop}
     >
       {dragOverUpload && !importing && (
@@ -2249,7 +2307,7 @@ export function Media() {
       )}
 
       {items !== undefined && (items === null || items.length === 0) && (
-        <div onDragOver={onGridDragOver} onDragLeave={() => setDragOverUpload(false)} onDrop={onGridDrop}>
+        <div>
           <SurfaceCard
             className={`py-14 text-center transition ${dragOverUpload ? 'outline outline-2 outline-offset-2 outline-[var(--team-primary)]' : ''}`}
           >
@@ -2489,16 +2547,7 @@ export function Media() {
       )}
 
       {items && items.length > 0 && view === 'list' && (
-        <div
-          onDragOver={onGridDragOver}
-          onDragLeave={(e) => {
-            if (e.currentTarget === e.target) setDragOverUpload(false);
-          }}
-          onDrop={onGridDrop}
-          className={`space-y-3 rounded p-1 transition ${
-            dragOverUpload ? 'outline-dashed outline-2 outline-offset-2 outline-[var(--team-primary)]' : ''
-          }`}
-        >
+        <div className="space-y-3 rounded p-1">
           {rolls.map((roll) => {
             const open = openRolls.has(roll.key);
             const photos = roll.entries.length;

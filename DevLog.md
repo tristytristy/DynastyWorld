@@ -9809,3 +9809,41 @@ renderer, and that the batch import path itself is the same one the file picker
 uses, which works.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 (final pass IV) — The drop overlay that would not go away
+
+Dragging a file onto the Media page and then dragging it back out left the
+"Drop to add to 2028" overlay up over the whole page, with nothing able to
+dismiss it. Reported with a screenshot; reproduced and fixed.
+
+**Three approaches, and the first two are the standard advice.**
+
+1. *Hide on `dragleave`.* It fires for every element the pointer crosses, so the
+   overlay strobes the whole way in.
+2. *Hide on `dragleave` only when `currentTarget === target`.* Fixes the strobe
+   and creates exactly the reported bug: leave the panel while over a child
+   tile and the panel never hears a leave of its own.
+3. *Count `dragenter` / `dragleave` pairs.* Correct in principle, and the
+   window-level net it needs is "hide when a dragleave has a null
+   `relatedTarget`, i.e. the pointer left the window". **Chromium leaves
+   `relatedTarget` null on EVERY dragleave**, so the first move onto a tile
+   cleared it. Measured in a live probe, not reasoned about — the trace showed
+   `enter@panel, enter@tile, leave@panel` and the overlay going down on the
+   third.
+
+**What holds: a heartbeat, not an event.** `dragover` fires many times a second
+for as long as a drag is over the panel and stops the instant it isn't — for any
+reason at all: left the panel, left the window, dropped elsewhere, cancelled
+with Escape. So each `dragover` restarts a 180ms timer, and the overlay goes
+when the heartbeat stops. `drop` and `dragend` still clear it immediately,
+because those two we are told about reliably.
+
+That also deleted the enter/leave handlers and the two redundant inner
+dropzones: one `onDragOver` on the panel is now the whole mechanism.
+
+Verified across all seven states: over the panel, onto a tile, still on the
+tile, back to the panel, dragged away, re-entered, cancelled. The two that used
+to fail — "onto a tile" and "dragged away" — are the two the earlier attempts
+each got wrong.
+
+typecheck / eslint / build:prod clean.
