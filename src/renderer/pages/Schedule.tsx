@@ -334,7 +334,7 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                   return (
                     <tr
                       key={g.gameId}
-                      onClick={() => openGameModal(dynastyId, g.gameId, seasonId)}
+                      onClick={() => openGameModal(dynastyId, g.gameId, seasonId, games.map((x) => x.gameId))}
                       className={`group cursor-pointer border-b border-slate-200/60 transition last:border-b-0 hover:brightness-[0.98] dark:border-white/5 ${tint}`}
                     >
                       <td className="tnum px-5 py-3.5 font-medium text-slate-500 dark:text-slate-400" style={{ boxShadow: `inset 3px 0 0 ${accent}` }}>{g.week}</td>
@@ -453,7 +453,9 @@ export function Schedule() {
                 <GameRow
                   key={game.gameId}
                   game={game}
-                  onOpen={() => id && openGameModal(id, game.gameId, seasonId)}
+                  onOpen={() =>
+                    id && openGameModal(id, game.gameId, seasonId, overview.games.map((x) => x.gameId))
+                  }
                 />
               ))}
             </tbody>

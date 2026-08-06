@@ -535,7 +535,10 @@ const HELP_TOPICS: HelpTopic[] = [
         <p>
           The keyboard icon in the title bar opens <strong>Shortcuts</strong>. A few keys are fixed and always work:{' '}
           <strong>Ctrl + K</strong> opens global search, <strong>Esc</strong> closes whatever panel is open, and{' '}
-          <strong>Shift + ←</strong> / <strong>Shift + →</strong> step through teams. They&apos;re listed at the top of
+          <strong>Shift + ←</strong> / <strong>Shift + →</strong> step through teams — or through conferences while
+          you&apos;re on Standings, which is the one page where that&apos;s the thing you want to page through. With a
+          game&apos;s info open from your schedule, plain <strong>←</strong> and <strong>→</strong> move to the
+          previous and next game. They&apos;re listed at the top of
           the panel under <strong>Built in</strong> so you can see them without having to find them by accident.
         </p>
         <p>

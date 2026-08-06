@@ -9872,3 +9872,47 @@ last published at v3.0 still stands.
 where that default was corrected after a 1 GB build went out by mistake.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-06 — Stepping through a schedule, and through conferences
+
+### Prev / next inside Game Info
+
+Opening a game from the schedule and then wanting the next one meant closing the
+modal, finding the next row and opening that. Plain **←** and **→** now move
+through the schedule from inside the box score, with matching controls and a
+"4 / 16" counter in the header.
+
+**The list is passed IN, not fetched**, and that is the whole design. "The next
+game" is a question about the LIST YOU CAME FROM: opened from a schedule it
+means the next row; opened from a player's profile it would mean his next
+appearance. The modal cannot know which, so `openGameModal` takes an optional
+ordered array of game ids and the caller supplies it. Callers that pass nothing
+— which is most of them — behave exactly as before and draw no controls, because
+a pair of permanently dead arrows is worse than none.
+
+**Bare arrows only.** Shift+Arrow is the app's reserved team switcher, and a
+modal quietly eating it would break that everywhere a game happened to be open;
+Ctrl and Alt are left alone for the same reason. Verified: opened at 4/16, right
+to 5 and 6, left back to 5, and Shift+Right ignored by the modal.
+
+### Standings claims Shift+Arrow for conferences
+
+On Standings the thing you page through is a conference, not a team — switching
+the viewed TEAM there changes nothing you can see, since it is the same table.
+So the page takes the shortcut over.
+
+**Capture phase is what makes that an override rather than a fight.** The team
+switcher listens on `window` in the bubble phase, which runs last; a capture
+listener on `document` runs first, so stopping propagation there means the
+switcher never sees the keystroke and the two cannot both act. The guards are
+copied from the switcher deliberately — not while typing, not under a dialog,
+not under an open dropdown — because a page claiming a shortcut has to honour
+the same rules or it reintroduces the bugs those guards exist to prevent.
+
+Verified live: Big Ten → ACC → American → ACC, with the viewed team reading
+"UCLA (current)" before and after three presses.
+
+The built-in shortcut list now says so rather than leaving it to be discovered,
+which is the whole reason that list exists.
+
+typecheck / eslint / check:refs / build:prod clean.

@@ -46,8 +46,11 @@ export const RESERVED_COMBOS: Record<string, string> = {
 export const BUILT_IN_SHORTCUTS: { combos: string[]; label: string }[] = [
   { combos: ['Ctrl+K', 'Meta+K'], label: 'Global search' },
   { combos: ['Escape'], label: 'Close the open panel' },
-  { combos: ['Shift+ArrowLeft'], label: 'Previous team' },
-  { combos: ['Shift+ArrowRight'], label: 'Next team' },
+  // Standings takes these over for its conferences — the one page where the
+  // thing you page through isn't a team. Said here rather than left to be
+  // discovered, since this list exists to stop exactly that.
+  { combos: ['Shift+ArrowLeft'], label: 'Previous team (conference on Standings)' },
+  { combos: ['Shift+ArrowRight'], label: 'Next team (conference on Standings)' },
 ];
 
 /** Modifier-only presses aren't a shortcut; they're the user still on their way to one. */

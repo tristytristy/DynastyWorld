@@ -171,6 +171,51 @@ export function Standings() {
     }
   }, [selectedGroupId, standings]);
 
+  /*
+    SHIFT + ← / → STEPS THROUGH CONFERENCES (user direction).
+
+    That combination is the app's reserved "previous / next team", and this page
+    deliberately takes it over: Standings is the one destination where the thing
+    you page through is not a team but a conference, and switching the viewed
+    TEAM here does nothing you can see — the table is the same table.
+
+    CAPTURE PHASE, and that is what makes the override work rather than fight.
+    The team switcher listens on `window` in the bubble phase, which runs last;
+    a capture listener on `document` runs first, so stopping propagation there
+    means the switcher never sees the keystroke and the two cannot both act on
+    it. The guards below are copied from the switcher on purpose — a page that
+    claims a shortcut has to honour the same "not while typing, not under an
+    overlay" rules, or it reintroduces the bugs those guards exist to prevent.
+  */
+  useEffect(() => {
+    const groups = standings?.groups ?? [];
+    if (groups.length < 2) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (!event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || /^(input|textarea|select)$/i.test(target?.tagName ?? '')) return;
+      // A modal or an open dropdown owns the keyboard while it is up.
+      if (document.querySelector('[role="dialog"]')) return;
+      if (document.querySelector('[role="listbox"]')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedGroupId((current) => {
+        const at = groups.findIndex((group) => group.id === current);
+        const from = at === -1 ? 0 : at;
+        // Wraps at both ends, so the conferences are a loop in either
+        // direction rather than stopping dead at the last one — same rule the
+        // team switcher uses, so the gesture feels identical.
+        const next = (from + (event.key === 'ArrowRight' ? 1 : -1) + groups.length) % groups.length;
+        return groups[next].id;
+      });
+    }
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [standings]);
+
   const selectedGroup = useMemo<ConferenceStandingsGroup | null>(() => {
     if (!standings || standings.groups.length === 0) return null;
     return standings.groups.find((group) => group.id === selectedGroupId) ?? standings.groups[0];
