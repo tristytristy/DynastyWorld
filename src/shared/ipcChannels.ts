@@ -193,6 +193,7 @@ export const IPC = {
     check: 'update:check',
     download: 'update:download',
     install: 'update:install',
+    backupNow: 'update:backupNow',
     getState: 'update:getState',
     /** Main -> renderer push. The state lives in main, so this is how the UI learns it changed. */
     state: 'update:state',

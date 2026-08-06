@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { IPC } from '../../shared/ipcChannels';
 import type { UpdateError, UpdateState, UpdateStatus } from '../../shared/updateTypes';
-import { flushPendingWrites, isDatabaseWriteInProgress } from '../../database/init';
+import { backupDatabase, flushPendingWrites, isDatabaseWriteInProgress } from '../../database/init';
 import { describeActiveTasks, hasActiveTasks } from './taskRegistry';
 import { getUpdatePreferences } from './updatePrefs';
 
@@ -349,13 +349,43 @@ export function installUpdate(): UpdateState {
   // Deferred a tick so this IPC call returns and the renderer can paint its
   // "installing" state before the window starts tearing down.
   setTimeout(() => {
-    try {
-      autoUpdater.quitAndInstall(false, true);
-    } catch (err) {
-      const safe = toUpdateError(err);
-      log('install failed', { code: safe.code });
-      setStatus('error', { error: safe });
-    }
+    void (async () => {
+      /*
+        A FULL-ARCHIVE CHECKPOINT, TAKEN AT THE LAST MOMENT IT IS STILL THIS
+        VERSION'S ARCHIVE.
+
+        An update is the one routine action that can change the database out
+        from under someone: the new build may carry migrations, and those run on
+        its first launch, after this process is gone. If anything about that goes
+        wrong the user has already replaced the only app that could have told
+        them. So the safety net is taken HERE — after the shutdown check passed,
+        before the installer runs.
+
+        Cheap and self-limiting: backupDatabase() fingerprints the archive and
+        returns null without writing when nothing has changed since the last
+        checkpoint, so updating twice in a row doesn't stack copies, and old
+        ones are pruned elsewhere.
+
+        Failure never blocks the update. A user who chose to update should get
+        the update; losing the checkpoint is worth a log line, not a refusal.
+      */
+      try {
+        const checkpoint = await backupDatabase();
+        log(checkpoint ? 'pre-update checkpoint written' : 'pre-update checkpoint skipped (archive unchanged)');
+      } catch (err) {
+        log('pre-update checkpoint failed — continuing with the update', {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      try {
+        autoUpdater.quitAndInstall(false, true);
+      } catch (err) {
+        const safe = toUpdateError(err);
+        log('install failed', { code: safe.code });
+        setStatus('error', { error: safe });
+      }
+    })();
   }, 400);
 
   return state;

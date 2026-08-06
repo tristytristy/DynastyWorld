@@ -319,6 +319,7 @@ const api: DynastyApi = {
     check: () => ipcRenderer.invoke(IPC.update.check),
     download: () => ipcRenderer.invoke(IPC.update.download),
     install: () => ipcRenderer.invoke(IPC.update.install),
+    backupNow: () => ipcRenderer.invoke(IPC.update.backupNow),
     getState: () => ipcRenderer.invoke(IPC.update.getState),
     openLink: (url) => ipcRenderer.invoke(IPC.update.openLink, url),
     getPrefs: () => ipcRenderer.invoke(IPC.update.getPrefs),

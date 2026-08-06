@@ -8,6 +8,7 @@ import {
   getDynastyBySavePath,
   getSeasonByYear,
   recordRankingSnapshot,
+  getSnapshot,
   saveSnapshot,
   saveSnapshotCompressed,
   updateDynasty,
@@ -177,7 +178,33 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
   if (!blockWrite) {
     saveSnapshot(season.id, 'league', extraction.league);
     saveSnapshot(season.id, 'teams', extraction.teams);
-    saveSnapshot(season.id, 'coaches', extraction.coaches);
+    /*
+      STAFF IS LOCKED ONCE THE CAROUSEL HAS FIRED (user report, Barcode 2026-08-05).
+
+      The coaching carousel moves coordinators right AFTER the national
+      championship — user-confirmed from the JMU→Cincinnati playtest, logged as a
+      ~week-18 CoachTransactionHistoryEntry. Every offseason sync after that
+      point is reading NEXT season's staff.
+
+      Rewriting `coaches` there overwrote the finished season's staff with the
+      replacements, so a coach who looked back at last year saw coordinators who
+      were never there — and the coordinators who actually won it had vanished
+      from Overview and Staff. `isSeasonLocked` only starts refusing writes at
+      offseason stage 3, so stages 1–2 sailed straight through. Those are End of
+      Season Recap and Players Leaving: precisely the moment the app RECOMMENDS
+      syncing, which made this near-guaranteed rather than rare.
+
+      Same shape as the coach→team rule (see memory reference-sync-phase-map):
+      capture before the carousel, then stop looking until the next season.
+
+      A first-ever sync taken in the offseason still writes, because post-carousel
+      staff beats no staff at all — the gate only ever refuses to REPLACE a
+      capture taken while the season was live.
+    */
+    const staffAlreadyCaptured = getSnapshot(season.id, 'coaches') !== undefined;
+    if (phase.kind !== 'offseason' || !staffAlreadyCaptured) {
+      saveSnapshot(season.id, 'coaches', extraction.coaches);
+    }
     saveSnapshot(season.id, 'roster', extraction.roster);
     saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
     saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);

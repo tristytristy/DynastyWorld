@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Markdown } from '../ui/Markdown';
 import { useUpdater } from '../../data/useUpdater';
 import { formatReleaseDate, formatSpeed, formatTransferred } from '../../lib/updateFormat';
@@ -6,6 +7,69 @@ const PRIMARY_BTN =
   'shrink-0 border border-[var(--team-primary)] bg-[var(--team-primary)] px-4 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:opacity-90 disabled:opacity-60';
 const SECONDARY_BTN =
   'shrink-0 border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
+
+/**
+ * BACK UP BEFORE YOU UPDATE — offered, and one click.
+ *
+ * An update is the only routine action that can change the database out from
+ * under someone: the new build may carry migrations, and they run on its first
+ * launch, after the app that could have warned you is gone. The install path
+ * already takes a checkpoint automatically (updateService.ts); this is the same
+ * checkpoint offered up front, because a user who has just been told an update
+ * is waiting should be able to take one deliberately and SEE that it worked.
+ *
+ * The wording is a recommendation rather than a warning. Updating is safe and
+ * we want people to do it — a red caution here would cost more installs than it
+ * would ever save archives, and the automatic checkpoint means declining this
+ * is not the dangerous choice it would otherwise be.
+ *
+ * "Already up to date" is a success, not a no-op: backupDatabase fingerprints
+ * the archive and writes nothing when it hasn't changed, which means a good
+ * checkpoint already exists. Saying "nothing to do" would read as failure.
+ */
+function BackupBeforeUpdate() {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<'saved' | 'current' | 'failed' | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const res = await window.api.update.backupNow();
+      setDone(!res.ok ? 'failed' : res.wrote ? 'saved' : 'current');
+    } catch {
+      setDone('failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-slate-200 pt-3 dark:border-white/10">
+      <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        <span className="font-semibold text-slate-700 dark:text-slate-200">Back up first.</span>{' '}
+        Recommended before any update — it saves a full copy of every dynasty, and takes a moment.
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" onClick={run} disabled={busy} className={SECONDARY_BTN}>
+          {busy ? 'Backing up…' : 'Back up now'}
+        </button>
+        {done === 'saved' && (
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Backup saved.</span>
+        )}
+        {done === 'current' && (
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            Your backup is already up to date.
+          </span>
+        )}
+        {done === 'failed' && (
+          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            Couldn&apos;t save a backup — you can still update.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The whole update experience, in one panel that reads the main process's
@@ -91,6 +155,7 @@ export function UpdatePanel({ onDismiss }: { onDismiss?: () => void } = {}) {
             </p>
           </div>
           {state.releaseNotes && <ReleaseNotes notes={state.releaseNotes} />}
+          <BackupBeforeUpdate />
           <div className="flex items-center gap-2">
             <button type="button" onClick={download} className={PRIMARY_BTN}>
               Update DynastyOS

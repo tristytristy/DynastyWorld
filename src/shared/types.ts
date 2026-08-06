@@ -3511,6 +3511,8 @@ export interface DynastyApi {
     download: () => Promise<UpdateState>;
     /** Saves everything outstanding, then closes, installs and relaunches. Refuses (with a reason) while work is in flight. */
     install: () => Promise<UpdateState>;
+    /** Takes a full-archive checkpoint on demand. `wrote` is false when the archive is unchanged since the last one — still a success. */
+    backupNow: () => Promise<{ ok: boolean; wrote: boolean }>;
     /** The current state, for a renderer that just mounted mid-download. */
     getState: () => Promise<UpdateState>;
     /** Subscribes to state pushes; returns its own unsubscribe. */

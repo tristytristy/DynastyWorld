@@ -2,6 +2,7 @@ import { ipcMain, shell } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
 import type { UpdateState } from '../../shared/updateTypes';
 import { checkForUpdates, downloadUpdate, getUpdateState, installUpdate } from './updateService';
+import { backupDatabase } from '../../database/init';
 import { getUpdatePreferences, setUpdatePreferences, type UpdatePreferences } from './updatePrefs';
 
 /**
@@ -13,6 +14,26 @@ export function registerUpdateHandlers(): void {
   ipcMain.handle(IPC.update.check, async (): Promise<UpdateState> => checkForUpdates());
   ipcMain.handle(IPC.update.download, async (): Promise<UpdateState> => downloadUpdate());
   ipcMain.handle(IPC.update.install, async (): Promise<UpdateState> => installUpdate());
+
+  /*
+    An on-demand full-archive checkpoint, offered next to the update button.
+    The install path takes one automatically (see updateService), but a user who
+    has just been told an update is waiting should be able to take one himself
+    and see that it worked — reassurance is the point, and reassurance you can't
+    observe isn't reassurance.
+
+    Returns false when the archive is unchanged since the last checkpoint, which
+    backupDatabase reports by writing nothing. That is still a success as far as
+    the user is concerned: a current checkpoint exists either way.
+  */
+  ipcMain.handle(IPC.update.backupNow, async (): Promise<{ ok: boolean; wrote: boolean }> => {
+    try {
+      const written = await backupDatabase();
+      return { ok: true, wrote: written !== null };
+    } catch {
+      return { ok: false, wrote: false };
+    }
+  });
   ipcMain.handle(IPC.update.getState, (): UpdateState => getUpdateState());
 
   ipcMain.handle(IPC.update.getPrefs, (): UpdatePreferences => getUpdatePreferences());
