@@ -387,6 +387,53 @@ export function createSeason(
   return mapSeason(row!);
 }
 
+/**
+ * PROMOTES A BACKFILLED HISTORY-ONLY SEASON TO A REAL ONE.
+ *
+ * Backfill creates a thin row for every past year the save knows about
+ * (`createSeason(..., isCurrent=false, hasFullData=false)`), carrying a
+ * `yearSummary` snapshot and nothing else. That was fine while such a year
+ * could never be synced afterwards — but it can: import a save at 2028 and
+ * 2026/2027 are backfilled, then load a 2027 save and `persistExtraction`
+ * finds the existing row and writes twenty real snapshots into it.
+ *
+ * Nothing upgraded the row to match, and `has_full_data` had no UPDATE anywhere
+ * in the codebase, so the season kept every value backfill gave it. The label
+ * was the least of it: `user_team_id` stayed NULL, and NINE read paths bail out
+ * on exactly that — Schedule, Standings, Rankings, Awards, Coaches, Recruits,
+ * Season Overview, NCAA Hub and History all return undefined or skip the year.
+ * The result was a season holding a full capture that every page refused to
+ * open, permanently, with no way back.
+ *
+ * So this repairs the whole row rather than the flag: the team and coach the
+ * capture is actually for, the current-season marker (the year being synced IS
+ * the current one), and a fresh timestamp, because it has just been captured
+ * for real.
+ *
+ * Called ONLY where the full snapshots are genuinely written — never on a
+ * blocked write, which would advertise data that isn't there.
+ */
+export function upgradeSeasonToFull(
+  seasonId: number,
+  dynastyId: string,
+  userTeamId: number,
+  userCoachId: number | null,
+): void {
+  // Same demotion createSeason does for a new current season — without it the
+  // dynasty would briefly have two, or none.
+  run('UPDATE seasons SET is_current = 0 WHERE dynasty_id = ?', [dynastyId]);
+  run(
+    `UPDATE seasons
+        SET has_full_data = 1,
+            is_current = 1,
+            user_team_id = ?,
+            user_coach_id = COALESCE(?, user_coach_id),
+            extracted_at = ?
+      WHERE id = ?`,
+    [userTeamId, userCoachId, new Date().toISOString(), seasonId],
+  );
+}
+
 export function getSeasonsByDynasty(dynastyId: string): Season[] {
   return all<SeasonRow>('SELECT * FROM seasons WHERE dynasty_id = ? ORDER BY season_year DESC', [
     dynastyId,

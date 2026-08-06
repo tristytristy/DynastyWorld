@@ -13,6 +13,7 @@ import {
   saveSnapshotCompressed,
   updateDynasty,
   updateSeasonPhase,
+  upgradeSeasonToFull,
   type Dynasty,
   type Season,
 } from './helpers';
@@ -176,6 +177,24 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
   const gamelog = extraction.gamelog.filter((entry) => !heldGameIds.has(entry.gameId));
 
   if (!blockWrite) {
+    /*
+      A year that was backfilled as history-only is now being captured for real,
+      so the row has to stop describing itself as a stub — see
+      upgradeSeasonToFull for why the flag alone isn't enough (a null
+      user_team_id makes nine read paths skip the season entirely).
+
+      Inside the write branch deliberately: promoting a season whose snapshots
+      were blocked would claim data that was never written.
+    */
+    if (existing && !existing.hasFullData) {
+      upgradeSeasonToFull(season.id, dynasty.id, seasonTeamIndex, userCoachId);
+      // The in-memory row is handed back to the caller and read by the success
+      // message; leaving it stale would report a history-only import.
+      season.hasFullData = true;
+      season.isCurrent = true;
+      season.userTeamId = seasonTeamIndex;
+    }
+
     saveSnapshot(season.id, 'league', extraction.league);
     saveSnapshot(season.id, 'teams', extraction.teams);
     /*
