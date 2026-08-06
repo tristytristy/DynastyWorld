@@ -29,14 +29,6 @@ export function isManualSeason(season: ProgramHistorySeasonEntry): boolean {
   return season.source === 'manual';
 }
 
-/**
- * True for a season the app never captured — either the save's own thin
- * year-row or a typed one. Both belong on the timeline and neither belongs in a
- * total computed from full seasons.
- */
-export function isBackfilledSeason(season: ProgramHistorySeasonEntry): boolean {
-  return season.source !== 'synced';
-}
 
 /**
  * A record for display, or a dash when the user left it blank.

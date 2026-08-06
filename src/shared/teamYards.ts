@@ -69,6 +69,3 @@ export function seasonOffenseYards(line: SeasonYardageFields): number {
   return line.offPassYards + line.offRushYards;
 }
 
-export function seasonReturnYards(line: SeasonYardageFields): number {
-  return Math.max(0, line.totalYards - seasonOffenseYards(line));
-}

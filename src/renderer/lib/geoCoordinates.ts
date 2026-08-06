@@ -1,4 +1,3 @@
-import { canonicalKey } from './assetMapping';
 
 /**
  * Latitude/longitude for every school and every stadium we could source.
@@ -334,29 +333,5 @@ export const STADIUM_COORDS: Readonly<Record<string, GeoPoint>> = {
   wyoming: { lat: 41.31167, lon: -105.56833 }, // Wyoming — War Memorial Stadium
 };
 
-/** Campus point, or undefined when we have none. */
-export function campusCoords(teamName: string | null | undefined): GeoPoint | undefined {
-  if (!teamName) return undefined;
-  return CAMPUS_COORDS[canonicalKey(teamName)];
-}
 
-/** Stadium point, or undefined when we have none. */
-export function stadiumCoords(teamName: string | null | undefined): GeoPoint | undefined {
-  if (!teamName) return undefined;
-  return STADIUM_COORDS[canonicalKey(teamName)];
-}
 
-/**
- * Great-circle distance in miles — for "how far did they travel", a road-trip
- * map, or sorting opponents by remoteness. Haversine, which is accurate to
- * well within a mile at these distances.
- */
-export function distanceMiles(a: GeoPoint, b: GeoPoint): number {
-  const R = 3958.7613;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}

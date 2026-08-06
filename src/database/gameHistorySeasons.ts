@@ -94,7 +94,3 @@ export function getGameHistorySeasons(dynastyId: string): GameHistorySeason[] {
   return out.sort((a, b) => b.year - a.year);
 }
 
-/** Quick lookup of which years the game can already account for. */
-export function getGameHistoryYears(dynastyId: string): Set<number> {
-  return new Set(getGameHistorySeasons(dynastyId).map((s) => s.year));
-}

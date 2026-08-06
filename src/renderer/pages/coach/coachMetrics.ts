@@ -10,10 +10,8 @@
  * Nothing in this file was redesigned during the split — the logic, and the
  * reasoning recorded against it, is carried over verbatim from the monolith.
  */
-import { seasonOffenseYards } from '../../../shared/teamYards';
-import { coachKey, spaceCamelCase, type CoachResume, type UnitStats } from '../../components/common/CoachCard';
+import { coachKey, spaceCamelCase, type CoachResume } from '../../components/common/CoachCard';
 import type { CoachOverview, ScheduleOverview } from '../../../shared/types';
-import type { TeamStatsData } from '../../../extractors/extract-team-stats';
 
 /** "'26" / "'26–'28" for a coach's tenure span. */
 export function yearsSpan(a: number, b: number): string {
@@ -66,39 +64,6 @@ export function jobSecurityEvaluation(status: string): { label: string; tone: To
   return { label: spaceCamelCase(status), tone: 'ok' };
 }
 
-/**
- * The two per-game numbers a coordinator is actually judged on, for the season
- * on screen: yards and points, on their own side of the ball.
- *
- * The offensive pair comes from the team's own season line; the defensive pair
- * is the same idea from the other direction — `defPassYards + defRushYards` is
- * what the defence GAVE UP, and points against come off the schedule, since the
- * team-stats snapshot carries yardage but not scoring. Games played is taken
- * from the finished games on the schedule rather than the record, so a
- * mid-season average divides by the games that have actually happened.
- */
-export function buildUnitStats(
-  teamStats: TeamStatsData | null,
-  schedule: ScheduleOverview | null,
-): UnitStats | null {
-  if (!teamStats && !schedule) return null;
-  const played = (schedule?.games ?? []).filter(
-    (g) => g.teamScore !== null && g.opponentScore !== null,
-  );
-  const games = played.length;
-  if (games === 0) return null;
-
-  const per = (total: number) => Math.round((total / games) * 10) / 10;
-  const pointsFor = played.reduce((sum, g) => sum + (g.teamScore ?? 0), 0);
-  const pointsAgainst = played.reduce((sum, g) => sum + (g.opponentScore ?? 0), 0);
-
-  return {
-    offenseYardsPerGame: teamStats ? per(seasonOffenseYards(teamStats)) : null,
-    pointsPerGame: per(pointsFor),
-    defenseYardsPerGame: teamStats ? per(teamStats.defPassYards + teamStats.defRushYards) : null,
-    pointsAgainstPerGame: per(pointsAgainst),
-  };
-}
 
 /**
  * How many years into their run at this school a coach is, for the season being

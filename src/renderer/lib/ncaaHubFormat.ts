@@ -1,4 +1,4 @@
-import { pickVariant, pickVariantFor, storySeed } from '../../shared/storyVariants';
+import { pickVariantFor, storySeed } from '../../shared/storyVariants';
 import type { NcaaHubGameFeature, NcaaHubOverview, NcaaHubTop25Entry } from '../../shared/types';
 
 /**
@@ -13,12 +13,6 @@ import type { NcaaHubGameFeature, NcaaHubOverview, NcaaHubTop25Entry } from '../
  * event it describes, so re-opening the page never rewrites the week.
  */
 
-export function gameMetaLine(game: NcaaHubGameFeature): string {
-  const parts = [game.date, game.dayOfWeek, game.kickoffTime !== 'TBD' ? game.kickoffTime : null, game.broadcastScope]
-    .filter((part) => part && part !== 'TBD')
-    .join(' - ');
-  return parts || 'Kickoff TBD';
-}
 
 export function eventLabel(game: NcaaHubGameFeature): string {
   if (game.isNationalChampionship) return 'National Championship';
@@ -26,38 +20,8 @@ export function eventLabel(game: NcaaHubGameFeature): string {
   return game.isNeutralSite ? 'Neutral Site' : 'Campus Matchup';
 }
 
-function gameSeed(game: NcaaHubGameFeature, seasonYear: number): string {
-  return storySeed(seasonYear, game.week, game.awayTeamName, game.homeTeamName);
-}
 
-// ------------------------------------------------------------------ score line
 
-const SCORE_LINES = [
-  (winner: string, _loser: string, high: number, low: number) => `${winner} won ${high}-${low}.`,
-  (winner: string, loser: string, high: number, low: number) => `${winner} ${high}, ${loser} ${low}.`,
-  (winner: string, _loser: string, high: number, low: number) => `${winner} by ${high - low}, ${high}-${low}.`,
-];
-
-/**
- * The bare result, for the places that label it ("Result:") rather than tell a
- * story about it. Kept separate from the narrated summaries on purpose — a
- * labelled fact should not also carry adjectives.
- */
-export function gameScoreLine(game: NcaaHubGameFeature, seasonYear: number): string | null {
-  if (game.homeScore === null || game.awayScore === null) return null;
-
-  if (game.homeScore === game.awayScore) {
-    return `${game.awayTeamName} and ${game.homeTeamName} finished tied at ${game.awayScore}-${game.homeScore}.`;
-  }
-
-  const homeWon = game.homeScore > game.awayScore;
-  return pickVariant(SCORE_LINES, gameSeed(game, seasonYear))(
-    homeWon ? game.homeTeamName : game.awayTeamName,
-    homeWon ? game.awayTeamName : game.homeTeamName,
-    Math.max(game.homeScore, game.awayScore),
-    Math.min(game.homeScore, game.awayScore),
-  );
-}
 
 // ------------------------------------------------------------ rank movement
 

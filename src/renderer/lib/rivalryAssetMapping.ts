@@ -103,10 +103,6 @@ export function setCustomRivalryRegistry(next: Record<string, CustomRivalryEntry
   customRivalries = next;
 }
 
-/** The user's rivalry for this matchup, or null. Order-independent. */
-export function customRivalryFor(teamA: string, teamB: string): CustomRivalryEntry | null {
-  return customRivalries[pairKey(teamA, teamB)] ?? null;
-}
 
 const LOGO_BY_PAIR = new Map(
   RIVALRY_LOGO_FILES.map(([teamA, teamB, file]) => [pairKey(teamA, teamB), `${RIVALRY_LOGO_BASE_PATH}/${file}`]),

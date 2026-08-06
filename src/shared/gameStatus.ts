@@ -38,13 +38,3 @@ export function isGamePlayed(status: string | null | undefined): boolean {
   return status === 'HomeWon' || status === 'AwayWon';
 }
 
-/**
- * The complement — still to come. Covers the genuinely unplayed AND the
- * bracket slots waiting on a matchup, which is what a "games remaining" or
- * "upcoming" list wants: a quarterfinal your team is sitting in as the bye
- * seed is absolutely an upcoming game, even though the save calls it
- * `HomeScheduled` rather than `Unplayed`.
- */
-export function isGameUpcoming(status: string | null | undefined): boolean {
-  return !isGamePlayed(status);
-}

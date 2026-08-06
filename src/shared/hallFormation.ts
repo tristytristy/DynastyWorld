@@ -374,17 +374,6 @@ export function findSlot(slotId: string): LegendFormationSlot | undefined {
   return LEGEND_SLOTS.find((slot) => slot.id === slotId);
 }
 
-/**
- * Every slot this player could fill, in formation order.
- *
- * One function, so the pool's filtering, the empty slot's prompt and the
- * assignment panel can't disagree about what "compatible" means — three places
- * that would each have grown their own copy.
- */
-export function compatibleSlots(position: string): LegendFormationSlot[] {
-  const pos = position.trim().toUpperCase();
-  return LEGEND_SLOTS.filter((slot) => slot.compatible.includes(pos));
-}
 
 export function isCompatible(position: string, slotId: string): boolean {
   const slot = findSlot(slotId);

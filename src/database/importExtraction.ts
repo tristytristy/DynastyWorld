@@ -17,7 +17,7 @@ import {
   type Dynasty,
   type Season,
 } from './helpers';
-import { withBatchedPersist } from './init';
+import { compactDatabase, getReusableSpaceBytes, withBatchedPersist } from './init';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
 import { captureGameContext } from './gameContext';
 import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
@@ -56,6 +56,34 @@ export interface PersistedImport {
 }
 
 /**
+ * Free space worth a VACUUM. Below this the rewrite costs more than it returns.
+ */
+const COMPACT_THRESHOLD_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Gives back the space a sync just stranded, when there is enough to bother.
+ *
+ * Re-syncing a season REPLACES its snapshots, and SQLite doesn't hand the old
+ * pages back to the filesystem — it keeps them on a free list for reuse. That
+ * was invisible while snapshots were stored raw and each rewrite was about the
+ * same size as the last. Now that they're compressed, a re-sync frees far more
+ * than it takes, and without this the file would stay at its old high-water mark
+ * indefinitely: measured on a real archive, compressing in place left the file
+ * at 38.4 MB until a VACUUM brought it to 21.2 MB.
+ *
+ * VACUUM rewrites the whole file, so it is gated on there being real space to
+ * reclaim rather than run on every sync. Failure is deliberately silent — a
+ * tidier file is never worth failing a sync the user asked for.
+ */
+function compactIfWorthwhile(): void {
+  try {
+    if (getReusableSpaceBytes() >= COMPACT_THRESHOLD_BYTES) compactDatabase();
+  } catch {
+    // Space stays claimed until the next opportunity; nothing is lost.
+  }
+}
+
+/**
  * Writes an extraction result to SQLite. Importing the same save path twice
  * reuses the existing dynasty (refreshing its label) rather than erroring on
  * the save_path UNIQUE constraint — re-importing to pull the latest week's
@@ -64,7 +92,11 @@ export interface PersistedImport {
 export function persistExtraction(savePath: string, extraction: ExtractionData): PersistedImport {
   // ~25 writes land below, and each one would otherwise rewrite the entire
   // archive to disk. One flush at the end instead — see withBatchedPersist.
-  return withBatchedPersist(() => persistExtractionInner(savePath, extraction));
+  const result = withBatchedPersist(() => persistExtractionInner(savePath, extraction));
+  // AFTER the batch: VACUUM cannot run inside a transaction, and the free pages
+  // it reclaims only exist once the batch has been flushed.
+  compactIfWorthwhile();
+  return result;
 }
 
 function persistExtractionInner(savePath: string, extraction: ExtractionData): PersistedImport {
@@ -196,7 +228,18 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     }
 
     saveSnapshot(season.id, 'league', extraction.league);
-    saveSnapshot(season.id, 'teams', extraction.teams);
+    /*
+      COMPRESSED, like the leaguewide payloads below. These six were the ones
+      still stored as raw JSON, and they were most of the archive: measured on a
+      real 38.4 MB file, season_snapshots was 36.8 MB of it and these accounted
+      for 20.8 MB, compressing to 2.8 MB — the archive roughly halves.
+
+      Reading is unaffected: getSnapshot detects the `gz:` prefix per row, so
+      rows already written uncompressed keep working and convert on the next
+      sync. Measured cost is single-digit milliseconds (teams 6 ms -> 9 ms), and
+      the snapshot cache means most reads never decompress at all.
+    */
+    saveSnapshotCompressed(season.id, 'teams', extraction.teams);
     /*
       STAFF IS LOCKED ONCE THE CAROUSEL HAS FIRED (user report, Barcode 2026-08-05).
 
@@ -222,16 +265,16 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     */
     const staffAlreadyCaptured = getSnapshot(season.id, 'coaches') !== undefined;
     if (phase.kind !== 'offseason' || !staffAlreadyCaptured) {
-      saveSnapshot(season.id, 'coaches', extraction.coaches);
+      saveSnapshotCompressed(season.id, 'coaches', extraction.coaches);
     }
     saveSnapshot(season.id, 'roster', extraction.roster);
-    saveSnapshot(season.id, 'leaguePortraits', extraction.leaguePortraits);
+    saveSnapshotCompressed(season.id, 'leaguePortraits', extraction.leaguePortraits);
     saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
     // Schedules are user-editable in the preseason (the game count settles once
     // the season starts — 934→944), so only capture them once out of preseason.
     if (isScheduleFinal(phase)) {
       saveSnapshotCompressed(season.id, 'leagueSchedule', leagueSchedule);
-      saveSnapshot(season.id, 'schedule', schedule);
+      saveSnapshotCompressed(season.id, 'schedule', schedule);
     }
     // Always written (even when nothing is held) so a previous sync's hold is
     // cleared the moment the week is revealed. Read by getLeagueScores so the
@@ -252,11 +295,11 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     // 138 programs x (all-time totals + up to 108 seasons + two record books) —
     // leaguewide and repetitive, so compressed like the other league snapshots.
     saveSnapshotCompressed(season.id, 'teamHistory', extraction.teamHistory);
-    saveSnapshot(season.id, 'awards', extraction.awards);
+    saveSnapshotCompressed(season.id, 'awards', extraction.awards);
     // Departures are only present at OffSeason stage 2 — write-once so a later
     // (or earlier) sync with an empty list never clobbers a captured one.
     if (extraction.departures.length > 0) {
-      saveSnapshot(season.id, 'departures', extraction.departures);
+      saveSnapshotCompressed(season.id, 'departures', extraction.departures);
     }
 
     const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);
