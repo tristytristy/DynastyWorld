@@ -9916,3 +9916,50 @@ The built-in shortcut list now says so rather than leaving it to be discovered,
 which is the whole reason that list exists.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-06 — Trophies that shrank to the left and vanished
+
+Reported against the UCLA 2027 save: Texas, USC, UMass, UConn and Troy showed a
+trophy that scaled down to the left and disappeared.
+
+**Reproduced and measured before touching anything.** On the real Texas hub the
+one trophy — the Golden Hat, natural 512x512 — had a rendered box of **0 x 170**,
+and the case had collapsed to a `flex-basis` of **25px** (24 of which is its own
+left padding).
+
+**The cause is Tailwind's preflight**, which sets `img { max-width: 100% }`. That
+clamps the trophy to its CONTAINER — and this container's width is computed by
+`TrophyCase` FROM the measured width of that image. The measurement therefore
+fed itself: any moment where the container was narrower than the art (first
+paint, a resize, the actions column not yet placed) clamped the image, the
+narrower image produced a narrower container, and the loop ran down to its
+stable fixed point at zero. Once there, nothing could recover it — a zero-width
+image measures zero forever.
+
+Why those teams and not others: every one of them is a case with a SINGLE
+rivalry trophy, where the initial basis (`170 x count`) is at its smallest and
+the first frame is most likely to be narrower than the art.
+
+**The fix is `max-w-none` on the trophy image.** With the cap off, the art's
+width is purely its aspect ratio at the current height — an input to the layout
+rather than an output of it, which is the only version that cannot chase itself.
+A sanity floor was added alongside: a reading under 8px per trophy is a
+transient, not a fact, so the last good size is kept rather than latched over.
+
+Verified across the reported teams: all five now render at 170x170 with zero
+zero-width images, and UCLA's five-trophy case is unaffected.
+
+### And a sizing rule tried, measured, and reverted
+
+With honest widths, a five-trophy case at 1700 fits inline at only 81px tall
+where a full-width row below would give 159. So the arrangement was made a
+choice — cost both, take the bigger.
+
+**It was reverted after looking at it.** The case does get bigger trophies, and
+it also takes a row of its own, which pushes the buttons to a THIRD row and
+leaves a tall ragged masthead with the wordmark floating in it. Small trophies
+on one tidy row beat big ones on three — the same call the user made when this
+row was first built. The only reason to leave the identity row is still that
+staying would collapse the case to a sliver.
+
+typecheck / eslint / build:prod clean.

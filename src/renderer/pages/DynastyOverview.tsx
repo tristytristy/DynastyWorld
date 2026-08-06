@@ -63,7 +63,25 @@ function TrophyBadge({ trophy, height, onLoad }: { trophy: Trophy; height: numbe
         onLoad();
       }}
       style={{ height }}
-      className="w-auto shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(15,23,42,0.25)]"
+      /*
+        `max-w-none` IS LOAD-BEARING, and its absence was a real bug: some teams'
+        trophies shrank to the left and vanished (Texas, USC, UMass, UConn,
+        Troy — every one of them a case with a single rivalry trophy).
+
+        Tailwind's preflight sets `img { max-width: 100% }`. That clamps the
+        trophy to its CONTAINER — and this container's width is computed by
+        TrophyCase FROM the measured width of this image. So the measurement
+        fed itself: a container momentarily narrower than the art (first paint,
+        a resize, the actions column not yet placed) clamped the image, the
+        narrower image produced a narrower container, and the loop ran down to
+        a stable fixed point at zero. Measured on a real Texas hub: natural
+        512x512, rendered box 0x170, case basis 25px.
+
+        With the cap off, the art's width is purely its aspect ratio at the
+        current height — an input to the layout rather than an output of it,
+        which is the only version that can't chase itself.
+      */
+      className="w-auto max-w-none shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(15,23,42,0.25)]"
       draggable={false}
     />
   );
@@ -72,6 +90,8 @@ function TrophyBadge({ trophy, height, onLoad }: { trophy: Trophy; height: numbe
 const TROPHY_GAP = 20; // gap-5 — part of the row's width that does NOT scale with height.
 const TROPHY_RULE = 24; // pl-6, the inset past the divider — also fixed.
 const TROPHY_MIN_HEIGHT = 56;
+/** Below this per trophy the row is mid-layout, not genuinely that small. */
+const MIN_ART_PER_TROPHY = 8;
 /**
  * Below this much room beside the name, staying inline stops being worth it and
  * the case takes its own line instead. Under roughly this width the fixed
@@ -138,7 +158,16 @@ function TrophyCase({ trophies }: { trophies: Trophy[] }) {
     if (!node.clientWidth) return;
     const fixed = TROPHY_GAP * Math.max(0, node.children.length - 1) + TROPHY_RULE;
     const artNow = node.scrollWidth - fixed;
-    if (artNow <= 0) return;
+    /*
+      A SANITY FLOOR, not an optimisation. `artNow` is measured, so a bad
+      measurement can be stored and then measured again — which is exactly how
+      the clamp bug above turned one narrow frame into a permanently collapsed
+      case. Nothing draws a trophy in under 8px, so a reading below that is a
+      transient (art still decoding, the row mid-layout) rather than a fact, and
+      the right response is to leave the last good size alone and wait for the
+      next measurement.
+    */
+    if (artNow < MIN_ART_PER_TROPHY * Math.max(1, node.children.length)) return;
     // What the art alone would span at full height, from what it spans now.
     const artAtMax = (artNow * max) / height;
     if (artAtMax <= 0) return;
@@ -158,6 +187,21 @@ function TrophyCase({ trophies }: { trophies: Trophy[] }) {
       inlineRoom = parent.clientWidth - siblings - gap * Math.max(0, parent.children.length - 1);
     }
 
+    /*
+      INLINE UNLESS THE ROOM IS GENUINELY TINY.
+
+      Costing the two arrangements and taking whichever gives bigger trophies
+      was tried and reverted: it does give bigger ones, but the case then takes
+      a row of its own and the buttons fall to a THIRD, leaving a tall ragged
+      masthead with the wordmark floating in it. Measured at 1700 — 159px
+      trophies and a header half again as tall. Small trophies on one tidy row
+      beat big ones on three, which is the same call the user made when this
+      row was first built.
+
+      So the only reason to leave the identity row is that staying on it would
+      collapse the case to a sliver (`TROPHY_MIN_INLINE`), which is the narrow
+      breakpoints and nothing else.
+    */
     const ownLine = inlineRoom < TROPHY_MIN_INLINE;
     const nextBasis = ownLine ? needed : Math.min(needed, inlineRoom);
     // On its own line the element spans the row, so the row is what it gets;
