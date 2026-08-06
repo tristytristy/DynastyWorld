@@ -188,8 +188,14 @@ export function getManualSeasonGap(dynastyId: string): ManualSeasonGap | undefin
   const newest = [...seasons].sort((a, b) => b.seasonYear - a.seasonYear)[0];
   let coachYears = 0;
   if (newest) {
-    const coaches = getSnapshot<{ presentationId: number; yearsCoaching: number }[]>(newest.id, 'coaches') ?? [];
-    const userCoach = coaches.find((c) => c.presentationId === newest.userCoachId);
+    const coaches =
+      getSnapshot<{ presentationId: number; teamIndex: number; yearsCoaching: number }[]>(newest.id, 'coaches') ?? [];
+    // Team AND id — ids are not unique across coaches (see hallOfLegends), and
+    // reading a stranger's YearsCoaching here would invent seasons that never
+    // happened. Id alone is kept as a fallback.
+    const userCoach =
+      coaches.find((c) => c.presentationId === newest.userCoachId && c.teamIndex === newest.userTeamId) ??
+      coaches.find((c) => c.presentationId === newest.userCoachId);
     coachYears = userCoach?.yearsCoaching ?? 0;
   }
 

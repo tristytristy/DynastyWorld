@@ -268,11 +268,20 @@ export function getCoachHall(dynastyId: string): CoachHall | undefined {
   // snapshot naming him; the id is the identity, the name is just the label.
   let coachName: string | null = null;
   for (const season of [...seasons].reverse()) {
-    const coaches = getSnapshot<{ presentationId: number; firstName: string; lastName: string }[]>(
-      season.seasonId,
-      'coaches',
-    );
-    const match = coaches?.find((c) => c.presentationId === coachId);
+    const coaches = getSnapshot<
+      { presentationId: number; teamIndex: number; firstName: string; lastName: string }[]
+    >(season.seasonId, 'coaches');
+    /*
+      TEAM **AND** ID, never id alone. PresentationId is not unique: one real
+      save shares 53 ids between two or more coaches (one id across six of
+      them), so a bare find returns whichever happens to sit first and can put
+      a stranger's name on the user's Hall. Pairing with the season's own team
+      is the same guard getCoachingTree and gameHistorySeasons already use.
+      Falls back to the id alone rather than losing the name entirely.
+    */
+    const match =
+      coaches?.find((c) => c.presentationId === coachId && c.teamIndex === season.teamIndex) ??
+      coaches?.find((c) => c.presentationId === coachId);
     if (match) {
       coachName = `${match.firstName} ${match.lastName}`.trim();
       break;

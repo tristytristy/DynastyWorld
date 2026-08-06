@@ -1,8 +1,10 @@
+import { hashSeed } from '../shared/storyVariants';
 import {
   getLargestTable,
   nonEmpty,
   preloadAllInstances,
   resolveReferenceWithTable,
+  type FranchiseRecord,
   type OpenFranchise,
 } from './lib/franchise';
 
@@ -249,7 +251,7 @@ export async function extractCoaches(franchise: OpenFranchise): Promise<CoachDat
     .map((r) => {
       const careerStatsResolved = resolveReferenceWithTable(franchise, r, 'CareerStats');
       return {
-        presentationId: Number(r.PresentationId),
+        presentationId: resolvePresentationId(r),
         teamIndex: Number(r.TeamIndex),
         prevTeamIndex: Number(r.PrevTeamIndex),
         firstName: String(r.FirstName),
@@ -278,6 +280,43 @@ export async function extractCoaches(franchise: OpenFranchise): Promise<CoachDat
         ...(Boolean(r.IsUserControlled) && contractGoals.length > 0 ? { contractGoals } : {}),
       };
     });
+}
+
+/**
+ * A COACH ID FOR COACHES THE SAVE NEVER GAVE ONE.
+ *
+ * `PresentationId` is the app's identity anchor for a coach — it links a coach
+ * across seasons and schools, and `user_coach_id` on the season row is what
+ * opens the Hall of Champions. The save leaves it 0 for coaches it didn't ship
+ * with an identity, which was written off as "generated coordinators" and
+ * treated as no id at all.
+ *
+ * THAT ASSUMPTION BREAKS ON MODDED ROSTERS. Measured across four real saves: a
+ * vanilla save has 0 of 143 head coaches without an id (taking over a real
+ * coach keeps its own — Willie Fritz came through as 542), while the '07 mod's
+ * roster has 69 of 144 without one. Those users' seasons stored
+ * `user_coach_id = null`, so the Hall told them to "sync once" forever. One of
+ * them proved the cause by hand-editing his id and watching the Hall open.
+ *
+ * So an idless coach gets a stable id derived from their name. Deterministic,
+ * so it is the same on every sync and the coach stays the same person across
+ * seasons and schools — which is the whole job of the field.
+ *
+ * NEGATIVE ON PURPOSE. Real ids are small positives — observed 3..424 in one
+ * save, plus 256, 542 and 785 elsewhere — so a negative range cannot collide
+ * with one, and is instantly recognisable as synthetic. The user who hand-fixed
+ * his own save picked 108 and unknowingly landed on an id three other coaches
+ * already had; this avoids that entire class of mistake.
+ *
+ * Two coaches sharing a name still collide. That is no worse than today, where
+ * every idless coach in the save collides on 0 — 285 of them in one save.
+ */
+function resolvePresentationId(record: FranchiseRecord): number {
+  const stored = Number(record.PresentationId);
+  if (stored) return stored;
+  const name = `${String(record.FirstName ?? '')} ${String(record.LastName ?? '')}`.trim().toLowerCase();
+  if (!name) return 0;
+  return -(hashSeed(name) % 2_000_000_000) - 1;
 }
 
 /**
