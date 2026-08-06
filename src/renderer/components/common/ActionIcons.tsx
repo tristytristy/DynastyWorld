@@ -168,3 +168,19 @@ export function GridViewIcon({ className = 'h-4 w-4' }: { className?: string }) 
   );
 }
 
+/** Nine panes — every photograph at once, no folders. Denser than the four-pane Grid on purpose. */
+export function AllPhotosIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+      <rect x="2" y="2" width="4.4" height="4.4" />
+      <rect x="7.8" y="2" width="4.4" height="4.4" />
+      <rect x="13.6" y="2" width="4.4" height="4.4" />
+      <rect x="2" y="7.8" width="4.4" height="4.4" />
+      <rect x="7.8" y="7.8" width="4.4" height="4.4" />
+      <rect x="13.6" y="7.8" width="4.4" height="4.4" />
+      <rect x="2" y="13.6" width="4.4" height="4.4" />
+      <rect x="7.8" y="13.6" width="4.4" height="4.4" />
+      <rect x="13.6" y="13.6" width="4.4" height="4.4" />
+    </svg>
+  );
+}

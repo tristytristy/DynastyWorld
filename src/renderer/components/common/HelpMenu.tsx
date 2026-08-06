@@ -438,9 +438,16 @@ const HELP_TOPICS: HelpTopic[] = [
           was. Clearing the name hands the folder back to the game.
         </p>
         <p>
-          In <strong>Grid</strong>, clicking an album opens it in place — the other albums step aside and that
-          album&apos;s photos fill the grid; <strong>← All albums</strong> brings them back. Hover any photo and click{' '}
-          <strong>Cover</strong> to make it the picture that album shows.
+          Three views, and whichever you pick is remembered. <strong>List</strong> is the folder shelf.{' '}
+          <strong>Album</strong> shows one box per album, each running a slideshow of its own photos — click one to
+          open it in place, and <strong>← All albums</strong> to come back. <strong>All photos</strong> drops the
+          folders entirely and lays the whole season out at once, which is the view to use when you want to select
+          and delete shots that live in different games.
+        </p>
+        <p>
+          <strong>Drag a photo to move it.</strong> The others flow out of the way as you go, so you can see exactly
+          where it will land before you let go — and the first photo in a folder is the one the folder shows, so
+          dragging a shot to the front makes it the cover.
         </p>
         <p>
           <strong>Select</strong> turns on multi-select. Tick photos (or <em>Select all</em>), then set the game for

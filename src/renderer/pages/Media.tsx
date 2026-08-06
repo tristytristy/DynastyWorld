@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
@@ -15,7 +15,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useConfirm } from '../data/ConfirmDialogProvider';
-import { CloseIcon, EditIcon, ExportIcon, GridViewIcon, ListViewIcon, PlusIcon, TrashIcon } from '../components/common/ActionIcons';
+import { AllPhotosIcon, CloseIcon, EditIcon, ExportIcon, GridViewIcon, ListViewIcon, PlusIcon, TrashIcon } from '../components/common/ActionIcons';
 import { ModalCloseButton } from '../components/common/ModalCloseButton';
 import { ZoomableImage, framingTransform } from '../components/common/ZoomableImage';
 import { MediaBackdrop } from '../components/common/MediaBackdrop';
@@ -87,15 +87,24 @@ const GOLD_MARK_KEY = 'cfb.mediaPlateGoldMark';
  */
 const MEDIA_VIEW_KEY = 'cfb.mediaView';
 
-function loadMediaView(): 'list' | 'grid' {
+const VIEW_LABELS: Record<'list' | 'grid' | 'all', string> = {
+  list: 'List view',
+  grid: 'Album view',
+  all: 'All photos',
+};
+
+type MediaView = 'list' | 'grid' | 'all';
+
+function loadMediaView(): MediaView {
   try {
-    return localStorage.getItem(MEDIA_VIEW_KEY) === 'grid' ? 'grid' : 'list';
+    const stored = localStorage.getItem(MEDIA_VIEW_KEY);
+    return stored === 'grid' || stored === 'all' ? stored : 'list';
   } catch {
     return 'list';
   }
 }
 
-function saveMediaView(view: 'list' | 'grid'): void {
+function saveMediaView(view: MediaView): void {
   try {
     localStorage.setItem(MEDIA_VIEW_KEY, view);
   } catch {
@@ -166,11 +175,12 @@ function MediaTile({
   onToggleSelect,
   onDragStartTile,
   onDragEndTile,
+  onDragOverTile,
   onDropTile,
   canReorder,
   onDelete,
-  onMakeCover,
-  isCover,
+  tileRef,
+  dragging,
 }: {
   item: MediaItemWithPath;
   index: number;
@@ -181,16 +191,21 @@ function MediaTile({
   onToggleSelect: () => void;
   onDragStartTile: () => void;
   onDragEndTile: () => void;
+  /** Fired when a dragged tile crosses this one — moves it here, live. */
+  onDragOverTile: () => void;
   onDropTile: (event: ReactDragEvent) => void;
   canReorder: boolean;
   onDelete: () => void;
-  /** Present only where the tile sits inside a folder that can have a cover. */
-  onMakeCover?: () => void;
-  isCover?: boolean;
+  /** Registers the element for the FLIP animation — see useReorderFlip. */
+  tileRef?: (el: HTMLDivElement | null) => void;
+  /** True while this tile is the one being dragged. */
+  dragging?: boolean;
 }) {
   return (
               <div
                 key={item.id}
+                ref={tileRef}
+                data-media-id={item.id}
                 role="button"
                 tabIndex={0}
                 draggable={!selectMode}
@@ -201,7 +216,11 @@ function MediaTile({
                 }}
                 onDragEnd={onDragEndTile}
                 onDragOver={(e) => {
-                  if (canReorder) e.preventDefault();
+                  // Only for an internal reorder — a FILE drag has to fall
+                  // through to the page's own drop target.
+                  if (!canReorder) return;
+                  e.preventDefault();
+                  onDragOverTile();
                 }}
                 onDrop={onDropTile}
                 onClick={() => (selectMode ? onToggleSelect() : onOpen())}
@@ -213,7 +232,17 @@ function MediaTile({
                   }
                 }}
                 aria-label={selectMode ? `Select media: ${caption}` : `Open media: ${caption}`}
-                className={`group relative aspect-video overflow-hidden border bg-slate-950 text-left transition ${
+                /*
+                  `media-tile` owns the lift and the drop-into-place easing (see
+                  globals.css). The transition is NOT a Tailwind `transition`
+                  here: the FLIP animation writes `transition` and `transform`
+                  on this element directly, and a class-level transition on the
+                  same properties fights it — the tile would ease to its old
+                  position and then jump.
+                */
+                className={`media-tile group relative aspect-video overflow-hidden border bg-slate-950 text-left ${
+                  dragging ? 'media-tile--dragging' : ''
+                } ${
                   selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
                 } ${
                   selected
@@ -290,29 +319,6 @@ function MediaTile({
                       className="pointer-events-auto shrink-0 border border-white/25 bg-slate-950/70 p-1.5 text-slate-200 transition hover:border-red-400/70 hover:bg-red-950/70 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--team-primary)]"
                     >
                       <TrashIcon />
-                    </button>
-                  )}
-                  {/* WHICH PHOTO THE FOLDER SHOWS, chosen here rather than in a
-                      separate picker: you are already looking at the pictures,
-                      and the one you want as the cover is the one under your
-                      pointer. */}
-                  {onMakeCover && !selectMode && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMakeCover();
-                      }}
-                      title={isCover ? 'This is the folder cover' : 'Use as the folder cover'}
-                      aria-label={isCover ? 'Folder cover' : 'Use as the folder cover'}
-                      aria-pressed={isCover}
-                      className={`pointer-events-auto shrink-0 border px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
-                        isCover
-                          ? 'border-[var(--team-primary)] bg-[var(--team-primary)] text-[var(--team-on-primary)]'
-                          : 'border-white/25 bg-slate-950/70 text-slate-200 hover:border-[var(--team-primary)]'
-                      }`}
-                    >
-                      Cover
                     </button>
                   )}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{caption}</span>
@@ -1461,7 +1467,7 @@ export function Media() {
     Session state, like the sort direction: it is how you want to look right
     now, not a standing preference.
   */
-  const [view, setView] = useState<'list' | 'grid'>(loadMediaView);
+  const [view, setView] = useState<MediaView>(loadMediaView);
   /** Folder names and covers the user has chosen this season, by game id (null = the unfiled pile). */
   const [albums, setAlbums] = useState<MediaAlbum[]>([]);
   /** Albums the user made — their own folders, filled by hand. */
@@ -1486,6 +1492,61 @@ export function Media() {
   /** Players to ADD to every selected photo. Empty = leave tags alone. */
   const [batchPlayerIds, setBatchPlayerIds] = useState<number[]>([]);
   const dragIndexRef = useRef<number | null>(null);
+  /** The media id under the cursor mid-drag — drives the lift, and nothing else. */
+  const [dragId, setDragId] = useState<number | null>(null);
+  /*
+    FLIP, and it is what makes reordering feel like moving photographs rather
+    than editing a list.
+
+    The DOM is reordered the moment you drag ACROSS a tile, not on drop — so the
+    grid shows you the arrangement you are about to get. But a browser
+    re-flowing a grid is instantaneous and therefore invisible: tiles teleport,
+    which reads as a glitch. FLIP fixes that by measuring every tile First,
+    letting React reorder (Last), Inverting each one back to where it just was
+    with a transform, and Playing that transform away. The result is that every
+    tile slides to its new place while the one under your cursor stays put.
+
+    Element refs rather than state, because this runs in a layout effect and
+    must not itself cause a render.
+  */
+  const tileEls = useRef(new Map<number, HTMLDivElement>());
+  const lastRects = useRef<Map<number, DOMRect> | null>(null);
+
+  const registerTile = useCallback(
+    (id: number) => (el: HTMLDivElement | null) => {
+      if (el) tileEls.current.set(id, el);
+      else tileEls.current.delete(id);
+    },
+    [],
+  );
+
+  /** Freeze where every tile is, just before the order changes. */
+  const captureTileRects = useCallback(() => {
+    const rects = new Map<number, DOMRect>();
+    tileEls.current.forEach((el, id) => rects.set(id, el.getBoundingClientRect()));
+    lastRects.current = rects;
+  }, []);
+
+  useLayoutEffect(() => {
+    const before = lastRects.current;
+    lastRects.current = null;
+    if (!before) return;
+    tileEls.current.forEach((el, id) => {
+      const from = before.get(id);
+      if (!from) return;
+      const to = el.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      // Sub-pixel drift isn't movement; animating it just costs a frame.
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)';
+        el.style.transform = '';
+      });
+    });
+  }, [items]);
 
   const seasonYear = seasons.find((s) => s.id === seasonId)?.seasonYear;
   /** Apply stays inert until the panel actually says to change something. */
@@ -1524,16 +1585,6 @@ export function Media() {
       return;
     }
     await renameAlbum(roll.game?.gameId ?? null, name);
-  }
-
-  /** Chooses the photograph a folder shows. Same call shape for both kinds. */
-  async function setCover(roll: { game?: ScheduleGame; albumId?: number }, mediaId: number | null) {
-    if (!id || seasonId === undefined) return;
-    if (roll.albumId !== undefined) {
-      setCustomAlbums(await window.api.media.setCustomAlbumCover(id, seasonId, roll.albumId, mediaId));
-      return;
-    }
-    setAlbums(await window.api.media.setAlbumCover(id, seasonId, roll.game?.gameId ?? null, mediaId));
   }
 
   /**
@@ -1649,19 +1700,44 @@ export function Media() {
     if (paths.length) importFiles(paths);
   }
 
-  // --- Drag-to-reorder (normal mode) ---
-  async function onTileDrop(event: ReactDragEvent, index: number) {
-    if (Array.from(event.dataTransfer.files ?? []).length > 0) return; // file drop → let the grid upload
+  /*
+    LIVE REORDER (user direction: "fluid and fun").
+
+    The list used to change only on DROP, which meant dragging was a guess and
+    the result arrived as a snap. Now crossing a tile moves the photograph
+    there and then — the grid flows around your cursor, FLIP animates every
+    displaced tile into place, and the drop is just where you stop.
+
+    Nothing is written to the database until the drag ENDS: a drag across a
+    dozen tiles would otherwise be a dozen writes of an order the user was
+    still in the middle of choosing.
+  */
+  function onTileDragOverReorder(index: number) {
     const from = dragIndexRef.current;
-    dragIndexRef.current = null;
-    if (from === null || from === index || !items || !id || seasonId === undefined) return;
-    event.preventDefault();
-    event.stopPropagation();
+    if (from === null || from === index || !items) return;
+    captureTileRects();
     const next = [...items];
     const [moved] = next.splice(from, 1);
     next.splice(index, 0, moved);
+    dragIndexRef.current = index;
     setItems(next);
-    await window.api.media.reorder(id, seasonId, next.map((m) => m.id));
+  }
+
+  async function commitOrder() {
+    const dragging = dragIndexRef.current !== null;
+    dragIndexRef.current = null;
+    setDragId(null);
+    if (!dragging || !items || !id || seasonId === undefined) return;
+    await window.api.media.reorder(id, seasonId, items.map((m) => m.id));
+  }
+
+  // The drop itself has nothing left to do — the order is already what you see.
+  // It only has to stay out of the way of a FILE drop, which the page handles.
+  function onTileDrop(event: ReactDragEvent) {
+    if (Array.from(event.dataTransfer.files ?? []).length > 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void commitOrder();
   }
 
   // --- Batch selection ---
@@ -1958,14 +2034,14 @@ export function Media() {
               now that nothing else does. */}
           {hasItems && (
             <div className="inline-flex shrink-0 border border-slate-200/80 bg-slate-50/90 p-1 dark:border-slate-800 dark:bg-white/5">
-              {(['list', 'grid'] as const).map((mode) => (
+              {(['list', 'grid', 'all'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   role="tab"
                   aria-selected={view === mode}
-                  title={mode === 'list' ? 'List view' : 'Grid view'}
-                  aria-label={mode === 'list' ? 'List view' : 'Grid view'}
+                  title={VIEW_LABELS[mode]}
+                  aria-label={VIEW_LABELS[mode]}
                   onClick={() => {
                     setView(mode);
                     saveMediaView(mode);
@@ -1976,7 +2052,7 @@ export function Media() {
                       : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
-                  {mode === 'list' ? <ListViewIcon /> : <GridViewIcon />}
+                  {mode === 'list' ? <ListViewIcon /> : mode === 'grid' ? <GridViewIcon /> : <AllPhotosIcon />}
                 </button>
               ))}
             </div>
@@ -2179,9 +2255,9 @@ export function Media() {
       */}
       {items && items.length > 0 && view === 'grid' && gridOpenKey === null && (
         <div className="media-fade-in grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {rolls.map((roll) => {
+          {rolls.map((roll, rollIndex) => {
             const cover =
-              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
+              roll.entries[0]?.item;
             /*
               THE COVER LEADS, then the rest. A folder with a chosen cover has
               to OPEN on it — a slideshow that starts somewhere else and reaches
@@ -2202,7 +2278,9 @@ export function Media() {
                 className="corner-cut group/box relative aspect-[16/10] w-full overflow-hidden border border-slate-200/80 bg-slate-950 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800"
               >
                 {photos.length > 0 ? (
-                  <MediaBackdrop photos={photos} tone="cover" />
+                  /* 200ms apart, in shelf order, so the wall doesn't turn
+                     over on one tick. */
+                  <MediaBackdrop photos={photos} tone="cover" staggerMs={rollIndex * 200} />
                 ) : (
                   <span className="absolute inset-0 grid place-items-center text-xs text-slate-500">Empty album</span>
                 )}
@@ -2254,6 +2332,50 @@ export function Media() {
       )}
 
       {/*
+        ALL PHOTOS — every photograph in the season laid out at once, with no
+        folders at all (user direction).
+
+        Its reason for existing is CROSS-ALBUM work: Select can only reach what
+        is on screen, so tidying up a handful of shots scattered across a dozen
+        games meant opening a dozen folders. Here they are all in one place and
+        one selection covers the lot.
+
+        Deliberately in ITEM order rather than schedule order — with the
+        grouping gone, the drag-reorder arrangement is the only arrangement
+        left, and this is the view where you can see and change it.
+      */}
+      {items && items.length > 0 && view === 'all' && (
+        <div className="media-fade-in grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {items.map((item, index) => {
+            const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
+            return (
+              <MediaTile
+                key={item.id}
+                item={item}
+                index={index}
+                caption={item.description || (game ? gameLabel(game) : 'Add details')}
+                selectMode={selectMode}
+                selected={selectedIds.has(item.id)}
+                onOpen={() => setLightboxIndex(index)}
+                onToggleSelect={() => toggleSelect(item.id)}
+                onDragStartTile={() => {
+                  dragIndexRef.current = index;
+                  setDragId(item.id);
+                }}
+                onDragEndTile={() => void commitOrder()}
+                onDragOverTile={() => onTileDragOverReorder(index)}
+                onDropTile={onTileDrop}
+                canReorder={dragIndexRef.current !== null}
+                onDelete={() => void confirmDelete(item)}
+                tileRef={registerTile(item.id)}
+                dragging={dragId === item.id}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/*
         AN ALBUM OPENED IN GRID. Its photographs take the whole grid and the
         shelf steps aside — the same tiles the folder view uses, so selection,
         drag-reorder, the bin and (crucially) the cover control are all here
@@ -2266,8 +2388,6 @@ export function Media() {
           {(() => {
             const roll = rolls.find((r) => r.key === gridOpenKey);
             if (!roll) return null;
-            const cover =
-              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
             return (
               <>
                 <div className="group/roll flex flex-wrap items-center gap-3">
@@ -2321,13 +2441,17 @@ export function Media() {
                       selected={selectedIds.has(item.id)}
                       onOpen={() => setLightboxIndex(index)}
                       onToggleSelect={() => toggleSelect(item.id)}
-                      onDragStartTile={() => (dragIndexRef.current = index)}
-                      onDragEndTile={() => (dragIndexRef.current = null)}
-                      onDropTile={(e) => onTileDrop(e, index)}
+                      onDragStartTile={() => {
+                        dragIndexRef.current = index;
+                        setDragId(item.id);
+                      }}
+                      onDragEndTile={() => void commitOrder()}
+                      onDragOverTile={() => onTileDragOverReorder(index)}
+                      onDropTile={onTileDrop}
                       canReorder={dragIndexRef.current !== null}
                       onDelete={() => void confirmDelete(item)}
-                      isCover={cover?.id === item.id}
-                      onMakeCover={() => void setCover(roll, item.id)}
+                      tileRef={registerTile(item.id)}
+                      dragging={dragId === item.id}
                     />
                   ))}
                   {roll.entries.length === 0 && (
@@ -2360,7 +2484,7 @@ export function Media() {
             // what every folder showed before covers existed, and what one
             // falls back to when its cover has since been deleted.
             const cover =
-              roll.entries.find(({ item }) => item.id === roll.coverMediaId)?.item ?? roll.entries[0]?.item;
+              roll.entries[0]?.item;
             return (
               <div
                 key={roll.key}
@@ -2475,13 +2599,17 @@ export function Media() {
                         selected={selectedIds.has(item.id)}
                         onOpen={() => setLightboxIndex(index)}
                         onToggleSelect={() => toggleSelect(item.id)}
-                        onDragStartTile={() => (dragIndexRef.current = index)}
-                        onDragEndTile={() => (dragIndexRef.current = null)}
-                        onDropTile={(e) => onTileDrop(e, index)}
+                        onDragStartTile={() => {
+                          dragIndexRef.current = index;
+                          setDragId(item.id);
+                        }}
+                        onDragEndTile={() => void commitOrder()}
+                        onDragOverTile={() => onTileDragOverReorder(index)}
+                        onDropTile={onTileDrop}
                         canReorder={dragIndexRef.current !== null}
                         onDelete={() => void confirmDelete(item)}
-                        isCover={cover?.id === item.id}
-                        onMakeCover={() => void setCover(roll, item.id)}
+                        tileRef={registerTile(item.id)}
+                        dragging={dragId === item.id}
                       />
                     ))}
                   </div>

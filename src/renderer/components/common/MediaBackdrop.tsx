@@ -19,14 +19,49 @@ import { useEffect, useState } from 'react';
  *
  * The host must be `relative` and `overflow-hidden`; this fills it.
  */
-export function MediaBackdrop({ photos, tone = 'backdrop' }: { photos: string[]; tone?: 'backdrop' | 'cover' }) {
+/** How long each photograph is held before the crossfade. */
+const HOLD_MS = 5000;
+
+export function MediaBackdrop({
+  photos,
+  tone = 'backdrop',
+  staggerMs = 0,
+}: {
+  photos: string[];
+  tone?: 'backdrop' | 'cover';
+  /**
+   * Pushes this instance's cycle out of step with its neighbours (user
+   * direction). A wall of album covers all turning over on the same tick reads
+   * as one thing blinking; a couple of hundred milliseconds apart and they read
+   * as a room where things are quietly happening.
+   *
+   * Callers pass a raw per-item offset — typically `index * 200` — and the
+   * WRAP is done here rather than there: past twenty or so items a raw offset
+   * would exceed the hold and the boxes would silently re-cluster, one cycle
+   * behind. Modulo keeps the spread meaningful at any number of albums.
+   */
+  staggerMs?: number;
+}) {
   const [index, setIndex] = useState(0);
+  const offset = ((staggerMs % HOLD_MS) + HOLD_MS) % HOLD_MS;
 
   useEffect(() => {
     if (photos.length < 2) return;
-    const id = window.setInterval(() => setIndex((i) => (i + 1) % photos.length), 5000);
-    return () => window.clearInterval(id);
-  }, [photos.length]);
+    /*
+      The offset delays the START of the cycle, so the first change lands at
+      offset + HOLD rather than at the offset itself. Firing early would give
+      every box a short first slide, and a photograph that flicks away sooner
+      than the rest reads as a glitch rather than as a stagger.
+    */
+    let interval: number | undefined;
+    const start = window.setTimeout(() => {
+      interval = window.setInterval(() => setIndex((i) => (i + 1) % photos.length), HOLD_MS);
+    }, offset);
+    return () => {
+      window.clearTimeout(start);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
+  }, [photos.length, offset]);
 
   // The layer holding the CURRENT photograph alternates, so the one being
   // replaced keeps its image while it fades out instead of snapping to the new

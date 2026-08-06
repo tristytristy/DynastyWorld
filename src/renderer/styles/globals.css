@@ -1248,6 +1248,46 @@
     opacity: 0.33;
   }
 
+  /*
+    A PHOTOGRAPH BEING MOVED, not a row being edited.
+
+    The tile itself carries no transition on `transform`: the FLIP animation in
+    Media.tsx writes `transition` and `transform` inline, and a competing rule
+    on the same properties would make a displaced tile ease toward its OLD
+    position before jumping. Everything here is on properties FLIP never
+    touches, so the two never collide.
+
+    The lift is deliberately small. A card that leaps off the page is a toy; a
+    couple of degrees of nothing, a brighter edge and a shadow is enough to say
+    "you have hold of this".
+  */
+  .media-tile {
+    transition:
+      box-shadow 180ms var(--ease-standard, ease-out),
+      opacity 180ms var(--ease-standard, ease-out),
+      border-color 180ms var(--ease-standard, ease-out);
+  }
+
+  .media-tile--dragging {
+    opacity: 0.55;
+    box-shadow: 0 18px 38px rgba(2, 6, 23, 0.55);
+  }
+
+  /* The photo inside can lift without disturbing the FLIP transform outside. */
+  .media-tile--dragging img,
+  .media-tile--dragging video {
+    transform: scale(1.04);
+    transition: transform 180ms var(--ease-standard, ease-out);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .media-tile,
+    .media-tile--dragging img,
+    .media-tile--dragging video {
+      transition: none;
+    }
+  }
+
   /* The shelf stepping aside for one album, and back again. */
   .media-fade-in {
     animation: media-fade-in 220ms var(--ease-standard, ease-out) both;

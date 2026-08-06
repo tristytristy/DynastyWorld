@@ -9709,3 +9709,62 @@ belongs to the Trophy Room, where the photograph is a picture shown ON
 something. An album cover is just the photograph.
 
 typecheck / eslint / check:refs / build:prod clean.
+
+## 2026-08-05 (final pass II) — Reordering becomes the interaction
+
+### Drag-to-reorder, live and animated
+
+It used to reorder on DROP, which made dragging a guess and the result a snap.
+Now crossing a tile moves the photograph there and then: the grid flows around
+the cursor and you see the arrangement you are about to get.
+
+**FLIP is what makes that readable.** A browser re-flowing a grid is
+instantaneous and therefore invisible — tiles teleport, which reads as a glitch.
+So every tile is measured First, React reorders (Last), each one is Inverted
+back to where it just was with a transform, and that transform is Played away
+over 260ms. The effect is that displaced tiles slide while the one under the
+cursor stays put.
+
+Two collisions had to be avoided deliberately. The tile carries **no Tailwind
+`transition`** any more: FLIP writes `transition` and `transform` inline, and a
+class-level transition on the same properties makes a displaced tile ease toward
+its OLD position before jumping. And the drag lift animates `box-shadow`,
+`opacity` and an inner `scale` — properties FLIP never touches — rather than a
+transform on the tile itself.
+
+**One write, at the end.** A drag across a dozen tiles would otherwise be a
+dozen writes of an order the user is still choosing, so the database is only
+told on drag end.
+
+Works in all three views, because they draw the same `MediaTile`.
+
+### The cover option is gone; the first photo is the cover
+
+Removed at the user's request, and it makes the model simpler rather than
+poorer: with reordering now the primary gesture, "which photo does this folder
+show" answers itself — drag the one you want to the front. One rule, no second
+piece of state to keep in step, and the answer is visible in the folder rather
+than hidden behind a hover control.
+
+`media_albums.cover_media_id` and `custom_albums.cover_media_id` stay in the
+schema unused. Migrations are append-only release history, and a column that
+nothing writes costs nothing; ripping them out would mean another migration to
+achieve exactly nothing.
+
+### ALL PHOTOS, a third view
+
+Every photograph in the season, no folders. Its reason for existing is
+cross-album work: Select can only reach what is on screen, so tidying up shots
+scattered across a dozen games meant opening a dozen folders. One selection now
+covers the lot.
+
+### Staggered slideshows
+
+Album covers turn over 200ms apart rather than on one tick — a wall of them
+changing together reads as one thing blinking. The offset WRAPS on the hold
+duration inside the component rather than at the call site: past twenty or so
+albums a raw `index * 200` would exceed the 5s hold and the boxes would silently
+re-cluster, one cycle behind.
+
+typecheck / eslint / check:refs / build:prod clean. Verified live: three view
+buttons present, 245 tiles in All photos, zero Cover controls remaining.
