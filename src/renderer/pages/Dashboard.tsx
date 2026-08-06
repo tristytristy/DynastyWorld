@@ -212,11 +212,46 @@ export function Dashboard() {
       .filter(Boolean)
       .join(', ');
 
+    /*
+      Read on CHANGE rather than off the input afterwards, and that isn't
+      fussiness: the dialog unmounts the moment confirm() settles, so by the
+      time the promise resolves the element is gone and a ref to it reads null.
+      Defaults to on — someone restoring a backup that contains a save almost
+      always wants to play it.
+    */
+    const placeSaveInGameFolder = { current: true };
+
     const confirmed = await confirm({
       title: chosen.alreadyPresent ? 'Replace this dynasty?' : 'Restore this dynasty?',
-      message: chosen.alreadyPresent
-        ? `${summary}.\n\nYou already have this dynasty. Restoring replaces your current copy with the backed-up one. A safety copy of everything you have now is taken first.`
-        : `${summary}.\n\nThis adds the dynasty to your dashboard. Nothing you already have is changed.`,
+      message: (
+        <div className="space-y-3">
+          <p>
+            {summary}.
+            {chosen.alreadyPresent
+              ? ' You already have this dynasty. Restoring replaces your current copy with the backed-up one. A safety copy of everything you have now is taken first.'
+              : ' This adds the dynasty to your dashboard. Nothing you already have is changed.'}
+          </p>
+          {chosen.saveGameName && (
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                defaultChecked
+                onChange={(event) => {
+                  placeSaveInGameFolder.current = event.target.checked;
+                }}
+                className="mt-0.5 h-4 w-4 accent-slate-900 dark:accent-white"
+              />
+              <span>
+                Put the save back in your College Football saves folder
+                <span className="mt-0.5 block text-xs opacity-70">
+                  So you can load it in the game. An existing save of the same name is never
+                  overwritten — the restored copy is added as {chosen.saveGameName}-OS-RESTORED.
+                </span>
+              </span>
+            </label>
+          )}
+        </div>
+      ),
       eyebrow: 'Restore backup',
       confirmLabel: chosen.alreadyPresent ? 'Replace it' : 'Restore',
       ...(chosen.alreadyPresent ? { tone: 'danger' as const } : {}),
@@ -225,7 +260,9 @@ export function Dashboard() {
 
     setRestoring(true);
     try {
-      const result = await window.api.editor.restoreDynastyBackup(chosen.filePath);
+      const result = await window.api.editor.restoreDynastyBackup(chosen.filePath, {
+        placeSaveInGameFolder: Boolean(chosen.saveGameName) && placeSaveInGameFolder.current,
+      });
       setStatusMessage({ text: result.message, success: result.success });
       // A restore can add OR replace a dynasty, so re-fetch rather than patching
       // local state the way delete does.
@@ -471,6 +508,17 @@ export function Dashboard() {
                       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         {dynasty.seasonYear !== null ? `Season ${dynasty.seasonYear}` : 'Awaiting season sync'}
                       </p>
+                      {/*
+                        No "sync before next season" marker here, deliberately,
+                        and it was tried. Naming the deadline taught the wrong
+                        lesson: it reads as "one sync per season is enough",
+                        which costs a coach every week of poll movement and every
+                        weekly stat line — the things that genuinely cannot be
+                        recovered later. The habit is what matters, so the
+                        guidance lives in SyncGuideModal where there is room to
+                        say why, rather than in a badge that can only fit a
+                        deadline.
+                      */}
                       {dynasty.savePhaseLabel && (
                         <span className="mt-2 inline-flex items-center border border-[var(--team-primary)]/45 bg-[color:color-mix(in_srgb,var(--team-primary)_12%,transparent)] px-2 py-0.5 text-xs font-semibold text-[var(--team-accent-text)] dark:text-white">
                           {dynasty.savePhaseLabel}

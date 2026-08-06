@@ -43,6 +43,7 @@ import { CustomRivalsProvider } from './data/CustomRivalsProvider';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
 import { UpdateNotice } from './components/common/UpdateNotice';
+import { SyncGuideHost } from './components/common/SyncGuideModal';
 import { ANGLED_FRAME, angledFrame } from './components/ui/angledClip';
 
 const ANGLED_PANEL = angledFrame('1.25rem');
@@ -242,6 +243,7 @@ export function App() {
       <RecruitProfileModal />
       <EditorModalHost />
       <UpdateNotice />
+      <SyncGuideHost />
     </div>
     </CustomRivalsProvider>
     </ProgramArtProvider>

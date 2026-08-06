@@ -2,6 +2,7 @@ import { CFP_ROUND_NAMES } from '../shared/cfpBowls';
 import { displayRank } from '../shared/pollRank';
 import { listManualSeasons } from './manualSeasons';
 import { getGameHistorySeasons } from './gameHistorySeasons';
+import { getSeasonYearRow, isYearRowBetter } from './seasonYearRow';
 import { getDynastyById, getRankingHistory, getSeasonsByDynasty, getSnapshot } from './helpers';
 import { getSeasonGameContext } from './gameContext';
 import type { AwardsData } from '../extractors/extract-awards';
@@ -285,8 +286,36 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
       });
     }
 
-    const wins = userTeam.confWins + userTeam.nonConfWins;
-    const losses = userTeam.confLosses + userTeam.nonConfLosses;
+    /*
+      A SYNCED SEASON IS ONLY BETTER THAN THE SAVE'S YEAR-ROW IF IT WAS ACTUALLY
+      CAPTURED AT FULL TERM.
+
+      The merge at the bottom of this function says a synced season beats the
+      thin year-row, and for a season captured at End of Season Recap that is
+      obviously right — the snapshots carry games, scores and box scores the
+      year-row has never heard of. But "synced" is not the same as "finished".
+      Sync once in week 4 and play on to the bowl and those snapshots stay
+      frozen at week 4 forever, because the next year's sync overwrites the
+      schedule and the save no longer holds last season's detail.
+
+      One real dynasty captured 2029 at WEEK ZERO: 120 of 921 games, a teams row
+      reading 1-0, and no conference championship — for a season the save itself
+      records as 12-2, ranked #24, Mountain West champions. The history page
+      showed 1-0, and so did every total built from it.
+
+      So the snapshots are preferred only while they know at least as much as
+      the year-row does. See isYearRowBetter for why counting games is the safe
+      test in both directions — in particular, the CURRENT season's year-row
+      reads 0-0 until the year closes, so a mid-season capture can never be
+      overridden by an empty row.
+    */
+    const yearRow = getSeasonYearRow(dynastyId, season.seasonYear, seasonTeamId);
+    const capturedWins = userTeam.confWins + userTeam.nonConfWins;
+    const capturedLosses = userTeam.confLosses + userTeam.nonConfLosses;
+    const stale = isYearRowBetter(yearRow, capturedWins, capturedLosses);
+
+    const wins = stale ? yearRow.wins : capturedWins;
+    const losses = stale ? yearRow.losses : capturedLosses;
     dynastyWins += wins;
     dynastyLosses += losses;
     if (userTeam.mediaPollRank > 0) {
@@ -307,11 +336,35 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
     const latestPostseason = postseasonGames[0];
     const latestPostseasonResult = latestPostseason ? gameResult(latestPostseason, seasonTeamId) : null;
     const nationalChampionshipGame = teamGames.find((game) => game.isNationalChampionship && isGamePlayed(game.status));
+    // The played game wins when there is one — it can say they LOST, which the
+    // year-row fallback must never override. Only its absence defers.
     const nationalChampion = nationalChampionshipGame
       ? gameResult(nationalChampionshipGame, seasonTeamId) === 'W'
-      : false;
-    const conferenceChampion = conferenceChampionship.some((entry) => entry.winningTeamName === userTeam.displayName);
-    const playoffAppearance = postseasonGames.some(isPlayoffGame);
+      : yearRow?.nationalResult === 'Win';
+    /*
+      Titles and postseason fall back to the year-row the same way the trophy
+      case does, and for the same reason: the conference-championship snapshot
+      is written from the league-history row for the season, which the game
+      does not fill in until the year CLOSES — so a mid-season capture has an
+      empty list rather than a list saying you lost.
+
+      A title from either source is real, so these are ORs rather than a
+      swap. That also rescues the naming mismatch between the two sources
+      ("Jacksonville State" against "Jax State"), which the snapshot lookup
+      above matches on display name and therefore misses.
+    */
+    const conferenceChampion =
+      conferenceChampionship.some((entry) => entry.winningTeamName === userTeam.displayName) ||
+      (yearRow?.wonConferenceChampionship ?? false);
+    const playoffAppearance =
+      postseasonGames.some(isPlayoffGame) ||
+      Boolean(
+        yearRow &&
+          (yearRow.firstRoundResult ||
+            yearRow.quarterFinalResult ||
+            yearRow.semiFinalResult ||
+            yearRow.nationalResult),
+      );
 
     if (conferenceChampion) {
       dynastyConferenceTitles++;
@@ -460,15 +513,30 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
 
     seasonEntries.push({
       source: 'synced',
+      ...(stale ? { recovered: true, capturedGames: capturedWins + capturedLosses } : {}),
       seasonYear: season.seasonYear,
       teamName: userTeam.displayName,
       wins,
       losses,
-      conferenceWins: userTeam.confWins,
-      conferenceLosses: userTeam.confLosses,
-      mediaRank: userTeam.mediaPollRank > 0 ? userTeam.mediaPollRank : null,
-      coachesRank: userTeam.coachesPollRank > 0 ? userTeam.coachesPollRank : null,
-      cfpRank: userTeam.cfpRank > 0 ? userTeam.cfpRank : null,
+      conferenceWins: stale ? yearRow.conferenceWins : userTeam.confWins,
+      conferenceLosses: stale ? yearRow.conferenceLosses : userTeam.confLosses,
+      /*
+        A stale capture's poll rank is whatever the team happened to be ranked
+        the week it was taken — a PRESEASON number on a week-zero sync — and
+        printing that as the season's final ranking is worse than printing
+        nothing. The year-row's is the real final one (0 there means unranked,
+        not #0).
+      */
+      mediaRank: stale
+        ? (yearRow.finalMediaRank > 0 ? yearRow.finalMediaRank : null)
+        : userTeam.mediaPollRank > 0
+          ? userTeam.mediaPollRank
+          : null,
+      // Nulled rather than recovered on a stale capture: these are mid-season
+      // standings, and the year-row only carries the media poll's final number.
+      // A blank reads as "not known"; the stale value would read as a fact.
+      coachesRank: stale ? null : userTeam.coachesPollRank > 0 ? userTeam.coachesPollRank : null,
+      cfpRank: stale ? null : userTeam.cfpRank > 0 ? userTeam.cfpRank : null,
       headCoachName: seasonHeadCoachName,
       conferenceChampion,
       conferenceChampionName: conferenceChampion ? (userTeam.conferenceName ?? null) : null,

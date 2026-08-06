@@ -81,7 +81,12 @@ export interface TeamHistorySeasonData {
   isConferenceStandingTied: boolean;
   /** 0 when the team finished outside the poll. */
   finalMediaRank: number;
-  /** True when this year's row records a conference title game appearance. */
+  /**
+   * True when this team WON its conference that year — not merely reached the
+   * game. Verified against the authoritative `conferenceChampionship` snapshot
+   * on a full season: all ten conference winners carried the flag and not one
+   * of the ten losing teams did.
+   */
   wonConferenceChampionship: boolean;
   /** Postseason results, in bracket order. `Invalid_` in the save means "didn't reach it" and becomes null. */
   firstRoundResult: string | null;

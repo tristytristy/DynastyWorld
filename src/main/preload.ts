@@ -176,8 +176,8 @@ const api: DynastyApi = {
     createDynastyBackup: (dynastyId, contents) =>
       ipcRenderer.invoke(IPC.editor.createDynastyBackup, dynastyId, contents),
     chooseBackupToRestore: () => ipcRenderer.invoke(IPC.editor.chooseBackupToRestore),
-    restoreDynastyBackup: (filePath) =>
-      ipcRenderer.invoke(IPC.editor.restoreDynastyBackup, filePath),
+    restoreDynastyBackup: (filePath, options) =>
+      ipcRenderer.invoke(IPC.editor.restoreDynastyBackup, filePath, options),
     onBackupProgress: (callback) => {
       const listener = (_event: unknown, progress: { percent: number; step: string }) =>
         callback(progress);

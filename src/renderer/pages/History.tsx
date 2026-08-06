@@ -1,6 +1,7 @@
 import { formatKnownRecord, isManualSeason } from '../../shared/programHistory';
 import { useEffect, useMemo, useState } from 'react';
 import { ManualHistoryEditor } from '../components/common/ManualHistoryEditor';
+import { RecoveredSeasonNotice } from '../components/common/RecoveredSeasonNotice';
 import { expandTeamSearchTerms } from '../lib/schoolLocations';
 import { InfoHint } from '../components/ui/InfoHint';
 import { Link, useParams } from 'react-router-dom';
@@ -19,6 +20,7 @@ import type {
   ProgramHistoryOverview,
   ProgramHistoryRecordCategory,
   ProgramHistoryRecordHolder,
+  ProgramHistorySeasonEntry,
 } from '../../shared/types';
 
 function formatRank(rank: number | null): string {
@@ -204,6 +206,7 @@ export function History() {
   */
   const [gap, setGap] = useState<ManualSeasonGap | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [recoveredSeason, setRecoveredSeason] = useState<ProgramHistorySeasonEntry | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   /*
@@ -455,6 +458,24 @@ export function History() {
                             Yours
                           </span>
                         )}
+                        {/*
+                          Marked for the same reason the manual row above is:
+                          these numbers are real and save-derived, but the
+                          season behind them was never captured whole, and a row
+                          that hides that is a row the user can be surprised by
+                          later. Clickable because the interesting part is WHAT
+                          is missing — see RecoveredSeasonNotice.
+                        */}
+                        {season.recovered && (
+                          <button
+                            type="button"
+                            onClick={() => setRecoveredSeason(season)}
+                            title="Synced before this season finished — see what was recovered"
+                            className="border border-amber-300/70 px-1 py-px text-[9px] font-medium uppercase tracking-wider text-amber-700 hover:border-amber-500 dark:border-amber-500/30 dark:text-amber-400 dark:hover:border-amber-400/60"
+                          >
+                            Recovered
+                          </button>
+                        )}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-300">
@@ -604,6 +625,10 @@ export function History() {
           defaultTeamName={history.teamName}
           onSaved={() => setReloadKey((n) => n + 1)}
         />
+      )}
+
+      {recoveredSeason && (
+        <RecoveredSeasonNotice season={recoveredSeason} onClose={() => setRecoveredSeason(null)} />
       )}
 </div>
   );

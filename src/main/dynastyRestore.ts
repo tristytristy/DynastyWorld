@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
@@ -7,6 +7,7 @@ import type { Database } from 'sql.js';
 import { backupDatabase, compactDatabase, getDb, loadDatabaseFromBuffer, persist } from '../database/init';
 import { getDynastyById, invalidateSnapshotCache, updateDynasty } from '../database/helpers';
 import { mediaDirFor } from './ipc/media';
+import { getSavesDir } from './ipc/filesystem';
 import { BACKUP_PATHS } from './dynastyBackup';
 import type { BackupInspection, DynastyRestoreResult } from '../shared/types';
 
@@ -349,7 +350,60 @@ async function restoreFiles(source: Map<string, Buffer>, prefix: string, destDir
  * files came from may not exist here, and the app looks for them by dynasty,
  * not by remembered location.
  */
-export async function restoreDynastyBackup(zipPath: string): Promise<DynastyRestoreResult> {
+/**
+ * Puts the backup's save file back where the GAME can find it.
+ *
+ * Restoring already unpacked the save, but into DynastyOS's own userData —
+ * which relinks the dynasty correctly and is still no use to someone who wants
+ * to play it, because College Football only lists saves in its own folder. So
+ * this is the other half, and it is opt-in: writing into the user's game
+ * directory is not something to do quietly on their behalf.
+ *
+ * NEVER OVERWRITES. A file already sitting at that name is the user's LIVE
+ * dynasty, which may have nothing to do with this backup and may be many hours
+ * ahead of it — clobbering it would destroy real progress to restore old
+ * progress. On a collision the restored copy lands beside it as
+ * `<name>-OS-RESTORED`, and the numbered suffix after that keeps a SECOND
+ * restore from overwriting the first. Save files carry no extension (verified:
+ * a real save is literally "DYNASTY-DYNASTYBOWL"), so the suffix simply appends
+ * — there is no extension to preserve.
+ *
+ * Returns the path written, or null if the user backed out of choosing a
+ * folder. A missing saves directory is the "not set up yet" case: the default
+ * is a Documents path that may not exist on this machine, so rather than
+ * failing or inventing it, ask.
+ */
+async function placeSaveInGameFolder(
+  saveBuffer: Buffer,
+  saveGameName: string,
+): Promise<string | null> {
+  let dir = getSavesDir();
+  if (!fs.existsSync(dir)) {
+    const chosen = await dialog.showOpenDialog({
+      title: 'Where should the restored save go?',
+      buttonLabel: 'Put it here',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (chosen.canceled || chosen.filePaths.length === 0) return null;
+    dir = chosen.filePaths[0];
+  }
+
+  let target = path.join(dir, saveGameName);
+  if (fs.existsSync(target)) {
+    target = path.join(dir, `${saveGameName}-OS-RESTORED`);
+    for (let n = 2; fs.existsSync(target); n++) {
+      target = path.join(dir, `${saveGameName}-OS-RESTORED-${n}`);
+    }
+  }
+
+  await fsp.writeFile(target, saveBuffer);
+  return target;
+}
+
+export async function restoreDynastyBackup(
+  zipPath: string,
+  options?: { placeSaveInGameFolder?: boolean },
+): Promise<DynastyRestoreResult> {
   const inspection = await inspectBackup(zipPath);
   if (!inspection.valid || !inspection.dynastyId) {
     return { success: false, message: inspection.message };
@@ -426,6 +480,20 @@ export async function restoreDynastyBackup(zipPath: string): Promise<DynastyRest
           if (!fs.existsSync(getDynastyById(dynastyId)?.savePath ?? '')) {
             updateDynasty(dynastyId, { savePath: restoredSavePath });
             savePathNote = ' Your game save was restored too.';
+          }
+
+          /*
+            Asked for separately, and pointed at the GAME's folder rather than
+            ours — see placeSaveInGameFolder. Done after the relink above so a
+            cancelled folder prompt still leaves the dynasty pointing at a real
+            file, and reported by name because the copy may have been renamed
+            to avoid overwriting a live save.
+          */
+          if (options?.placeSaveInGameFolder) {
+            const placed = await placeSaveInGameFolder(saveBuffer, inspection.saveGameName);
+            savePathNote = placed
+              ? ` Your game save was restored to ${path.basename(placed)} in your saves folder.`
+              : ' Your game save was restored, but not copied to your saves folder.';
           }
         }
       }

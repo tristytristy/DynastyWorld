@@ -29,7 +29,6 @@ export interface SavePeek {
   /** "Preseason", "Week 7", "End of Season Recap" — see formatSaveWeek. */
   weekLabel: string;
 }
-
 export interface DynastySummary {
   id: string;
   label: string;
@@ -1343,6 +1342,13 @@ export interface Trophy {
   assetKey: string | null;
   /** Distinguishes multiple trophies of the same kind — a season can carry several rivalry wins. */
   id?: string;
+  /**
+   * True when this was recovered from the save's own program history rather
+   * than read from the season it belongs to — see getTrophies.ts. The title is
+   * real either way; what's missing is the game behind it, so surfaces that
+   * would otherwise offer a score or an opponent have to know not to.
+   */
+  recovered?: boolean;
 }
 
 export type PostseasonKind = 'bowl' | 'cfp-round' | 'national-championship';
@@ -2644,6 +2650,19 @@ export interface ProgramHistorySeasonEntry {
    * them visibly differently; see shared/programHistory.ts.
    */
   source: 'synced' | 'gameHistory' | 'manual';
+  /**
+   * A `synced` season whose numbers came from the save's year-row instead of
+   * its own snapshots, because it was captured before the season finished and
+   * the snapshots are demonstrably behind (see database/seasonYearRow.ts).
+   *
+   * Still summable and still save-derived — the year-row IS the game's own
+   * account — but the detail behind it is gone for good, so the row is marked
+   * rather than passed off as a complete capture. `capturedGames` is how many
+   * of the season's games those snapshots actually saw, which is what makes the
+   * loss concrete when it's explained to the user.
+   */
+  recovered?: boolean;
+  capturedGames?: number;
   seasonYear: number;
   /** The real team this season was played for — a dynasty can span schools; see Phase 0 per-season team tracking. */
   teamName: string;
@@ -3242,7 +3261,11 @@ export interface DynastyApi {
     /** Opens a file picker and reports what the chosen backup contains, WITHOUT changing anything. Null if cancelled. */
     chooseBackupToRestore: () => Promise<(BackupInspection & { filePath: string }) | null>;
     /** Restores a backup, after checkpointing whatever is already here. */
-    restoreDynastyBackup: (filePath: string) => Promise<DynastyRestoreResult>;
+    restoreDynastyBackup: (
+      filePath: string,
+      /** `placeSaveInGameFolder` also copies the backup's save into the game's own saves folder, never overwriting — see dynastyRestore.ts. */
+      options?: { placeSaveInGameFolder?: boolean },
+    ) => Promise<DynastyRestoreResult>;
     /** Subscribes to write progress; returns an unsubscribe function. */
     onBackupProgress: (
       callback: (progress: { percent: number; step: string }) => void,

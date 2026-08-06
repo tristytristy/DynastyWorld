@@ -11,7 +11,7 @@ function savesConfigPath(): string {
 }
 
 /** The remembered saves folder, or the game's standard Documents location. */
-function getSavesDir(): string {
+export function getSavesDir(): string {
   try {
     const saved = (JSON.parse(fsSync.readFileSync(savesConfigPath(), 'utf8')) as { savesPath?: string }).savesPath;
     if (saved) return saved;

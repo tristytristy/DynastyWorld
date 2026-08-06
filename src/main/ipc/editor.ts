@@ -101,8 +101,12 @@ export function registerEditorHandlers(): void {
 
   ipcMain.handle(
     IPC.editor.restoreDynastyBackup,
-    async (_event, filePath: string): Promise<DynastyRestoreResult> => {
-      return restoreDynastyBackup(filePath);
+    async (
+      _event,
+      filePath: string,
+      options?: { placeSaveInGameFolder?: boolean },
+    ): Promise<DynastyRestoreResult> => {
+      return restoreDynastyBackup(filePath, options);
     },
   );
 

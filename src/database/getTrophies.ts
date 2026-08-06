@@ -1,6 +1,7 @@
 import { CFP_ROUND_NAMES, resolveCfpBowl } from '../shared/cfpBowls';
 import { isGamePlayed } from '../shared/gameStatus';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
+import { getSeasonYearRow } from './seasonYearRow';
 import type { GameData } from '../extractors/extract-schedule';
 import type { ConferenceChampionshipData } from '../extractors/extract-league-history';
 import type { TeamData } from '../extractors/extract-teams';
@@ -95,6 +96,13 @@ function bowlIdentity(game: GameData): { name: string; assetName: string | null 
  * extractor - see extract-conference-championship.ts). Returns real, played
  * results only; nothing here is inferred from incomplete/upcoming games.
  *
+ * Where those two sources are silent because the season was never captured at
+ * full term, conference and national titles are recovered from the save's own
+ * program history and marked `recovered` (see seasonYearRow.ts). Bowl trophies
+ * deliberately have no such fallback: program history records that a postseason
+ * round was won but never which bowl it was, so there is no honest way to pick
+ * the trophy.
+ *
  * WORKS FOR ANY TEAM, not just the user's. Every source it reads — the
  * leaguewide `schedule` snapshot, `teams`, the conference-championship snapshot
  * and the rivalry-trophy pairing map — already covers all 143 programs; the only
@@ -121,10 +129,20 @@ export function getTrophies(dynastyId: string, seasonId?: number, teamIndex?: nu
   );
 
   const trophies: Trophy[] = [];
+  // The safety net for seasons that were never captured at full term — consulted
+  // only where the season's own data comes up empty. See seasonYearRow.ts.
+  const historySeason = getSeasonYearRow(dynastyId, season.seasonYear, subjectTeamIndex);
 
   const ncGame = teamGames.find((g) => g.isNationalChampionship && isGamePlayed(g.status));
   if (ncGame && gameResult(ncGame, userTeamIndex) === 'W') {
     trophies.push({ kind: 'national-championship', label: 'National Champions', assetKey: null });
+  } else if (!ncGame && historySeason?.nationalResult === 'Win') {
+    trophies.push({
+      kind: 'national-championship',
+      label: 'National Champions',
+      assetKey: null,
+      recovered: true,
+    });
   }
 
   const teams = getSnapshot<TeamData[]>(season.id, 'teams') ?? [];
@@ -146,6 +164,25 @@ export function getTrophies(dynastyId: string, seasonId?: number, teamIndex?: nu
       kind: 'conference-championship',
       label: `${confChamp.conferenceName} Champions`,
       assetKey: confChamp.conferenceName,
+    });
+  } else if (historySeason?.wonConferenceChampionship && historySeason.conferenceName) {
+    /*
+      No conference title in this season's own snapshot, but the save's program
+      history says the team won one. That combination is not a contradiction —
+      it's the ordinary result of syncing before the year closed, which leaves
+      the league-history row empty while program history fills in later.
+
+      Safe against false positives: the flag was checked against the
+      authoritative winners on a full season and matched all ten, with no
+      losing finalist carrying it (see extract-team-history.ts). It also rescues
+      the naming mismatch above, where the snapshot's "Jacksonville State"
+      never matched program history's "Jax State".
+    */
+    trophies.push({
+      kind: 'conference-championship',
+      label: `${historySeason.conferenceName} Champions`,
+      assetKey: historySeason.conferenceName,
+      recovered: true,
     });
   }
 

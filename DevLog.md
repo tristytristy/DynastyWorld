@@ -9963,3 +9963,299 @@ row was first built. The only reason to leave the identity row is still that
 staying would collapse the case to a sliver.
 
 typecheck / eslint / build:prod clean.
+
+---
+
+## Phase — Empty Trophy Rooms: the titles were never recorded (2026-08-07)
+
+Reported by several users; diagnosed on the Wyoming save the user supplied.
+Not a rendering bug — `getTrophies` was correct and the trophies genuinely
+weren't there.
+
+**Both trophy sources are gated on WHEN you sync.** Conference titles come from
+the league-history row for the season (`extract-all.ts:125`), and the game
+doesn't write that row until the year *closes* — so a mid-season sync leaves
+`conferenceChampions` empty permanently. All five Wyoming seasons had **0 rows**
+there. Bowl wins come from the schedule, where their bowls sat at
+`status = "Unplayed"` carrying EA's pre-sim score, which `resultsHold` correctly
+suppresses. Meanwhile `teamHistory` said they'd won the Mountain West **twice**.
+
+**The wider damage is worse than the trophies.** Per-season capture coverage:
+
+    2027  synced wk17 (BowlSeason1)   854/897 games
+    2028  synced wk10 (RegularSeason) 595/909 games
+    2029  synced wk0  (RegularSeason) 120/921 games   ← actually 12-2, MWC champs
+    2030  preseason                     0/0
+
+Every summary column in `seasons` is NULL and `finalized = 0` for all five —
+those are only written at End of Season Recap, which never happened.
+
+**Fix: fall back to `teamHistory`.** It's the one source that survives all of
+this — the save keeps a year-by-year row for every program and re-reads it in
+full on every sync, so a 2030 capture still knows who won what in 2027.
+Conference and national titles are recovered from it and marked
+`recovered: true`.
+
+**The flag was verified before being trusted.** The field behind
+`wonConferenceChampionship` is `ConfChampionshipConferenceEnum` — a
+*which-conference* field, so "won" vs "appeared" was genuinely ambiguous, and
+the interface doc claimed "appearance". Cross-referenced against the
+authoritative `conferenceChampionship` snapshot on a full UCLA season: all **10**
+conference winners carried the flag and **none** of the 10 losing finalists did.
+Doc comment corrected.
+
+**Matched on `teamIndex`, never on name.** The two sources disagree on spelling —
+league history says "Jacksonville State" where program history says "Jax State" —
+so a name match silently drops exactly the schools with abbreviated names. The
+fallback also rescues that case, since the snapshot lookup is by display name.
+
+**No bowl fallback, deliberately.** Program history records that a postseason
+round was won but never *which bowl* it was, so there is no honest way to pick
+the trophy art. Wyoming's 2027 bowl win stays unknown.
+
+**Blast radius.** The fallback only fires where the season's own data is silent.
+Wyoming: empty → MWC 2027 + 2029. The healthy UCLA dynasty produces **zero**
+recovered entries — National Champions, Big Ten, Orange/Rose Bowl and Victory
+Bell all still come from the snapshot path, unchanged. Renderer needed no
+changes: the Trophy Room populates on its own, its detail panel already sources
+the record from program history (so 2029 reads 12-2, #24), and
+`ChampionshipGame` returns null when there's no game behind a trophy.
+
+**No re-sync required, and it's retroactive.** The fallback reads a snapshot
+already in the archive, so the titles come back on update alone — verified by
+running against Wyoming's untouched archive with no sync at all. A user does not
+need to have synced correctly back in 2027 for their 2027 title to return.
+
+The exception is an archive with no `teamHistory` anywhere, i.e. last synced
+before 3.0.1 (2026-07-31, when extract-team-history landed). One sync repairs
+every past year at once, since program history is re-read in full each time.
+
+Because of that cutoff, archives carry the snapshot on recent seasons and not on
+older ones — `b0b6ca4f` has `th=NO` on 2027/2028 and `th=yes` on 2029/2030. So
+`historySeasonFor` SCANS newest-first for the first season that has it rather
+than taking the newest and giving up; history accumulates, so whichever it finds
+is authoritative for every year.
+
+Exercised the real `getTrophies` against both archives by compiling the DAL to
+CJS and stubbing `electron` — not a reimplementation of the logic.
+
+typecheck / eslint clean.
+
+**Deferred, and the bigger prize:** none of this prevents the loss in the first
+place. Within a season a later sync *does* backfill earlier weeks (the save is
+cumulative and the schedule snapshot is a full replacement), but nothing
+survives the season boundary — once the calendar rolls, last year's game-by-game
+detail is gone from the save and only program-history summaries remain. A
+staleness nudge before the rollover is worth more than any post-hoc repair.
+
+---
+
+## Phase — Seasons synced early no longer read as the record they never were (2026-08-07)
+
+Follow-on from the empty Trophy Room, and the bigger half of it. The trophy fix
+put titles back; this fixes the *numbers*.
+
+**The precedence rule was too trusting.** `getHistory` merges three tiers —
+"a fully synced season beats the save's thin year-row, which beats anything
+typed" — and `claimed` is built from synced seasons, so the year-row only ever
+filled years never synced at all. That holds when the sync was taken at full
+term. It is exactly wrong when it wasn't: Wyoming's 2029 was captured at **week
+zero**, so it claimed the year with a teams row reading 1-0 and no conference
+title, and the save's own 12-2 / #24 / Mountain West champions row was
+discarded. Every total built from it inherited the 1-0.
+
+**The test is counting games, not guessing phase.** `isYearRowBetter` prefers the
+snapshots only while they know at least as much as the year-row does. Safe in
+both directions and needs no schema:
+
+- a season synced at End of Season Recap matches its year-row exactly, so
+  nothing moves for anyone who syncs properly;
+- the CURRENT season's year-row reads 0-0 until the year closes, so a mid-season
+  capture can never be overridden by an empty row.
+
+Ties go to the snapshots, which carry far more detail.
+
+**Applied where the entry is BUILT, not at the merge.** Totals, coach summaries,
+milestones and the season row all read the same corrected numbers; correcting it
+at the merge would have left `dynastyWins` on the stale figure while the row
+above it showed the real one.
+
+Per-field decisions, all in the same direction — never let a mid-season value
+pose as a final one:
+
+- record / conference record / title flags → year-row when stale. Titles are
+  ORs rather than swaps (a title from either source is real), which also
+  rescues the "Jacksonville State" vs "Jax State" naming mismatch.
+- `mediaRank` → the year-row's FINAL rank. A stale capture's poll rank is
+  whatever they happened to be ranked that week — a preseason number on a
+  week-zero sync — and printing that as a final ranking is worse than nothing.
+- `coachesRank` / `cfpRank` → nulled. The year-row only carries the media
+  poll, and a blank reads as "not known" where the stale value would read as
+  fact.
+- national championship → the played game always wins when there is one, since
+  it can say they LOST and the fallback must never override that.
+
+**Verified on both archives.** Wyoming: 2029 goes 1-0 → 12-2 #24 CONF, 2027
+10-3 → 10-4 CONF, dynasty total 30-11 with 2 conference titles, and the rows
+carry how much was actually seen (2029 saw **1 of 14** games; 2027 saw 13/14 —
+the missing bowl). The properly-synced UCLA dynasty is **unchanged**: 15-1 and
+16-0, both CONF NATL, 31-1 overall, nothing flagged. Auburn, Sac State, James
+Madison and Texas State likewise untouched.
+
+**Surfaced, not silent.** Auto-correcting and saying nothing would leave a coach
+to discover their 12-2 season has no box scores and conclude the app lost them.
+Affected rows carry a `Recovered` badge — following the existing `Yours` badge
+for manual rows, and for the same stated reason: a row whose provenance is
+hidden is one the user can be surprised by later. It opens
+`RecoveredSeasonNotice`, which states what was recovered and what is gone
+(games, stats, weekly polls, which bowl) with equal weight, and closes with the
+one piece of advice worth giving — sync at End of Season Recap, because the save
+only keeps one season's games at a time.
+
+**Rankings deliberately untouched.** Weekly poll history is per-moment and
+genuinely unrecoverable; it is never synthesised. Final rank rides along free
+because it is in the year-row. Nothing about the ranking sync changes for anyone
+who syncs responsibly.
+
+`getSeasonYearRow` / `isYearRowBetter` moved into `database/seasonYearRow.ts`,
+now shared by `getTrophies` and `getHistory`.
+
+typecheck / eslint / build:prod clean.
+
+**Still deferred:** prevention. Nothing here stops the loss happening again — a
+staleness nudge before the calendar rolls is worth more than any repair, and
+`importExtraction`'s `blockWrite` rule needs reading first, since a "catch up
+now" prompt can land in a state where the write is refused.
+
+---
+
+## Phase — Prevention: warn before a season becomes permanent (2026-08-07)
+
+The other half of the recovered-season work. Repair puts back what it can;
+this stops the loss happening again.
+
+**The window is narrower than it looks.** `isSeasonCapturedWhole` returns true
+only from OffSeason stage 1 — and the write side (`isSeasonLocked`) refuses to
+write to a concluded season from stage 3 on. So the capture window is offseason
+stages 1–2 (End of Season Recap + Players Leaving), and missing it is permanent.
+A postseason capture is NOT whole: the Wyoming save synced during bowl week and
+kept 13 of 14 games — everything except the bowl, the one they most wanted.
+
+**Built as a dashboard badge first, and REMOVED after the user called it.**
+A marker reading "sync before next season" was accurate and taught the wrong
+lesson: naming the deadline reads as "one sync per season is enough", and a
+coach who syncs only at the end still loses every week of poll movement and
+every weekly stat line on the way. Those are the things nothing recovers. The
+badge was reverted along with all of its plumbing (`captureState` on
+DynastySummary, `isSeasonCapturedWhole`) rather than left dead.
+
+**Replaced by a startup guide** (`SyncGuideModal`), which has room to teach the
+habit instead of a deadline. Led, at the user's direction, with the thing most
+people get wrong: **you never need to exit your dynasty** — advance the week,
+save in-game, hit Sync, leave the game running. Everything else depends on
+syncing being cheap. Then: keep ONE save file for syncing (a stable filename is
+what keeps it a one-click Sync instead of an Import every time), sync every week
+you play, and always sync at the End of Season Recap. Mechanism in one line at
+the end. Kept short deliberately — a wall of text at launch gets dismissed
+unread, which would leave the reader worse off than the badge did.
+
+Dismissal is a "Don't show this on startup" checkbox persisted to localStorage,
+honoured permanently rather than re-armed each release: someone who understands
+the mechanism doesn't need telling again.
+
+**Verified end to end in the running app** (screenshot harness, four launches):
+opens on launch; tick + "Got it" writes the flag and the modal is absent on the
+next launch; closing WITHOUT ticking writes nothing and the guide returns next
+launch. A blocked localStorage is treated as dismissed rather than making the
+modal unskippable.
+
+### Faults found and fixed
+
+**An 11x performance regression, caught by measuring rather than assuming.**
+`teamHistory` is 143 programs deep and gzipped; getSnapshot caches it, but that
+cache is a 48 MB byte-budgeted LRU and getHistory pulls a `teams`, `schedule`
+and `coaches` snapshot per season as it loops — which evicts it, so every season
+re-inflated the whole thing. getHistory on the five-season dynasty went
+**102 ms → 1130 ms**. Fixed with a one-slot resolved index in seasonYearRow.ts,
+keyed by dynasty AND database epoch (the epoch is what makes restore-from-backup
+and archive-swap safe). Back to **321 ms** cold / 31–46 ms warm, with the
+residual being the one-time inflate the feature genuinely needs.
+
+### Data-damage audit
+
+- **Zero writes.** No INSERT/UPDATE/DELETE, no `run(`, no `persist(`, no
+  `saveSnapshot` anywhere in the change set. No migration, no schema change —
+  the archive is still v22.
+- **Archive byte-identical** after exercising every new path: sha256 before and
+  after both probes matched exactly.
+- Every correction is computed at READ time, so it costs nothing to be wrong
+  and corrects itself the moment a good sync arrives.
+
+### Fault tests
+
+- Interleaved reads across all six dynasties, three rounds — the single-slot
+  index never leaked rows between them.
+- Per-team lookup verified against three unrelated programs (Air Force, Georgia,
+  Sam Houston) at the same year: all matched their own row, distinct teams
+  returned distinct rows, no cross-contamination. This is the coach-changed-
+  schools path, which no dynasty in the test archives actually exercises.
+- Unknown teamIndex (9999) and unknown year (1899) both return undefined.
+- 11 real year-rows sanity-checked for negative or out-of-range values: none.
+- `isYearRowBetter` boundaries, 6/6: missing row, current-season 0-0 against a
+  fresh sync, empty row against a mid-season capture, exact match (tie goes to
+  the snapshots), week-zero capture, and missing-bowl-only.
+
+typecheck / eslint / build:prod clean.
+
+---
+
+## Phase — Restore puts the save back where the GAME can find it (2026-08-07)
+
+**The bug was that restore already worked, halfway.** It unpacked the backup's
+save file into `userData/restored-saves/<dynastyId>/` and relinked the dynasty
+to it — correct for DynastyOS, useless for playing, because College Football
+only lists saves in its own folder. Users were told "Your game save was restored
+too" and then couldn't find it.
+
+Now an opt-in checkbox on the restore dialog also writes it to the game's saves
+folder. Opt-in deliberately: writing into someone's game directory isn't
+something to do quietly on their behalf. Defaults to ticked, since a backup that
+contains a save is nearly always being restored to be played.
+
+**It NEVER overwrites.** A file already at that name is the user's LIVE
+dynasty, which may have nothing to do with this backup and may be many hours
+ahead of it — clobbering it would destroy real progress in order to restore old
+progress. On a collision the copy lands beside it as `<name>-OS-RESTORED`
+(user's choice of suffix), and a numbered suffix after that stops a SECOND
+restore overwriting the first. Save files carry no extension — a real one is
+literally `DYNASTY-DYNASTYBOWL` — so the suffix just appends.
+
+A missing saves directory is the "not set up yet" case: `getSavesDir()` falls
+back to a Documents path that may not exist on this machine, so rather than
+failing or inventing it, the folder picker opens. Cancelling still leaves the
+restore successful and the dynasty pointing at a real file, because the placement
+runs AFTER the relink.
+
+`getSavesDir` exported from ipc/filesystem.ts; the option travels
+renderer → preload → IPC → `restoreDynastyBackup(zip, { placeSaveInGameFolder })`.
+
+The checkbox rides in the existing confirm dialog's `message` (already a
+ReactNode), so the provider didn't need changing. Its value is read on CHANGE
+rather than off the element afterwards — the dialog unmounts the moment
+`confirm()` settles, so a ref to the input reads null by the time the promise
+resolves. That one is easy to write and looks like it works until someone ticks
+the box and nothing happens.
+
+### Tested end to end
+
+No backup on hand actually contained a save (the Wyoming one has
+`saveGame: null`), so the test builds one: the real archive plus a
+`save/DYNASTYMASTER` entry and a patched manifest. Run against the real
+`restoreDynastyBackup` with a stubbed electron dialog:
+
+    live save present    → DYNASTYMASTER-OS-RESTORED written, live file byte-identical
+    restore again        → DYNASTYMASTER-OS-RESTORED-2, first restored copy untouched
+    empty saves folder   → DYNASTYMASTER (original name, no needless suffix)
+    saves folder missing → picker opens; cancelling still reports success honestly
+
+typecheck / eslint / build:prod clean.
