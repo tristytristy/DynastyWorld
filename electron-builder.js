@@ -56,6 +56,15 @@ module.exports = {
   // cfbmedia:// handler (fs.readFile in the main process) serves real files, and
   // getAssetsRoot's bundled-fallback sentinel check resolves. No-op in a slim
   // build (those folders aren't packaged).
+  /*
+    Save-file schemas for game patches newer than madden-franchise ships.
+
+    Copied OUTSIDE the asar deliberately — extractors/lib/franchise.ts hands the
+    path straight to the library, which opens it with plain fs, and an asar path
+    is not a real file to a library that doesn't go through Electron's patched
+    fs. See FALLBACK_SCHEMAS there for why they exist at all.
+  */
+  extraResources: [{ from: 'resources/schemas', to: 'schemas' }],
   asarUnpack: MEDIA_GLOBS,
   directories: {
     output: 'release',

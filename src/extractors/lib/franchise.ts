@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import Franchise from 'madden-franchise';
 
 export type OpenFranchise = Awaited<ReturnType<typeof Franchise.create>>;
@@ -82,8 +84,92 @@ function indexTablesById(franchise: OpenFranchise): void {
   };
 }
 
+/*
+  SCHEMAS FOR SAVES NEWER THAN THE LIBRARY KNOWS ABOUT.
+
+  A save is unlabelled binary; the schema is the map that says which bits are
+  TeamIndex, which are the coach's name, and so on. madden-franchise ships those
+  maps and picks one per file.
+
+  ITS PICKER CANNOT BE TRUSTED ACROSS A GAME PATCH. It selects the schema whose
+  major version is numerically CLOSEST to the one the save asks for — and the two
+  numbering schemes are unrelated. Measured on real saves: a pre-patch file asks
+  for major 814 and a post-patch file for 833, while the schemas are numbered 468
+  and 486. Both files land on 486 because it is nearer to both numbers, so simply
+  adding a newer schema silently breaks every save that predates it.
+
+  The August 6 2026 title update added a field to the Coach table (137 members →
+  138). Every tool that reads coaches broke the same day, ours included, with
+  "Could not determine which team this dynasty belongs to" — the schema refuses
+  to bind, zero coaches parse, and nothing identifies the user's team.
+
+  So: open normally, and only if the Coach table failed to bind, reopen pointing
+  at the newer schema by PATH, which bypasses the picker entirely. Unpatched
+  saves take the original path and are completely unaffected; patched saves pay
+  one extra open, which is cheap beside the extraction that follows.
+
+  Adding a future patch's schema means dropping its .gz into resources/schemas/27
+  and listing it below, newest first.
+*/
+const FALLBACK_SCHEMAS: { fileName: string; gameYear: number; major: number; minor: number }[] = [
+  // EA CFB 27 title update, 6 August 2026.
+  { fileName: 'C27_486_1.gz', gameYear: 27, major: 486, minor: 1 },
+];
+
+function bundledSchemaPath(fileName: string): string | null {
+  const candidates = [
+    // Packaged: electron-builder copies resources/schemas via extraResources.
+    process.resourcesPath ? path.join(process.resourcesPath, 'schemas', '27', fileName) : null,
+    // Dev / tests, run from the repo.
+    path.join(process.cwd(), 'resources', 'schemas', '27', fileName),
+  ].filter((p): p is string => p !== null);
+  return candidates.find((p) => fs.existsSync(p)) ?? null;
+}
+
+/**
+ * Did the Coach table get a real schema, or did the library fall back to
+ * generating anonymous `Field_0`, `Field_1`… from the header? The latter parses
+ * without error and yields nothing usable, so it has to be detected explicitly.
+ */
+function coachTableBound(franchise: OpenFranchise): boolean {
+  const tables = franchise.getAllTablesByName('Coach') as unknown as FranchiseTable[];
+  if (!tables || tables.length === 0) return true; // nothing to judge; let the caller fail normally
+  const biggest = tables.reduce((a, b) => (b.header.recordCapacity > a.header.recordCapacity ? b : a));
+  return Boolean(biggest.schema);
+}
+
 export async function openFranchiseFile(filePath: string): Promise<OpenFranchise> {
-  const franchise = await Franchise.create(filePath);
+  let franchise = await Franchise.create(filePath);
+
+  if (!coachTableBound(franchise)) {
+    for (const candidate of FALLBACK_SCHEMAS) {
+      const schemaPath = bundledSchemaPath(candidate.fileName);
+      if (!schemaPath) continue;
+      /*
+        `path` is what actually does the work — it bypasses the picker and loads
+        this exact file. The version fields alongside it are the same schema's
+        real metadata; they're supplied because the library's type requires them,
+        and they keep the override self-describing rather than an opaque path.
+      */
+      const settings = {
+        schemaOverride: {
+          gameYear: candidate.gameYear,
+          major: candidate.major,
+          minor: candidate.minor,
+          path: schemaPath,
+        },
+        // Cast because the library's published settings type demands every
+        // option and doesn't declare `path` on the override, while the runtime
+        // reads exactly this shape (see its schemaOverride.path branch).
+      } as unknown as Parameters<typeof Franchise.create>[1];
+      const retried = await Franchise.create(filePath, settings);
+      if (coachTableBound(retried)) {
+        franchise = retried;
+        break;
+      }
+    }
+  }
+
   indexTablesById(franchise);
   return franchise;
 }
