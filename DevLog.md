@@ -10259,3 +10259,45 @@ No backup on hand actually contained a save (the Wyoming one has
     saves folder missing → picker opens; cancelling still reports success honestly
 
 typecheck / eslint / build:prod clean.
+
+---
+
+## Phase — 4.3.3 released (2026-08-06)
+
+Shipped: coordinator carousel lock, History-Only season repair, backups around
+updates, plus everything drafted for 4.3.2 (season recovery, the startup sync
+guide, restoring a save into the game's folder).
+
+**4.3.2 was pulled and never released.** It was public for ~13 minutes and its
+manifest was fetched 7 times with 3 installer downloads, so the version number
+was NOT reused — electron-updater compares versions, and anyone holding that
+build would never have been offered a re-issued 4.3.2. They get 4.3.3 instead,
+since 4.3.2 < 4.3.3. The 4.3.2 draft is retained deliberately: it is the only
+copy of the binary those three installed.
+
+**Release mechanics that worked and should be repeated.** Branch and tag pushed
+BEFORE the build, so electron-builder bound to a real tag instead of
+auto-creating one from the default branch. `v4.3.3` → `8a030fc`, verified
+against local. (`v4.3.0` and `v4.3.1` still point at the same stray commit, so
+`git diff v4.3.1..HEAD` remains meaningless for those — the real 4.3.1 commit is
+`a6450b5`.)
+
+Published manually by the user from the web UI after a volunteer tested it.
+
+### A one-off COMPLETE build for a demo
+
+`COMPLETE_INSTALLER=1` + `--publish never` → a 1,036 MB installer with the
+artwork bundled, so a colleague doesn't need the separate ~927 MB image pack.
+Confirmed it did NOT touch the published release: that still carries the 110 MB
+slim installer.
+
+Paired with a pre-seeded user profile (330 MB) built by running the app's own
+restore against a UCLA backup under `CFB_USER_DATA_DIR` — not hand-assembled, so
+every path and id is wired the way the app expects. Shipping a profile works at
+all because `media_items` stores only `file_name`; the absolute path is derived
+from userData at read time, which makes the folder portable between machines.
+
+Deliberately excluded from that zip: Chromium's caches (they rebuild, and were
+most of the 351 MB) and Local Storage (so the new startup sync guide shows on
+his first launch). Known limitation: the dynasty's `save_path` still points at
+the machine that built it, so Sync needs a relink — everything else works.
