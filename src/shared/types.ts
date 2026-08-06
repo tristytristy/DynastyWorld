@@ -3380,6 +3380,8 @@ export interface DynastyApi {
     clearLogo: (dynastyId: string, pairKey: string) => Promise<CustomRival | null>;
   };
   media: {
+    /** The on-disk path of a dragged File. Uses Electron's supported webUtils rather than the deprecated `File.path`. */
+    pathForFile: (file: File) => string;
     /** Native multi-select file dialog (images + videos). Returns absolute paths, or null if cancelled. */
     pickFiles: () => Promise<string[] | null>;
     /** Copies the given files into the dynasty's media library and creates their DB rows. Split from pickFiles so verification runs can add files without a native dialog. */

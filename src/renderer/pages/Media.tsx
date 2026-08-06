@@ -1639,6 +1639,18 @@ export function Media() {
     setCustomAlbums(await window.api.media.createCustomAlbum(id, seasonId, name));
     setNewAlbumName('');
     setCreatingAlbum(false);
+    /*
+      SHOW THE THING THAT WAS JUST MADE. The album was being created correctly
+      and then landing somewhere the user could not see: "All photos" has no
+      folders at all, and an album opened in grid hides the shelf the new one
+      would appear on. Either way the button looked broken. Creating an album
+      is a statement that you want to see albums, so this goes to the shelf.
+    */
+    setGridOpenKey(null);
+    if (view === 'all') {
+      setView('grid');
+      saveMediaView('grid');
+    }
   }
 
   const refresh = useCallback(() => {
@@ -1694,8 +1706,18 @@ export function Media() {
     if (files.length === 0) return; // an internal reorder drop — handled on the tile
     event.preventDefault();
     setDragOverUpload(false);
+    /*
+      EVERY FILE IN THE DROP, which is what makes this a batch import — a drop
+      of forty screenshots is one gesture and forty rows.
+
+      Paths come from the preload's `pathForFile`, not from `File.path`: the
+      latter is an Electron extension that is deprecated now and gone in
+      Electron 32, so the version that "works" would quietly start importing
+      nothing. The fallback is there only for the case where the bridge is
+      missing entirely.
+    */
     const paths = files
-      .map((f) => (f as File & { path?: string }).path)
+      .map((f) => window.api.media.pathForFile?.(f) ?? (f as File & { path?: string }).path ?? '')
       .filter((p): p is string => typeof p === 'string' && p.length > 0);
     if (paths.length) importFiles(paths);
   }

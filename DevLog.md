@@ -9768,3 +9768,44 @@ re-cluster, one cycle behind.
 
 typecheck / eslint / check:refs / build:prod clean. Verified live: three view
 buttons present, 245 tiles in All photos, zero Cover controls remaining.
+
+## 2026-08-05 (final pass III) — Album creation was invisible, and drag-import gets a future
+
+### "Create album isn't working" — it was working, and landing out of sight
+
+Probed end to end: the plus opens the field, Create fires, and the row reaches
+the database (`listCustomAlbums` returns it). Nothing was broken in the chain.
+
+The failure was that the new album had nowhere to appear. **"All photos" has no
+folders at all**, and an album opened in grid hides the shelf the new one would
+land on — so in two of the three views the button did exactly what it should and
+produced no visible change. That is indistinguishable from broken, and the user
+was right to report it.
+
+Creating an album is a statement that you want to see albums, so it now closes
+any opened album and, from "All photos", switches to the shelf. Verified from
+the worst case: create from All photos, and the shelf comes up with "Rivalry
+Week" first, marked Album, 0 photos.
+
+### Drag-import off `File.path`
+
+Dropping files worked, but it read the on-disk path from `File.path` — an
+Electron extension to the web File object that is **deprecated and removed in
+Electron 32**. This project is on 31, so it works today and would silently
+import nothing after the next major upgrade: the drop would be accepted, the
+path list would come back empty, and no error would be raised anywhere.
+
+`webUtils.getPathForFile` is the supported replacement and has to be called in
+the preload, where the real File object exists. Exposed as `media.pathForFile`,
+with the old field kept as a fallback for the case where the bridge is missing.
+
+Batch was already there — a drop maps EVERY file in `dataTransfer` and the
+importer reports progress — and the whole panel has been the drop target since
+this morning. What changed is that it will still be there after an upgrade.
+
+**Not verified end to end:** a real OS drag can't be simulated in the screenshot
+harness. What was checked is that `pathForFile` is exposed and callable in the
+renderer, and that the batch import path itself is the same one the file picker
+uses, which works.
+
+typecheck / eslint / check:refs / build:prod clean.

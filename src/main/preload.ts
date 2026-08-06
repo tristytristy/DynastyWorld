@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { IPC } from '../shared/ipcChannels';
 import type { DynastyApi, ExtractionProgressEvent } from '../shared/types';
 import type { UpdateState } from '../shared/updateTypes';
@@ -247,6 +247,23 @@ const api: DynastyApi = {
     clearLogo: (dynastyId, pairKey) => ipcRenderer.invoke(IPC.rivals.clearLogo, dynastyId, pairKey),
   },
   media: {
+    /*
+      THE ON-DISK PATH OF A DRAGGED FILE.
+
+      `File.path` is an Electron extension to the web File object that is
+      DEPRECATED and removed in Electron 32 — so a drag-and-drop import written
+      against it works today and silently imports nothing after the next major
+      upgrade. `webUtils.getPathForFile` is the supported replacement, and it
+      has to be called HERE: it needs the real File object, which only exists on
+      this side of the bridge.
+    */
+    pathForFile: (file) => {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch {
+        return (file as File & { path?: string }).path ?? '';
+      }
+    },
     pickFiles: () => ipcRenderer.invoke(IPC.media.pickFiles),
     addFiles: (dynastyId, seasonId, filePaths) =>
       ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),
