@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { usePlayerHoverCard } from '../data/PlayerHoverProvider';
 import { SavedPlayerCard } from '../components/common/SavedPlayerCard';
 import { TeamLogo } from '../components/common/TeamLogo';
 import { VerticalToggle } from '../components/ui/VerticalToggle';
@@ -59,6 +60,8 @@ type UnitView = 'offense' | 'defense' | 'specialists';
  * would quietly imply they were team-mates.
  */
 function RecordBoards({ dynastyId, unit }: { dynastyId: string; unit: UnitView }) {
+  const { openPlayerModal } = usePlayerModal();
+  const { hoverProps } = usePlayerHoverCard();
   const [data, setData] = useState<CoachLeaderboards | null>(null);
   useEffect(() => {
     if (!dynastyId) return;
@@ -72,7 +75,51 @@ function RecordBoards({ dynastyId, unit }: { dynastyId: string; unit: UnitView }
   }, [dynastyId]);
 
   const boards = (data?.boards ?? []).filter((b) => b.group === unit);
+  /*
+    Emitted once by the query and keyed here, because the same quarterback tops
+    three of these boards and each appearance needs the same roster row to draw
+    his card.
+  */
+  const playerById = useMemo(
+    () => new Map((data?.players ?? []).map((p) => [p.player.id, p])),
+    [data],
+  );
+
   if (boards.length === 0) return null;
+
+  /*
+    Siblings are every player on the SAME board, so the modal's next/previous
+    walks the leaderboard the user clicked from rather than an unrelated roster
+    order — the same contract StatisticsTable gives its rows.
+  */
+  function openPlayer(playerId: number) {
+    const board = boards.find((b) => b.rows.some((r) => r.playerId === playerId));
+    /*
+      His OWN last season, not the current one. These boards are mostly players
+      who have graduated, and resolving one against the season the dynasty is
+      in now finds nobody — the modal opened on an empty shell before this was
+      passed.
+    */
+    const found = playerById.get(playerId);
+    openPlayerModal(
+      dynastyId,
+      playerId,
+      found?.seasonId ?? undefined,
+      board?.rows.map((r) => r.playerId),
+    );
+  }
+
+  /** Nothing to hover with if the player predates the roster snapshot we read. */
+  function hoverFor(playerId: number) {
+    const found = playerById.get(playerId);
+    if (!found) return {};
+    return hoverProps({
+      player: found.player,
+      teamName: found.teamName,
+      seasonYear: found.seasonYear,
+      dynastyId,
+    });
+  }
 
   // Offense is nine boards in a 3x3; defense is four in a 2x2; specialists is
   // one and shouldn't stretch across the page.
@@ -106,7 +153,20 @@ function RecordBoards({ dynastyId, unit }: { dynastyId: string; unit: UnitView }
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold uppercase tracking-wide text-slate-950 dark:text-white">
+                    {/*
+                      A button, not a span: every other place a player's name
+                      appears in this app opens him, and a name that reads the
+                      same but does nothing is the worse kind of inconsistency.
+                      Hovering shows his card through the same provider the
+                      roster uses, so the preference that turns hover cards off
+                      is honoured here for free.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => openPlayer(row.playerId)}
+                      {...hoverFor(row.playerId)}
+                      className="block w-full truncate text-left text-xs font-semibold uppercase tracking-wide text-slate-950 transition hover:text-[var(--team-primary)] dark:text-white dark:hover:text-[var(--team-primary)]"
+                    >
                       {row.playerName}
                       {row.position && (
                         <span className="ml-1.5 font-normal text-slate-400 dark:text-slate-500">{row.position}</span>
@@ -114,7 +174,7 @@ function RecordBoards({ dynastyId, unit }: { dynastyId: string; unit: UnitView }
                       {row.teamName && (
                         <span className="ml-1 font-normal text-slate-400 dark:text-slate-500">{row.teamName}</span>
                       )}
-                    </span>
+                    </button>
                     <span className="block text-[10px] text-slate-400 dark:text-slate-600">{row.span}</span>
                   </span>
                   <span className="tnum shrink-0 text-sm font-semibold text-slate-950 dark:text-white">

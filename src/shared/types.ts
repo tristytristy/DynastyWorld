@@ -3632,8 +3632,19 @@ export interface CoachLeaderboard {
   rows: CoachLeaderboardRow[];
 }
 
+/** A ranked player's roster row plus the context a hover card labels itself with. */
+export interface CoachLeaderboardPlayer {
+  player: RosterPlayer;
+  seasonYear: number | null;
+  /** The season to resolve him against — a ranked player has usually graduated. */
+  seasonId: number | null;
+  teamName: string | null;
+}
+
 export interface CoachLeaderboards {
   coachId: number;
   seasonsCounted: number;
   boards: CoachLeaderboard[];
+  /** Every ranked player, once — rows reference these by id. See getCoachLeaderboards. */
+  players: CoachLeaderboardPlayer[];
 }

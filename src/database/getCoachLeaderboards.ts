@@ -42,6 +42,16 @@ interface Folded {
   position: string | null;
   /** The school he last played for under this coach — see the row mapping. */
   teamName: string | null;
+  /** His last roster row, so the Hall can draw a hover card without a second fetch. */
+  roster: RosterPlayerData | null;
+  /** The season that roster row came from — the hover card labels itself with it. */
+  rosterSeasonYear: number | null;
+  /**
+   * And its season id, which the player modal needs to resolve him at all: a
+   * leaderboard is full of players who have since graduated, and looking one up
+   * against the CURRENT season finds nobody.
+   */
+  rosterSeasonId: number | null;
   firstSeason: number;
   lastSeason: number;
   seasons: number;
@@ -161,6 +171,9 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
         name: 'Unknown player',
         position: null,
         teamName: null,
+        roster: null,
+        rosterSeasonYear: null,
+        rosterSeasonId: null,
         firstSeason: season.seasonYear,
         lastSeason: season.seasonYear,
         seasons: 0,
@@ -175,6 +188,9 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
       if (who) {
         base.name = `${who.firstName} ${who.lastName}`.trim();
         base.position = who.position;
+        base.roster = who;
+        base.rosterSeasonYear = season.seasonYear;
+        base.rosterSeasonId = season.seasonId;
       }
       if (teamName) base.teamName = teamName;
       base.firstSeason = Math.min(base.firstSeason, season.seasonYear);
@@ -226,5 +242,22 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
     };
   }).filter((b) => b.rows.length > 0);
 
-  return { coachId, seasonsCounted: counted, boards };
+  /*
+    Emitted ONCE, keyed by id, rather than embedded in every row: fourteen boards
+    of ten is 140 rows and the same quarterback appears on several of them. The
+    Hall needs the whole roster row to draw a hover card, and duplicating an
+    18-field object per appearance would be most of the payload for none of the
+    information.
+  */
+  const ranked = new Set(boards.flatMap((b) => b.rows.map((r) => r.playerId)));
+  const rankedPlayers = [...folded.values()]
+    .filter((p) => ranked.has(p.playerId) && p.roster)
+    .map((p) => ({
+      player: p.roster as RosterPlayerData,
+      seasonYear: p.rosterSeasonYear,
+      seasonId: p.rosterSeasonId,
+      teamName: p.teamName,
+    }));
+
+  return { coachId, seasonsCounted: counted, boards, players: rankedPlayers };
 }
