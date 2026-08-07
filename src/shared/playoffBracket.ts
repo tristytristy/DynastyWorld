@@ -140,6 +140,46 @@ export function deriveBracketSlots(
     slotByGameId.set(g.gameId, 3 + bye);
   }
 
+  /*
+    A FIRST-ROUND GAME PLACED BY WHERE ITS WINNER TURNED UP (user report
+    2026-08-07). The rule above needs both teams' seeds, and seeds come from the
+    CURRENT cfp poll — which keeps moving after the bracket is set. A team that
+    entered as the 5 seed can be sitting at 15 by the time the season is synced
+    (seen exactly that: a first-round game between the 14 and the 6), and then
+    `seedOf` returns null, the game is skipped, and the bracket prints TO BE
+    DECIDED for a game whose score is on the Scores page.
+
+    The wiring answers it without any seed at all: first-round slot N feeds
+    quarterfinal N+4, and a first-round WINNER plays in that quarterfinal. So
+    find the placed quarterfinal this game's winner appears in and subtract four.
+
+    Runs after the seed rule and never overwrites it — the save's own numbering
+    wins, then seeds, then this. And it refuses a slot another game already
+    holds, because two first-round games claiming one position would be worse
+    than one empty box.
+  */
+  const quarterfinalSlotByParticipant = new Map<number, number>();
+  for (const g of quarterfinals) {
+    const slot = slotByGameId.get(g.gameId);
+    if (slot === undefined) continue;
+    for (const teamIndex of [g.homeTeamIndex, g.awayTeamIndex]) {
+      if (teamIndex !== null) quarterfinalSlotByParticipant.set(teamIndex, slot);
+    }
+  }
+  const takenSlots = new Set(slotByGameId.values());
+  for (const g of games) {
+    if (g.bowlName !== CFP_FIRST_ROUND || slotByGameId.has(g.gameId)) continue;
+    if (!isGamePlayed(g.status)) continue;
+    const winner = g.homeScore > g.awayScore ? g.homeTeamIndex : g.awayTeamIndex;
+    if (winner === null) continue;
+    const quarterfinalSlot = quarterfinalSlotByParticipant.get(winner);
+    if (quarterfinalSlot === undefined) continue;
+    const slot = quarterfinalSlot - 4;
+    if (!FIRST_ROUND_SLOTS.includes(slot) || takenSlots.has(slot)) continue;
+    slotByGameId.set(g.gameId, slot);
+    takenSlots.add(slot);
+  }
+
   const quarterfinalSlotOfWinner = new Map<number, number>();
   for (const g of quarterfinals) {
     const slot = slotByGameId.get(g.gameId);
