@@ -9,8 +9,6 @@ import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { TeamLogo } from '../components/common/TeamLogo';
-import { getGameTypeImagePath } from '../lib/scheduleFormat';
-import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import { useTheme } from '../theme/ThemeProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
@@ -18,6 +16,7 @@ import { useConfirm } from '../data/ConfirmDialogProvider';
 import { AllPhotosIcon, CloseIcon, EditIcon, ExportIcon, GridViewIcon, ListViewIcon, PlusIcon, TrashIcon } from '../components/common/ActionIcons';
 import { ModalCloseButton } from '../components/common/ModalCloseButton';
 import { ZoomableImage, framingTransform } from '../components/common/ZoomableImage';
+import { MediaPlate, PLATE_CHROME_BUTTON, occasionMarkSrc } from '../components/common/MediaPlate';
 import { MediaBackdrop } from '../components/common/MediaBackdrop';
 import {
   DEFAULT_MEDIA_LOOK,
@@ -26,7 +25,6 @@ import {
   findPreset,
   isUntreated,
   resolveMediaLook,
-  vignetteCss,
   washStyle,
   type MediaLook,
 } from '../../shared/mediaLook';
@@ -125,40 +123,6 @@ function loadGoldMark(): boolean {
   } catch {
     return true;
   }
-}
-
-/**
- * The emblem for the occasion, most specific first — the same resolution the
- * box score's hero uses, so a photo from the Iron Bowl carries the mark that
- * game carries everywhere else in the app.
- *
- * Rivalry outranks conference: the Iron Bowl is not "an SEC game" to anyone who
- * cares that it's being played. It does not outrank a bowl — if two rivals meet
- * in the Playoff, the round is the occasion.
- */
-function occasionMarkSrc(game: ScheduleGame, appearance: 'light' | 'dark'): string | null {
-  if (game.gameType !== 'bowl') {
-    const rivalry = getRivalryLogoPath(game.teamName, game.opponent, game.isRivalryGame);
-    if (rivalry) return rivalry;
-  }
-  return getGameTypeImagePath(game, appearance);
-}
-
-/**
- * The game, written as a sentence rather than a scoreboard fragment.
- *
- * "21-14 win vs Eastern Michigan in week 0." is what a caption says; "Wk 0 @
- * E. Michigan W 21-14 →" is what a button says. This plate is a caption, so the
- * abbreviations go.
- */
-function gameSentence(game: ScheduleGame): string {
-  const where = game.isHome ? 'vs' : 'at';
-  const week = `week ${game.week}`;
-  if (game.teamScore === null || game.opponentScore === null) {
-    return `${where} ${game.opponent} in ${week}.`;
-  }
-  const outcome = game.result === 'W' ? 'win' : game.result === 'L' ? 'loss' : 'tie';
-  return `${game.teamScore}-${game.opponentScore} ${outcome} ${where} ${game.opponent} in ${week}.`;
 }
 
 /**
@@ -1026,24 +990,9 @@ function MediaLightbox({
   // was taken, which the linked game already carries. With no game linked, the
   // season's schedule is the same answer — every game in it is this team's.
   const plateTeamName = game?.teamName ?? games[0]?.teamName ?? null;
+  // Only whether one EXISTS — the plate resolves and draws it. The look
+  // panel needs this to know whether the toggle has anything to turn off.
   const occasionSrc = game ? occasionMarkSrc(game, appearance) : null;
-  // What CAN be printed, and what the photo says to print — both have to be true.
-  const showTeamMark = look.showTeamMark && !!plateTeamName;
-  const showOccasionMark = look.showOccasionMark && !!occasionSrc;
-
-  // `!transition-none` is what makes the capture honest, and it is not
-  // decoration: `!opacity-0` alone still ANIMATES to zero over --duration-base
-  // (180ms), while exportPlate waits two animation frames (~32ms) before the
-  // main process reads the window — so the arrows, the counter and the action
-  // row were all photographed around 80% opaque and baked into the PNG. Turning
-  // the transition off makes the drop instant, which is what the two-frame wait
-  // below was always assuming.
-  const chromeClass = `pointer-events-none absolute opacity-0 transition-opacity duration-base group-hover:opacity-100 group-focus-within:opacity-100 ${
-    capturing ? '!opacity-0 !transition-none' : ''
-  }`;
-  const chromeButtonClass =
-    'pointer-events-auto flex h-9 w-9 items-center justify-center border border-white/15 bg-slate-950/70 text-slate-200 backdrop-blur-sm transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-30';
-
   async function exportPlate() {
     const node = plateRef.current;
     if (!node) return;
@@ -1091,22 +1040,43 @@ function MediaLightbox({
           editing ? 'max-w-6xl lg:flex-row' : 'max-w-5xl'
         }`}
       >
-        {/* The plate: everything the export captures, and nothing that isn't
-            part of the picture. */}
-        <div ref={plateRef} className="flex min-h-0 flex-1 flex-col bg-slate-950">
-          {/* group: the hover chrome hangs off this. overflow-hidden because a
-              zoomed photo has to be clipped by something, and the stage is what
-              it lives in. */}
-          <div className="group relative flex min-h-[16rem] flex-1 items-center justify-center overflow-hidden lg:min-h-[30rem]">
-            {item.mediaType === 'video' ? (
-              <video
-                key={item.id}
-                src={fileUrl(item.absolutePath)}
-                controls
-                autoPlay={false}
-                className="max-h-[74vh] max-w-full"
-              />
-            ) : editing ? (
+        {/*
+          THE PLATE — now the SHARED one (components/common/MediaPlate), so this
+          page and the galleries on player profiles and game pages draw the same
+          photograph the same way. Everything specific to this page — the gold
+          mark toggle, export, edit, delete — arrives as `actions`, and the
+          zoomable stage is swapped in while framing.
+        */}
+        <MediaPlate
+          key={item.id}
+          plateRef={plateRef}
+          src={fileUrl(item.absolutePath)}
+          mediaType={item.mediaType}
+          description={item.description}
+          framing={item.framing}
+          look={look}
+          taggedPlayers={taggedPlayers.map((p) => ({
+            id: p.id,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            jerseyNumber: p.jerseyNumber,
+          }))}
+          game={game ?? null}
+          teamName={plateTeamName}
+          goldMark={goldMark}
+          appearance={appearance}
+          index={index}
+          total={items.length}
+          chromeHidden={capturing}
+          onPrevious={() => onNavigate(index - 1)}
+          onNext={() => onNavigate(index + 1)}
+          onOpenPlayer={(playerId) => openPlayerModal(dynastyId, playerId, seasonId)}
+          onOpenGame={(gameId) => {
+            onClose();
+            openGameModal(dynastyId, gameId, seasonId);
+          }}
+          stage={
+            editing && item.mediaType !== 'video' ? (
               <ZoomableImage
                 key={item.id}
                 src={fileUrl(item.absolutePath)}
@@ -1117,75 +1087,10 @@ function MediaLightbox({
                 // has to be ON the photo you're treating.
                 filter={filterCss(look)}
               />
-            ) : (
-              /* Viewing is not editing, so no zoom pill and no drag — just the
-                 photo, wearing whatever framing and treatment were saved. */
-              <img
-                key={item.id}
-                src={fileUrl(item.absolutePath)}
-                alt={item.description || 'Dynasty media'}
-                draggable={false}
-                className="max-h-[74vh] w-full select-none object-contain"
-                style={{ transform: framingTransform(item.framing), filter: filterCss(look) || undefined }}
-              />
-            )}
-
-            {/*
-              THE TREATMENT LAYERS, over the photo and under the chrome.
-
-              They're separate elements rather than more filter primitives
-              because none of them IS a filter: a wash is a blended colour, a
-              vignette is a gradient, and grain is a texture. Each is
-              pointer-events-none so the photo underneath still takes a drag
-              while you're framing it.
-
-              Grain is drawn as an inline SVG turbulence — a real noise field,
-              generated by the browser at whatever size the frame happens to be,
-              with no asset to ship and nothing to tile.
-            */}
-            {washStyle(look) && (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background: washStyle(look)?.background,
-                  mixBlendMode: washStyle(look)?.mixBlendMode as never,
-                  opacity: washStyle(look)?.opacity,
-                }}
-              />
-            )}
-            {vignetteCss(look) && (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0"
-                style={{ background: vignetteCss(look) ?? undefined }}
-              />
-            )}
-            {look.grain > 0 && (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 mix-blend-overlay"
-                style={{
-                  /*
-                    STRENGTHENED (user direction) — at the old settings you
-                    genuinely could not tell it was on. Three things were
-                    fighting it: the layer capped at 0.55 opacity, the noise
-                    rect inside the SVG was itself only 0.6 opaque, so the
-                    strongest possible grain was a third of one, and
-                    `baseFrequency` 0.85 put the grain below one screen pixel
-                    where it averaged out to flat grey. Now full opacity on both,
-                    and a coarser 0.62 frequency so each grain is big enough to
-                    survive being drawn.
-                  */
-                  opacity: look.grain / 100,
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E\")",
-                }}
-              />
-            )}
-
-            {/* Top-right: the actions, in the order they escalate. */}
-            <div className={`${chromeClass} right-3 top-3 flex items-center gap-1.5`}>
+            ) : undefined
+          }
+          actions={
+            <>
               {plateTeamName && (
                 <button
                   type="button"
@@ -1193,11 +1098,10 @@ function MediaLightbox({
                   aria-pressed={goldMark}
                   aria-label={goldMark ? 'Use the standard team mark' : 'Use the gold team mark'}
                   title={goldMark ? 'Team mark: gold' : 'Team mark: standard'}
-                  className={chromeButtonClass}
+                  className={PLATE_CHROME_BUTTON}
                 >
                   {/* The control shows the mark itself rather than an icon of
-                      one — you're picking a look, so the button is a preview of
-                      it. */}
+                      one — you're picking a look, so the button is a preview. */}
                   <TeamLogo
                     team={{ assetName: plateTeamName, label: plateTeamName }}
                     size="sm"
@@ -1206,13 +1110,7 @@ function MediaLightbox({
                   />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={exportPlate}
-                aria-label="Export this photo with its caption"
-                title="Export photo"
-                className={chromeButtonClass}
-              >
+              <button type="button" onClick={exportPlate} aria-label="Export this photo with its caption" title="Export photo" className={PLATE_CHROME_BUTTON}>
                 <ExportIcon className="h-4 w-4" />
               </button>
               <button
@@ -1220,7 +1118,7 @@ function MediaLightbox({
                 onClick={() => setEditing((prev) => !prev)}
                 aria-label={editing ? 'Stop editing details' : 'Edit details and framing'}
                 title={editing ? 'Done editing' : 'Edit details & framing'}
-                className={chromeButtonClass}
+                className={PLATE_CHROME_BUTTON}
               >
                 <EditIcon className="h-4 w-4" />
               </button>
@@ -1231,136 +1129,17 @@ function MediaLightbox({
                 }}
                 aria-label="Delete this media"
                 title="Delete"
-                className={`${chromeButtonClass} text-red-300 hover:text-red-200`}
+                className={`${PLATE_CHROME_BUTTON} text-red-300 hover:text-red-200`}
               >
                 <TrashIcon className="h-4 w-4" />
               </button>
               <span className="mx-1 h-5 w-px bg-white/15" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close media viewer"
-                title="Close (Esc)"
-                className={chromeButtonClass}
-              >
+              <button type="button" onClick={onClose} aria-label="Close media viewer" title="Close (Esc)" className={PLATE_CHROME_BUTTON}>
                 <CloseIcon className="h-4 w-4" />
               </button>
-            </div>
-
-            <div className={`${chromeClass} left-3 top-1/2 -translate-y-1/2`}>
-              <button
-                type="button"
-                onClick={() => canGoPrevious && onNavigate(index - 1)}
-                disabled={!canGoPrevious}
-                aria-label="Previous media"
-                title="Previous (←)"
-                className={chromeButtonClass}
-              >
-                ←
-              </button>
-            </div>
-            <div className={`${chromeClass} right-3 top-1/2 -translate-y-1/2`}>
-              <button
-                type="button"
-                onClick={() => canGoNext && onNavigate(index + 1)}
-                disabled={!canGoNext}
-                aria-label="Next media"
-                title="Next (→)"
-                className={chromeButtonClass}
-              >
-                →
-              </button>
-            </div>
-
-            {items.length > 1 && (
-              <span className={`${chromeClass} tnum bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300`}>
-                {index + 1} / {items.length}
-              </span>
-            )}
-          </div>
-
-          {/*
-            THE CAPTION. Players, then description, then the game — the user's
-            order, and the order a caption reads: who, what, where.
-
-            Centred and generously spaced because this is the label under a
-            print, not a form. Anything absent is simply not printed; an empty
-            caption leaves the photo alone rather than reserving space to say
-            "No description yet."
-          */}
-          {/*
-            THE TWO MARKS, in the bottom corners, flanking the caption (user
-            request). Left is the program, right is the occasion — the same
-            reading order as a ticket stub: who, then what for.
-
-            They're positioned absolutely against the caption row rather than
-            placed in it, so a long caption wraps through the middle without
-            ever pushing a mark off its corner. The caption keeps clear of them
-            with its own horizontal padding.
-
-            The occasion mark resolves exactly as it does on the box score, so
-            it's the bowl's logo, the playoff round, the conference
-            championship mark, the rivalry shield or the plain conference logo,
-            in that order of occasion — and simply absent for a plain
-            non-conference game, which has no emblem worth inventing.
-          */}
-          {(taggedPlayers.length > 0 || item.description || game || showTeamMark) && (
-            <div className="relative shrink-0 px-28 py-6 text-center">
-              {/* 84px, up from 56 — the marks were reading as footnotes at the
-                  bottom of a large plate rather than as part of it. The caption's
-                  horizontal padding grew with them so a long line still can't
-                  reach either corner. */}
-              {showTeamMark && plateTeamName && (
-                <TeamLogo
-                  team={{ assetName: plateTeamName, label: plateTeamName }}
-                  size="lg"
-                  variant={goldMark ? 'gold' : undefined}
-                  className="!absolute bottom-5 left-6 !h-[5.25rem] !w-[5.25rem] opacity-90"
-                />
-              )}
-              {showOccasionMark && occasionSrc && (
-                <img
-                  src={occasionSrc}
-                  alt=""
-                  aria-hidden
-                  draggable={false}
-                  className="absolute bottom-5 right-6 h-[5.25rem] w-[5.25rem] object-contain opacity-90"
-                />
-              )}
-              {taggedPlayers.length > 0 && (
-                <p className="text-[15px] font-semibold leading-7 text-white">
-                  {taggedPlayers.map((player, i) => (
-                    <span key={player.id}>
-                      {i > 0 && <span className="text-slate-500">, </span>}
-                      <button
-                        type="button"
-                        onClick={() => openPlayerModal(dynastyId, player.id, seasonId)}
-                        className="transition hover:text-[var(--team-secondary)]"
-                      >
-                        <span className="tnum text-slate-400">#{player.jerseyNumber}</span> {playerLabel(player)}
-                      </button>
-                    </span>
-                  ))}
-                </p>
-              )}
-              {item.description && (
-                <p className="mt-1 text-[15px] leading-7 text-slate-200">{item.description}</p>
-              )}
-              {game && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    openGameModal(dynastyId, game.gameId, seasonId);
-                  }}
-                  className="mt-1 text-[15px] leading-7 text-slate-300 transition hover:text-[var(--team-secondary)]"
-                >
-                  {gameSentence(game)}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            </>
+          }
+        />
 
         {/* The working panel — only while editing, which is also the only time
             the zoom control is on the photo. */}

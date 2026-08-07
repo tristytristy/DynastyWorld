@@ -2,7 +2,7 @@ import { getDb, persist } from './init';
 import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
 import { getRoster } from './getRoster';
 import { getSchedule } from './getSchedule';
-import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer } from '../shared/types';
+import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer, ScheduleGame } from '../shared/types';
 import type { MediaLook } from '../shared/mediaLook';
 
 /** Resolved display shape minus the absolute path — the media IPC layer adds the path (it owns the on-disk library location; see withPath in src/main/ipc/media.ts). */
@@ -131,8 +131,11 @@ function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[]
     const schedule = scheduleBySeason.get(item.seasonId) ?? undefined;
 
     let gameLabel: string | null = null;
+    // The game itself travels too — the shared plate writes its own sentence and
+    // resolves the occasion mark from these fields (see MediaItemResolved.game).
+    let game: ScheduleGame | null = null;
     if (item.gameId !== null) {
-      const game = schedule?.games.find((g) => g.gameId === item.gameId);
+      game = schedule?.games.find((g) => g.gameId === item.gameId) ?? null;
       if (game) {
         const score =
           game.teamScore !== null && game.opponentScore !== null
@@ -151,11 +154,12 @@ function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[]
             lastName: player.lastName,
             position: player.position,
             portraitAssetName: player.portraitAssetName,
+            jerseyNumber: player.jerseyNumber,
           }
-        : { playerId, firstName: 'Player', lastName: `#${playerId}`, position: '', portraitAssetName: null };
+        : { playerId, firstName: 'Player', lastName: `#${playerId}`, position: '', portraitAssetName: null, jerseyNumber: 0 };
     });
 
-    return { ...item, gameLabel, taggedPlayers };
+    return { ...item, gameLabel, taggedPlayers, game };
   });
 }
 

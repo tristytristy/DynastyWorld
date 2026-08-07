@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MediaFraming, MediaItemResolved } from '../../../shared/types';
-import { PlayerPortrait } from './PlayerPortrait';
 import { usePlayerModal } from '../../data/PlayerModalProvider';
 import { useGameModal } from '../../data/GameModalProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { ModalOverlay } from './ModalOverlay';
-import { ModalCloseButton } from './ModalCloseButton';
-import { ZoomableImage, framingTransform } from './ZoomableImage';
+import { MediaPlate, PLATE_CHROME_BUTTON } from './MediaPlate';
+import { framingTransform } from './ZoomableImage';
 
 /**
  * Absolute on-disk path → a URL the (file://-origin) renderer can load. Shared
@@ -52,18 +52,18 @@ export function MediaGallery({
 }) {
   const { openPlayerModal } = usePlayerModal();
   const { openGameModal } = useGameModal();
+  const { appearance } = useTheme();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  // Framings saved from THIS gallery, overlaid on the fetched items. The parent
-  // owns `items` and doesn't refetch on a crop, so without this the tile behind
-  // the viewer would keep the old crop until the page was revisited.
-  const [framings, setFramings] = useState<Record<number, MediaFraming | null>>({});
-  const framingFor = (media: MediaItemResolved): MediaFraming | null =>
-    media.id in framings ? framings[media.id] : media.framing;
-
-  function saveFraming(id: number, framing: MediaFraming | null) {
-    void window.api.media.setFraming(id, framing);
-    setFramings((prev) => ({ ...prev, [id]: framing }));
-  }
+  /*
+    FRAMING IS NO LONGER EDITED HERE. This gallery used to offer a crop, and
+    kept a local overlay of saved framings because the parent owns `items` and
+    doesn't refetch after one. Adopting the shared plate (see MediaPlate) made
+    it read-only — the same call the plate's own note makes: an item's game,
+    tags and now its crop are managed on the Media page of its season, and a
+    viewer reached from a player's profile is not that place. Saved framings are
+    still SHOWN, exactly as saved.
+  */
+  const framingFor = (media: MediaItemResolved): MediaFraming | null => media.framing;
 
   const item = lightboxIndex !== null ? items[lightboxIndex] : undefined;
 
@@ -89,9 +89,6 @@ export function MediaGallery({
     document.addEventListener('keydown', handleKeys);
     return () => document.removeEventListener('keydown', handleKeys);
   }, [lightboxIndex, canGoPrevious, canGoNext]);
-
-  const navButtonClass =
-    'border border-slate-300/80 bg-white/85 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
 
   return (
     <>
@@ -150,113 +147,66 @@ export function MediaGallery({
             role="dialog"
             aria-modal="true"
             aria-label="Media viewer"
-            className="corner-cut flex max-h-full w-full max-w-6xl flex-col overflow-hidden modal-panel lg:flex-row"
+            className="corner-cut flex max-h-full w-full max-w-5xl flex-col overflow-hidden modal-panel"
           >
-            {/* overflow-hidden because a zoomed photo has to be clipped by
-                something, and the stage is what it lives in. */}
-            <div className="relative flex min-h-[16rem] flex-1 items-center justify-center overflow-hidden bg-slate-950 lg:min-h-[28rem]">
-              {item.mediaType === 'video' ? (
-                <video key={item.id} src={mediaFileUrl(item.absolutePath)} controls className="max-h-[70vh] max-w-full" />
-              ) : (
-                <ZoomableImage
-                  key={item.id}
-                  src={mediaFileUrl(item.absolutePath)}
-                  alt={item.description || 'Dynasty media'}
-                  saved={framingFor(item)}
-                  onSave={(framing) => saveFraming(item.id, framing)}
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => canGoPrevious && setLightboxIndex(lightboxIndex - 1)}
-                disabled={!canGoPrevious}
-                aria-label="Previous media"
-                title="Previous (←)"
-                className={`${navButtonClass} absolute left-3 top-1/2 -translate-y-1/2`}
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() => canGoNext && setLightboxIndex(lightboxIndex + 1)}
-                disabled={!canGoNext}
-                aria-label="Next media"
-                title="Next (→)"
-                className={`${navButtonClass} absolute right-3 top-1/2 -translate-y-1/2`}
-              >
-                →
-              </button>
-              <span className="tnum absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-200">
-                {lightboxIndex + 1} / {items.length}
-              </span>
-            </div>
+            {/*
+              THE SAME PLATE THE MEDIA PAGE DRAWS (user direction 2026-08-07).
+              What stood here was a photo beside a 320px column of labelled boxes
+              — DESCRIPTION, GAME, PLAYERS — which was every fact the plate puts
+              in its caption, drawn as a form instead of as a label under a
+              print. Two surfaces, two designs, one subject.
 
-            <div className="flex w-full shrink-0 flex-col border-t border-slate-200/80 dark:border-white/10 lg:w-80 lg:border-l lg:border-t-0">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3 dark:border-white/10">
-                <p className="type-eyebrow text-slate-400 dark:text-slate-500">
-                  {item.mediaType === 'video' ? 'Video' : 'Photo'} details
-                </p>
-                <ModalCloseButton label="media viewer" onClick={() => setLightboxIndex(null)} />
-              </div>
-
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                {item.description && (
-                  <div>
-                    <p className="type-eyebrow text-slate-400 dark:text-slate-500">Description</p>
-                    <p className="mt-1.5 text-sm leading-6 text-slate-700 dark:text-slate-200">{item.description}</p>
-                  </div>
-                )}
-
-                {!hideGameChip && item.gameLabel && item.gameId !== null && (
-                  <div>
-                    <p className="type-eyebrow text-slate-400 dark:text-slate-500">Game</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLightboxIndex(null);
-                        openGameModal(dynastyId, item.gameId!, item.seasonId);
-                      }}
-                      className="mt-1.5 inline-block border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm font-semibold text-slate-800 transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5 dark:text-slate-100"
-                    >
-                      {item.gameLabel} →
-                    </button>
-                  </div>
-                )}
-
-                {item.taggedPlayers.filter((p) => p.playerId !== omitPlayerId).length > 0 && (
-                  <div>
-                    <p className="type-eyebrow text-slate-400 dark:text-slate-500">Players</p>
-                    <div className="mt-1.5 space-y-1">
-                      {item.taggedPlayers
-                        .filter((p) => p.playerId !== omitPlayerId)
-                        .map((player) => (
-                          <button
-                            key={player.playerId}
-                            type="button"
-                            onClick={() => {
-                              setLightboxIndex(null);
-                              openPlayerModal(dynastyId, player.playerId, item.seasonId);
-                            }}
-                            className="flex w-full items-center gap-2.5 border border-slate-200/80 bg-slate-50/85 px-2.5 py-1.5 text-left transition hover:border-[var(--team-primary)] dark:border-slate-800 dark:bg-white/5"
-                          >
-                            <PlayerPortrait player={player} size="sm" className="!h-7 !w-7" />
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {player.firstName} {player.lastName}
-                            </span>
-                            {player.position && (
-                              <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">{player.position}</span>
-                            )}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                <p className="border-t border-slate-200/60 pt-3 text-xs text-slate-400 dark:border-slate-800/60 dark:text-slate-500">
-                  Manage this item (game, tags, description) on the Media page of its season.
-                </p>
-              </div>
-            </div>
+              READ-ONLY, which is the honest difference between the surfaces
+              rather than a second design: this gallery is reached from a
+              player's profile or a game's page, where an item's game and tags
+              are managed somewhere else entirely. So it passes no `actions`
+              beyond Close, and framing/treatment are shown as saved. The note
+              telling the reader where to manage it sits under the plate.
+            */}
+            <MediaPlate
+              key={item.id}
+              src={mediaFileUrl(item.absolutePath)}
+              mediaType={item.mediaType}
+              description={item.description}
+              framing={framingFor(item)}
+              look={item.look}
+              taggedPlayers={item.taggedPlayers.map((p) => ({
+                id: p.playerId,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                jerseyNumber: p.jerseyNumber,
+              }))}
+              omitPlayerId={omitPlayerId}
+              game={hideGameChip ? null : item.game}
+              teamName={item.game?.teamName ?? null}
+              appearance={appearance}
+              index={lightboxIndex}
+              total={items.length}
+              onPrevious={() => setLightboxIndex(lightboxIndex - 1)}
+              onNext={() => setLightboxIndex(lightboxIndex + 1)}
+              onOpenPlayer={(playerId) => {
+                setLightboxIndex(null);
+                openPlayerModal(dynastyId, playerId, item.seasonId);
+              }}
+              onOpenGame={(gameId) => {
+                setLightboxIndex(null);
+                openGameModal(dynastyId, gameId, item.seasonId);
+              }}
+              actions={
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(null)}
+                  aria-label="Close media viewer"
+                  title="Close (Esc)"
+                  className={PLATE_CHROME_BUTTON}
+                >
+                  ✕
+                </button>
+              }
+            />
+            <p className="shrink-0 border-t border-white/10 bg-slate-950 px-4 py-2.5 text-center text-xs text-slate-500">
+              Manage this item (game, tags, description) on the Media page of its season.
+            </p>
           </div>
         </ModalOverlay>,
         document.body,
