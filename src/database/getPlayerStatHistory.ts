@@ -1,3 +1,4 @@
+import type { OffensiveStatLine, DefensiveStatLine } from '../extractors/extract-stats';
 import { FCS_POOL_TEAM_INDEX } from '../shared/fcsPool';
 import { getSeasonsByDynasty, getSnapshot } from './helpers';
 import { findSamePlayer } from '../shared/playerIdentity';
@@ -71,6 +72,18 @@ export function getPlayerStatHistory(
     // identity ever has to survive an id change too.
     const line = league?.stats.find((entry) => entry.playerId === player.id);
     if (!line?.season) continue;
+    /*
+      Linemen now carry a stat line of their own (pancakes, sacks allowed) — see
+      extract-stats.ts. This history renders the offense/defense box score and
+      has no row for either, so an 'oline' entry is skipped rather than forced
+      into a shape it doesn't fit. Their numbers surface on the Statistics
+      leaderboards instead.
+    */
+    if (line.category === 'oline') continue;
+    // The guard above is the narrowing — `category` and `season` are separate
+    // fields, so TypeScript can't infer it for us without making the payload a
+    // discriminated union, which would ripple much further than this.
+    const seasonLine = line.season as OffensiveStatLine | DefensiveStatLine;
 
     out.push({
       seasonYear: season.seasonYear,
@@ -80,7 +93,7 @@ export function getPlayerStatHistory(
       schoolYear: player.schoolYear ?? null,
       position: player.position ?? null,
       category: line.category,
-      line: line.season,
+      line: seasonLine,
     });
   }
 

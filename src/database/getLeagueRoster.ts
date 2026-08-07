@@ -1,3 +1,5 @@
+import type { OffensiveStatLine, DefensiveStatLine } from '../extractors/extract-stats';
+import type { LeagueSeasonStat } from '../extractors/extract-league-roster';
 import { getDynastyById, getSeasonById, getSeasonsByDynasty, getSnapshot, resolveSeasonHeadCoach } from './helpers';
 import { conferenceChampionshipWeek } from '../shared/championshipWeek';
 import { getSeasonGameContext } from './gameContext';
@@ -32,6 +34,26 @@ function resolveSeasonId(dynastyId: string, seasonId?: number): number | undefin
  * tracked leaguewide.) Returns the same SeasonOverview shape so one render path
  * serves both.
  */
+/**
+ * A league-roster stat cell, or null for a lineman.
+ *
+ * Linemen carry their own line now (pancakes, sacks allowed — see
+ * extract-stats.ts), and this column renders the offense/defense box score,
+ * which has no place to put one. Null is the same thing the roster showed
+ * before linemen had stats at all, so nothing regresses; their numbers appear
+ * on the Statistics leaderboards.
+ */
+function leagueSeasonStat(
+  stat: LeagueSeasonStat | undefined,
+): { playerId: number; category: 'offense' | 'defense'; season: OffensiveStatLine | DefensiveStatLine | null } | null {
+  if (!stat || stat.category === 'oline') return null;
+  return {
+    playerId: stat.playerId,
+    category: stat.category,
+    season: stat.season as OffensiveStatLine | DefensiveStatLine | null,
+  };
+}
+
 export function getLeagueTeamOverview(
   dynastyId: string,
   teamIndex: number,
@@ -178,7 +200,7 @@ export function getLeagueTeamRoster(dynastyId: string, teamIndex: number, season
   const statByPlayer = new Map(league.stats.map((s) => [s.playerId, s]));
   const players = league.players
     .filter((p) => p.teamIndex === teamIndex)
-    .map((p) => ({ ...p, seasonStat: statByPlayer.get(p.id) ?? null }));
+    .map((p) => ({ ...p, seasonStat: leagueSeasonStat(statByPlayer.get(p.id)) }));
 
   return { teamIndex, displayName, seasonId: resolved, players };
 }
@@ -221,7 +243,7 @@ export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): Natio
       ...p,
       teamDisplayName: nameByIndex.get(p.teamIndex) as string,
       conferenceName: confByIndex.get(p.teamIndex) ?? null,
-      seasonStat: statByPlayer.get(p.id) ?? null,
+      seasonStat: leagueSeasonStat(statByPlayer.get(p.id)),
     }));
 }
 

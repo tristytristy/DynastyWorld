@@ -67,14 +67,27 @@ export interface DefensiveStatLine {
   puntReturnLongest: number;
 }
 
-export type StatCategory = 'offense' | 'defense';
+/**
+ * Linemen's own box score. Kept apart from offense/defense because it is a
+ * different table with four columns, not a variant of either — a guard has no
+ * rushing line to sit alongside.
+ */
+export interface OLineStatLine {
+  gamesPlayed: number;
+  gamesStarted: number;
+  /** OLINEPANCAKES — the one counting stat the position actually gets credited for. */
+  pancakes: number;
+  sacksAllowed: number;
+}
+
+export type StatCategory = 'offense' | 'defense' | 'oline';
 
 export interface PlayerStatsData {
   /** Matches RosterPlayerData.id (PresentationId). */
   playerId: number;
   category: StatCategory;
-  career: OffensiveStatLine | DefensiveStatLine | null;
-  season: OffensiveStatLine | DefensiveStatLine | null;
+  career: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null;
+  season: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null;
 }
 
 const PLAYER_FIELDS = ['PresentationId', 'TeamIndex', 'CareerStats', 'SeasonStats'];
@@ -95,12 +108,25 @@ const PLAYER_FIELDS = ['PresentationId', 'TeamIndex', 'CareerStats', 'SeasonStat
 export function categoryFromTableName(name: string): StatCategory | undefined {
   if (name === 'CareerOffensiveStats' || name === 'CareerOffensiveKPReturnStats') return 'offense';
   if (name === 'CareerDefensiveStats' || name === 'CareerDefensiveKPReturnStats') return 'defense';
+  // Linemen resolve to their own table. Previously unrecognised, so every
+  // offensive lineman was dropped from stats entirely — which is why pancakes
+  // could not be shown anywhere.
+  if (name === 'CareerOLineStats') return 'oline';
   return undefined;
 }
 
 /** True only for records resolved from a *KPReturn table variant — the plain offense/defense tables have no KRETATTEMPTS column at all. */
 function hasReturnFields(r: FranchiseRecord): boolean {
   return 'KRETATTEMPTS' in r.fields;
+}
+
+function mapOLineLine(r: FranchiseRecord): OLineStatLine {
+  return {
+    gamesPlayed: Number(r.GAMESPLAYED),
+    gamesStarted: Number(r.GAMESSTARTED),
+    pancakes: Number(r.OLINEPANCAKES),
+    sacksAllowed: Number(r.OLINESACKSALLOWED),
+  };
 }
 
 function mapOffensiveLine(r: FranchiseRecord): OffensiveStatLine {
@@ -161,8 +187,13 @@ function mapDefensiveLine(r: FranchiseRecord): DefensiveStatLine {
   };
 }
 
-export function mapLineForCategory(category: StatCategory, r: FranchiseRecord): OffensiveStatLine | DefensiveStatLine {
-  return category === 'offense' ? mapOffensiveLine(r) : mapDefensiveLine(r);
+export function mapLineForCategory(
+  category: StatCategory,
+  r: FranchiseRecord,
+): OffensiveStatLine | DefensiveStatLine | OLineStatLine {
+  if (category === 'offense') return mapOffensiveLine(r);
+  if (category === 'oline') return mapOLineLine(r);
+  return mapDefensiveLine(r);
 }
 
 export async function extractStats(
@@ -187,6 +218,8 @@ export async function extractStats(
       'CareerDefensiveKPReturnStats',
       'SeasonOffensiveKPReturnStats',
       'SeasonDefensiveKPReturnStats',
+      'CareerOLineStats',
+      'SeasonOLineStats',
     ].map((name) => preloadAllInstances(franchise, name)),
   );
 
@@ -214,7 +247,7 @@ export async function extractStats(
     // 2026 season and read as current). No matching slot now honestly means
     // "no stats this season yet" (season: null), the same principle as the
     // schedule extractor's own year filter.
-    let season: OffensiveStatLine | DefensiveStatLine | null = null;
+    let season: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null = null;
     const seasonRow = resolveReferenceWithTable(franchise, player, 'SeasonStats');
     if (seasonRow) {
       let currentSlot: FranchiseRecord | undefined;

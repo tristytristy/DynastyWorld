@@ -628,9 +628,18 @@ export interface DefensiveStatLine {
 
 export interface PlayerStats {
   playerId: number;
-  category: 'offense' | 'defense';
-  career: OffensiveStatLine | DefensiveStatLine | null;
-  season: OffensiveStatLine | DefensiveStatLine | null;
+  /** 'oline' arrived with pancakes — linemen resolve to their own save table and were previously dropped entirely. */
+  category: 'offense' | 'defense' | 'oline';
+  career: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null;
+  season: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null;
+}
+
+/** Linemen's own box score — pancakes and sacks allowed. See extract-stats.ts. */
+export interface OLineStatLine {
+  gamesPlayed: number;
+  gamesStarted: number;
+  pancakes: number;
+  sacksAllowed: number;
 }
 
 /** Kicking/punting — a genuinely separate stat category (own save table, CareerKickingStats/SeasonKickingStats), not merged into the offense/defense binary. See extract-kicking.ts. */

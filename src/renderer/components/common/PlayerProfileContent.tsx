@@ -34,6 +34,7 @@ import type {
   MediaItemResolved,
   OffensiveGameLine,
   OffensiveStatLine,
+  OLineStatLine,
   PlayerDevelopmentSeason,
   PlayerStatSeason,
   PlayerEditFields,
@@ -253,9 +254,17 @@ function StatLineSection({
   emptyMessage,
 }: {
   title: string;
-  category: 'offense' | 'defense' | undefined;
+  /*
+    'oline' reaches here now that linemen resolve to their own save table (they
+    used to be dropped from stats entirely). This section renders the offense
+    and defense box scores; a lineman's four columns are not one of those, so
+    they fall through to the empty message rather than being forced into a
+    layout that has no row for a pancake. Their numbers live on the Statistics
+    leaderboards instead.
+  */
+  category: 'offense' | 'defense' | 'oline' | undefined;
   position: string | null | undefined;
-  line: OffensiveStatLine | DefensiveStatLine | null | undefined;
+  line: OffensiveStatLine | DefensiveStatLine | OLineStatLine | null | undefined;
   emptyMessage: string;
 }) {
   if (!line || !category) {

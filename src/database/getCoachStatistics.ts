@@ -1,6 +1,11 @@
 import { getSnapshot } from './helpers';
 import { activeCoachId, coachSeasons } from './hallOfLegends';
-import type { PlayerStatsData, OffensiveStatLine, DefensiveStatLine } from '../extractors/extract-stats';
+import type {
+  PlayerStatsData,
+  OffensiveStatLine,
+  DefensiveStatLine,
+  OLineStatLine,
+} from '../extractors/extract-stats';
 import type { RosterPlayerData } from '../extractors/extract-roster';
 import type { TeamData } from '../extractors/extract-teams';
 import type {
@@ -51,11 +56,21 @@ const EMPTY_TOTALS: CoachStatTotals = {
   passDeflections: 0,
 };
 
-function isOffense(line: OffensiveStatLine | DefensiveStatLine): line is OffensiveStatLine {
+type AnyLine = OffensiveStatLine | DefensiveStatLine | OLineStatLine;
+
+function isOffense(line: AnyLine): line is OffensiveStatLine {
   return 'passYards' in line;
 }
 
-function addLine(into: CoachStatTotals, line: OffensiveStatLine | DefensiveStatLine): void {
+function isOLine(line: AnyLine): line is OLineStatLine {
+  return 'pancakes' in line;
+}
+
+function addLine(into: CoachStatTotals, line: AnyLine): void {
+  // Linemen's four columns have no home in these offense/defense totals — they
+  // are counted on the Statistics leaderboards instead, where pancakes get a
+  // category of their own.
+  if (isOLine(line)) return;
   if (isOffense(line)) {
     into.passYards += line.passYards;
     into.passTDs += line.passTDs;
