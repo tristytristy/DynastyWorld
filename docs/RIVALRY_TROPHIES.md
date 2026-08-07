@@ -32,10 +32,11 @@ a file with no unique art is a label for something that doesn't exist yet.
 
 ---
 
-## Renamed (89)
+## Renamed (90)
 
 | File | Schools | |
 |---|---|---|
+| `rvlt-BattleofI75-BGSU-TOL.webp` | Bowling Green / Toledo | added by the game's 2026-08-06 patch |
 | `rvlt-Bell-USM-TULN.webp` | Southern Miss / Tulane |  |
 | `rvlt-Belt-USA-TROY.webp` | South Alabama / Troy |  |
 | `rvlt-BenSchwartzwalder-SYR-WVU.webp` | Syracuse / West Virginia |  |
@@ -154,13 +155,12 @@ Cannon (Illinois/Purdue) and is almost certainly a duplicate name for it.
 
 ---
 
-## Trophies the save knows about with no art in the pack (9)
+## Trophies the save knows about with no art in the pack (8)
 
 These rivalries carry a `Trophy` reference but no file matches them. Worth
 knowing before assuming a lookup always resolves.
 
 - Arkansas / Missouri (Battle Line Rivalry)
-- Bowling Green / Toledo (Battle of I-75)
 - Washington / Washington St. (Apple Cup)
 - Houston / Rice (Bayou Bucket Classic)
 - Oklahoma / Oklahoma State (Bedlam)

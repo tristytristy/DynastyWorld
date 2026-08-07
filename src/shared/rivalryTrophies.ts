@@ -14,6 +14,10 @@
 
 /** [team A, team B, asset file stem] — display names exactly as the save gives them. */
 const RIVALRY_TROPHIES: [string, string, string][] = [
+  // Shipped with the game's 2026-08-06 patch. The save has always carried this
+  // Trophy reference — it was one of the nine listed in docs/RIVALRY_TROPHIES.md
+  // as having no art in the pack, so the pairing resolved to nothing.
+  ['Bowling Green', 'Toledo', 'rvlt-BattleofI75-BGSU-TOL'],
   ['Southern Miss', 'Tulane', 'rvlt-Bell-USM-TULN'],
   ['South Alabama', 'Troy', 'rvlt-Belt-USA-TROY'],
   ['Syracuse', 'West Virginia', 'rvlt-BenSchwartzwalder-SYR-WVU'],

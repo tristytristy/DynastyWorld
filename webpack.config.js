@@ -217,6 +217,14 @@ const rendererConfig = {
               '**/public/assets/Screenshots/**',
               '**/public/assets/coaches_added/**',
               '**/public/assets/NFL/**',
+              // Drop-folder for the game's 2026-08-06 patch art, already
+              // consumed: nine of its ten trophies were byte-identical to what
+              // rivalrytophy/ ships and the tenth is now installed there under
+              // the app's own naming. Needs excluding where coaches_added does
+              // not, because `rivalry/` travels INSIDE the app bundle — left in,
+              // it would ship a second copy of nine files under names nothing
+              // reads.
+              '**/public/assets/rivalry/8-6patch/**',
             ],
           },
         },
