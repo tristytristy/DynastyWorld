@@ -11188,3 +11188,55 @@ Written as whole class strings rather than an interpolated
 `xl:grid-cols-${n}` — Tailwind scans source TEXT for class names, so a computed
 one is never generated and the grid would have silently fallen back to one
 column.
+
+---
+
+## Phase — Ship 4.4.0, and the patch art beside it (2026-08-07)
+
+User direction: release the non-asset version, then package the new assets as a
+separate install to publish by hand.
+
+**4.4.0, not 4.3.6.** Twenty-five commits since 4.3.5 — thirteen from today plus
+twelve that had never shipped (the coach Statistics tab, fifteen leaderboards,
+the Hall's record boards, O-line stats, the Score Summary tab, the updater's raw
+markup, the invisible team map). A coach gaining a career stat line and every
+program's rivalries being read for the first time is a minor bump by any reading.
+
+Gates before the tag, all clean: `tsc --noEmit`, `eslint`, and `check:refs`
+(36 build-input references resolve; the six skips are the gitignored image
+library, expected absent on a clean checkout).
+
+Built slim per the standing rule — `SLIM_INSTALLER=1 npx electron-builder`, NSIS
+only, no portable. All three updater assets are present and hyphenated:
+`DynastyOS-Setup-4.4.0.exe` (112.7 MB), its `.blockmap`, and a `latest.yml` whose
+sha512 and 118,219,704-byte size match the exe. The hyphenation is the thing that
+broke 4.2.0, so it is checked rather than assumed.
+
+Tagged `v4.4.0` LOCALLY only. The tag and the release are the user's to push —
+they publish from the web UI, and a tag pushed early is a tag the updater can
+find before the notes are ready.
+
+### The patch art ships as an add-on, not a rebuilt library
+
+The 2026-08-06 patch art splits across BOTH artifacts, which is easy to get
+wrong in either direction:
+
+- **The Battle of I-75 trophy needed nothing.** `rivalry/` is outside
+  `MEDIA_GLOBS`, so it travels inside the app — it already shipped in the 4.4.0
+  installer above.
+- **The twelve coach portraits did.** `coaches/` IS in `MEDIA_GLOBS`, so a slim
+  build strips them and no app update can deliver them.
+
+`build/patch-art-installer.nsi` ships those twelve alone: 190 KB of payload, 254
+KB compiled. Modelled on `polos-installer.nsi`, including the rule that matters —
+it claims `AssetsPath` only when nothing has set it, so running it on a machine
+with the full library cannot repoint the app at a folder holding twelve
+portraits and break every other image.
+
+Named files rather than `File /r coaches`, which would have shipped all ~500
+portraits and recreated most of the gigabyte the add-on exists to avoid. Payload
+size confirms it: 195,268 bytes against the twelve files' 195,220.
+
+**Still owed:** the full ~928 MB Content Library is now stale — a NEW install
+gets library v4 without these portraits and needs the add-on too. Folding them in
+means recutting the pack, which is the one thing to ask about first.
