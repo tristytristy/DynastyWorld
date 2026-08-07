@@ -87,7 +87,116 @@ const isTableDivider = (line: string) => /^\s*\|?[\s:-]*-[\s|:-]*\|?\s*$/.test(l
 const splitRow = (line: string) =>
   line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
 
+
+/*
+  GITHUB SOMETIMES HANDS US HTML, NOT MARKDOWN.
+
+  electron-updater's GitHub provider reads the releases ATOM FEED, and that
+  feed carries release notes already rendered to HTML. Fed to the Markdown
+  parser below they came out as literal text — users saw `<h1>DynastyOS
+  4.3.5</h1> <p>A maintenance release.` on the update card.
+
+  So HTML is parsed too, and parsed the same way for the same reason: into
+  React ELEMENTS, never innerHTML. DOMParser builds an INERT document — scripts
+  do not run, `<img onerror>` never fires, external references are not fetched —
+  and then only an allowlist of tags is converted. Anything else contributes its
+  text and nothing more, so an unknown or hostile tag degrades to the words
+  inside it rather than to markup.
+
+  Keep that property. The whole reason this file exists instead of a library is
+  that release notes arrive over the network into a privileged renderer.
+*/
+
+function looksLikeHtml(source: string): boolean {
+  // A markdown note can mention a tag in prose; a rendered one OPENS with markup.
+  return /<(p|h[1-6]|ul|ol|li|blockquote|pre|div|br)\b[^>]*>/i.test(source);
+}
+
+function htmlNodeToReact(node: Node, key: string): ReactNode {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+  const el = node as Element;
+  const tag = el.tagName.toUpperCase();
+  const kids = Array.from(el.childNodes).map((child, i) => htmlNodeToReact(child, `${key}-${i}`));
+
+  switch (tag) {
+    case 'BR':
+      return <br key={key} />;
+    case 'HR':
+      return <hr key={key} className="my-3 border-slate-200 dark:border-white/10" />;
+    case 'H1':
+    case 'H2':
+      return <p key={key} className="mt-3 font-semibold text-slate-950 first:mt-0 dark:text-white">{kids}</p>;
+    case 'H3':
+    case 'H4':
+    case 'H5':
+    case 'H6':
+      return <p key={key} className="mt-3 font-semibold text-slate-800 first:mt-0 dark:text-slate-100">{kids}</p>;
+    case 'STRONG':
+    case 'B':
+      return <strong key={key} className="font-semibold text-slate-900 dark:text-white">{kids}</strong>;
+    case 'EM':
+    case 'I':
+      return <em key={key}>{kids}</em>;
+    case 'CODE':
+      return <code key={key} className="rounded bg-slate-100 px-1 py-0.5 text-[0.85em] dark:bg-white/10">{kids}</code>;
+    case 'PRE':
+      return <pre key={key} className="mt-2 overflow-x-auto rounded bg-slate-100 p-2 text-xs dark:bg-white/10">{kids}</pre>;
+    case 'UL':
+      return <ul key={key} className="mt-2 list-disc space-y-1 pl-5">{kids}</ul>;
+    case 'OL':
+      return <ol key={key} className="mt-2 list-decimal space-y-1 pl-5">{kids}</ol>;
+    case 'LI':
+      return <li key={key}>{kids}</li>;
+    case 'BLOCKQUOTE':
+      return (
+        <blockquote key={key} className="mt-2 border-l-2 border-slate-300 pl-3 italic text-slate-500 dark:border-white/20 dark:text-slate-400">
+          {kids}
+        </blockquote>
+      );
+    case 'A': {
+      // Same scheme allowlist as the markdown path — javascript: never renders as a link.
+      const href = safeHref(el.getAttribute('href') ?? '');
+      return href ? (
+        <a key={key} href={href} target="_blank" rel="noreferrer" className="text-[var(--team-primary)] underline">
+          {kids}
+        </a>
+      ) : (
+        <span key={key}>{kids}</span>
+      );
+    }
+    case 'P':
+      return <p key={key} className="mt-2 first:mt-0">{kids}</p>;
+    /*
+      Dropped ENTIRELY, contents and all. These are the two tags whose text is
+      code rather than prose: the default branch below keeps an unknown tag's
+      words, which is right for a <span> and wrong for a <script> — the parse is
+      inert so nothing would run, but the source would be printed on the update
+      card as if it were part of the notes.
+    */
+    case 'SCRIPT':
+    case 'STYLE':
+    case 'IFRAME':
+    case 'OBJECT':
+      return null;
+    default:
+      // Unknown tag: keep the words, drop the element.
+      return <span key={key}>{kids}</span>;
+  }
+}
+
+function HtmlNotes({ source }: { source: string }) {
+  const doc = new DOMParser().parseFromString(source, 'text/html');
+  const nodes = Array.from(doc.body.childNodes).map((n, i) => htmlNodeToReact(n, `h${i}`));
+  return <>{nodes}</>;
+}
+
 export function Markdown({ source }: { source: string }) {
+  // Rendered HTML from the releases feed takes the HTML path; hand-written
+  // markdown takes the parser below. See looksLikeHtml.
+  if (looksLikeHtml(source)) return <HtmlNotes source={source} />;
+
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
   let i = 0;
