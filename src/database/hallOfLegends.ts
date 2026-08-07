@@ -1,3 +1,4 @@
+import { reconcileAutoLegends } from './legendAutoFill';
 import { getDb, persist } from './init';
 import { getDynastyById, getSnapshot } from './helpers';
 import { isCompatible } from '../shared/hallFormation';
@@ -228,7 +229,7 @@ export function getLegendStatus(dynastyId: string, playerId: number): LegendStat
   };
 }
 
-function snapshotFor(player: HallEligiblePlayer): LegendPlayerSnapshot {
+export function snapshotFor(player: HallEligiblePlayer): LegendPlayerSnapshot {
   return {
     name: `${player.firstName} ${player.lastName}`.trim(),
     position: player.position,
@@ -256,6 +257,22 @@ export function getCoachHall(dynastyId: string): CoachHall | undefined {
       careerLastYear: null,
       entries: [],
     };
+  }
+
+  /*
+    Restock the pool from the leaderboards before reading it.
+    
+    On the READ rather than only after a sync, so the pool is right the first
+    time someone opens the Hall after updating — waiting for their next sync
+    would show an empty Hall and look broken. reconcileAutoLegends diffs before
+    it writes and returns without touching the database when the pool already
+    matches, so the usual case costs a comparison. Never allowed to break the
+    page: a Hall that renders is worth more than one that is perfectly stocked.
+  */
+  try {
+    reconcileAutoLegends(dynastyId, coachId);
+  } catch {
+    // Pool stays as it was; the next open tries again.
   }
 
   const seasons = coachSeasons(dynastyId, coachId);
@@ -330,9 +347,13 @@ export function addLegend(dynastyId: string, coachId: number, playerId: number):
   const last = seasons[seasons.length - 1];
   getDb().run(
     `INSERT INTO coach_legends
-       (dynasty_id, coach_id, player_id, added_at, added_from_season_id, added_from_team_index, snapshot_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(dynasty_id, coach_id, player_id) DO UPDATE SET snapshot_json = excluded.snapshot_json`,
+       (dynasty_id, coach_id, player_id, added_at, added_from_season_id, added_from_team_index, snapshot_json, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'manual')
+     ON CONFLICT(dynasty_id, coach_id, player_id) DO UPDATE SET
+       snapshot_json = excluded.snapshot_json,
+       -- Adding someone the leaderboards had already put in the pool makes him
+       -- the user's, permanently: from here the auto-fill will not evict him.
+       source = 'manual'`,
     [
       dynastyId,
       coachId,
