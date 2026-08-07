@@ -18,6 +18,7 @@ import { useWatchlist } from '../data/useWatchlist';
 import { formatClassYearShort } from '../lib/recruitFormat';
 import type { ForceCommitResult, NationalRecruit } from '../../shared/types';
 import { ModalCloseButton } from '../components/common/ModalCloseButton';
+import { ModalOverlay } from '../components/common/ModalOverlay';
 
 /** A star toggle for the watchlist — filled when watching, hollow otherwise. */
 function WatchStar({ watched, onToggle, className = '' }: { watched: boolean; onToggle: () => void; className?: string }) {
@@ -50,7 +51,30 @@ const STAGE_STYLE: Record<string, { label: string; cls: string }> = {
   Battle: { label: 'Battle', cls: 'border-red-300/70 bg-red-100/80 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300' },
 };
 
-function StageBadge({ stage }: { stage: string }) {
+/**
+ * The funnel stage — except once he has signed, when the school he signed with
+ * replaces the word (user direction 2026-08-07).
+ *
+ * "Signed" is the least informative label on the page: at the end of a
+ * recruiting cycle nearly the whole pool reads Signed, so the badge stops
+ * distinguishing anybody. The mark answers the question the word only raises.
+ *
+ * FALLS BACK TO THE WORD when the school isn't known — a season synced before
+ * the national pool carried `signedTeamDisplayName`, or a signing the
+ * committed-players sweep couldn't resolve. Showing the badge is right there;
+ * a blank space or a generic mark would both claim more than we know.
+ */
+function StageBadge({ stage, signedTeamDisplayName }: { stage: string; signedTeamDisplayName?: string | null }) {
+  if (stage === 'Signed' && signedTeamDisplayName) {
+    return (
+      <span className="inline-flex items-center" title={`Signed with ${signedTeamDisplayName}`}>
+        <TeamLogo team={{ assetName: signedTeamDisplayName, label: signedTeamDisplayName }} size="sm" className="!h-6 !w-6" />
+        {/* The logo carries the meaning visually; this carries it to a screen
+            reader, which cannot read a crest. */}
+        <span className="sr-only">Signed with {signedTeamDisplayName}</span>
+      </span>
+    );
+  }
   const meta = STAGE_STYLE[stage] ?? { label: stage, cls: STAGE_STYLE.Top10.cls };
   return <span className={`inline-flex items-center border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${meta.cls}`}>{meta.label}</span>;
 }
@@ -160,7 +184,17 @@ function RecruitPanel({
   const weaknesses = sortedAthletic.slice(-2).reverse();
 
   return (
-    <SurfaceCard className="space-y-5">
+    /*
+      space-y-6, up from 5 (user report 2026-08-07: "PROSPECT and RECRUITING are
+      too high up and they are touching the ranking boxes"). They were touching
+      literally — measured at ZERO px, because SurfaceCard was swallowing this
+      className's spacing entirely (see splitChildSpacing there, fixed with it).
+      Six rather than back to five: every section here is headed by a small-caps
+      eyebrow sitting under a block of bordered tiles or dense rows, and the
+      extra step is what stops each label reading as a caption for the thing
+      above it.
+    */
+    <SurfaceCard className="space-y-6">
       {/* Hero */}
       <div className="flex items-start gap-3">
         <button type="button" onClick={() => onOpenFull(recruit)} className="shrink-0" title="Open full profile">
@@ -175,7 +209,7 @@ function RecruitPanel({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
             <span className="border border-slate-300/80 px-1.5 py-0.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">{recruit.position}</span>
             <Stars n={recruit.stars} />
-            <StageBadge stage={recruit.recruitStage} />
+            <StageBadge stage={recruit.recruitStage} signedTeamDisplayName={recruit.signedTeamDisplayName} />
             {recruit.gemBust === 'GEM' && <span className="border border-emerald-300/70 bg-emerald-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">Gem</span>}
             {recruit.onUserBoard && <span className="border border-[var(--team-primary)]/50 bg-[color:color-mix(in_srgb,var(--team-primary)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--team-accent-text)] dark:text-white">On board</span>}
           </div>
@@ -393,7 +427,14 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
   const [stars, setStars] = useState('');
   const [classYear, setClassYear] = useState('');
   const [homeState, setHomeState] = useState('');
-  const [stage, setStage] = useState('');
+  const [archetype, setArchetype] = useState('');
+  /*
+    THE PROSPECT PANEL FOLDS AWAY (user direction 2026-08-07), and the table
+    takes the width it leaves behind. Session-local rather than persisted: it
+    is a per-visit reading choice, like the profile modal's roster rail, not a
+    setting worth remembering across launches.
+  */
+  const [panelOpen, setPanelOpen] = useState(true);
   const [board, setBoard] = useState(boardOnly ? 'on' : ''); // '' = all, 'on' = on my board (checkbox)
   const [interestedOnly, setInterestedOnly] = useState(false); // recruits with the user's team in their top schools
   const [sortKey, setSortKey] = useState<SortKey>('nationalRank');
@@ -420,9 +461,18 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
       ...availablePositionGroups(list.map((r) => r.position)),
       classes: distinct(list.map((r) => r.classYear)),
       states: distinct(list.map((r) => r.homeState)),
-      stages: distinct(list.map((r) => r.recruitStage)),
+      /*
+        SCOPED TO THE POSITION FILTER when one is set. Archetypes are
+        position-specific ("Pocket Passer" belongs to nobody but a quarterback),
+        so the unscoped list is ~90 entries of which about six can ever match
+        what is on screen. Narrowing it turns the dropdown from a scroll into a
+        choice.
+      */
+      archetypes: distinct(
+        list.filter((r) => matchesPositionFilter(position, r.position)).map((r) => r.archetype),
+      ),
     };
-  }, [recruits]);
+  }, [recruits, position]);
 
   const filtered = useMemo(() => {
     const list = recruits ?? [];
@@ -433,7 +483,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
       if (stars && r.stars !== Number(stars)) return false;
       if (classYear && r.classYear !== classYear) return false;
       if (homeState && r.homeState !== homeState) return false;
-      if (stage && r.recruitStage !== stage) return false;
+      if (archetype && r.archetype !== archetype) return false;
       if (board === 'on' && !r.onUserBoard) return false;
       if (
         interestedOnly &&
@@ -480,7 +530,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
       return ((a[sortKey] as number) - (b[sortKey] as number)) * dir;
     });
     return result;
-  }, [recruits, search, position, stars, classYear, homeState, stage, board, interestedOnly, userTeamIndex, sortKey, sortDir, watchlistOnly, watchedIds, ovr]);
+  }, [recruits, search, position, stars, classYear, homeState, archetype, board, interestedOnly, userTeamIndex, sortKey, sortDir, watchlistOnly, watchedIds, ovr]);
 
   const selected = useMemo(() => (recruits ?? []).find((r) => r.playerId === selectedId) ?? null, [recruits, selectedId]);
 
@@ -512,7 +562,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     setStars('');
     setClassYear('');
     setHomeState('');
-    setStage('');
+    setArchetype('');
     setBoard(boardOnly ? 'on' : ''); // keep the board scope on the My Board page
     setInterestedOnly(false);
   }
@@ -559,7 +609,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
     );
   }
 
-  const filtersActive = !!(search || position || stars || classYear || homeState || stage || (!boardOnly && board) || interestedOnly);
+  const filtersActive = !!(search || position || stars || classYear || homeState || archetype || (!boardOnly && board) || interestedOnly);
   const shown = filtered.slice(0, RENDER_CAP);
 
   const th = (key: SortKey, label: string, alignRight = false, hint?: string) => (
@@ -598,7 +648,9 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+      <div
+        className={`grid gap-5 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]' : 'xl:grid-cols-1'}`}
+      >
         {/* Filters + table */}
         <div className="space-y-3">
           {/* Search on its own full-width row, filters beneath it. */}
@@ -650,12 +702,12 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
               ]}
             />
             <Select
-              value={stage}
-              onChange={setStage}
-              ariaLabel="Filter by stage"
+              value={archetype}
+              onChange={setArchetype}
+              ariaLabel="Filter by archetype"
               options={[
-                { value: '', label: 'All stages' },
-                ...options.stages.map((s) => ({ value: s, label: STAGE_STYLE[s]?.label ?? s })),
+                { value: '', label: 'All archetypes' },
+                ...options.archetypes.map((a) => ({ value: a, label: a })),
               ]}
             />
             {!boardOnly && (
@@ -675,11 +727,28 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
             )}
           </div>
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''}
-            {boardOnly ? ' on your board' : watchlistOnly ? ' on your watchlist' : ` (${dash.total.toLocaleString()} total)`}
-            {filtered.length > RENDER_CAP && ' — narrow with filters to see more'}
-          </p>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()} {filtersActive ? `filtered` : ''}
+              {boardOnly ? ' on your board' : watchlistOnly ? ' on your watchlist' : ` (${dash.total.toLocaleString()} total)`}
+              {filtered.length > RENDER_CAP && ' — narrow with filters to see more'}
+            </p>
+            {/*
+              Above the table, not on the panel — the control has to stay in the
+              same place in BOTH states, and a button that lives on the panel
+              disappears with it, leaving no way back. `xl:` only, because that
+              is the width at which the two are side by side; below it the panel
+              already stacks under the table and there is nothing to reclaim.
+            */}
+            <button
+              type="button"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-expanded={panelOpen}
+              className="hidden shrink-0 whitespace-nowrap border border-slate-200/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:border-[var(--team-primary)]/60 hover:text-slate-900 xl:inline-flex dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
+            >
+              {panelOpen ? 'Hide prospect panel' : 'Show prospect panel'}
+            </button>
+          </div>
 
           <SurfaceCard className="overflow-hidden p-0">
             <div className="max-h-[70vh] overflow-auto">
@@ -693,6 +762,10 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
                     {th('positionRank', 'Pos', true)}
                     {th('stateRank', 'St', true)}
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Class</th>
+                    {/* Beside Class rather than out at the far edge: archetype
+                        is part of WHO THE PLAYER IS, so it belongs next to the
+                        identity columns, not filed with hometown and pipeline. */}
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Archetype</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Town</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">State</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.14em]">Pipeline</th>
@@ -748,17 +821,18 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.positionRank || '—'}</td>
                         <td className="tnum px-3 py-2 text-right text-slate-500 dark:text-slate-400">{r.stateRank || '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{formatClassYearShort(r.classYear)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.archetype || '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.hometown}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{r.homeState}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-slate-500 dark:text-slate-400">{r.pipeline || '—'}</td>
-                        <td className="whitespace-nowrap px-3 py-2"><StageBadge stage={r.recruitStage} /></td>
+                        <td className="whitespace-nowrap px-3 py-2"><StageBadge stage={r.recruitStage} signedTeamDisplayName={r.signedTeamDisplayName} /></td>
                         <td className="tnum px-3 py-2 text-right text-slate-600 dark:text-slate-300">{r.commitScore || '—'}</td>
                         <td className="tnum px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatNil(r.baseNilValue)}</td>
                       </tr>
                     );
                   })}
                   {shown.length === 0 && (
-                    <tr><td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                    <tr><td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
                       {watchlistOnly && watchlist.count === 0
                         ? 'Your watchlist is empty — add recruits with the ☆ star on any prospect in National Recruits (or the checkbox in a prospect’s panel).'
                         : 'No recruits match these filters.'}
@@ -770,7 +844,9 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
           </SurfaceCard>
         </div>
 
-        {/* Profile panel */}
+        {/* Profile panel — unmounted when collapsed rather than hidden, so the
+            grid genuinely reflows to one column and the table takes the width. */}
+        {panelOpen && (
         <div className="xl:sticky xl:top-4 xl:self-start">
           <RecruitPanel
             recruit={selected}
@@ -788,6 +864,7 @@ export function NationalRecruits({ boardOnly = false, watchlistOnly = false }: {
             onForceCommit={setForceCommitRecruit}
           />
         </div>
+        )}
       </div>
 
       {pendingUnlock &&
@@ -915,8 +992,25 @@ function RecruitInfluenceModal({
     recruit.topSchools.find((s) => s.teamIndex === idx)?.teamName ??
     `Team ${idx}`;
 
+  /*
+    ModalOverlay, NOT a hand-rolled `fixed inset-0 z-[120]` (user report
+    2026-08-07: "none of the dropdowns work here").
+
+    THE Z-INDEX WAS THE BUG. Every Select portals its option panel to <body> and
+    takes its depth from `useModalLayer` — the app's open-order stack, which
+    starts at 100 and steps by 10. Opened as the only overlay, the panel claimed
+    z-110 and this modal was hardcoded at z-120, so all eleven dropdowns opened
+    BEHIND it: the trigger flipped its chevron and nothing appeared, which reads
+    exactly like a dead control.
+
+    Joining the stack is the fix and it is the one the Select's own comment
+    anticipated ("the whole reason the editors' selects will work when they're
+    converted"). The modal now claims a layer on open and a Select inside it
+    claims the NEXT one, so the dropdown is above its own modal by construction
+    rather than by two numbers agreeing.
+  */
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+    <ModalOverlay className="fixed inset-0 flex items-center justify-center p-4">
       <div className="modal-scrim absolute inset-0" onClick={() => !saving && onClose()} aria-hidden="true" />
       <div className="corner-cut relative flex max-h-[88vh] w-full max-w-lg flex-col border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 p-5 dark:border-white/10">
@@ -1015,7 +1109,7 @@ function RecruitInfluenceModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

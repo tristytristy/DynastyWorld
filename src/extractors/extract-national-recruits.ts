@@ -8,6 +8,7 @@ import {
 } from './lib/franchise';
 import { PLAYER_FIELDS } from './lib/playerFields';
 import { dealbreakerLabel, idealPitchLabel } from '../shared/recruitPreferences';
+import { buildSignedDestinationMap } from './extract-recruits';
 
 /**
  * One school pursuing a recruit, from the recruit's own top-schools list
@@ -75,6 +76,24 @@ export interface NationalRecruitData {
   };
   /** Up to 10 pursuing schools, sorted by influence desc. */
   topSchools: NationalRecruitSchool[];
+  /**
+   * Where this prospect actually signed, once `recruitStage === 'Signed'`;
+   * null while he is still undecided.
+   *
+   * NOT DERIVABLE FROM ANYTHING ON THE RECRUIT. Confirmed directly against a
+   * real completed-season save: the `Recruit` row has 15 fields and not one of
+   * them names a team, and `Player.TeamIndex` stays at the 255 sentinel for all
+   * 4,101 prospects — Signed, Top3, Battle alike. The only record of a
+   * signing is on the RECEIVING END, in each team's own `CommittedPlayers`
+   * list, which is what `buildSignedDestinationMap` walks (shared with
+   * extract-recruits.ts rather than reimplemented, so the board and the
+   * national pool can never disagree about where somebody went).
+   *
+   * Hand this straight to `TeamLogo`'s `assetName` — despite that prop's name,
+   * the logo lookup is keyed by normalized DISPLAY name, not the save's raw
+   * `Team.AssetName`.
+   */
+  signedTeamDisplayName: string | null;
 }
 
 const WEIGHT_OFFSET = 160;
@@ -99,6 +118,7 @@ function mapRecruit(
   recruit: FranchiseRecord,
   player: FranchiseRecord,
   topSchools: NationalRecruitSchool[],
+  signedDestinations: Map<number, string>,
 ): NationalRecruitData {
   return {
     playerId: Number(player.PresentationId),
@@ -138,6 +158,7 @@ function mapRecruit(
       jumping: Number(player.JumpingRating),
     },
     topSchools,
+    signedTeamDisplayName: signedDestinations.get(Number(player.PresentationId)) ?? null,
   };
 }
 
@@ -170,7 +191,9 @@ function resolveTopSchools(
  */
 export async function extractNationalRecruits(franchise: OpenFranchise): Promise<NationalRecruitData[]> {
   const teamTable = getLargestTable(franchise, 'Team');
-  await teamTable.readRecords(['TeamIndex', 'DisplayName']);
+  // CommittedPlayers rides along with the identity fields — it is the list
+  // buildSignedDestinationMap reverses to answer "who did he sign with".
+  await teamTable.readRecords(['TeamIndex', 'DisplayName', 'CommittedPlayers']);
   const teamNameByIndex = new Map<number, string>();
   for (const t of nonEmpty(teamTable.records)) {
     if (t.DisplayName) teamNameByIndex.set(Number(t.TeamIndex), String(t.DisplayName));
@@ -187,13 +210,14 @@ export async function extractNationalRecruits(franchise: OpenFranchise): Promise
   ]);
 
   const recruitTable = getLargestTable(franchise, 'Recruit');
+  const signedDestinations = await buildSignedDestinationMap(franchise, teamTable);
 
   const results: NationalRecruitData[] = [];
   for (const recruit of nonEmpty(recruitTable.records)) {
     const player = resolveReferenceWithTable(franchise, recruit, 'Player');
     if (!player || !String(player.record.LastName || '').trim()) continue;
     const topSchools = resolveTopSchools(franchise, recruit, teamNameByIndex);
-    results.push(mapRecruit(recruit, player.record, topSchools));
+    results.push(mapRecruit(recruit, player.record, topSchools, signedDestinations));
   }
   return results;
 }

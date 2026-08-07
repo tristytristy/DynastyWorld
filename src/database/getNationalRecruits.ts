@@ -20,8 +20,20 @@ export function getNationalRecruits(dynastyId: string, seasonId?: number): Natio
   const recruits = getSnapshot<NationalRecruitData[]>(season.id, 'nationalRecruits');
   if (!recruits) return undefined;
 
-  const board = getSnapshot<{ playerId: number }[]>(season.id, 'recruits') ?? [];
+  const board = getSnapshot<{ playerId: number; signedTeamDisplayName?: string | null }[]>(season.id, 'recruits') ?? [];
   const boardIds = new Set(board.map((r) => r.playerId));
+  /*
+    THE BOARD AS A BACKFILL. `signedTeamDisplayName` reached the national pool
+    later than it reached the board, so a season synced before that carries the
+    school for the ~35 prospects the user was recruiting and for nobody else.
+    Reading across recovers exactly those without a re-sync — which is the set
+    the user cares most about anyway, since it is their own signing class.
+    Everyone else falls back to the plain Signed badge until the season is
+    re-synced.
+  */
+  const signedByBoard = new Map(
+    board.filter((r) => r.signedTeamDisplayName).map((r) => [r.playerId, r.signedTeamDisplayName as string]),
+  );
 
   // Dealbreaker/pitch are REPAIRED ON READ, not just at extraction: the
   // snapshot stores the label, so every season synced before the wording maps
@@ -33,6 +45,9 @@ export function getNationalRecruits(dynastyId: string, seasonId?: number): Natio
     dealbreaker: normalizeRecruitPreference(r.dealbreaker),
     idealPitch: normalizeRecruitPreference(r.idealPitch),
     onUserBoard: boardIds.has(r.playerId),
+    // `?? null` matters: an old snapshot has no such key at all, and undefined
+    // would reach the UI as a missing prop rather than an honest "unknown".
+    signedTeamDisplayName: r.signedTeamDisplayName ?? signedByBoard.get(r.playerId) ?? null,
   }));
 }
 

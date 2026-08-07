@@ -101,11 +101,18 @@ export function RecruitingNewsPanel({
   // Ranked prospects only, best first. A national rank of 0 means unranked in
   // this pool, and sorting those to the top would put the least notable names
   // in the most prominent rows.
+  /*
+    A HUNDRED, not ten (user direction 2026-08-07). The panel body already
+    scrolls inside its fixed height, so the old cap only decided how far you
+    could scroll — and the national top 100 is the list people actually read
+    down. The rows are cheap: this is the same array the Recruit Hub renders 200
+    of.
+  */
   const topRecruits = useMemo(() => {
     return [...(nationalRecruits ?? [])]
       .filter((recruit) => recruit.nationalRank > 0)
       .sort((a, b) => a.nationalRank - b.nationalRank)
-      .slice(0, 10);
+      .slice(0, 100);
   }, [nationalRecruits]);
 
   function openRecruit(recruit: NationalRecruit, list: NationalRecruit[]) {
@@ -299,11 +306,13 @@ export function RecruitingNewsPanel({
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {summary.committedCount} committed · {recruiting.board.length} on the board
             </p>
+            {/* The WHOLE class, newest commitment first (user direction
+                2026-08-07) — same reasoning as the two lists above: the panel
+                scrolls, so a four-row cap only truncated it. */}
             {recruiting.timeline.length > 0 && (
               <div className="divide-y divide-[var(--surface-raised-border)] border-t border-[var(--surface-raised-border)] pt-1">
                 {[...recruiting.timeline]
                   .sort((a, b) => b.week - a.week)
-                  .slice(0, 4)
                   .map((entry) => (
                     <RowButton
                       key={entry.playerId}
