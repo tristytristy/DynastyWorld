@@ -1,4 +1,5 @@
 import type { ColumnDef } from '../components/common/StatisticsCategorySection';
+import { passerRating } from '../../shared/passerRating';
 import type { DefensiveStatLine, KickingStatLine, OffensiveStatLine } from '../../shared/types';
 
 /**
@@ -30,6 +31,18 @@ export const PASSING_COLUMNS: ColumnDef<OffensiveStatLine>[] = [
   { key: 'passTDs', label: 'TD', raw: (l) => l.passTDs, perGame: true },
   { key: 'passInts', label: 'Int', raw: (l) => l.passInts, perGame: true },
   { key: 'passLongest', label: 'Lng', raw: (l) => l.passLongest },
+  /*
+    NCAA passer rating, derived (see shared/passerRating.ts — the save stores no
+    such field). Last, the way a college box score prints it: it is the summary
+    of every column left of it, so it reads as the conclusion rather than as one
+    more counting stat.
+
+    NO `perGame`. It is already a rate — dividing it by games played would
+    produce a number that means nothing at all. `raw` returning null for a
+    player with no attempts is exactly what the column machinery wants; nobody
+    gets a rating for passes they never threw.
+  */
+  { key: 'passerRating', label: 'Rtg', raw: (l) => passerRating(l), format: oneDecimal },
 ];
 
 export const RUSHING_COLUMNS: ColumnDef<OffensiveStatLine>[] = [

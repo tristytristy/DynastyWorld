@@ -41,6 +41,7 @@ import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { gameImpactScore } from '../../shared/gameImpactScore';
+import { passerRating } from '../../shared/passerRating';
 import type {
   DefensiveGameLine,
   DefensiveStatLine,
@@ -652,6 +653,21 @@ export function Statistics() {
             label: 'Completion %',
             value: (l) => (l.passAttempts > 0 ? (100 * l.passCompletions) / l.passAttempts : 0),
             format: pctFormat,
+            qualifies: (l) => l.passAttempts >= 100,
+            qualifierLabel: 'min 100 att',
+          },
+          /*
+            THE ONE CARD THAT NEEDS A FLOOR. Passer rating caps nothing, so the
+            backup who threw one 40-yard touchdown rates 766 and would lead this
+            outright — which is why it takes the same 100-attempt qualifier the
+            completion-percentage card already uses. Failing rows drop from THIS
+            CARD ONLY; the Rtg column below still shows everyone's, because a
+            player's own number is never in doubt, only his claim to lead.
+          */
+          {
+            label: 'Passer Rating',
+            value: (l) => passerRating(l) ?? 0,
+            format: oneDecimal,
             qualifies: (l) => l.passAttempts >= 100,
             qualifierLabel: 'min 100 att',
           },
