@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeProvider';
 import { DEFAULT_GROUND_DARK, DEFAULT_GROUND_LIGHT } from '../../theme/themePreference';
 import { useRecruitingExperience } from '../../data/RecruitingExperienceProvider';
-import type { ColorMode } from '../../theme/themePreference';
 import type {
   AssetStatus,
   MediaLibraryMoveResult,
@@ -47,48 +46,6 @@ function SegmentButton({
       }`}
     >
       {label}
-    </button>
-  );
-}
-
-function ThemeModeButton({
-  label,
-  value,
-  description,
-  active,
-  isDark,
-  onSelect,
-}: {
-  label: string;
-  value: ColorMode;
-  description: string;
-  active: boolean;
-  isDark: boolean;
-  onSelect: (value: ColorMode) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      className={`w-full rounded-xl border p-4 text-left transition-all ${
-        active
-          ? isDark
-            ? 'border-[var(--team-primary)] bg-slate-950/96 shadow-[0_22px_50px_-36px_rgba(0,0,0,0.50)]'
-            : 'border-[var(--team-primary)] bg-white/88 shadow-[0_22px_50px_-36px_rgba(0,0,0,0.75)]'
-          : isDark
-            ? 'border-slate-800/85 bg-slate-950/82 hover:bg-slate-900/92'
-            : 'border-slate-200/90 bg-white/72 hover:bg-white/88'
-      }`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{label}</p>
-        {active && (
-          <span className="bg-[var(--team-primary)] px-2.5 py-1 type-eyebrow text-[var(--team-on-primary)]">
-            Active
-          </span>
-        )}
-      </div>
-      <p className={`mt-2 text-xs leading-5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{description}</p>
     </button>
   );
 }
@@ -150,7 +107,7 @@ function CollapsibleSection({
 }
 
 export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?: string; icon?: React.ReactNode } = {}) {
-  const { preference, appearance, setAppearance, setColorMode, setGround } = useTheme();
+  const { preference, appearance, setAppearance, setGround } = useTheme();
   const { ovr, athletic, experimentalSaveEditing, setExperimentalSaveEditing } = useRecruitingExperience();
   const revealAll = ovr.unlockedAll && athletic.unlockedAll;
   const setRevealAll = (value: boolean) => {
@@ -364,30 +321,6 @@ export function PreferencesMenu({ triggerClassName, icon }: { triggerClassName?:
                 >
                   Reset
                 </button>
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Theme Source" isDark={isDark} outerClass={sectionClass}>
-              <p className={`text-xs leading-5 ${subtleTextClass}`}>
-                Choose whether accent colors follow the active dynasty or the default app palette.
-              </p>
-              <div className="mt-3 space-y-3">
-                <ThemeModeButton
-                  label="Team Mode"
-                  value="team"
-                  description="Use the active dynasty's team colors in dynasty views while the shell keeps its shared structure."
-                  active={preference.colorMode === 'team'}
-                  isDark={isDark}
-                  onSelect={setColorMode}
-                />
-                <ThemeModeButton
-                  label="Default Mode"
-                  value="default"
-                  description="Keep the app on the built-in brand palette for a steady, neutral presentation."
-                  active={preference.colorMode === 'default'}
-                  isDark={isDark}
-                  onSelect={setColorMode}
-                />
               </div>
             </CollapsibleSection>
 

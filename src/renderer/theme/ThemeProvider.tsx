@@ -7,7 +7,6 @@ import {
   resolveThemeColors,
   saveThemePreference,
   type ActiveTeamColors,
-  type ColorMode,
   type ThemePreference,
 } from './themePreference';
 
@@ -27,17 +26,11 @@ function loadInitialAppearance(): Appearance {
 interface ThemeContextValue {
   preference: ThemePreference;
   appearance: Appearance;
-  setColorMode: (mode: ColorMode) => void;
-  setCustomColors: (primary: string, secondary: string) => void;
   /** The page ground for one appearance. Stored per theme; only the active one is applied. */
   setGround: (appearance: Appearance, color: string) => void;
   setAppearance: (appearance: Appearance) => void;
   toggleAppearance: () => void;
-  /**
-   * Resolves the priority chain for a given active team (or none). DynastyLayout
-   * passes the current dynasty's colors; team mode yields team colors while
-   * custom/default modes ignore the argument — the chain lives in one place.
-   */
+  /** The CSS vars for an active team (or none) — DynastyLayout passes the current dynasty's colors. */
   resolveColorVars: (team?: ActiveTeamColors | null) => TeamColorVars;
 }
 
@@ -82,18 +75,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     saveThemePreference(window.localStorage, preference);
-    // Baseline colors on the root: custom/default apply app-wide; team with no
-    // active dynasty falls back to the brand default (see resolveThemeColors).
-    // DynastyLayout overrides this on its own subtree with the active team.
-    applyColorVars(resolveThemeColors(preference));
   }, [preference]);
 
-  const setColorMode = useCallback((colorMode: ColorMode) => {
-    setPreference((prev) => ({ ...prev, colorMode }));
-  }, []);
-
-  const setCustomColors = useCallback((customPrimary: string, customSecondary: string) => {
-    setPreference((prev) => ({ ...prev, customPrimary, customSecondary }));
+  // Baseline colors on the root — the brand silver, since no dynasty is active
+  // at this level. DynastyLayout overrides them on its own subtree with the
+  // active team's, which is where team colour actually lands.
+  useEffect(() => {
+    applyColorVars(resolveThemeColors());
   }, []);
 
   /** Sets the ground for ONE appearance — light and dark are tuned separately. */
@@ -122,23 +110,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const resolveColorVars = useCallback(
-    (team?: ActiveTeamColors | null) => resolveThemeColors(preference, team),
-    [preference],
-  );
+  const resolveColorVars = useCallback((team?: ActiveTeamColors | null) => resolveThemeColors(team), []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       preference,
       appearance,
-      setColorMode,
-      setCustomColors,
       setGround,
       setAppearance,
       toggleAppearance,
       resolveColorVars,
     }),
-    [preference, appearance, setColorMode, setCustomColors, setGround, setAppearance, toggleAppearance, resolveColorVars],
+    [preference, appearance, setGround, setAppearance, toggleAppearance, resolveColorVars],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

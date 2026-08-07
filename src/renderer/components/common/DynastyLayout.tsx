@@ -6,13 +6,13 @@ import { GliderNav, gliderItemClass } from '../ui/GliderNav';
 import { Select, type SelectOption } from '../ui/Select';
 import { TeamLogo } from './TeamLogo';
 import { SelectedSeasonProvider, useSelectedSeason } from '../../data/SelectedSeasonProvider';
-import { ViewedTeamProvider } from '../../data/ViewedTeamProvider';
+import { ViewedTeamProvider, useViewedTeamOptional } from '../../data/ViewedTeamProvider';
 import { CommandPalette } from './CommandPalette';
 import { TEAM_TABS } from '../../pages/TeamHubLayout';
 import { NCAA_TABS } from '../../pages/NcaaHubLayout';
 import { RECRUIT_TABS } from '../../pages/RecruitHubLayout';
 import { TeamProfileModal } from './TeamProfileModal';
-import type { DynastyTheme } from '../../../shared/types';
+import type { DynastyTheme, TeamTheme } from '../../../shared/types';
 
 // A bare glyph — no border, no fill. It sits beside the season switcher, and a
 // second bordered box there read as a second control of equal weight when this is
@@ -242,7 +242,9 @@ function DynastyNav({ id }: { id: string }) {
 function SeasonThemedShell({ id }: { id: string }) {
   const { resolveColorVars } = useTheme();
   const { selectedSeasonId } = useSelectedSeason();
+  const viewed = useViewedTeamOptional();
   const [theme, setTheme] = useState<DynastyTheme | null | undefined>(undefined);
+  const [viewedTheme, setViewedTheme] = useState<TeamTheme | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,9 +256,42 @@ function SeasonThemedShell({ id }: { id: string }) {
     };
   }, [id, selectedSeasonId]);
 
+  /*
+    THE TEAM YOU ARE LOOKING AT WEARS ITS OWN COLOURS (user direction
+    2026-08-07: Baylor selected, UCLA blue on the table header).
+
+    The shell already repaints per SEASON so a coach's earlier school shows its
+    own colours; browsing another PROGRAM is the same idea one step further, and
+    it was the one case still painted in somebody else's. Applied here rather
+    than page by page because it is the shell that owns the vars — every table
+    header, chip and accent downstream follows without knowing this exists.
+
+    Cleared the moment the switcher goes back to My Team, so the user's own
+    colours are never left behind on their own dynasty.
+  */
+  const viewedTeamName =
+    viewed?.viewedTeamIndex != null
+      ? viewed.leagueTeams?.find((t) => t.teamIndex === viewed.viewedTeamIndex)?.displayName ?? null
+      : null;
+
+  useEffect(() => {
+    if (!viewedTeamName) {
+      setViewedTheme(null);
+      return;
+    }
+    let cancelled = false;
+    window.api.db.getTeamTheme(id, viewedTeamName, selectedSeasonId).then((result) => {
+      if (!cancelled) setViewedTheme(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, viewedTeamName, selectedSeasonId]);
+
+  const active = viewedTheme ?? theme;
   const colorVars = resolveColorVars({
-    primary: theme?.primaryColor ?? null,
-    secondary: theme?.secondaryColor ?? null,
+    primary: active?.primaryColor ?? null,
+    secondary: active?.secondaryColor ?? null,
   });
 
   return (
