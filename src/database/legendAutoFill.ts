@@ -6,7 +6,7 @@ import { getCoachLeaderboards } from './getCoachLeaderboards';
  * KEEPS THE LEGEND POOL STOCKED FROM THE LEADERBOARDS, WITHOUT EVER OVERRULING
  * THE USER.
  *
- * The top five in each statistical category are added to the pool for you, and
+ * The top three in each statistical category are added to the pool for you, and
  * leave again when someone overtakes them. That is a convenience, not an
  * opinion — so it is bounded by one rule: **the automation only ever owns what
  * nobody has touched.**
@@ -20,18 +20,23 @@ import { getCoachLeaderboards } from './getCoachLeaderboards';
  *     for the app to pull him out from under a slot he occupies because his
  *     receptions dropped to sixth.
  *
- * TOP FIVE OF EVERY BOARD, which is broader than it sounds and deliberately so:
- * fifteen categories means a return specialist and an offensive lineman get in
- * on their own merits rather than losing to yardage totals they can never post.
- * Overlap collapses it in practice — the same quarterback leads yards,
- * touchdowns and completion percentage.
+ * TOP THREE OF EVERY BOARD, across all fourteen — narrow per board, but broad
+ * across them, so a return specialist gets in on his own merits rather than
+ * losing to yardage totals he can never post. Overlap collapses it further in
+ * practice: the same quarterback leads passing yards, touchdowns and completion
+ * percentage, and counts once.
+ *
+ * Was five per board, which filled a three-season pool to 41 — enough that the
+ * shortlist stopped being short. Lowering it evicts the auto entries that no
+ * longer qualify on the next reconcile; anything the user added or slotted is
+ * untouched, which is the whole point of the source column.
  *
  * Idempotent, and silent when nothing changed: it computes the desired set,
  * diffs it against what is stored, and returns without writing if they match.
  * That is what makes it safe to call on a read.
  */
 
-const AUTO_TOP_N = 5;
+const AUTO_TOP_N = 3;
 
 export interface LegendAutoFillResult {
   added: number;
