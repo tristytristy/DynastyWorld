@@ -87,7 +87,10 @@ export function buildYearbookHtml(
 
   const postseason = historySeason?.postseasonSummary ?? historySeason?.bowlAppearance ?? null;
 
-  const userAwards = (awards?.leagueAwards ?? []).filter((a) => a.isUserTeam);
+  // HEISMAN excluded: it now travels with the marquee awards (see
+  // resolveLeagueAwards) but this page gives it its own headline row below, and
+  // printing both listed the same trophy twice.
+  const userAwards = (awards?.leagueAwards ?? []).filter((a) => a.isUserTeam && a.awardType !== 'HEISMAN');
   const allAmericans = (awards?.honorsRoster ?? []).filter((h) => h.isUserTeam);
   const heisman = awards?.heismanWinner ?? null;
   const weeklyHonorCount = awards?.weeklyHonors.length ?? 0;

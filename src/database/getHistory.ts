@@ -5,6 +5,7 @@ import { getGameHistorySeasons } from './gameHistorySeasons';
 import { getSeasonYearRow, isYearRowBetter } from './seasonYearRow';
 import { getDynastyById, getRankingHistory, getSeasonsByDynasty, getSnapshot } from './helpers';
 import { getSeasonGameContext } from './gameContext';
+import { resolveLeagueAwards } from './getAwards';
 import type { AwardsData } from '../extractors/extract-awards';
 import type { CoachData } from '../extractors/extract-coaches';
 import type { ChampionSummary, ConferenceChampionshipData, YearSummaryData } from '../extractors/extract-league-history';
@@ -277,7 +278,9 @@ export function getHistory(dynastyId: string): ProgramHistoryOverview | undefine
     }
 
     const awardsSnapshot = getSnapshot<AwardsData>(season.id, 'awards');
-    for (const award of awardsSnapshot?.leagueAwards ?? []) {
+    // Through resolveLeagueAwards, so the Heisman reaches the Trophy Room and
+    // the History page like every other national award — see its doc comment.
+    for (const award of awardsSnapshot ? resolveLeagueAwards(awardsSnapshot) : []) {
       if (award.teamDisplayName !== userTeam.displayName) continue;
       nationalAwards.push({
         seasonYear: season.seasonYear,

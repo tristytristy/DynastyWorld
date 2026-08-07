@@ -1,6 +1,6 @@
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { getLeaguePortraitMap } from './getLeaguePortraits';
-import type { AwardsData } from '../extractors/extract-awards';
+import type { AwardsData, LeagueAwardData } from '../extractors/extract-awards';
 import type { RosterPlayerData } from '../extractors/extract-roster';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GameData } from '../extractors/extract-schedule';
@@ -49,6 +49,74 @@ function countPreseasonHonors(roster: HonorRosterEntry[], teamName: string): Pre
 }
 
 /**
+ * HAS THIS SEASON'S SILVERWARE ACTUALLY BEEN HANDED OUT?
+ *
+ * The season's own postseason evidence: marquee awards, or EARNED (not
+ * preseason) All-America selections. Both are `PlayerAward` rows the game writes
+ * only once a season finishes, which makes them exactly the signal "has this
+ * been decided" — and there is no cleaner one, since the save carries no
+ * "awards done" flag of its own.
+ *
+ * ONE DEFINITION, TWO CONSUMERS, and that is the point of exporting it. It
+ * decides whether the Heisman is folded into the marquee awards below, AND
+ * whether the surfaces that show the Heisman call the man at rank 0 the WINNER
+ * or the LEADER. Those have to agree: a page that crowns a champion while his
+ * trophy is deliberately withheld from the trophy case is the app contradicting
+ * itself in two places at once.
+ */
+export function seasonAwardsDecided(awards: AwardsData): boolean {
+  return (
+    awards.leagueAwards.length > 0 ||
+    awards.leagueAllAmericans.some((a) => !isPreseasonHonor(a.awardType))
+  );
+}
+
+/**
+ * THE HEISMAN, FOLDED BACK IN WITH THE AWARDS IT BELONGS BESIDE.
+ *
+ * User report (2026-08-07): a UCLA player won the 2028 Heisman, and it appeared
+ * neither on his Journey nor in the Trophy Room. The award page showed it,
+ * because that page reads `heismanRanking` directly — and that ranking is the
+ * ONLY place the Heisman has ever lived. `extractAwards` keeps `leagueAwards` to
+ * `MARQUEE_PLAYER_TYPES`, derived from the curated `AWARD_DISPLAY_ORDER`, which
+ * deliberately omits HEISMAN so the Annual Awards *list* doesn't repeat the hero
+ * panel above it. Everything else in the app reads a player's and a program's
+ * honours from `leagueAwards`, so the biggest award in the sport was the one
+ * award that reached none of them.
+ *
+ * Derived at QUERY time, not fixed in the extractor, so every dynasty already in
+ * an archive is repaired without a re-sync — the ranking is in every awards
+ * snapshot already taken. A future sync that does carry a real HEISMAN row is
+ * handled too: an existing row always wins, and nothing is synthesised.
+ *
+ * THE RANKING IS A LIVE RACE, NOT A RESULT — rank 0 mid-season is the current
+ * leader, and writing him into a permanent Journey entry and a trophy case would
+ * invent an award nobody has won. (Confirmed on a real week-5 save: four ranked
+ * candidates, zero awards handed out.) `seasonAwardsDecided` above is the gate,
+ * and the same one the surfaces use to decide whether to say "winner".
+ */
+export function resolveLeagueAwards(awards: AwardsData): LeagueAwardData[] {
+  if (awards.leagueAwards.some((a) => a.awardType === 'HEISMAN')) return awards.leagueAwards;
+
+  const winner = awards.heismanRanking.find((h) => h.rank === 0);
+  if (!winner) return awards.leagueAwards;
+
+  if (!seasonAwardsDecided(awards)) return awards.leagueAwards;
+
+  return [
+    ...awards.leagueAwards,
+    {
+      awardType: 'HEISMAN',
+      playerId: winner.playerId,
+      firstName: winner.firstName,
+      lastName: winner.lastName,
+      teamDisplayName: winner.teamDisplayName,
+      position: winner.position,
+    },
+  ];
+}
+
+/**
  * Reads the season's awards snapshot for a dynasty. `leagueAwards` covers
  * every real single-winner season award leaguewide (Heisman is split out
  * separately as heismanWinner/heismanFinalists); `honorsRoster` is every
@@ -74,6 +142,7 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
       leagueAwards: [],
       heismanWinner: null,
       heismanFinalists: [],
+      heismanDecided: false,
       teamHonorCounts: countHonors([], teamName),
       honorsRoster: [],
       preseasonHonorsRoster: [],
@@ -86,7 +155,7 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
 
   const leaguePortraits = getLeaguePortraitMap(season.id);
 
-  const leagueAwards: LeagueAward[] = awards.leagueAwards.map((a) => ({
+  const leagueAwards: LeagueAward[] = resolveLeagueAwards(awards).map((a) => ({
     awardType: a.awardType,
     playerId: a.playerId,
     winnerName: `${a.firstName} ${a.lastName}`,
@@ -107,6 +176,13 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
   }));
   const heismanWinner = heismanCandidates.find((h) => h.rank === 0) ?? null;
   const heismanFinalists = heismanCandidates.filter((h) => h.rank > 0);
+  /*
+    THE RANKING IS A LIVE RACE UNTIL THE SEASON ENDS. rank 0 mid-season is the
+    current leader, not a winner — confirmed on a real week-5 save: four ranked
+    candidates, zero awards handed out. The candidates are still worth showing
+    (a Heisman race IS the story in November); the label is what has to change.
+  */
+  const heismanDecided = seasonAwardsDecided(awards);
 
   const toHonorEntry = (a: (typeof awards.leagueAllAmericans)[number]): HonorRosterEntry => ({
     playerId: a.playerId,
@@ -177,6 +253,7 @@ export function getAwards(dynastyId: string, seasonId?: number): AwardsOverview 
     leagueAwards,
     heismanWinner,
     heismanFinalists,
+    heismanDecided,
     teamHonorCounts: countHonors(honorsRoster, teamName),
     honorsRoster,
     preseasonHonorsRoster,

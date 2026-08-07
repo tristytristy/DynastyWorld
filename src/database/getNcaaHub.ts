@@ -11,6 +11,7 @@ import {
 import { computeTeamStreak, recentForm } from './ncaaHubStreaks';
 import type { AwardsData } from '../extractors/extract-awards';
 import type { CoachData } from '../extractors/extract-coaches';
+import { seasonAwardsDecided } from './getAwards';
 import type { GameData } from '../extractors/extract-schedule';
 import type { TeamData } from '../extractors/extract-teams';
 import type {
@@ -150,13 +151,23 @@ function buildPollTop25(teams: TeamData[], userTeamIndex: number, poll: PollKey)
     });
 }
 
+/**
+ * WINNER OR LEADER — decided by the season, not by the rank.
+ *
+ * This read `rank === 0 ? 'Heisman Winner' : 'Heisman Leader'`, which looks like
+ * a real test and is not: rank 0 is occupied from the moment the ranking exists,
+ * so the label was "Heisman Winner" in week 3. The honest question is whether the
+ * season's awards have been handed out at all — see seasonAwardsDecided, the same
+ * gate the Trophy Room and a player's Journey use before granting the trophy.
+ */
 function buildHeismanFeature(awards: AwardsData | undefined): NcaaHubHeismanFeature | null {
   const first = awards?.heismanRanking[0];
   if (!first) return null;
 
   const winner = awards?.heismanRanking.find((entry) => entry.rank === 0) ?? first;
+  const decided = awards ? seasonAwardsDecided(awards) : false;
   return {
-    label: winner.rank === 0 ? 'Heisman Winner' : 'Heisman Leader',
+    label: decided && winner.rank === 0 ? 'Heisman Winner' : 'Heisman Leader',
     rank: winner.rank,
     playerId: winner.playerId,
     playerName: `${winner.firstName} ${winner.lastName}`,
@@ -165,11 +176,20 @@ function buildHeismanFeature(awards: AwardsData | undefined): NcaaHubHeismanFeat
   };
 }
 
+/**
+ * EVERY ranked class, not a top eight (user direction 2026-08-07: "I would like
+ * to have Recruiting classes be able to scroll the whole FBS school length").
+ *
+ * The panel that renders this already scrolls inside a fixed height, so the cap
+ * was doing nothing but hiding rows 9 through 138 — and a recruiting table that
+ * stops at 8 can't answer the only question a coach outside the top ten asks,
+ * which is where THEY sit. ~130 small rows is a few KB on a payload that already
+ * carries the full poll.
+ */
 function buildRecruitingBuzz(teams: TeamData[], userTeamIndex: number): NcaaHubRecruitingClassEntry[] {
   return teams
     .filter((team) => team.topClassRank > 0)
     .sort((a, b) => a.topClassRank - b.topClassRank)
-    .slice(0, 8)
     .map((team) => ({
       rank: team.topClassRank,
       teamName: team.displayName,

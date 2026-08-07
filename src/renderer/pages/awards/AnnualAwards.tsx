@@ -6,16 +6,32 @@ import { getAwardTrophyPath } from '../../lib/trophyAssetMapping';
 import { useAwardsOverview } from '../../data/useAwardsOverview';
 import type { HeismanCandidate, LeagueAward } from '../../../shared/types';
 
+/**
+ * The Heisman — a RACE until the season decides it.
+ *
+ * `heismanRanking` updates every week and rank 0 moves with it, so this panel
+ * was crowning whoever happened to lead in October and calling it the Heisman
+ * Trophy. Same fact the Journey and the Trophy Room already act on: those
+ * withhold the trophy until the season's awards exist (see seasonAwardsDecided),
+ * and this page saying "winner" at the same moment made the app contradict
+ * itself in two places.
+ *
+ * The candidates still show — a Heisman race IS the story in November. Only the
+ * words change: Race/Leader/Contenders while it is live, Trophy/winner/Finalists
+ * once it is settled.
+ */
 function HeismanSection({
   dynastyId,
   seasonId,
   winner,
   finalists,
+  decided,
 }: {
   dynastyId: string;
   seasonId?: number;
   winner: HeismanCandidate | null;
   finalists: HeismanCandidate[];
+  decided: boolean;
 }) {
   const trophyPath = getAwardTrophyPath('HEISMAN');
 
@@ -25,7 +41,9 @@ function HeismanSection({
         <div className="flex items-center gap-5">
           {trophyPath && <img src={trophyPath} alt="" className="h-28 w-28 shrink-0 object-contain" draggable={false} />}
           <div className="min-w-0">
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">Heisman Trophy</p>
+            <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+              {decided ? 'Heisman Trophy' : 'Heisman Race'}
+            </p>
             {winner ? (
               <>
                 <div className="mt-1 flex items-center gap-2">
@@ -46,21 +64,26 @@ function HeismanSection({
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{winner.position}</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {winner.position}
+                  {!decided && <span className="text-slate-400 dark:text-slate-500"> &middot; current leader</span>}
+                </p>
                 <div className="mt-2">
                   <TeamLine teamName={winner.teamDisplayName} />
                 </div>
               </>
             ) : (
-              <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">No Heisman winner recorded for this season yet.</p>
+              <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">No Heisman race recorded for this season yet.</p>
             )}
           </div>
         </div>
 
         <div className="border-t border-slate-200/80 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0 dark:border-slate-800">
-          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Finalists</p>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">{decided ? 'Finalists' : 'Contenders'}</p>
           {finalists.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">No finalist data available.</p>
+            <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
+              {decided ? 'No finalist data available.' : 'No other candidates ranked yet.'}
+            </p>
           ) : (
             <div className="mt-3 space-y-3">
               {finalists.map((finalist) => (
@@ -147,7 +170,7 @@ export function AnnualAwards() {
 
   return (
     <div className="space-y-6">
-      <HeismanSection dynastyId={dynastyId} seasonId={seasonId} winner={awards.heismanWinner} finalists={awards.heismanFinalists} />
+      <HeismanSection dynastyId={dynastyId} seasonId={seasonId} winner={awards.heismanWinner} finalists={awards.heismanFinalists} decided={awards.heismanDecided} />
 
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
