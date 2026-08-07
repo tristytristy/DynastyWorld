@@ -1,12 +1,6 @@
-import { useState } from 'react';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
-import { ToggleSwitch } from '../../components/ui/ToggleSwitch';
 import { useCoachHubReady, useCoachQuery } from './coachData';
-import type {
-  CoachStatistics as CoachStatisticsData,
-  CoachStatTotals,
-  CoachLeaderboards,
-} from '../../../shared/types';
+import type { CoachStatistics as CoachStatisticsData, CoachStatTotals } from '../../../shared/types';
 
 /**
  * STATISTICS — the coach's own career line, the way a player looks up their
@@ -61,88 +55,8 @@ function seasonRow(totals: CoachStatTotals): { label: string; value: string }[] 
 }
 
 
-/**
- * TOP 25 IN EACH CATEGORY — the same career-under-this-coach numbers as the
- * totals view, but per player instead of summed.
- *
- * One row per player, not per season: a four-year starter is one entry with
- * four years added together. See database/getCoachLeaderboards.ts.
- */
-function LeaderboardsView({ dynastyId }: { dynastyId: string }) {
-  const data = useCoachQuery<CoachLeaderboards | null>(
-    dynastyId ? `coachBoards:${dynastyId}` : null,
-    async () => (await window.api.db.getCoachLeaderboards(dynastyId)) ?? null,
-  );
-
-  if (data === undefined) {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Ranking your players…</p>;
-  }
-  if (!data || data.boards.length === 0) {
-    return (
-      <div className="py-16 text-center">
-        <p className="mx-auto max-w-md text-sm text-slate-500 dark:text-slate-400">
-          No synced season has player statistics yet. Sync a season and these boards fill in.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-      {data.boards.map((board) => (
-        <SurfaceCard key={board.key}>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="type-eyebrow text-slate-400 dark:text-slate-500">{board.label}</p>
-            {board.minimumNote && (
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">{board.minimumNote}</p>
-            )}
-          </div>
-          <ol className="mt-3 space-y-1">
-            {board.rows.map((row, index) => (
-              <li
-                key={row.playerId}
-                className="flex items-center gap-3 border-t border-slate-200/80 py-1.5 text-sm first:border-t-0 dark:border-white/5"
-              >
-                <span className="tnum w-6 shrink-0 text-right text-xs text-slate-400 dark:text-slate-500">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-slate-950 dark:text-white">
-                    {row.playerName}
-                    {row.position && (
-                      <span className="ml-1.5 text-xs font-normal text-slate-400 dark:text-slate-500">
-                        {row.position}
-                      </span>
-                    )}
-                  </span>
-                  <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
-                    {row.span}
-                    {row.detail ? ` · ${row.detail}` : ''}
-                  </span>
-                </span>
-                <span className="tnum shrink-0 font-semibold text-slate-950 dark:text-white">
-                  {row.value.toLocaleString(undefined, {
-                    minimumFractionDigits: board.decimals,
-                    maximumFractionDigits: board.decimals,
-                  })}
-                  {board.unit && (
-                    <span className="ml-1 text-[10px] font-normal text-slate-400">{board.unit}</span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </SurfaceCard>
-      ))}
-    </div>
-  );
-}
-
-type View = 'totals' | 'leaders';
-
 export function CoachStatistics() {
   const { dynastyId } = useCoachHubReady();
-  const [view, setView] = useState<View>('totals');
   const stats = useCoachQuery<CoachStatisticsData | null>(
     dynastyId ? `coachStats:${dynastyId}` : null,
     // `undefined` is the loading state for useCoachQuery, so a genuine
@@ -180,11 +94,10 @@ export function CoachStatistics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">Statistics</p>
         <h2 className="mt-1 font-display text-2xl font-bold text-slate-950 dark:text-white">
-          {view === 'totals' ? 'Everything your players have done' : 'Your best players, ranked'}
+          Everything your players have done
         </h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           {span} · {stats.seasonsCounted} season{stats.seasonsCounted === 1 ? '' : 's'} ·{' '}
@@ -196,23 +109,7 @@ export function CoachStatistics() {
             </span>
           )}
         </p>
-        </div>
-        {/* The app's own two-way switch — same device as Postseason|Annual Awards
-            in the Trophy Room and Roster|Transfers, rather than a second costume
-            for an identical interaction. */}
-        <ToggleSwitch
-          value={view}
-          onChange={setView}
-          left={{ value: 'totals', label: 'Total' }}
-          right={{ value: 'leaders', label: 'Top players' }}
-          ariaLabel="Career totals or per-player leaderboards"
-        />
       </div>
-
-      {view === 'leaders' ? (
-        <LeaderboardsView dynastyId={dynastyId} />
-      ) : (
-        <>
 
       <Section title="Passing">
         <StatTile label="Yards" value={nf.format(c.passYards)} />
@@ -331,8 +228,6 @@ export function CoachStatistics() {
           </table>
         </div>
       </SurfaceCard>
-        </>
-      )}
     </div>
   );
 }

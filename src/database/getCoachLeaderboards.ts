@@ -7,6 +7,7 @@ import type {
   OLineStatLine,
 } from '../extractors/extract-stats';
 import type { RosterPlayerData } from '../extractors/extract-roster';
+import type { TeamData } from '../extractors/extract-teams';
 import type { CoachLeaderboards, CoachLeaderboard, CoachLeaderboardRow } from '../shared/types';
 
 /**
@@ -27,20 +28,20 @@ import type { CoachLeaderboards, CoachLeaderboard, CoachLeaderboardRow } from '.
  * reading is the one that matches how the user thinks of him now.
  */
 
-const TOP_N = 25;
+const TOP_N = 10;
 
 /**
  * Rate stats need a floor or they are meaningless: a backup who threw one
- * completion sits at 100% above every real quarterback. 150 attempts over a
- * career under one coach is roughly a season and a half of starting — enough
- * that the number describes a passer rather than an accident.
+ * completion sits at 100% above every real quarterback.
  */
-const MIN_ATTEMPTS_FOR_RATE = 150;
+const MIN_ATTEMPTS_FOR_RATE = 100;
 
 interface Folded {
   playerId: number;
   name: string;
   position: string | null;
+  /** The school he last played for under this coach — see the row mapping. */
+  teamName: string | null;
   firstSeason: number;
   lastSeason: number;
   seasons: number;
@@ -78,6 +79,8 @@ function accumulate<T extends object>(into: T | null, from: T): T {
 interface Spec {
   key: string;
   label: string;
+  /** Which of the Hall's three formations this board belongs beneath. */
+  group: 'offense' | 'defense' | 'specialists';
   unit: string;
   value: (p: Folded) => number;
   detail?: (p: Folded) => string | null;
@@ -86,68 +89,44 @@ interface Spec {
 }
 
 const SPECS: Spec[] = [
-  { key: 'passYards', label: 'Passing Yards', unit: 'yds', value: (p) => p.off?.passYards ?? 0,
-    detail: (p) => (p.off ? `${p.off.passTDs} TD · ${p.off.passInts} INT` : null) },
-  { key: 'passTDs', label: 'Passing Touchdowns', unit: '', value: (p) => p.off?.passTDs ?? 0,
-    detail: (p) => (p.off ? `${p.off.passYards.toLocaleString()} yds` : null) },
+  // Offense, in the 3x3 the Hall lays them out in: passing, rushing, receiving.
+  { key: 'passYards', group: 'offense', label: 'Passing Yards', unit: 'yds', value: (p) => p.off?.passYards ?? 0 },
+  { key: 'passTDs', group: 'offense', label: 'Passing TD', unit: '', value: (p) => p.off?.passTDs ?? 0 },
   {
-    key: 'passPct', label: 'Completion %', unit: '%',
+    key: 'passPct', group: 'offense', label: 'Passing %', unit: '%',
     value: (p) => (p.off && p.off.passAttempts > 0 ? (p.off.passCompletions / p.off.passAttempts) * 100 : 0),
-    detail: (p) => (p.off ? `${p.off.passCompletions} of ${p.off.passAttempts}` : null),
     eligible: (p) => (p.off?.passAttempts ?? 0) >= MIN_ATTEMPTS_FOR_RATE,
   },
-  { key: 'rushYards', label: 'Rushing Yards', unit: 'yds', value: (p) => p.off?.rushYards ?? 0,
-    detail: (p) => (p.off && p.off.rushAttempts > 0 ? `${(p.off.rushYards / p.off.rushAttempts).toFixed(1)} per carry` : null) },
-  { key: 'rushAttempts', label: 'Rushing Attempts', unit: '', value: (p) => p.off?.rushAttempts ?? 0,
-    detail: (p) => (p.off ? `${p.off.rushYards.toLocaleString()} yds` : null) },
-  { key: 'rushTDs', label: 'Rushing Touchdowns', unit: '', value: (p) => p.off?.rushTDs ?? 0,
-    detail: (p) => (p.off ? `${p.off.rushYards.toLocaleString()} yds` : null) },
-  { key: 'receptions', label: 'Receptions', unit: '', value: (p) => p.off?.receptions ?? 0,
-    detail: (p) => (p.off ? `${p.off.receivingYards.toLocaleString()} yds` : null) },
-  { key: 'receivingYards', label: 'Receiving Yards', unit: 'yds', value: (p) => p.off?.receivingYards ?? 0,
-    detail: (p) => (p.off ? `${p.off.receptions} rec · ${p.off.receivingTDs} TD` : null) },
-  { key: 'receivingTDs', label: 'Receiving Touchdowns', unit: '', value: (p) => p.off?.receivingTDs ?? 0,
-    detail: (p) => (p.off ? `${p.off.receivingYards.toLocaleString()} yds` : null) },
+  { key: 'rushAttempts', group: 'offense', label: 'Rush ATT', unit: '', value: (p) => p.off?.rushAttempts ?? 0 },
+  { key: 'rushYards', group: 'offense', label: 'Rush YDS', unit: 'yds', value: (p) => p.off?.rushYards ?? 0 },
+  { key: 'rushTDs', group: 'offense', label: 'Rush TD', unit: '', value: (p) => p.off?.rushTDs ?? 0 },
+  { key: 'receptions', group: 'offense', label: 'Receptions', unit: '', value: (p) => p.off?.receptions ?? 0 },
+  { key: 'receivingYards', group: 'offense', label: 'Rec Yards', unit: 'yds', value: (p) => p.off?.receivingYards ?? 0 },
+  { key: 'receivingTDs', group: 'offense', label: 'Rec TDs', unit: '', value: (p) => p.off?.receivingTDs ?? 0 },
+
+  // Defense, in its 2x2.
+  { key: 'tackles', group: 'defense', label: 'Tackles', unit: '', value: (p) => p.def?.tackles ?? 0 },
+  { key: 'sacks', group: 'defense', label: 'Sacks', unit: '', value: (p) => p.def?.sacks ?? 0 },
+  { key: 'interceptions', group: 'defense', label: 'Interceptions', unit: '', value: (p) => p.def?.interceptions ?? 0 },
   /*
-    Pancakes are ranked but sacks allowed rides alongside, because the game
-    credits pancakes sparingly — measured on a real roster, the leader had 2
-    across 19 games while sacks allowed ranged 1 to 18. Ranking on pancakes
-    alone would be a board of ties; the second number is what separates them.
+    Both halves: a pick-six and a scoop-and-score are the same achievement.
+    `?? 0` on each because a snapshot predating fumbleTDs has the field missing,
+    and `number + undefined` is NaN — which fails the `value > 0` filter and
+    made the whole board vanish instead of showing what it did know.
   */
-  { key: 'pancakes', label: 'Pancakes', unit: '', value: (p) => p.ol?.pancakes ?? 0,
-    detail: (p) => (p.ol ? `${p.ol.sacksAllowed} sacks allowed · ${p.ol.gamesStarted} starts` : null) },
-  { key: 'sacks', label: 'Sacks', unit: '', value: (p) => p.def?.sacks ?? 0,
-    detail: (p) => (p.def ? `${p.def.tacklesForLoss} TFL` : null) },
-  { key: 'tackles', label: 'Tackles', unit: '', value: (p) => p.def?.tackles ?? 0,
-    detail: (p) => (p.def ? `${p.def.assistedTackles} assisted` : null) },
-  { key: 'interceptions', label: 'Interceptions', unit: '', value: (p) => p.def?.interceptions ?? 0,
-    detail: (p) => (p.def ? `${p.def.interceptionReturnYards} return yds` : null) },
-  /* Both halves, because a pick-six and a scoop-and-score are the same achievement. */
+  { key: 'defTDs', group: 'defense', label: 'Def TD', unit: '',
+    value: (p) => (p.def ? (p.def.interceptionTDs ?? 0) + (p.def.fumbleTDs ?? 0) : 0) },
+
   /*
-    ?? 0 on each half, because a snapshot taken before fumbleTDs was extracted
-    has the field missing entirely — and `number + undefined` is NaN, which
-    fails the `value > 0` filter and made the whole board disappear rather than
-    showing the interception returns it did have. Old archives now show what
-    they know and gain the rest on their next sync.
+    Special teams. Return duty is tracked on both the offensive and defensive
+    variants — a returner is whichever side of the ball he plays the rest of the
+    time — so both are summed rather than one being picked. Kicking is a
+    separate save table and comes later.
   */
-  { key: 'defTDs', label: 'Defensive Touchdowns', unit: '',
-    value: (p) => (p.def ? (p.def.interceptionTDs ?? 0) + (p.def.fumbleTDs ?? 0) : 0),
-    detail: (p) => (p.def ? `${p.def.interceptionTDs ?? 0} INT · ${p.def.fumbleTDs ?? 0} fumble` : null) },
-  /*
-    Return duty is tracked on both the offensive and defensive variants — a
-    returner is whichever side of the ball he plays on the rest of the time —
-    so both are summed rather than picking one.
-  */
-  { key: 'returnTDs', label: 'Return Touchdowns', unit: '',
+  { key: 'returnTDs', group: 'specialists', label: 'Return TD', unit: '',
     value: (p) =>
       (p.off ? p.off.kickReturnTDs + p.off.puntReturnTDs : 0) +
-      (p.def ? p.def.kickReturnTDs + p.def.puntReturnTDs : 0),
-    detail: (p) => {
-      const kr = (p.off?.kickReturns ?? 0) + (p.def?.kickReturns ?? 0);
-      const pr = (p.off?.puntReturns ?? 0) + (p.def?.puntReturns ?? 0);
-      return `${kr} kick · ${pr} punt returns`;
-    },
-  },
+      (p.def ? p.def.kickReturnTDs + p.def.puntReturnTDs : 0) },
 ];
 
 export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | undefined {
@@ -167,6 +146,11 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
 
     const roster = getSnapshot<RosterPlayerData[]>(season.seasonId, 'roster') ?? [];
     const byId = new Map(roster.map((p) => [p.id, p]));
+    const teams = getSnapshot<TeamData[]>(season.seasonId, 'teams') ?? [];
+    const teamName =
+      season.teamIndex === null
+        ? null
+        : (teams.find((t) => t.teamIndex === season.teamIndex)?.displayName ?? null);
 
     for (const entry of stats) {
       if (!entry.season) continue;
@@ -176,6 +160,7 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
         playerId: entry.playerId,
         name: 'Unknown player',
         position: null,
+        teamName: null,
         firstSeason: season.seasonYear,
         lastSeason: season.seasonYear,
         seasons: 0,
@@ -184,11 +169,14 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
         ol: null,
       };
 
-      // Newest reading wins for identity — players are renamed and move position.
+      // Newest reading wins for identity — players are renamed and move
+      // position, and the school follows the same rule: a player who came with
+      // the coach shows where he finished, not where he started.
       if (who) {
         base.name = `${who.firstName} ${who.lastName}`.trim();
         base.position = who.position;
       }
+      if (teamName) base.teamName = teamName;
       base.firstSeason = Math.min(base.firstSeason, season.seasonYear);
       base.lastSeason = Math.max(base.lastSeason, season.seasonYear);
       base.seasons += 1;
@@ -212,9 +200,14 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
         playerId: p.playerId,
         playerName: p.name,
         position: p.position,
+        /*
+          The school matters because a coach can move: two players on the same
+          board may have produced for different programmes under the same man,
+          and a bare name would quietly imply they were team-mates.
+        */
+        teamName: p.teamName,
         span: p.firstSeason === p.lastSeason ? `${p.firstSeason}` : `${p.firstSeason}–${p.lastSeason}`,
         value: spec.value(p),
-        detail: spec.detail?.(p) ?? null,
       }))
       // A zero is "he doesn't do this", not a ranking — a board of 25 players
       // with none of the stat would be noise dressed as a leaderboard.
@@ -226,8 +219,9 @@ export function getCoachLeaderboards(dynastyId: string): CoachLeaderboards | und
       key: spec.key,
       label: spec.label,
       unit: spec.unit,
+      group: spec.group,
       decimals: spec.key === 'passPct' ? 1 : 0,
-      minimumNote: spec.eligible ? `minimum ${MIN_ATTEMPTS_FOR_RATE} attempts` : null,
+      minimumNote: spec.eligible ? `min ${MIN_ATTEMPTS_FOR_RATE} att` : null,
       rows,
     };
   }).filter((b) => b.rows.length > 0);

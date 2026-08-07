@@ -20,6 +20,7 @@ import {
 import { ALL_CARD_LAYERS, DEFAULT_CARD_SCRIM } from '../../shared/types';
 import type {
   CoachHall,
+  CoachLeaderboards,
   HallEligiblePlayer,
   LegendEntry,
   PlayerCardRecord,
@@ -39,6 +40,100 @@ import type {
  */
 
 type UnitView = 'offense' | 'defense' | 'specialists';
+
+/**
+ * THE RECORD BOARDS, beneath the formation they belong to.
+ *
+ * Top ten in each category over a career under this coach — the same numbers
+ * that stock the pool automatically, shown so the choice above them can be
+ * argued with. Offense lays out 3x3 (passing, rushing, receiving), defense 2x2,
+ * specialists on their own.
+ *
+ * A ROW IS A NAME, A POSITION, A SCHOOL AND A YEAR — nothing else. These sit
+ * under a formation of trading cards, and stacking per-row stat lines beneath
+ * that turns a shortlist into a spreadsheet. The number that ranks him is on the
+ * right; anything more belongs on his card.
+ *
+ * The school is there because a coach can move: two players on one board may
+ * have produced for different programmes under the same man, and a bare name
+ * would quietly imply they were team-mates.
+ */
+function RecordBoards({ dynastyId, unit }: { dynastyId: string; unit: UnitView }) {
+  const [data, setData] = useState<CoachLeaderboards | null>(null);
+  useEffect(() => {
+    if (!dynastyId) return;
+    let cancelled = false;
+    window.api.db.getCoachLeaderboards(dynastyId).then((result) => {
+      if (!cancelled) setData(result ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId]);
+
+  const boards = (data?.boards ?? []).filter((b) => b.group === unit);
+  if (boards.length === 0) return null;
+
+  // Offense is nine boards in a 3x3; defense is four in a 2x2; specialists is
+  // one and shouldn't stretch across the page.
+  const columns =
+    unit === 'offense' ? 'sm:grid-cols-2 lg:grid-cols-3' : unit === 'defense' ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3';
+
+  return (
+    <div className="mt-10">
+      <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+        {unit === 'offense' ? 'Offensive records' : unit === 'defense' ? 'Defensive records' : 'Special teams records'}
+      </p>
+      <div className={`mt-4 grid gap-4 ${columns}`}>
+        {boards.map((board) => (
+          <div
+            key={board.key}
+            className="corner-cut-sm border border-slate-200/80 bg-slate-50/85 p-4 dark:border-white/10 dark:bg-white/[0.03]"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="type-eyebrow text-slate-500 dark:text-slate-400">{board.label}</p>
+              {board.minimumNote && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-600">{board.minimumNote}</p>
+              )}
+            </div>
+            <ol className="mt-2">
+              {board.rows.map((row, index) => (
+                <li
+                  key={row.playerId}
+                  className="flex items-baseline gap-2 border-t border-slate-200/70 py-1.5 first:border-t-0 dark:border-white/5"
+                >
+                  <span className="tnum w-4 shrink-0 text-right text-[10px] text-slate-400 dark:text-slate-600">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold uppercase tracking-wide text-slate-950 dark:text-white">
+                      {row.playerName}
+                      {row.position && (
+                        <span className="ml-1.5 font-normal text-slate-400 dark:text-slate-500">{row.position}</span>
+                      )}
+                      {row.teamName && (
+                        <span className="ml-1 font-normal text-slate-400 dark:text-slate-500">{row.teamName}</span>
+                      )}
+                    </span>
+                    <span className="block text-[10px] text-slate-400 dark:text-slate-600">{row.span}</span>
+                  </span>
+                  <span className="tnum shrink-0 text-sm font-semibold text-slate-950 dark:text-white">
+                    {row.value.toLocaleString(undefined, {
+                      minimumFractionDigits: board.decimals,
+                      maximumFractionDigits: board.decimals,
+                    })}
+                    {board.unit && <span className="ml-0.5 text-[9px] font-normal text-slate-400">{board.unit}</span>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 /** Positions from the save, spelled for a caption rather than a depth chart. */
 function seasonSpan(entry: LegendEntry): string | null {
@@ -939,6 +1034,8 @@ export function HallOfLegends() {
           </div>
         </div>
       </div>
+
+      <RecordBoards dynastyId={id} unit={unit} />
 
       {hall.entries.length === 0 && (
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">

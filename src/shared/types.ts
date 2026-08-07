@@ -3612,16 +3612,18 @@ export interface CoachLeaderboardRow {
   playerId: number;
   playerName: string;
   position: string | null;
+  /** The school he played for under this coach — a career can span several. */
+  teamName: string | null;
   /** "2026" or "2026–2028" — the seasons he was coached here. */
   span: string;
   value: number;
-  /** The context under the number, e.g. "42 TD · 9 INT". */
-  detail: string | null;
 }
 
 export interface CoachLeaderboard {
   key: string;
   label: string;
+  /** Which formation this board sits beneath in the Hall. */
+  group: 'offense' | 'defense' | 'specialists';
   unit: string;
   /** Rate stats print a decimal; counting stats do not. */
   decimals: number;
