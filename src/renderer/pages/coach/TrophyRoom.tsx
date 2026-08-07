@@ -1,4 +1,5 @@
 import { formatKnownRecord } from '../../../shared/programHistory';
+import { resolveCfpBowl } from '../../../shared/cfpBowls';
 import { useEffect, useMemo, useState } from 'react';
 import { PlayerPortrait } from '../../components/common/PlayerPortrait';
 import { MediaBackdrop } from '../../components/common/MediaBackdrop';
@@ -384,8 +385,25 @@ function useChampionshipGame(
       "<bowlName> Champions", so comparing it against the game's own `bowlName`
       never matched — every bowl trophy rendered without its game while the
       national championship, matched on a flag, worked.
+
+      A CFP ROUND NEEDS THE SECOND TEST. `bowlIdentity` (getTrophies.ts) resolves
+      a quarterfinal or semifinal to the bowl it actually is via the venue, so
+      the trophy's assetKey reads `Rose_Bowl` — while the game's own
+      `bowlAssetName` is the placeholder the save gives a bracket round, which is
+      blank. So the first test can never match a playoff bowl, and the two
+      trophies a title run earns rendered with no box score under them at all.
+      Resolving the game the same way the trophy was resolved is what makes the
+      two comparable.
     */
-    if (assetKey) return played.find((g) => g.gameType === 'bowl' && g.bowlAssetName === assetKey) ?? null;
+    if (assetKey) {
+      return (
+        played.find(
+          (g) =>
+            g.gameType === 'bowl' &&
+            (g.bowlAssetName === assetKey || resolveCfpBowl(g.bowlName, g.neutralVenueId)?.assetName === assetKey),
+        ) ?? null
+      );
+    }
     return played.find((g) => g.gameType === 'bowl') ?? null;
   }, [schedule, kind, assetKey]);
 }
@@ -488,7 +506,34 @@ function PostseasonRoom({
             assetKey: trophy.assetKey,
           });
         } else if (trophy.kind === 'bowl-win') {
-          out.push({ key: `${year}-bowl`, seasonYear: year, kind: 'bowl', label: trophy.label, image: getBowlTrophyPath(trophy.assetKey), assetKey: trophy.assetKey });
+          /*
+            KEYED ON THE BOWL, NOT JUST THE YEAR (user report 2026-08-07: "the
+            second bowl trophy is pulling up the first trophy's data").
+
+            A season has at most one national title and one conference title, so
+            `${year}-nc` and `${year}-conf` are unique. BOWL WINS ARE NOT: the
+            twelve-team playoff means a title run wins a quarterfinal and a
+            semifinal that are each somebody's bowl, so 2027 legitimately holds
+            an Orange Bowl and a Rose Bowl. Both got the key `2027-bowl`, and
+            everything keyed on it broke together — `champions.find` returned the
+            FIRST match so clicking the Rose Bowl displayed the Orange Bowl,
+            `selected?.key === c.key` lit BOTH tiles, and React saw duplicate
+            keys in the same list.
+
+            `assetKey` is the right discriminator rather than an index: it is
+            stable identity, and getTrophies already dedupes bowl wins by it
+            within a season, so two surviving rows cannot share one. The index
+            is a fallback for the impossible case of a blank asset key, so a
+            collision can never come back silently.
+          */
+          out.push({
+            key: `${year}-bowl-${trophy.assetKey || out.length}`,
+            seasonYear: year,
+            kind: 'bowl',
+            label: trophy.label,
+            image: getBowlTrophyPath(trophy.assetKey),
+            assetKey: trophy.assetKey,
+          });
         }
       }
     }
