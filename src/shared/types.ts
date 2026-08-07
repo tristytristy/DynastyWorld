@@ -612,6 +612,8 @@ export interface DefensiveStatLine {
   interceptions: number;
   interceptionReturnYards: number;
   interceptionTDs: number;
+  /** Fumbles returned for a score — the other half of a complete defensive-touchdown count. */
+  fumbleTDs: number;
   forcedFumbles: number;
   fumbleRecoveries: number;
   passDeflections: number;
@@ -3164,6 +3166,8 @@ export interface DynastyApi {
     getCoachHall: (dynastyId: string) => Promise<CoachHall | undefined>;
     /** The coach's own career production — see database/getCoachStatistics.ts. */
     getCoachStatistics: (dynastyId: string) => Promise<CoachStatistics | undefined>;
+    /** Top 25 per category, career under this coach — see database/getCoachLeaderboards.ts. */
+    getCoachLeaderboards: (dynastyId: string) => Promise<CoachLeaderboards | undefined>;
     /** Everyone this coach coached — fetched lazily, only when the picker opens. */
     getHallEligible: (dynastyId: string) => Promise<HallEligiblePlayer[]>;
     getLegendStatus: (dynastyId: string, playerId: number) => Promise<LegendStatus>;
@@ -3601,4 +3605,33 @@ export interface CoachStatistics {
   /** Newest first. */
   seasons: CoachStatSeason[];
   leaders: CoachStatLeader[];
+}
+
+/** One row on a leaderboard — a player's whole career under this coach, folded into one line. */
+export interface CoachLeaderboardRow {
+  playerId: number;
+  playerName: string;
+  position: string | null;
+  /** "2026" or "2026–2028" — the seasons he was coached here. */
+  span: string;
+  value: number;
+  /** The context under the number, e.g. "42 TD · 9 INT". */
+  detail: string | null;
+}
+
+export interface CoachLeaderboard {
+  key: string;
+  label: string;
+  unit: string;
+  /** Rate stats print a decimal; counting stats do not. */
+  decimals: number;
+  /** Set on rate boards that exclude small samples, so the page can say so. */
+  minimumNote: string | null;
+  rows: CoachLeaderboardRow[];
+}
+
+export interface CoachLeaderboards {
+  coachId: number;
+  seasonsCounted: number;
+  boards: CoachLeaderboard[];
 }

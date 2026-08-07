@@ -85,6 +85,7 @@ import { getHeadToHead } from '../../database/getHeadToHead';
 import { activeCoachId, addLegend, assignLegend, getCoachHall, getHallEligible, getLegendStatus, removeLegend } from '../../database/hallOfLegends';
 import { getCoachingTree } from '../../database/getCoachingTree';
 import { getCoachStatistics } from '../../database/getCoachStatistics';
+import { getCoachLeaderboards } from '../../database/getCoachLeaderboards';
 import {
   confirmTeamAwardWinner,
   finalizeTeamAwards,
@@ -445,6 +446,10 @@ export function registerDatabaseHandlers(): void {
   */
   ipcMain.handle(IPC.db.getCoachStatistics, async (_event, dynastyId: string) => {
     return getCoachStatistics(dynastyId);
+  });
+
+  ipcMain.handle(IPC.db.getCoachLeaderboards, async (_event, dynastyId: string) => {
+    return getCoachLeaderboards(dynastyId);
   });
 
   ipcMain.handle(IPC.db.getCoachHall, async (_event, dynastyId: string) => {

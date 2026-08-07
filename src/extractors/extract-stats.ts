@@ -53,6 +53,8 @@ export interface DefensiveStatLine {
   interceptions: number;
   interceptionReturnYards: number;
   interceptionTDs: number;
+  /** DLINEFUMBLETDS — a fumble returned for a score. Pairs with interceptionTDs to make a complete "defensive touchdowns" number; neither half is that on its own. */
+  fumbleTDs: number;
   forcedFumbles: number;
   fumbleRecoveries: number;
   passDeflections: number;
@@ -173,6 +175,7 @@ function mapDefensiveLine(r: FranchiseRecord): DefensiveStatLine {
     interceptions: Number(r.DSECINTS),
     interceptionReturnYards: Number(r.DSECINTRETURNYARDS),
     interceptionTDs: Number(r.DSECINTTDS),
+    fumbleTDs: Number(r.DLINEFUMBLETDS),
     forcedFumbles: Number(r.DLINEFORCEDFUMBLES),
     fumbleRecoveries: Number(r.DLINEFUMBLERECOVERIES),
     passDeflections: Number(r.DEFPASSDEFLECTIONS),

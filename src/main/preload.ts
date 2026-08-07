@@ -100,6 +100,7 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.db.getPlayerStatHistory, dynastyId, playerId, anchorSeasonId),
     getCoachHall: (dynastyId) => ipcRenderer.invoke(IPC.db.getCoachHall, dynastyId),
     getCoachStatistics: (dynastyId) => ipcRenderer.invoke(IPC.db.getCoachStatistics, dynastyId),
+    getCoachLeaderboards: (dynastyId) => ipcRenderer.invoke(IPC.db.getCoachLeaderboards, dynastyId),
     getHallEligible: (dynastyId) => ipcRenderer.invoke(IPC.db.getHallEligible, dynastyId),
     getLegendStatus: (dynastyId, playerId) =>
       ipcRenderer.invoke(IPC.db.getLegendStatus, dynastyId, playerId),
