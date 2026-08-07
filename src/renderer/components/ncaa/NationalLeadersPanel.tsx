@@ -32,8 +32,14 @@ interface Metric<TLine> {
   label: string;
   column: ColumnDef<TLine>;
   line: (entry: NationalLeaderEntry) => TLine | null;
-  /** Defensive lists are re-sorted per tab; offensive ones arrive in the right order. */
+  /** Defensive lists are re-sorted per tab; offensive ones arrive ordered by their headline stat. */
   sort?: boolean;
+  /**
+   * Volume floor for a RATE metric. Completion percentage is the only one here
+   * that needs it and it needs it badly: the pool holds every passer, so without
+   * a floor a backup who went 2-for-2 leads the country at 100%.
+   */
+  qualifies?: (line: TLine) => boolean;
 }
 
 function column<TLine>(columns: ColumnDef<TLine>[], key: string): ColumnDef<TLine> {
@@ -42,10 +48,54 @@ function column<TLine>(columns: ColumnDef<TLine>[], key: string): ColumnDef<TLin
   return found;
 }
 
-const OFFENSE: Record<OffenseTab, Metric<OffensiveStatLine>> = {
-  passing: { label: 'Pass yds', column: column(PASSING_COLUMNS, 'passYards'), line: (entry) => entry.offense },
-  rushing: { label: 'Rush yds', column: column(RUSHING_COLUMNS, 'rushYards'), line: (entry) => entry.offense },
-  receiving: { label: 'Rec yds', column: column(RECEIVING_COLUMNS, 'receivingYards'), line: (entry) => entry.offense },
+const offenseLine = (entry: NationalLeaderEntry) => entry.offense;
+
+/**
+ * Three stats per position group (user direction 2026-08-07), because "who
+ * leads" has never been one question: the passing yards leader and the
+ * touchdown leader are usually different people, and only one of them was ever
+ * visible here.
+ *
+ * The FIRST of each trio is the group's headline stat and needs no `sort` — the
+ * server returns each list already ordered by it. Every other metric MUST set
+ * `sort`, or it would print its own numbers in the headline stat's order, which
+ * is the exact bug getNationalStatLeaders' doc comment records from the
+ * defensive tabs. The pool itself is safe: `topByAny` there keeps the top 100 by
+ * touchdowns, attempts and receptions as well as by yards, so re-sorting finds a
+ * real leaderboard rather than the tail of a yardage list.
+ */
+const OFFENSE: Record<OffenseTab, Metric<OffensiveStatLine>[]> = {
+  passing: [
+    { label: 'Pass yds', column: column(PASSING_COLUMNS, 'passYards'), line: offenseLine },
+    {
+      label: 'Comp %',
+      column: column(PASSING_COLUMNS, 'passCompletionPct'),
+      line: offenseLine,
+      sort: true,
+      // The NCAA's own passing qualifier — 15 attempts per game — rather than a
+      // fixed season total, because this panel is read in week 3 as often as in
+      // January and a flat threshold is either empty early or useless late.
+      qualifies: (line) => line.gamesPlayed > 0 && line.passAttempts >= 15 * line.gamesPlayed,
+    },
+    { label: 'Pass TD', column: column(PASSING_COLUMNS, 'passTDs'), line: offenseLine, sort: true },
+  ],
+  rushing: [
+    { label: 'Rush yds', column: column(RUSHING_COLUMNS, 'rushYards'), line: offenseLine },
+    { label: 'Carries', column: column(RUSHING_COLUMNS, 'rushAttempts'), line: offenseLine, sort: true },
+    { label: 'Rush TD', column: column(RUSHING_COLUMNS, 'rushTDs'), line: offenseLine, sort: true },
+  ],
+  receiving: [
+    { label: 'Rec yds', column: column(RECEIVING_COLUMNS, 'receivingYards'), line: offenseLine },
+    { label: 'Catches', column: column(RECEIVING_COLUMNS, 'receptions'), line: offenseLine, sort: true },
+    { label: 'Rec TD', column: column(RECEIVING_COLUMNS, 'receivingTDs'), line: offenseLine, sort: true },
+  ],
+};
+
+/** The button labels — abbreviated to fit three across a ~225px column. */
+const OFFENSE_METRIC_LABELS: Record<OffenseTab, string[]> = {
+  passing: ['Yds', 'Pct', 'TD'],
+  rushing: ['Yds', 'Att', 'TD'],
+  receiving: ['Yds', 'Rec', 'TD'],
 };
 
 const DEFENSE: Record<DefenseTab, Metric<DefensiveStatLine>> = {
@@ -147,6 +197,11 @@ function LeadersBody<TLine>({
 
   const rows = useMemo(() => {
     const scored = entries
+      .filter((entry) => {
+        if (!metric.qualifies) return true;
+        const line = metric.line(entry);
+        return line !== null && metric.qualifies(line);
+      })
       .map((entry) => ({ entry, value: valueOf(metric, entry) }))
       .filter((row): row is { entry: NationalLeaderEntry; value: number } => row.value !== null && row.value > 0);
     if (metric.sort) scored.sort((a, b) => b.value - a.value);
@@ -233,6 +288,61 @@ function TabRow<T extends string>({
   );
 }
 
+/**
+ * The metric switch, on the row the metric LABEL used to occupy alone.
+ *
+ * Deliberately quieter than the position tabs above it: those are a
+ * destination change (which group am I looking at), this is a mode within one
+ * (which number ranks them). Giving both the filled team-colour treatment would
+ * have put two identical-looking switches on top of each other and made neither
+ * read as subordinate to the other.
+ */
+function MetricRow({
+  labels,
+  index,
+  onChange,
+}: {
+  labels: string[];
+  index: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    /*
+      LEFT, under the position tabs (user direction 2026-08-07). It started
+      right-aligned because it replaced a column HEADER sitting over its own
+      right-aligned numbers — but it stopped being a header the moment it became
+      three buttons. A control belongs with the control above it, and the two
+      rows now read as one switch narrowing down to another.
+
+      `px-1.5` on the row plus `px-1.5` on the button puts the first label 12px
+      in; the tab strip's border + `p-0.5` + `px-2.5` puts PASS at 13px. Close
+      enough to read as aligned without a magic pixel value that would rot the
+      moment either padding changed.
+    */
+    <div role="tablist" aria-label="Statistic" className="mb-1 flex items-center justify-start gap-1 px-1.5">
+      {labels.map((label, i) => {
+        const active = i === index;
+        return (
+          <button
+            key={label}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(i)}
+            className={`px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+              active
+                ? 'text-slate-950 underline decoration-[var(--team-primary)] decoration-2 underline-offset-4 dark:text-white'
+                : 'text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function OffenseLeadersPanel({
   leaders,
   dynastyId,
@@ -243,19 +353,32 @@ export function OffenseLeadersPanel({
   seasonId?: number;
 }) {
   const [tab, setTab] = useState<OffenseTab>('passing');
-  const metric = OFFENSE[tab];
+  // Which of the group's three stats is ranked. Reset on a group change: the
+  // index means a different stat in each group, so carrying it across would
+  // silently land you on Carries after picking Comp %.
+  const [metricIndex, setMetricIndex] = useState(0);
+  const metrics = OFFENSE[tab];
+  const metric = metrics[Math.min(metricIndex, metrics.length - 1)];
 
   return (
     <DashboardPanel
       title="Offense Leaders"
       action={<PanelLink to={`/dynasty/${dynastyId}/national-stats`}>View all</PanelLink>}
-      controls={<TabRow tabs={OFFENSE_TABS} value={tab} onChange={setTab} ariaLabel="Offensive category" />}
+      controls={
+        <TabRow
+          tabs={OFFENSE_TABS}
+          value={tab}
+          onChange={(next) => {
+            setTab(next);
+            setMetricIndex(0);
+          }}
+          ariaLabel="Offensive category"
+        />
+      }
       className="min-h-0 flex-1"
       bodyClassName="flex flex-col overflow-y-auto"
     >
-      <p className="mb-1 px-1.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-        {metric.label}
-      </p>
+      <MetricRow labels={OFFENSE_METRIC_LABELS[tab]} index={metricIndex} onChange={setMetricIndex} />
       {leaders === undefined ? (
         <PanelSkeleton rows={5} />
       ) : !leaders ? (

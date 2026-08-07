@@ -200,10 +200,24 @@ export function StatisticsCategorySection<TLine>({
       .filter((entry): entry is { metric: LeaderMetric<TLine>; leader: (typeof rows)[number]; tiedCount: number; value: number } => entry !== null);
   }, [rows, leaders]);
 
+  /*
+    THE COLUMN COUNT FOLLOWS THE CARD COUNT (user direction 2026-08-07).
+    Fixed at three, Passing's four leaders laid out 3 + 1, leaving an orphan on
+    a row of its own next to two card-widths of nothing — and Passing only has
+    four because Passer Rating joined it earlier today.
+
+    Four wants 2x2: two full rows beat a ragged one, and the cards are wider for
+    it. Three and two already fill their row, so they keep three columns.
+    Written as whole class strings rather than an interpolated `xl:grid-cols-${n}`
+    because Tailwind scans source text for class names — a computed one is never
+    generated and the grid silently falls back to one column.
+  */
+  const leaderGridClass = leaderCards.length === 4 ? 'xl:grid-cols-2' : 'xl:grid-cols-3';
+
   const body = (
     <>
       {leaderCards.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={`grid gap-3 sm:grid-cols-2 ${leaderGridClass}`}>
           {leaderCards.map(({ metric, leader, tiedCount, value }) => (
             <LeaderCard
               key={metric.label}
