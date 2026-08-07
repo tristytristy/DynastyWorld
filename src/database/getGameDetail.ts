@@ -3,6 +3,7 @@ import { getSeasonGameContext } from './gameContext';
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { formatGameDate, formatKickoff } from './getSchedule';
 import type { GameData } from '../extractors/extract-schedule';
+import type { ScoringPlayData } from '../extractors/extract-scoring';
 import type { TeamData } from '../extractors/extract-teams';
 import type { GameDetailData, GameDetailTeamSide, GameLogEntry } from '../shared/types';
 import { isGamePlayed } from '../shared/gameStatus';
@@ -69,7 +70,62 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
       : 'non-conference';
   const conferenceName = gameType === 'conference' ? homeConf : null;
 
-  const players = (getSnapshot<GameLogEntry[]>(season.id, 'gamelog') ?? []).filter((e) => e.gameId === gameId);
+  const seasonLog = getSnapshot<GameLogEntry[]>(season.id, 'gamelog') ?? [];
+  const players = seasonLog.filter((e) => e.gameId === gameId);
+
+  /*
+    THE SPOILER GATE for scoring summaries, and the only one.
+
+    Summaries are captured for the current week even while the results hold is
+    suppressing it, because the save discards them a week later and dropping
+    them would lose that week for good (see importExtraction). They are withheld
+    here instead — and the condition is simply whether the game reads as played,
+    because a held game was rewritten to `status: 'Unplayed'` by holdGameResult.
+    Deriving the gate from the hold's own output rather than re-deriving the held
+    week is what stops the two drifting apart: whatever the hold decides to
+    conceal, this conceals with it.
+
+    Sorted on the way out rather than trusted: the merge appends each week's
+    capture to the end, so a season's plays sit in sync order, not game order.
+    The clock counts DOWN, so descending clock inside an ascending quarter is the
+    order they were played in — and a stable sort keeps two scores on the same
+    second in the order the save listed them.
+  */
+  const rawPlays = isGamePlayed(game.status)
+    ? (getSnapshot<ScoringPlayData[]>(season.id, 'scoring') ?? [])
+        .filter((p) => p.gameId === gameId)
+        .sort((a, b) => a.quarter - b.quarter || b.clockSeconds - a.clockSeconds)
+    : [];
+
+  /*
+    SCORERS ARE NAMED FROM THE WHOLE SEASON, NOT FROM THIS GAME.
+
+    The obvious source is `players` above — this game's own box score — and it
+    is the wrong one. The save writes no per-game player lines for the week
+    currently being played (measured: weeks 0-3 carried 847/5103/5183/5022 lines
+    and the current week carried none, see resultsHold.ts), which is precisely
+    the week these summaries come from. Resolving against this game alone
+    therefore found nobody for exactly the games that have a summary, and every
+    touchdown rendered as a bare "Touchdown".
+
+    Scanning the season's full leaguewide log fixes it, because a scorer has
+    almost always played earlier weeks: on a real save every one of 346 scorer
+    lookups resolved this way. The user's roster is preferred where it has him,
+    for the same reason the box score prefers it — richer and current.
+
+    Costs nothing extra: the snapshot is already loaded above for `players`, so
+    this is one more pass over an array in hand.
+  */
+  const scoringPlays = rawPlays.map(({ gameId: _gameId, scorers, ...play }) => ({
+    ...play,
+    scorers: scorers
+      .map((playerId) => {
+        const line = seasonLog.find((e) => e.playerId === playerId && (e.firstName || e.lastName));
+        const name = line ? `${line.firstName ?? ''} ${line.lastName ?? ''}`.trim() : '';
+        return { playerId, name, position: line?.position ?? null };
+      })
+      .filter((s) => s.name !== ''),
+  }));
 
   /*
     OVERTIME POINTS, DERIVED RATHER THAN READ — on purpose.
@@ -145,5 +201,6 @@ export function getGameDetail(dynastyId: string, gameId: number, seasonId?: numb
       userTeamIndex !== null &&
       (game.homeTeamIndex === userTeamIndex || game.awayTeamIndex === userTeamIndex),
     players,
+    scoringPlays,
   };
 }

@@ -15,6 +15,7 @@ import { extractStats, type PlayerStatsData } from './extract-stats';
 import { extractTeamStats, type TeamStatsData } from './extract-team-stats';
 import { extractKicking, type PlayerKickingStatsData } from './extract-kicking';
 import { extractGameLog, type PlayerGameLogEntry } from './extract-gamelog';
+import { extractScoring, type ScoringPlayData } from './extract-scoring';
 import {
   extractLeagueHistory,
   type ConferenceChampionshipData,
@@ -44,6 +45,8 @@ export interface ExtractionData {
   teamStats: TeamStatsData | null;
   kicking: PlayerKickingStatsData[];
   gamelog: PlayerGameLogEntry[];
+  /** Scoring summaries for the CURRENT WEEK ONLY — the save keeps no others. Merged, never replaced, at persist time. See extract-scoring.ts. */
+  scoring: ScoringPlayData[];
   conferenceChampionship: ConferenceChampionshipData[];
   rivalries: RivalryData[];
   /** Real program history for EVERY school — all-time totals, year-by-year seasons and the record book. See extract-team-history.ts. */
@@ -117,6 +120,13 @@ export async function extractAll(
     franchise,
     schedule.map((g) => g.gameId),
   );
+  // Scoring summaries ride along with the box scores — same games, same step.
+  // The schedule supplies each game's two team indexes so a play knows whose it
+  // is without resolving the team references a second time.
+  const scoring = await extractScoring(
+    franchise,
+    new Map(schedule.map((g) => [g.gameId, { homeTeamIndex: g.homeTeamIndex, awayTeamIndex: g.awayTeamIndex }])),
+  );
   onProgress?.('gamelog', 'done');
 
   onProgress?.('trophies', 'start');
@@ -165,6 +175,7 @@ export async function extractAll(
     teamStats,
     kicking,
     gamelog,
+    scoring,
     conferenceChampionship,
     rivalries,
     teamHistory,

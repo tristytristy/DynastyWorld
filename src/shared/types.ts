@@ -1060,6 +1060,39 @@ export interface GameDetailData {
   hasUser: boolean;
   /** Both teams' player box-score lines for this game. */
   players: GameLogEntry[];
+  /**
+   * Every score, in order. EMPTY IS NORMAL, and means nothing was captured
+   * rather than that nothing happened: the save only ever carries the current
+   * week's summaries, so a game has these only if it was synced during the week
+   * it was played. Seasons synced before this shipped have none and never can —
+   * the Score Summary tab says so rather than showing a blank list.
+   */
+  scoringPlays: ScoringPlay[];
+}
+
+/** One score in a game — see extractors/extract-scoring.ts for how it's derived. */
+export interface ScoringPlay {
+  quarter: number;
+  /** Seconds remaining in the quarter. */
+  clockSeconds: number;
+  teamIndex: number | null;
+  isHome: boolean;
+  /** The play itself: 6, 3 or 2. */
+  points: number;
+  /** The try afterwards: 1 kicked, 2 for a two-point play, 0 for none. */
+  conversionPoints: number;
+  playType: 'touchdown' | 'fieldGoal' | 'safety';
+  /** Score after the play and its try. */
+  homeScore: number;
+  awayScore: number;
+  /** Who scored, already named. Empty when the save recorded nobody for this play. */
+  scorers: ScoringPlayScorer[];
+}
+
+export interface ScoringPlayScorer {
+  playerId: number;
+  name: string;
+  position: string | null;
 }
 
 export interface GameLogEntry {

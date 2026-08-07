@@ -1,6 +1,7 @@
 import { isGamePlayed } from '../shared/gameStatus';
 import { extractAll } from '../extractors/extract-all';
 import type { ExtractionData } from '../extractors/extract-all';
+import type { ScoringPlayData } from '../extractors/extract-scoring';
 import {
   createDynasty,
   createSeason,
@@ -300,6 +301,43 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     // (or earlier) sync with an empty list never clobbers a captured one.
     if (extraction.departures.length > 0) {
       saveSnapshotCompressed(season.id, 'departures', extraction.departures);
+    }
+
+    /*
+      SCORING SUMMARIES ACCUMULATE — they are the one snapshot that must never
+      be replaced wholesale.
+
+      The save carries summaries for the CURRENT WEEK ONLY (see
+      extract-scoring.ts), so a week-6 sync arrives holding week 6 and nothing
+      else. Overwriting would erase every earlier week the user had already
+      banked, and since the data is gone from the save by then, nothing could
+      ever recover it. So new games are merged over old, keyed by gameId: a game
+      re-synced within its own week refreshes, and every other game is left
+      exactly as captured.
+
+      HELD GAMES ARE STORED, NOT DROPPED — the one place this snapshot departs
+      from how the hold treats everything else.
+
+      The current week is also the week the hold suppresses, so a sync taken
+      before the user plays their own game arrives holding summaries that would
+      spoil it. Filtering them out here was the obvious move and is the wrong
+      one: by the next sync the week has advanced and the save has replaced them,
+      so anyone who syncs on advancing rather than after playing would lose every
+      week permanently. Dropped data cannot be recovered; stored data can always
+      be hidden.
+
+      So they are written, and getGameDetail withholds them for as long as the
+      game reads unplayed — which is exactly as long as the hold redacts it (see
+      holdGameResult, which rewrites `status` to Unplayed). One gate, driven by
+      the hold's own output, so the two cannot drift apart.
+    */
+    if (extraction.scoring.length > 0) {
+      const previous = getSnapshot<ScoringPlayData[]>(season.id, 'scoring') ?? [];
+      const replaced = new Set(extraction.scoring.map((p) => p.gameId));
+      saveSnapshotCompressed(season.id, 'scoring', [
+        ...previous.filter((p) => !replaced.has(p.gameId)),
+        ...extraction.scoring,
+      ]);
     }
 
     const currentYearSummary = extraction.leagueHistory.find((y) => y.seasonYear === league.seasonYear);

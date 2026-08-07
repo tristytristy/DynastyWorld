@@ -10262,6 +10262,38 @@ typecheck / eslint / build:prod clean.
 
 ---
 
+## Phase — Score Summary: who scored and when, pulled out of the save (2026-08-06)
+
+**User request.** "In-game the game info pages show scoring summaries. Basically who scored and when. Are we able to pull that data and add it to our own game info modal on a Score Summary page which would be to the right of stats and to the left of media?"
+
+**Yes — and the data is richer than expected, with one hard limit.**
+
+**The chain.** `SeasonGame.ScoringSummaries` → a `ScoringSummary[]` container (36 slots) → one `ScoringSummary` row per score, carrying `Quarter`, `TimeStampInSec` (clock REMAINING, max 900), `Home/AwayPreviousScore` → `Home/AwayCurrentScore`, a `Conversion` enum, and `Home/AwayPlayerSnapshots`.
+
+**THE LIMIT: the save keeps summaries for the CURRENT WEEK ONLY.** Verified on three unrelated saves — a week-5 file held 63, all week 5, none for weeks 0–4; a week-1 file held 68, all week 1; a save on the National Championship held exactly one, that game. This can never be backfilled. A season accumulates only the weeks it was actually synced, and every season already in an archive has none and never will.
+
+**The model, and the one subtlety that breaks it.** The scoring team is whichever side's score moved; the delta IS the play and leaguewide takes only four values — 6 (touchdown, 390), 3 (field goal, 161), 2 (safety, 3), 0 (73). A ZERO-DELTA row is a period marker, not a score: every game carries one at 0:00 of Q2. `Conversion` is the try AFTERWARDS, not the play type, and its points are NOT in `CurrentScore` — they appear in the next row's `PreviousScore`. `FieldGoal` → +1 (a kicked PAT), `Touchdown` → +2 (a two-point play), `None` → +0. Applied with that one-row lag it reconciles the last row to the real final in **131/131 games across two saves**; applied to the running total as well it broke 37 of 63. That failure was mine and it was the useful one — it is what pinned the lag down.
+
+**Naming the scorer is DERIVED; the save names nobody.** Each row stores a snapshot of each side's three offensive leaders (QB/HB/WR) with cumulative lines. Diffing a row against the previous row finds whoever's touchdown count rose — two players on a passing score. Those references are typed `record` rather than `record[]`, so `madden-franchise` returns null for them; the words are ordinary references and are decoded by hand off `hexData` ([2 flag][13 table][17 row]). Coverage is 63% of touchdowns (a tight end or fourth receiver isn't in the three-man snapshot) and **0% of field goals — kickers appear in no snapshot at all**, which the UI says out loud rather than leaving a reader to wonder.
+
+**Two bugs found by looking at output rather than at code.**
+1. Scorers came out **backwards** — "Aaron Philo from Tye Melvin", crediting the catch to the passer. The save lists snapshots quarterback-first; the QB is now sorted last so the man who reached the end zone leads.
+2. Every touchdown rendered as a bare "Touchdown". Names were resolved from *this game's* box score, and **the save writes no per-game player lines for the week being played** (already recorded in resultsHold.ts: weeks 0–3 carried 847/5103/5183/5022 lines, the current week none) — precisely the week these summaries come from. Resolution moved to the season's full leaguewide log, where a scorer has almost always played earlier weeks: 346/346 lookups resolve.
+
+**HELD GAMES ARE STORED, NOT DROPPED — the one place this departs from the hold.** The current week is also the week `resultsHold` suppresses, so filtering spoilers at ingest was the obvious move and the wrong one: by the next sync the week has advanced and the save has replaced them, so anyone who syncs on advancing rather than after playing would lose every week permanently. Dropped data cannot be recovered; stored data can always be hidden. They are written, and `getGameDetail` withholds them for as long as the game reads unplayed — which is exactly as long as the hold redacts it, since `holdGameResult` rewrites `status` to `Unplayed`. One gate, driven by the hold's own output, so the two cannot drift.
+
+**The snapshot MERGES, never replaces**, keyed by gameId — a week-6 sync must not erase week 5. Verified both ways: importing the same save twice leaves 554 plays (not 1,108), and a seeded earlier week survives a later sync (554 → 557 across 66 games).
+
+**Layout bug fixed on the way.** The shared "This game has not been played yet" card guarded the whole modal body, so it printed above whichever destination was open — including the new Scoring tab, which was left explaining itself underneath a card saying the game hadn't happened. It is now scoped to the Team and Player views; Media was never affected only because it sits outside that block.
+
+**Cost.** 91ms to extract, 554 plays over 63 games, 9.3KB stored compressed (97KB raw).
+
+**Files.** New `extract-scoring.ts`; wired through `extract-all.ts`, `importExtraction.ts`, `getGameDetail.ts`, `shared/types.ts`; `GameDetail.tsx` gains the `scoring` view between Player and Media, with hover cards and click-through to the player modal.
+
+**Verified** on a real imported save: 13-play LSU–Florida summary reading 37–35 with named scorers, the 2-PT chip, the leader bolded, the game-winning field goal at 0:00; Team view intact after the layout change; the empty state explaining itself on a game with no capture; light and dark both.
+
+---
+
 ## Phase — 4.3.3 released (2026-08-06)
 
 Shipped: coordinator carousel lock, History-Only season repair, backups around

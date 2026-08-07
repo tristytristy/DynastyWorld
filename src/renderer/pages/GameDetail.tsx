@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, SyntheticEvent } from 'react';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { TeamLogo } from '../components/common/TeamLogo';
@@ -19,16 +19,18 @@ import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
 import { MediaGallery } from '../components/common/MediaGallery';
 import { GliderNav, gliderItemClass } from '../components/ui/GliderNav';
+import { usePlayerHoverCard } from '../data/PlayerHoverProvider';
 
 /**
  * The three things a game HAS. A SUB-MENU rather than a mode switch (user
  * direction): these are destinations within the game, and the app marks a
  * destination with the glider — the filled toggle is for modes.
  */
-type GameView = 'team' | 'player' | 'media';
+type GameView = 'team' | 'player' | 'scoring' | 'media';
 const GAME_VIEWS: { key: GameView; label: string }[] = [
   { key: 'team', label: 'Team' },
   { key: 'player', label: 'Player' },
+  { key: 'scoring', label: 'Scoring' },
   { key: 'media', label: 'Media' },
 ];
 import type {
@@ -37,6 +39,7 @@ import type {
   GameDetailTeamSide,
   GameLogEntry,
   MediaItemResolved,
+  ScoringPlay,
   OffensiveGameLine,
   RosterPlayer,
   ScheduleGame,
@@ -352,6 +355,188 @@ function fallbackToDefaultBowlLogo(event: SyntheticEvent<HTMLImageElement>): voi
   const fallback = getBowlLogoPath(null);
   if (event.currentTarget.src.endsWith(fallback)) return;
   event.currentTarget.src = fallback;
+}
+
+/** 564 seconds remaining reads 9:24 on a stadium clock. */
+function formatClock(seconds: number): string {
+  const safe = Math.max(0, seconds);
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+const PLAY_LABEL: Record<ScoringPlay['playType'], string> = {
+  touchdown: 'Touchdown',
+  fieldGoal: 'Field goal',
+  safety: 'Safety',
+};
+
+/**
+ * SCORE SUMMARY — every score in order, the way the game's own game-info page
+ * lists them.
+ *
+ * The save keeps scoring summaries for the CURRENT WEEK ONLY (see
+ * extract-scoring.ts), so this is the one surface in the app whose emptiness is
+ * expected rather than a fault. A game synced a week late has none and never
+ * will, so the empty state EXPLAINS that instead of showing a blank list —
+ * otherwise it reads as a bug in a feature working exactly as designed.
+ *
+ * Scorers are named only where the save's three-man snapshot happened to
+ * contain them, which covers most touchdowns and no field goals at all. A play
+ * with nobody named simply omits the name rather than printing "unknown": the
+ * row still says what happened and when, which is the part that always holds.
+ */
+function ScoreSummary({
+  played,
+  plays,
+  home,
+  away,
+  homeColor,
+  awayColor,
+  roster,
+  dynastyId,
+  seasonId,
+}: {
+  played: boolean;
+  plays: ScoringPlay[];
+  home: GameDetailTeamSide;
+  away: GameDetailTeamSide;
+  homeColor: string;
+  awayColor: string;
+  roster: RosterPlayer[];
+  dynastyId: string;
+  seasonId: number | undefined;
+}) {
+  const { openPlayerModal } = usePlayerModal();
+  const { hoverProps } = usePlayerHoverCard();
+
+  /*
+    Names arrive already resolved (getGameDetail reads the whole season's log,
+    which is the only place a current-week scorer can be found). The roster is
+    still indexed here for ONE thing the name can't carry: the hover card needs a
+    full roster row, so opponents get a clickable name without a card, exactly as
+    they do on every other player surface.
+  */
+  const rosterById = useMemo(() => new Map(roster.map((p) => [p.id, p])), [roster]);
+
+  function hoverFor(playerId: number) {
+    const player = rosterById.get(playerId);
+    if (!player) return {};
+    return hoverProps({ player, teamName: null, seasonYear: null, dynastyId });
+  }
+
+  if (plays.length === 0) {
+    return (
+      <SurfaceCard>
+        <div className="corner-cut-sm border border-dashed border-slate-300/80 px-5 py-10 text-center dark:border-slate-700">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Score summary</p>
+          <p className="mx-auto mt-3 max-w-md text-sm text-slate-500 dark:text-slate-400">
+            {played ? (
+              <>
+                No scoring summary was captured for this game. The save only carries them for the
+                week being played, so they&apos;re recorded when you sync during that week — and
+                can&apos;t be recovered afterwards.
+              </>
+            ) : (
+              <>This game hasn&apos;t been played yet. Its scoring plays appear once the result is synced.</>
+            )}
+          </p>
+        </div>
+      </SurfaceCard>
+    );
+  }
+
+  // Grouped into quarters so the reader gets the same landmarks the broadcast
+  // does. Overtime arrives as quarter 5 and up and is labelled as such rather
+  // than printed as "Q5".
+  const quarters = [...new Set(plays.map((p) => p.quarter))].sort((a, b) => a - b);
+
+  return (
+    <SurfaceCard className="overflow-hidden p-0">
+      <div className="border-b border-slate-200/80 px-5 py-4 dark:border-white/5">
+        <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">Score summary</h3>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          {plays.length} scoring {plays.length === 1 ? 'play' : 'plays'} · clock shows time remaining
+        </p>
+      </div>
+
+      {quarters.map((quarter) => (
+        <div key={quarter}>
+          <div className="bg-slate-100/80 px-5 py-2 dark:bg-white/5">
+            <span className="type-eyebrow text-slate-500 dark:text-slate-400">
+              {quarter <= 4 ? `Quarter ${quarter}` : quarter === 5 ? 'Overtime' : `Overtime ${quarter - 4}`}
+            </span>
+          </div>
+          {plays
+            .filter((p) => p.quarter === quarter)
+            .map((play, index) => {
+              const side = play.isHome ? home : away;
+              const color = play.isHome ? homeColor : awayColor;
+              const scorers = play.scorers;
+              return (
+                <div
+                  key={`${quarter}-${play.clockSeconds}-${index}`}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-200/70 px-5 py-3 dark:border-white/5"
+                  style={{ borderLeft: `3px solid ${color}` }}
+                >
+                  <span className="tnum w-12 shrink-0 text-sm text-slate-400 dark:text-slate-500">
+                    {formatClock(play.clockSeconds)}
+                  </span>
+                  <span className="w-32 shrink-0 truncate text-sm font-semibold text-slate-950 dark:text-white">
+                    {side.name}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-300">
+                    {PLAY_LABEL[play.playType]}
+                    {scorers.length > 0 && (
+                      <>
+                        {' — '}
+                        {scorers.map((s, i) => (
+                          <span key={s.playerId}>
+                            {i > 0 && ' from '}
+                            <button
+                              type="button"
+                              onClick={() => openPlayerModal(dynastyId, s.playerId, seasonId, undefined, undefined, side.teamIndex)}
+                              className="font-semibold text-slate-950 underline-offset-2 hover:underline dark:text-white"
+                              {...hoverFor(s.playerId)}
+                            >
+                              {s.name}
+                            </button>
+                          </span>
+                        ))}
+                      </>
+                    )}
+                    {/*
+                      Only ever said about a touchdown. A field goal or safety
+                      carries no try, so "no good" against one would be inventing
+                      a play that never took place.
+                    */}
+                    {play.playType === 'touchdown' && play.conversionPoints === 0 && (
+                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">conversion no good</span>
+                    )}
+                    {play.conversionPoints === 2 && (
+                      <span className="ml-2 text-xs font-semibold text-slate-500 dark:text-slate-400">2-PT</span>
+                    )}
+                  </span>
+                  {/* The leader's number carries the weight, so the run of play reads down the column. */}
+                  <span className="tnum shrink-0 text-sm text-slate-500 dark:text-slate-400">
+                    <span className={play.awayScore >= play.homeScore ? 'font-semibold text-slate-950 dark:text-white' : ''}>
+                      {play.awayScore}
+                    </span>
+                    <span className="mx-1 text-slate-300 dark:text-slate-600">–</span>
+                    <span className={play.homeScore >= play.awayScore ? 'font-semibold text-slate-950 dark:text-white' : ''}>
+                      {play.homeScore}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+        </div>
+      ))}
+
+      <div className="border-t border-slate-200/80 px-5 py-3 text-xs text-slate-400 dark:border-white/5 dark:text-slate-500">
+        {away.name} listed first. Kickers aren&apos;t named in the save&apos;s summary, so field goals
+        show no scorer.
+      </div>
+    </SurfaceCard>
+  );
 }
 
 /**
@@ -881,7 +1066,20 @@ export function GameDetailContent({
         </GliderNav>
       </div>
 
-      {!played || !statBars ? (
+      {/*
+        SCOPED TO THE TWO STAT VIEWS. This used to guard the whole body, so it
+        printed above whichever destination was open — including Scoring, which
+        has its own empty state and was left explaining itself underneath a card
+        saying the game hadn't happened. Media was never affected only because it
+        sits outside this block entirely.
+
+        `!statBars` stays part of the condition for team/player because both are
+        built from the team stat lines; it deliberately does NOT gate the score
+        summary, which comes from a different snapshot and can be complete on a
+        game whose stat caches never arrived.
+      */}
+      {(view === 'team' || view === 'player') &&
+        (!played || !statBars ? (
         <SurfaceCard>
           <div className="rounded-xl border border-dashed border-slate-300/80 px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
             This game has not been played yet. Box score and stat surfaces will populate after the result is imported.
@@ -1088,6 +1286,25 @@ export function GameDetailContent({
           </>
           )}
         </>
+        ))}
+
+      {/*
+        Renders for an unplayed game too, and says so itself — the shared
+        "not played yet" card no longer covers this view, and a tab that goes
+        blank reads as broken.
+      */}
+      {view === 'scoring' && (
+        <ScoreSummary
+          played={played}
+          plays={detail.scoringPlays ?? []}
+          home={home}
+          away={away}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          roster={roster ?? []}
+          dynastyId={id}
+          seasonId={seasonId}
+        />
       )}
 
       {/* Auto-populated from Media-page tags: every upload linked to this game. Hidden when empty — the Media page is the hub; this is a bonus surface. */}
