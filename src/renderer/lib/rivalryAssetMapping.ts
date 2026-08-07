@@ -103,6 +103,33 @@ export function setCustomRivalryRegistry(next: Record<string, CustomRivalryEntry
   customRivalries = next;
 }
 
+/**
+ * THE SAVE'S OWN RIVALRIES, LEAGUEWIDE — pair key → the save's name for it
+ * (or null when it has none).
+ *
+ * User report (2026-08-07): "Michigan vs Ohio State, one of the biggest
+ * rivalries in all of college football, looks just like a regular game."
+ * Correct, and for two compounding reasons. The Game has no dedicated art in the
+ * shipped pairing list below, so nothing matched there; and the only other
+ * signal was `isKnownRivalry`, which comes from the save's rivalry flag for the
+ * USER's team alone — browse anybody else's schedule and every rivalry in the
+ * country goes quiet.
+ *
+ * The save knew all along: every one of the 138 teams carries three rival slots,
+ * and walking them yields 272 pairings. `extractLeagueRivalries` now captures
+ * them, and this is where they land. A rivalry in here earns at least the
+ * generic shield, exactly as a user-declared one does — the evidence is the
+ * same kind, so the treatment is the same.
+ *
+ * Empty until a season is re-synced, which simply restores the old behaviour
+ * rather than breaking anything.
+ */
+let leagueRivalries: Map<string, string | null> = new Map();
+
+export function setLeagueRivalryRegistry(rows: { teamA: string; teamB: string; name: string | null }[]): void {
+  leagueRivalries = new Map(rows.map((r) => [rivalryPairKey(r.teamA, r.teamB), r.name]));
+}
+
 
 const LOGO_BY_PAIR = new Map(
   RIVALRY_LOGO_FILES.map(([teamA, teamB, file]) => [pairKey(teamA, teamB), `${RIVALRY_LOGO_BASE_PATH}/${file}`]),
@@ -128,11 +155,29 @@ const LOGO_BY_PAIR = new Map(
  * played" is not evidence of a rivalry.
  */
 export function getRivalryLogoPath(teamA: string, teamB: string, isKnownRivalry = false): string | null {
-  const custom = customRivalries[pairKey(teamA, teamB)];
+  const key = pairKey(teamA, teamB);
+  const custom = customRivalries[key];
   if (custom?.logo) return custom.logo;
-  const known = LOGO_BY_PAIR.get(pairKey(teamA, teamB));
+  const known = LOGO_BY_PAIR.get(key);
   if (known) return known;
-  return custom || isKnownRivalry ? DEFAULT_RIVALRY_LOGO : null;
+  // The save's leaguewide list joins `isKnownRivalry` as evidence of the same
+  // kind — the difference between them is only WHOSE schedule you are on, which
+  // is no reason for The Game to look like a Tuesday non-conference fixture.
+  return custom || isKnownRivalry || leagueRivalries.has(key) ? DEFAULT_RIVALRY_LOGO : null;
+}
+
+/**
+ * IS this matchup a rivalry — from any source we trust: the user's own
+ * declaration, the shipped pairing list, the save's leaguewide table, or the
+ * caller's own flag.
+ *
+ * Separate from `getRivalryLogoPath` because "is it one" and "what mark does it
+ * get" are different questions, and callers were answering the first by testing
+ * the second for null — which reads as a coincidence rather than a check.
+ */
+export function isKnownRivalry(teamA: string, teamB: string, saveFlag = false): boolean {
+  const k = pairKey(teamA, teamB);
+  return saveFlag || k in customRivalries || LOGO_BY_PAIR.has(k) || leagueRivalries.has(k);
 }
 
 /**
@@ -141,5 +186,8 @@ export function getRivalryLogoPath(teamA: string, teamB: string, isKnownRivalry 
  * rivalry's name rather than draw its mark.
  */
 export function getRivalryName(teamA: string, teamB: string, saveName?: string | null): string | null {
-  return customRivalries[pairKey(teamA, teamB)]?.name ?? saveName ?? null;
+  const key = pairKey(teamA, teamB);
+  // `saveName` is the caller's own (user-team-scoped) knowledge and stays ahead
+  // of the leaguewide table, which is the same data read from further away.
+  return customRivalries[key]?.name ?? saveName ?? leagueRivalries.get(key) ?? null;
 }

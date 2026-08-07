@@ -21,7 +21,7 @@ import {
   type ConferenceChampionshipData,
   type YearSummaryData,
 } from './extract-league-history';
-import { extractRivalries, type RivalryData } from './extract-rivalries';
+import { extractRivalries, extractLeagueRivalries, type LeagueRivalryData, type RivalryData } from './extract-rivalries';
 import { extractTeamHistory, type TeamHistoryData } from './extract-team-history';
 import { extractAwards, type AwardsData } from './extract-awards';
 import { extractDepartures, type DepartureData } from './extract-departures';
@@ -49,6 +49,8 @@ export interface ExtractionData {
   scoring: ScoringPlayData[];
   conferenceChampionship: ConferenceChampionshipData[];
   rivalries: RivalryData[];
+  /** Every program's rivals, not just the user's — see extractLeagueRivalries. */
+  leagueRivalries: LeagueRivalryData[];
   /** Real program history for EVERY school — all-time totals, year-by-year seasons and the record book. See extract-team-history.ts. */
   teamHistory: TeamHistoryData[];
   awards: AwardsData;
@@ -137,6 +139,9 @@ export async function extractAll(
 
   onProgress?.('rivalries', 'start');
   const rivalries = await extractRivalries(franchise, userTeam.teamIndex);
+  // Same three tables already preloaded above, so the leaguewide sweep is
+  // reference resolution and nothing else.
+  const leagueRivalries = await extractLeagueRivalries(franchise);
 
   onProgress?.('teamHistory', 'start');
   const teamHistory = await extractTeamHistory(franchise);
@@ -178,6 +183,7 @@ export async function extractAll(
     scoring,
     conferenceChampionship,
     rivalries,
+    leagueRivalries,
     teamHistory,
     awards,
     departures,

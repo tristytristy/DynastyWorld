@@ -293,6 +293,7 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     saveSnapshotCompressed(season.id, 'gamelog', gamelog);
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
     saveSnapshot(season.id, 'rivalries', extraction.rivalries);
+    saveSnapshot(season.id, 'leagueRivalries', extraction.leagueRivalries);
     // 138 programs x (all-time totals + up to 108 seasons + two record books) —
     // leaguewide and repetitive, so compressed like the other league snapshots.
     saveSnapshotCompressed(season.id, 'teamHistory', extraction.teamHistory);

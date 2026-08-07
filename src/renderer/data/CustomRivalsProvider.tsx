@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { useMatch } from 'react-router-dom';
 import { programArtUrl } from '../lib/programArt';
-import { setCustomRivalryRegistry, type CustomRivalryEntry } from '../lib/rivalryAssetMapping';
+import { setCustomRivalryRegistry, setLeagueRivalryRegistry, type CustomRivalryEntry } from '../lib/rivalryAssetMapping';
 import type { CustomRival } from '../../shared/types';
 
 interface CustomRivalsContextValue {
@@ -95,6 +95,33 @@ export function CustomRivalsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [dynastyId, publish]);
+
+  /*
+    THE SAVE'S OWN RIVALRIES, alongside the user's — loaded here rather than in a
+    provider of its own because it feeds the same module registry, for the same
+    pure resolver, on the same dynasty lifecycle. A second provider would have
+    been a second copy of all of this to keep in step.
+
+    Cleared on a dynasty change for exactly the reason the block above is: the
+    previous save's 272 pairings must not light up rivalries on this one's
+    schedule while the new list is in flight. Season-independent on purpose —
+    rivalries are a property of the programs, not of the year being viewed, so
+    the current season's list serves every season's schedule.
+  */
+  useEffect(() => {
+    setLeagueRivalryRegistry([]);
+    setVersion((v) => v + 1);
+    if (!dynastyId) return;
+    let cancelled = false;
+    void window.api.db.getLeagueRivalries(dynastyId).then((rows) => {
+      if (cancelled || !rows?.length) return;
+      setLeagueRivalryRegistry(rows);
+      setVersion((v) => v + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dynastyId]);
 
   const applyRival = useCallback(
     (row: CustomRival) => {

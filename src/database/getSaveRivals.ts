@@ -1,5 +1,5 @@
 import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
-import type { RivalryData } from '../extractors/extract-rivalries';
+import type { LeagueRivalryData, RivalryData } from '../extractors/extract-rivalries';
 import type { TeamData } from '../extractors/extract-teams';
 import type { SaveRival } from '../shared/types';
 
@@ -48,4 +48,18 @@ export function getSaveRivals(
       rivalryName: r.name,
     })),
   };
+}
+
+/**
+ * Every rivalry in the league, as name pairings — what makes a rivalry look
+ * like one on ANY team's schedule, not just the user's.
+ *
+ * Returns an empty list for a season synced before `leagueRivalries` existed,
+ * which the renderer treats as "no extra knowledge" and falls back to the
+ * shipped pairing list plus the user's own flag, exactly as before.
+ */
+export function getLeagueRivalries(dynastyId: string, seasonId?: number): LeagueRivalryData[] {
+  const season = seasonId !== undefined ? getSeasonById(seasonId) : getCurrentSeason(dynastyId);
+  if (!season || season.dynastyId !== dynastyId) return [];
+  return getSnapshot<LeagueRivalryData[]>(season.id, 'leagueRivalries') ?? [];
 }
