@@ -10333,3 +10333,858 @@ Deliberately excluded from that zip: Chromium's caches (they rebuild, and were
 most of the 351 MB) and Local Storage (so the new startup sync guide shows on
 his first launch). Known limitation: the dynasty's `save_path` still points at
 the machine that built it, so Sync needs a relink — everything else works.
+
+---
+
+## Phase — An award winner's profile was there all along (2026-08-07)
+
+**User report.** Clicking a player in Annual Awards doesn't open the typical
+player modal — "it opens up a separate one which has no stats and says profile
+unavailable."
+
+**It was the same modal, showing its last-resort branch.**
+`PlayerProfileContent` resolves a player against the USER'S roster snapshots:
+the caller's season first, then every season newest-first. An opposing team's
+Heisman winner is in none of them, so the resolution fell through to a
+name-and-portrait stub headed "Full profile unavailable", explaining that
+opposing players "aren't tracked in this dynasty".
+
+**That explanation was out of date.** The `leagueRoster` snapshot covers all 138
+programs with full bio, class, OVR and season stat line, and the app already
+renders the complete profile from it — that is what the team switcher and the
+National Players page do. Those callers pass a `leagueTeamIndex`; the awards
+surfaces (Annual Awards, All-America, Weekly Honors, the Heisman board) carry a
+player id and a team NAME and have no index to pass, so the one door into the
+league data was shut to them. Nothing was missing but the join.
+
+**Fixed at the resolver, not at the four callers.** New `findLeaguePlayerTeam`
+(getLeagueRoster.ts) answers "which team holds this player" from the league
+snapshot — caller's season first, then every full-data season newest-first,
+skipping the FCS pool and any conference-less team for the same reason
+`getPlayerDevelopment` does (index 255 is where departed players and
+un-enrolled recruits are parked, and "resolving" to it opens a roster of 4,500
+strangers). The modal then takes the league path it already had. Every
+leaguewide surface is fixed at once, including ones written later — the same
+argument the recruit guard in PlayerModalProvider is built on.
+
+**ORDER MATTERS: league resolution runs AFTER the user-roster search.** A player
+on your own team resolves to snapshots that also carry his game log and
+schedule, and the league path has neither. Putting the league lookup first would
+have quietly downgraded every user-team player whose id also sits in the league
+snapshot — which is all of them. The chosen order costs an opposing player
+nothing: his user-roster search always missed anyway.
+
+**The stub survives, honestly.** What reaches it now is a player no synced
+season has a roster row for at all — a History-Only dynasty, or an award from a
+season imported before leaguewide rosters were extracted. Its message says that
+rather than blaming the opponent, and it still shows the honors, which come from
+a separate leaguewide extraction and outlive the roster row.
+
+**Files.** `getLeagueRoster.ts` (+`findLeaguePlayerTeam`), IPC channel + handler
++ preload + `window.api.db` typing, `PlayerProfileContent.tsx` (league load
+extracted to a reusable `loadFromLeague`, called from both the explicit
+`leagueTeamIndex` path and the new fallback).
+
+**Verified** against a real archive: the Heisman winner (Jeremiah Smith, Ohio
+State — not the user's team) opens the full five-destination profile with
+jersey number, team mark, class, 99 OVR and bio; a user-team player still opens
+through the roster path with his game log and Prev/Next intact.
+`Productivity/screenshots/awards-full-profile-2026-08-07.png`.
+
+---
+
+## Phase — The Heisman was never an award (2026-08-07)
+
+**User report.** A UCLA player won the 2028 Heisman. It showed on the Annual
+Awards page and appeared neither on his Journey nor in the Trophy Room.
+
+**Because the Heisman has never lived where every other award lives.** The
+awards page reads `heismanRanking` directly, and that ranking is its only
+source: `extractAwards` fills `leagueAwards` from `MARQUEE_PLAYER_TYPES`, derived
+from the curated `AWARD_DISPLAY_ORDER`, which deliberately omits HEISMAN so the
+Annual Awards *list* doesn't repeat the hero panel above it. But `leagueAwards`
+is what a player's honours (`buildPlayerHonorSeasons` → Journey) and a program's
+history (`getHistory` → `nationalAwards` → Trophy Room, History page) are built
+from. The biggest award in the sport was the one award that reached none of them.
+The Trophy Room even had HEISMAN branches ready — dead code, since no HEISMAN
+entry could ever arrive.
+
+**Derived at query time, in one shared place.** `resolveLeagueAwards(awards)` in
+getAwards.ts returns the marquee list with the Heisman folded in;
+`getAwards` and `getHistory` both read through it, so the award page, the
+profile and the trophy case cannot disagree. Query-time rather than a fix in the
+extractor because the ranking is already in every awards snapshot ever taken —
+every archived dynasty is repaired with no re-sync. A future sync that does carry
+a real HEISMAN row wins outright and nothing is synthesised.
+
+**THE RANKING IS A LIVE RACE, NOT A RESULT.** rank 0 mid-season is the current
+leader — confirmed on a real week-5 save: four ranked candidates, zero awards
+handed out. Writing that into a permanent Journey entry and a trophy case would
+invent an award nobody has won, so the gate is the season's OWN postseason
+evidence: marquee awards, or EARNED (non-`_PRE`) All-America selections. Both are
+`PlayerAward` rows the game writes only once a season finishes, which makes them
+exactly the signal "has this been decided".
+
+**Verified both directions** on a real archive. Undecided season, live race:
+"No player has been honoured yet", zero mentions of the Heisman anywhere. Season
+seeded as decided: the trophy stands in the Annual Awards room with the winner
+resolved (name, portrait, position, school, year), a Heisman in AWARDS WON, and
+"2026 — Heisman Trophy" on the player's Journey. The Annual Awards page still
+prints it exactly once — `sortAnnualAwards` filters HEISMAN out of the list, which
+is what makes folding it into `leagueAwards` safe. The yearbook export prints its
+own Heisman headline, so HEISMAN is excluded from its award rows for the same
+reason.
+
+---
+
+## Phase — SurfaceCard was eating its callers' spacing (2026-08-07)
+
+**User report.** In the recruit side panel, "the words PROSPECT and RECRUITING
+are too high up and they are touching the ranking boxes."
+
+**They were touching literally — measured at ZERO pixels.** The panel is a
+`SurfaceCard className="space-y-5"`, and `SurfaceCard` wraps its children in a
+`relative` div (needed so content paints above the absolute gradient layer on
+raised/overlay). So the caller's `space-y-*` landed on the `<section>`, whose
+only children are that wrapper and the gradient span. Both `space-y-*` and
+`divide-*` style the gaps BETWEEN siblings; with one real sibling there are
+none. The classes parsed, applied, and did nothing — for as long as they have
+existed.
+
+**Fixed at the component**, not in the caller: `splitChildSpacing` forwards
+`space-[xy]-*` and `divide-*` (with any `sm:`/`dark:` prefix) to the wrapper and
+leaves padding, background and border on the section where they describe the
+panel itself. Three callers were affected; the other two had also been asking
+for something they never got — Weekly Honors for row dividers, and one Media
+card for `space-y-3`. Both now render what they always asked for.
+
+The recruit panel goes to `space-y-6` rather than back to 5: every section there
+is headed by a small-caps eyebrow sitting under bordered tiles or dense rows, and
+the extra step is what stops each label reading as a caption for the block above
+it. COMMIT SCORE had the identical problem one section down.
+
+---
+
+## Phase — Theme Source removed; team colour is the app (2026-08-07)
+
+User direction: "remove default theme altogether from preferences and make the
+team theme the default. we can also remove the option from the preferences
+altogether."
+
+Removed rather than hidden — the whole `colorMode` chain (`team` / `default`,
+plus a `custom` mode that had no control at all and hadn't been reachable for a
+long time). `resolveThemeColors` now takes only the active team, and
+`loadThemePreference` ignores any stored `colorMode`/`custom*`, so anyone whose
+saved preference said `default` lands on team colour rather than being stuck on
+a mode with no switch left to escape it.
+
+The page ground stays settable — a different question (how dark is the room),
+with its own control that still works. Preferences' Interface group is now
+Appearance / Background / Player card preview.
+
+---
+
+## Phase — NCAA passer rating, built but not wired (2026-08-07)
+
+User direction: build the formula, don't add it to anything yet — "I just want
+to be able to trigger its usage."
+
+`src/shared/passerRating.ts`. `passerRating(line)` and
+`formatLinePasserRating(line)`, imported by nothing.
+
+**The formula**, coefficients fixed in 1979 and unchanged since:
+
+    (8.4 × yards + 330 × TD − 200 × INT + 100 × completions) ÷ attempts
+
+8.4 was chosen so an average passer's yards-per-attempt and completion-percentage
+components summed to exactly 100, and 330/200 so his touchdowns and
+interceptions cancelled. Passing has moved a long way since, so 100 now reads as
+a poor season rather than a typical one — worth knowing before anyone designs a
+colour scale against it.
+
+**Verified against known answers** with a throwaway harness: Cade McNown's 1997
+NCAA-leading season (173/283, 2877, 22 TD, 5 INT) = 168.6, the theoretical
+bounds 1261.6 and −731.6, and three real lines pulled out of DYNASTY-AUBURNNATTY
+earlier in the session.
+
+**Two decisions the module makes, and one it refuses to.**
+
+  • No attempts returns **null, not 0** — a player who has never thrown has no
+    rating, and a zero would sort him below the worst quarterback alive on any
+    leaderboard that took it literally.
+  • The line type is **structural**, so `OffensiveStatLine` (season/career) and
+    `OffensiveGameLine` (per game) both satisfy it without importing each other.
+  • It does NOT enforce a minimum attempt count. The NCAA formula caps nothing —
+    one 40-yard touchdown on a single attempt rates 766.0 — but that is a display
+    decision, not a formula one: a player's own game log should show his rating
+    for a two-throw game and a leaderboard should not. Whichever surface ranks
+    players owns that rule.
+
+**No extractor work, and no re-sync when it is eventually wired.** The save
+stores no passer rating at any scope — a sweep of every table for
+RATING/QBR/EFFIC/PASSER turned up only `PrologueGameStats.QBRating` (a one-row
+tutorial table) and `StatManager.GetPlayerPasserRating`, which is a function, not
+a column: the game computes it live and never writes it down. But
+PASSCOMPLETED / PASSATTEMPTS / PASSYARDS / PASSTDS / PASSINTS are all on the
+game, season AND career rows, so every dynasty already in an archive can show
+this the day it is switched on.
+
+**Not `gameRating`.** GAMERATING is the save's own 0–100 per-game grade, carried
+by every stat category including defense, and already read by this codebase for
+the Breakout-game milestone. Different measurement: the 22/28, 338-yard, 5-TD
+game that grades 100 there rates 238.9 here. GAMERATING is also zero on every
+season row — per-game only.
+
+Sources: stassen.com/football/pass-eff and the Shakin The Southland explainer
+the user linked.
+
+---
+
+## Phase — Passer rating reaches the surfaces (2026-08-07)
+
+User direction: "it would appear in game info statlines, overall statistics,
+player season and careers statistics." All four, off the shared formula built
+earlier today — no extractor work and no re-sync, since the five inputs were
+already on the game, season and career rows of every archived dynasty.
+
+  • **Game Info box score** — a `Rtg` column on the passing table. Verified live:
+    Caden Creel 26/39, 294 yds, 3 TD, 0 INT = 155.4.
+  • **Overall statistics** — `Rtg` added to `PASSING_COLUMNS` in
+    `lib/statColumns.ts`, which the Team Hub Statistics page and the NCAA
+    national leaderboards BOTH read, so one line covered two surfaces. Verified:
+    Creel 251/404, 3,414 yds, 28 TD, 8 INT = 152.0.
+  • **A Passer Rating leader card**, carrying the same `min 100 att` qualifier
+    the completion-percentage card already uses. Not decoration: the formula
+    caps nothing, so a backup with one 40-yard touchdown rates 766 and would
+    lead outright. Failing rows drop from the CARD only and still show their own
+    number in the table — a player's rating is never in doubt, only his claim to
+    lead.
+  • **Player season and career** — ONE entry in `OFFENSIVE_FIELDS` serves the
+    season headline tiles, the career-totals tiles and the season-by-season
+    table. Verified: career 540/897, 6,920 yds, 47 TD, 18 INT = 138.3, with the
+    2027 row reading 152.0.
+
+**Two details that matter.** No `perGame` flag anywhere — it is already a rate,
+and dividing it by games played would produce a number meaning nothing. And the
+profile field's `recorded` test is ATTEMPTS, not the rating: a rating of 0 is a
+real, dreadful performance, so testing the rating itself would hide exactly the
+quarterback it describes. No attempts prints a dash, and the hero tile strip
+drops the dash rather than printing an empty tile.
+
+---
+
+## Phase — A signed recruit shows his school (2026-08-07)
+
+User direction: show the team logo instead of the word SIGNED.
+
+The word is the least informative label on the page — at the end of a cycle
+2,626 of 4,100 prospects read Signed, so the badge stops distinguishing anybody
+while raising the only question that matters.
+
+**WHERE THE SCHOOL COMES FROM — not where you would look.** The `Recruit` row
+has 15 fields and not one names a team, and `Player.TeamIndex` stays pinned at
+the 255 sentinel for every prospect: Signed, Top3 and Battle alike (checked
+directly — all 4,100 at 255). The only record of a signing is on the RECEIVING
+end, in each team's own `CommittedPlayers` list. `extract-recruits.ts` already
+reversed that for the user's 35-slot board; `buildSignedDestinationMap` is now
+exported and reused by `extract-national-recruits.ts`, so the whole national pool
+carries `signedTeamDisplayName` and the board and the pool cannot disagree about
+where somebody went.
+
+**Verified on a real import:** 2,626 Signed, 2,626 with a resolved school — a
+100% match, the same clean result the board's own note recorded. Logos decode
+(naturalWidth 1024, Oregon included).
+
+**RE-SYNC NEEDED** for other teams' signings, since this comes from the
+extractor. `getNationalRecruits` reads across to the board snapshot meanwhile,
+which recovers the user's OWN signing class with no re-sync — the set they care
+most about. Anything still unknown keeps the Signed badge, which is the honest
+answer rather than a blank or a generic mark. The logo carries an sr-only
+"Signed with X"; a screen reader cannot read a crest.
+
+---
+
+## Phase — Recruit panel folds away; archetype replaces the stage filter (2026-08-07)
+
+**The prospect panel collapses** and the table takes the width. Unmounted rather
+than hidden, so the grid genuinely reflows from `[1.9fr 1fr]` to one column — at
+1800px that is the difference between Pipeline being the last visible column and
+the whole table through Commit and NIL fitting without a horizontal scroll.
+
+The toggle lives ABOVE THE TABLE, not on the panel: a control that sits on the
+thing it hides disappears with it and leaves no way back. `xl:` only, since below
+that width the panel already stacks underneath and there is nothing to reclaim.
+Session-local, same reasoning as the player modal's roster rail.
+
+**Archetype column beside Class** — it is part of who the player is, so it
+belongs with the identity columns, not filed next to hometown and pipeline.
+
+**The All Stages filter becomes All Archetypes**, and its options are SCOPED TO
+THE POSITION FILTER when one is set. Archetypes are position-specific ("Pocket
+Passer" belongs to nobody but a quarterback), so the unscoped list is ~90 entries
+of which about six can ever match what is on screen; narrowing it turns the
+dropdown from a scroll into a choice. The stage filter is removed outright rather
+than left as dead state — the stage COLUMN stays, now showing the school logo.
+
+Partially satisfies the older `todo-recruit-columns` agenda item; its
+national-rank column, abbreviated states and archetype-replaces-Pipeline parts
+remain open.
+
+---
+
+## Phase — One media viewer, everywhere (2026-08-07)
+
+User direction: use the Media page's image preview across the board — "the goal
+would be more visual cohesion and less like it was built by separate people."
+
+**It genuinely was two designs.** The Media page had grown a gallery plate: the
+photo, its caption underneath, the program mark and the occasion mark in the
+bottom corners, everything else hover chrome. The player profile's Showcase and
+the Game Info media section still ran the older viewer — the photo beside a
+320px column of labelled boxes headed PHOTO DETAILS. Same photo, same three
+facts, drawn as a form instead of as a label under a print.
+
+**Extracted, not copied.** `components/common/MediaPlate.tsx` is now the only
+thing in this app that draws a photograph. The Media page passes its editing
+chrome in through `actions` and swaps a `ZoomableImage` into `stage` while
+framing; the read-only galleries pass Close and nothing else. Neither surface
+knows what the other can do.
+
+**THE DATA HAD TO CATCH UP** — and this is why the two looked different in the
+first place. The gallery only ever received a pre-formatted `gameLabel` ("Wk 13
+@ USC W 38-16") and tagged players with no jersey number. It could not have
+written "#66 Jensen Somerville" or "38-16 win at USC in week 13." if it wanted
+to, and it could not resolve the corner occasion mark at all — that needs the
+game's bowl/rivalry/conference fields. So `MediaItemResolved` now carries the
+whole `ScheduleGame` and `MediaTaggedPlayer` carries `jerseyNumber`, both filled
+by the resolver that already had the schedule row in hand.
+
+**One deliberate loss:** the gallery's crop editor. It was the only thing the
+sidebar could do that the plate doesn't, and keeping it would have meant a second
+design again. An item's game, tags — and now its crop — are managed on the Media
+page of its season, which is exactly what the note under the plate says. Saved
+crops are still shown as saved.
+
+**Verified** on a real import with a seeded photo: identical caption, marks and
+chrome on the Media page and in a player's Showcase, with the viewed player's own
+chip correctly omitted from his own caption.
+
+---
+
+## Phase — Schedule: REC of its own, fewer labels, the bowl beside the round (2026-08-07)
+
+Three user asks on one table.
+
+**REC is a column now.** The running record used to ride inside Result as a
+small grey parenthetical — two different facts (what happened in this game;
+where the season stood after it) in one cell, with the eye left to separate them.
+
+**The neutral-site badge is gone.** It printed either "Neutral Site" or the
+event's own name — "CFP Quarterfinal" — above the venue. Both had stopped
+earning their row: Type already draws the occasion's mark and the venue
+underneath says where it is, so the label was a third telling of the same thing.
+
+**A CFP quarterfinal or semifinal shows the BOWL's logo beside the round mark.**
+The two answer different questions: the round says how deep into the bracket
+this is, the bowl says which one it was. `getCfpBowlImagePath` already existed
+for the Game Info header, so this is the schedule reading the same way — null
+for the first round (on campus, no bowl) and the national championship (its mark
+is already the trophy), so nothing prints twice.
+
+Verified on a real 12-game schedule: the header reads Wk / Date / Rank / Rec /
+rivalry / Opponent / Type / Location / Kickoff / Result / Rec, with zero
+neutral-site or CFP text badges anywhere on the page.
+
+---
+
+## Phase — The save had all 272 rivalries the whole time (2026-08-07)
+
+**User report.** "Some teams don't have rivalry icons... Michigan vs Ohio State,
+one of the biggest rivalries in all of college football, looks just like a
+regular game."
+
+**Two reasons compounding.** The Game has no dedicated art in the shipped
+31-pairing list, so nothing matched there — and the only other signal was
+`isKnownRivalry`, which is the save's rivalry flag for the USER's team alone.
+Browse anybody else's schedule and every rivalry in the country goes quiet.
+
+**Researched the save before writing a list, and the list turned out to be
+unnecessary.** All 138 teams carry `Rival1/2/3TeamRef`, not just the user's;
+walking every one yields **272 distinct pairings**, Michigan and Ohio State among
+them, named "The Game" by the save's own `Rivalry` table. `extractRivalries` had
+only ever read the user team's three slots.
+
+`extractLeagueRivalries` walks them all — deduped and order-independent, since A
+lists B and B lists A, with the FCS pool skipped — into a `leagueRivalries`
+snapshot, and publishes into the same module registry the user's own declared
+rivalries use. The Schedule, Scores, Game Info and the media plate all pick it up
+without any of them learning that leaguewide rivalries exist. A pairing in that
+list earns at least the generic shield: it is the same kind of evidence a
+user-declared rivalry provides, so it gets the same treatment.
+
+**RE-SYNC NEEDED** — it is an extractor change, and until then the old behaviour
+stands rather than breaking. **Verified** on a real import: 272 rows stored, "The
+Game" present with its name, and Michigan's schedule — a browsed team, not the
+user's — now draws the shield on the Ohio State row.
+
+---
+
+## Phase — The Location column, put back properly (2026-08-07)
+
+**User correction.** "Instead of just removing the blue identifier you removed
+the stadium name and city also... I just didn't want the boxes."
+
+**The stadium was never removed — those games never resolved one.** The indigo
+badge printed "Neutral Site" or the event's own name above the venue, and on a
+playoff game whose venue reference is missing it had been the ONLY thing in the
+cell. Taking it out emptied the column outright, which reads exactly like the
+stadium having been deleted.
+
+Now the venue leads whenever it resolves, and when it doesn't the cell names the
+occasion as **plain grey text on the venue's own line** rather than as a chip.
+"I just didn't want the boxes" is a statement about treatment, not about
+information.
+
+Worth knowing for the case that prompted it: on a properly synced season a CFP
+quarterfinal or semifinal DOES carry `SeasonGame.Stadium` (verified directly —
+all four quarterfinals in a real save resolve to Sugar / Rose / Peach / Fiesta
+venue ids), so both the stadium line and the bowl logo appear. Where they don't,
+the reference is absent from that season's snapshot and there is nothing to
+resolve — the app can name the round, but it cannot invent a building.
+
+---
+
+## Phase — The bracket believes the scoreboard now (2026-08-07)
+
+**User report.** "Our playoff is missing games, but the scores table does verify
+those games... let's find a better way to use this data to avoid showing TO BE
+DECIDED if we don't have to."
+
+**Two leaguewide snapshots hold the same slate, and a sync can leave them
+disagreeing.** The bracket reads `schedule`; the Scores page reads
+`leagueSchedule`. A playoff game missing from the first and present in the second
+printed TO BE DECIDED for a game whose score is one page away — the app
+disbelieving its own data.
+
+**Two fixes, both read-across, both repairing existing archives with no re-sync.**
+
+  1. **The pool is now the union.** Any game `leagueSchedule` holds that
+     `schedule` doesn't, and that names a CFP round itself, joins the bracket.
+     `schedule` still wins wherever both have a game — it is the richer row —
+     so this only ever adds. (Same trick `getLeagueScores` already plays in the
+     opposite direction for bowl names.)
+  2. **A first-round game can be placed by where its winner turned up.** The
+     seed rule needs both teams' seeds, and seeds come from the CURRENT poll,
+     which keeps moving after the bracket is set — a team that entered as the 5
+     can be sitting at 15 by sync time (the user's own screenshots show a
+     first-round game between the 14 and the 6). The wiring answers it without
+     any seed: first-round slot N feeds quarterfinal N+4, so find the placed
+     quarterfinal the winner appears in and subtract four. It runs after the
+     seed rule, never overwrites it, and refuses a slot another game holds.
+
+**Measured, not assumed.** Against the eleven real CFP games of a synced season,
+with the save's own slot numbers removed and seeds withheld for everyone but the
+four bye teams — the exact shape of the reported failure — placement goes from
+**7/11 with four games unplaced to 11/11, zero wrong**.
+
+---
+
+## Phase — The bowl beside the round on a browsed team's schedule too (2026-08-07)
+
+User direction: extend it.
+
+The user's own schedule and the Scores page already paired the CFP round
+graphic with the bowl's own logo; the team-switcher schedule couldn't, because
+`LeagueTeamGame` never carried `neutralVenueId` — and that reference is the only
+thing that says WHICH bowl a quarterfinal or semifinal is (the save gives those a
+placeholder `BowlGame` row with a blank asset name).
+
+It now travels, resolved the way the bowl name already was: preferring the richer
+`schedule` snapshot and falling back to the leaguewide row's own copy, so a
+season that has one but not the other still lands.
+
+**This is the surface that needed it most.** On your own schedule you remember
+the season; on somebody else's you don't, so "which bowl was that" is a question
+only the browsed table actually raises.
+
+**Verified** on a real 15-0 Tennessee run: week 18 draws CFP Quarterfinal +
+Sugar Bowl, week 19 CFP Semifinal + Orange Bowl, and week 20 draws the
+championship trophy ALONE — even though the title game shares the Superdome
+venue id with that Sugar Bowl quarterfinal. That is `resolveCfpBowl`'s
+round-scoping doing exactly the job its doc comment warns about, confirmed live
+rather than assumed.
+
+---
+
+## Phase — Multi-user-coach leagues: researched, deferred (2026-08-07)
+
+User question: some saves have several user-coaches — can we use them, would we
+have to rebuild, what would a multi-coach experience take? Answered by importing
+a real 28-coach save end to end rather than reasoning about it.
+
+**Full write-up: `docs/multi-user-coach-research.md`.** Deferred to a later
+update at the user's direction; nothing implemented.
+
+The three things worth carrying forward:
+
+  • **There is a live bug.** `DYNASTY-PRESEASON3` has 28 user-controlled coaches
+    on 28 teams, and importing it produces "Illinois Dynasty" — because
+    `findUserTeamIndex` returns the first `IsUserControlled` row and Bielema sits
+    first in the table. Deterministic but arbitrary, and nothing looks broken.
+    That function's doc comment asserts the flag is true for exactly one coach;
+    this save disproves it 28 times.
+
+  • **No rebuild is needed.** All 28 teams are already in the archive via the
+    leaguewide snapshots, and `coaches` already stores `isUserControlled` per
+    coach — so detection needs no extraction change and works on archives
+    already imported. Only seven snapshots are genuinely single-coach, measured
+    at ~48 KB each (preseason) against a 2.3 MB leaguewide base.
+
+  • **The trap to avoid when it is built.** `extract-roster` and `extract-stats`
+    each read the whole ~16,000-row Player table and filter to one team. A
+    per-coach loop must read ONCE and partition, or a 28-coach sync reads that
+    table 28 times — and single-coach users must stay on the identical path.
+
+Open question to settle before scoping: is a coach profile a LENS (one archive,
+shared media/cards/notes) or a TENANT (each coach gets their own)? It changes
+the schema, not just the UI.
+
+---
+
+## Phase — Two bowls in one season shared a key (2026-08-07)
+
+**User report.** "The second bowl trophy is pulling up the first trophy's data."
+
+**A key collision, and the playoff is what creates it.** `PostseasonRoom` built
+`key: \`${year}-bowl\``. A season has at most one national title and one
+conference title, so `${year}-nc` and `${year}-conf` are safe — but the
+twelve-team playoff means a title run wins a quarterfinal AND a semifinal that
+are each somebody's bowl, so 2027 legitimately holds an Orange Bowl and a Rose
+Bowl. Both got `2027-bowl`, and everything keyed on it broke together:
+
+  • `champions.find(c => c.key === selectedKey)` returned the FIRST match, so
+    clicking the second trophy displayed the first — the reported symptom.
+  • `selected?.key === c.key` lit BOTH tiles at once.
+  • React saw duplicate keys in one list.
+
+Now keyed on the bowl: `${year}-bowl-${assetKey}`. `assetKey` is the right
+discriminator rather than an index — it is stable identity, and `getTrophies`
+already dedupes bowl wins by it within a season, so two surviving rows cannot
+share one. An index fallback covers a blank asset key so a collision can never
+return silently.
+
+**A SECOND DEFECT SAT DIRECTLY BEHIND IT**, and fixing only the first would have
+left the trophy selectable but bare. `useChampionshipGame` matched a bowl trophy
+to its game on `g.bowlAssetName === assetKey`. For a CFP quarterfinal or
+semifinal that can never match: `bowlIdentity` resolves those to the bowl they
+actually are via the venue (so the trophy reads `Rose_Bowl`), while the game's
+own `bowlAssetName` is the blank placeholder the save gives a bracket round. So
+the two trophies a playoff run earns rendered with no box score under them at
+all. The lookup now resolves the game the same way the trophy was resolved,
+through `resolveCfpBowl`.
+
+**Verified** on a seeded two-bowl season (a real archive with two CFP wins
+written onto the user's team): only the clicked tile lights, the hero reads
+"Sugar Bowl Champions" with the Sugar Bowl art, and the box-score row resolves
+to the right game — Auburn 31–19 Georgia, the Sugar Bowl quarterfinal.
+
+---
+
+## Phase — NCAA Hub: longer lists, and three stats per position group (2026-08-07)
+
+Three user asks on the hub's right-hand column.
+
+**The lists were capped, not unscrollable.** All three panels already scroll
+inside a fixed-height body, so every cap was doing nothing but deciding how far
+you could get. Removed, with the heights untouched as asked:
+
+  • Recruiting **Classes** — was the top 8, now every ranked class. Measured at
+    **138 rows**. A recruiting table that stops at 8 can't answer the only
+    question a coach outside the top ten asks, which is where THEY sit.
+  • **Top** recruits — was 10, now **100**. Body height still 320px against a
+    4,599px scroll height, so the panel is the same size and simply goes
+    further.
+  • **My Team** — was the last 4 commitments, now the whole class.
+
+**Three stats per position group.** The row that printed a single metric label
+("PASS YDS") is now a switch:
+
+    PASS   Yds · Pct · TD
+    RUSH   Yds · Att · TD
+    REC    Yds · Rec · TD
+
+"Who leads" was never one question — the passing-yards leader and the
+touchdown leader are usually different people, and only one of them was ever
+visible. Verified live: Yds → Mestemaker (LSU) 4,878; TD → Underwood
+(Tennessee) 41; Pct → Underwood 69.3%. Three different leaderboards.
+
+**Two things that had to be right.**
+
+  • **Every non-headline metric sets `sort`.** The server returns each list
+    ordered by its headline stat, so a metric that didn't re-sort would print
+    its own numbers in the yardage order — the exact bug
+    `getNationalStatLeaders`' doc comment records from the defensive tabs. The
+    pool itself is safe: `topByAny` already keeps the top 100 by touchdowns,
+    attempts and receptions as well as by yards, so re-sorting finds a real
+    leaderboard rather than the tail of a yardage list.
+  • **Completion % needed a volume floor**, and needed it badly — the pool holds
+    every passer, so without one a backup who went 2-for-2 leads the country at
+    100%. Gated on the NCAA's own passing qualifier, **15 attempts per game
+    played**, rather than a fixed season total: this panel is read in week 3 as
+    often as in January, and a flat threshold is either empty early or useless
+    late.
+
+The metric switch is deliberately quieter than the position tabs above it —
+underline in team colour rather than a filled chip. Those are a destination
+change (which group), this is a mode within one (which number ranks them);
+giving both the filled treatment would have stacked two identical-looking
+switches and made neither read as subordinate.
+
+**Follow-up, same day:** the metric row moved to the LEFT, under the position
+tabs. It started right-aligned because it replaced a column header sitting over
+its own right-aligned numbers — but it stopped being a header the moment it
+became three buttons. A control belongs with the control above it. Measured
+after: the first metric button's text lands within a pixel of PASS, from the
+existing paddings rather than a magic value that would rot the moment either
+changed.
+
+---
+
+## Phase — The recruiting editor's dropdowns opened behind it (2026-08-07)
+
+**User report.** "None of the dropdowns work here" — the Edit Recruiting modal,
+all eleven of them (Stage plus ten school slots).
+
+**They worked. They opened underneath the modal.** Every `Select` portals its
+option panel to `<body>` and takes its depth from `useModalLayer`, the app's
+open-order stack: base 100, step 10. Opened as the only overlay, the panel
+claimed **z-110** — and this modal was a hand-rolled `fixed inset-0 z-[120]`.
+So the panel painted behind it every time: the trigger flipped its chevron and
+nothing appeared, which reads exactly like a dead control.
+
+The Select's own comment had already named this case — *"a dropdown opened
+INSIDE a modal takes the next slot above that modal, which is the whole reason
+the editors' selects will work when they're converted."* This editor was one of
+the unconverted ones.
+
+**Converted to `ModalOverlay`**, so the modal claims a layer on open and a
+Select inside it claims the NEXT one. The dropdown is above its own modal by
+construction rather than by two hardcoded numbers happening to agree.
+
+**Verified in the running app**, and not just by eye: with the stage dropdown
+open, the panel measures **z-120 against the modal's z-110** (the exact
+inversion of before), it lists its five real options, and a hit-test at the
+panel's centre returns an option button — so it is genuinely on top and
+clickable, not merely painted.
+
+**Two sibling modals share the pattern** and are left alone deliberately: the
+stat-unlock prompt (`z-[120]`) and Force Commit (`z-[130]`) in the same file
+contain no `Select`, so nothing is broken there today. Worth converting the next
+time either grows a dropdown — noted here so the symptom is recognisable rather
+than re-diagnosed from scratch.
+
+---
+
+## Phase — The Heisman is a race until the season says otherwise (2026-08-07)
+
+Flagged while fixing the Heisman trophy last session, then asked for directly.
+
+**Two surfaces called the man at rank 0 the winner, in week 3.** The
+`heismanRanking` updates every week and rank 0 moves with it, so the Annual
+Awards page crowned whoever happened to lead in October under the heading
+"Heisman Trophy". The NCAA Hub's feature was worse in an instructive way — it
+read `rank === 0 ? 'Heisman Winner' : 'Heisman Leader'`, which LOOKS like a real
+test and is not: rank 0 is occupied from the moment the ranking exists, so the
+"Leader" branch was unreachable.
+
+Both now use `seasonAwardsDecided` — the same gate the Trophy Room and a
+player's Journey already use before granting the trophy. That agreement is the
+point: a page crowning a champion while his trophy is deliberately withheld from
+the trophy case is the app contradicting itself in two places at once. The test
+was already written for that job; it is now exported and named rather than
+inlined.
+
+**Only the words change.** The candidates still show — a Heisman race IS the
+story in November:
+
+  • Undecided: "Heisman Race" · "current leader" beside the position · "Contenders"
+  • Decided: "Heisman Trophy" · no qualifier · "Finalists"
+
+**Verified both branches on one real mid-season archive.** As synced (week ~5,
+no awards handed out) it reads Heisman Race / current leader / Contenders. With
+a single marquee award seeded so the season reads as decided, the same page
+flips to Heisman Trophy / Finalists with no leader qualifier.
+
+---
+
+## Phase — Saying HEY, this game matters (2026-08-07)
+
+**User direction.** "The shields are fine. We need a way to say HEY this game is
+important. Users expect that." Asked which shape it should take; the answer was
+NAME THE OCCASION, qualifying on rivalries, ranked-vs-ranked, and the postseason.
+
+**The words were already in the save and the app was throwing them away.** It
+drew an anonymous shield for a matchup the game itself calls "The Game", the
+"Iron Bowl", the "Tiger Bowl". `getRivalryName` already resolved them — and now
+resolves them leaguewide — so this is presentation catching up with data.
+
+A single line under the opponent, small-caps in the team accent:
+
+  • Postseason → its own name (CFP Quarterfinal, National Championship)
+  • Conference title → "SEC Championship"
+  • Rivalry → the save's name for it, or the user's if they renamed it
+  • Ranked vs ranked → "#8 vs #5"
+
+**ONE LINE, MOST SPECIFIC FIRST.** A game can qualify several ways and stacking
+every reason turns a schedule into a paragraph, so the occasion that subsumes the
+others wins. Ranked-vs-ranked is the exception: it ADDS rather than replaces —
+"Iron Bowl" is always big, "#8 vs #6" says this one is bigger — so it rides as a
+suffix where a name exists and stands alone where it doesn't.
+
+Null for an ordinary game, deliberately: **if every row says something, no row
+says anything.** Measured on a real 12-game schedule, 2 rows carried a line.
+
+**`teamRank` is new and is what makes the ranked test real.** The schedule
+carried the opponent's rank at kickoff but not our own, so "ranked vs ranked" was
+half a test. It resolves through exactly the same capture-first rule, so a team
+genuinely unranked that week reads null rather than falling through to its rank
+today.
+
+**Every branch verified in the running app**, seeding ranks where the fixture
+lacked them: `#8 VS #5` alone, `TIGER BOWL` and `IRON BOWL` alone, `IRON BOWL ·
+#8 VS #6` combined, and on a browsed team's schedule `SEC CHAMPIONSHIP`, `CFP
+QUARTERFINAL`, `CFP SEMIFINAL`, `NATIONAL CHAMPIONSHIP`.
+
+The browsed table gets everything except the ranked line — a browsed team's own
+kickoff rank isn't tracked leaguewide, and half a test is not worth printing.
+
+---
+
+## Phase — The occasion moves to Game Info, and the trophy replaces the shield (2026-08-07)
+
+**User correction, with the evidence attached.** A screenshot of five straight
+schedule rows each carrying a name AND a "#2 VS #4": *"I see what you're saying
+about noise now."* Three changes, all subtractive except the last.
+
+**Off the schedule entirely.** The occasion line is gone from both tables. It
+now lives only on Game Info — the one surface that is already about a single
+game, where a line describing it is the subject rather than a decoration.
+
+**The ranks are gone from the text everywhere.** They were the noisiest part:
+the schedule prints the opponent's rank in its own column, and the Game Info
+header prints each team's rank above its helmet. A third telling, inline, was
+pure repetition. `gameOccasion` no longer takes ranks at all — the parameter is
+gone, not merely unused.
+
+**An unnamed rivalry now says "Rivalry".** The matchup is the fact; the name is
+a nicety the game supplies for only some of them — **195 of the save's 272
+pairings are named, 77 are not** (Akron–Ohio, Arizona–Texas Tech, Arizona
+State–Utah…). Those said nothing before. This needed a real
+`isKnownRivalry(a, b, saveFlag)` in rivalryAssetMapping: callers had been
+answering "is this a rivalry" by testing whether `getRivalryLogoPath` returned
+null, which reads as a coincidence rather than a check.
+
+**THE TROPHY OUTRANKS THE SHIELD.** Where a matchup has real silverware, Game
+Info's hero mark is now the trophy — the Iron Bowl draws the James E. Foy Trophy
+rather than a rivalry crest. The user's reasoning, and it is right: the Little
+Brown Jug is a thing you can hold, the shield is a badge saying this fixture
+counts. Asked of the MATCHUP rather than of a won trophy, because the question is
+what is on the table tonight and that has an answer before kickoff. ~92 pairings
+have trophy art; the rest keep the shield, which is why the fallback stays.
+
+Game Info also gained the occasion in words, which it never had: it was reading
+`gameTypeLabel`, which resolves a rivalry from `game.rivalryName` — and this
+page's adapter builds its ScheduleGame out of neutral game detail with that field
+null, so a rivalry printed nothing there at all.
+
+**Verified:** the schedule is clean of occasion text, and the Iron Bowl box score
+shows the Foy Trophy between the helmets with "Iron Bowl" above the venue and
+each team's rank still on its own side.
+
+---
+
+## Phase — A browsed team's schedule shows where its games were played (2026-08-07)
+
+User request. The Location column now appears on the team-switcher schedule too.
+
+**The reason it was excluded had quietly stopped being true.** The table's own
+doc comment said stadiums are "only tracked for the user's own games" — but the
+venue chain is shipped reference data (stadiums by team, bowl venues,
+championship sites) plus the save's own `neutralVenueId`, and neither half was
+ever user-scoped. The one genuinely missing piece was that a browsed game didn't
+carry the venue reference or its home/away/neutral flag. `neutralVenueId` started
+travelling with the CFP-bowl work; `siteType` now joins it, read across from the
+same `schedule` snapshot the bowl identity comes from.
+
+**`getLocationDisplay` is structural now** (`LocationFields`) rather than
+demanding a whole `ScheduleGame`. A second table shouldn't have to fake twenty
+irrelevant fields to ask where a game was played.
+
+**The occasion label moved to the CALLER.** `LocationCell`'s fallback text used
+`game.gameType`/`gameTypeLabel`, which needs bowl identity — fields with nothing
+to do with location. Dragging them into `LocationFields` would have made a venue
+lookup depend on what kind of game it was; passing the label in keeps the cell
+about one thing.
+
+**Verified on a real 16-game browsed schedule**, including the cases that
+actually test the chain: a neutral-site opener resolves to Mercedes-Benz Stadium,
+Atlanta rather than the nominal home team's field; the CFP quarterfinal reads
+Caesars Superdome, New Orleans; the semifinal Hard Rock Stadium, Miami Gardens;
+and home games read Neyland Stadium, Knoxville.
+
+Kickoff time and the game-detail link stay user-only — those really are.
+
+---
+
+## Phase — Schedule columns, and a browsed team wearing its own colours (2026-08-07)
+
+Four asks, three on the schedule tables and one on the shell.
+
+**"Opp Rec", not "Rec".** The user's schedule has TWO won-lost columns — the
+opponent's, and yours after the game — and both were labelled "Rec", leaving the
+reader to work out which was which from position. The opponent's is now named.
+
+**The browsed table gained the team's own running record**, in the same place
+the user's schedule puts it: right of Result. `applyLeagueRunningRecords` is the
+browsed twin of `getSchedule`'s version, deliberately with the same rule — ties
+count toward neither column, matching season totals everywhere else. A season
+should read the same way whoever is having it.
+
+**"Non-Conf" is gone from the browsed Type column.** Every other row there
+carries a MARK — a conference crest, a bowl logo, a playoff round — and
+"Non-Conf" was a word describing the ABSENCE of one. A blank cell says the same
+thing without asking to be read.
+
+**THE TEAM YOU ARE LOOKING AT NOW WEARS ITS OWN COLOURS.** Reported with a
+screenshot: Baylor selected, UCLA blue on the table header. The shell already
+repaints per SEASON so a coach's earlier school shows its own colours; browsing
+another PROGRAM is the same idea one step further, and it was the one case still
+painted in somebody else's.
+
+Applied in `SeasonThemedShell` rather than page by page, because the shell owns
+the CSS vars — every table header, chip and accent downstream follows without
+knowing this exists. Cleared the moment the switcher returns to My Team, so a
+browsed team's colours can never be left behind on the user's own dynasty.
+
+**Verified live:** the header goes from Auburn navy `rgb(13,34,63)` to Baylor
+green `rgb(21,71,53)`; the headers read
+`Wk | Rank | Opp Rec | | Opponent | Type | Location | Result | Rec`; the last
+row carries `8-5 (4-5)`; and "Non-Conf" appears nowhere on the page.
+
+---
+
+## Phase — Four leaders lay out 2x2 (2026-08-07)
+
+User direction. Passing gained a fourth leader card when Passer Rating joined it
+earlier today, and at a fixed three columns that laid out 3 + 1 — an orphan on a
+row of its own beside two card-widths of nothing.
+
+The column count now follows the card count: **four gets two columns, everything
+else keeps three.** Three and two already fill their row; only four was ragged.
+Measured after: 4 cards, 2 rows, 2 columns, each card 604px wide against ~400
+before. Rushing's three are untouched in a single row of three.
+
+Written as whole class strings rather than an interpolated
+`xl:grid-cols-${n}` — Tailwind scans source TEXT for class names, so a computed
+one is never generated and the grid would have silently fallen back to one
+column.

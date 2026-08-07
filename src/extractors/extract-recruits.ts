@@ -112,7 +112,7 @@ function parseStarRating(raw: string): number {
  * 'Signed'`, and building the full reverse map found zero players appearing
  * in more than one team's list (a clean, exclusive source, not a guess).
  */
-async function buildSignedDestinationMap(
+export async function buildSignedDestinationMap(
   franchise: OpenFranchise,
   teamTable: { records: FranchiseRecord[] },
 ): Promise<Map<number, string>> {

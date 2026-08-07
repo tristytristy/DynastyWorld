@@ -1273,6 +1273,8 @@ export interface ScheduleGame {
   result: 'W' | 'L' | 'T' | null;
   /** The opponent's current poll rank, not their rank at the time this game was/will be played — no weekly poll history exists in the save. */
   opponentCurrentRank: number | null;
+  /** OUR rank around kickoff, same capture rule as the opponent's — what makes a ranked-vs-ranked test real. Null when unranked that week. */
+  teamRank: number | null;
   /**
    * True when the rank/record above were CAPTURED around this game's kickoff
    * rather than read live. False means no capture exists (the game predates
@@ -1493,6 +1495,13 @@ export interface AwardsOverview {
   leagueAwards: LeagueAward[];
   heismanWinner: HeismanCandidate | null;
   heismanFinalists: HeismanCandidate[];
+  /**
+   * Whether this season's awards have actually been handed out (see
+   * seasonAwardsDecided). False means `heismanWinner` is the current LEADER of a
+   * live race, not a champion — the ranking updates every week and rank 0 moves
+   * with it. Surfaces must say which one they are showing.
+   */
+  heismanDecided: boolean;
   teamHonorCounts: TeamHonorCounts;
   /** Full leaguewide All-American/All-Conference roster — the UI filters this client-side by kind/tier/conference rather than the server pre-splitting it. Postseason (earned) honors only. */
   honorsRoster: HonorRosterEntry[];
@@ -1601,16 +1610,36 @@ export interface LeagueTeamGame {
   bowlName: string | null;
   /** Stable bowl identity for logo matching; blank for CFP bracket placeholders. */
   bowlAssetName: string | null;
+  /**
+   * `SeasonGame.Stadium` as `tableId:rowNumber` when the game isn't at the home
+   * team's own field — the one thing that says WHICH bowl a CFP quarterfinal or
+   * semifinal is (see shared/cfpBowls.ts), since the save gives those a
+   * placeholder BowlGame row with a blank asset name.
+   *
+   * Carried here so a browsed team's schedule can pair the bowl's logo with the
+   * round graphic exactly as the user's own schedule and the Scores page do.
+   * Null on a season synced before it was extracted, which simply leaves the
+   * round mark standing alone.
+   */
+  neutralVenueId: string | null;
   isNationalChampionship: boolean;
   /** This conference's championship game — see shared/championshipWeek.ts. */
   isConferenceChampionship: boolean;
   isHome: boolean;
+  /** Home/away/neutral from the leaguewide `schedule` snapshot — what the venue lookup needs to know before it can name a stadium. */
+  siteType: 'home' | 'away' | 'neutral';
   opponent: string;
   /** The opponent's league team index — opens the Team modal. */
   opponentTeamIndex: number;
   teamScore: number | null;
   opponentScore: number | null;
   result: 'W' | 'L' | 'T' | null;
+  /**
+   * THIS team's record after the game — the same running total the user's own
+   * schedule shows, so a browsed season reads as a season rather than a list of
+   * results. Null for an unplayed game.
+   */
+  runningRecord: { overallWins: number; overallLosses: number; conferenceWins: number; conferenceLosses: number } | null;
   /** Same classification the user's own schedule uses — bowl/playoff, or conference vs non-conference by comparing both teams' conference membership (from the teams snapshot). */
   gameType: 'conference' | 'non-conference' | 'bowl';
   /** The opponent's poll rank captured around kickoff, not their rank today. Null when this game predates context tracking. See schema_v11_game_context.sql. */
@@ -1833,6 +1862,16 @@ export interface NationalRecruit {
   topSchools: NationalRecruitSchool[];
   /** True if this prospect is on the user's own recruiting board (merged from the board snapshot in getNationalRecruits). */
   onUserBoard: boolean;
+  /**
+   * The school this prospect signed with, once `recruitStage === 'Signed'`;
+   * null while undecided, and null on any season synced before this field
+   * existed (it comes from the extractor, so an old snapshot has no value to
+   * give — surfaces fall back to the plain Signed badge).
+   *
+   * Pass straight to `TeamLogo`'s `assetName`: that lookup is keyed by
+   * normalized display name, not the save's raw `AssetName`.
+   */
+  signedTeamDisplayName: string | null;
 }
 
 /** A viewed (any) team's championship honors for one season, from the leaguewide YearSummary snapshot — so Team Hub can show the same trophies the user's own team gets. */
@@ -2227,12 +2266,24 @@ export interface MediaTaggedPlayer {
   lastName: string;
   position: string;
   portraitAssetName: string | null;
+  /** The number the caption prints in front of the name ("#66 Jensen Somerville"). 0 when the roster row couldn't be resolved. */
+  jerseyNumber: number;
 }
 
 /** MediaItemWithPath plus display metadata resolved server-side against the item's OWN season (game label, tagged players) — for the read-only galleries on player bios and game pages, which span or sit outside the Media page's selected season. */
 export interface MediaItemResolved extends MediaItemWithPath {
   gameLabel: string | null;
   taggedPlayers: MediaTaggedPlayer[];
+  /**
+   * The linked game itself, from the item's OWN season's schedule — not just a
+   * label. The shared media plate needs the game, not a string: it writes the
+   * caption as a sentence ("38-16 win at USC in week 13.") and resolves the
+   * occasion mark in the corner (bowl, playoff round, conference championship,
+   * rivalry shield) from the same fields the schedule and box score use. A
+   * pre-formatted label could do neither, which is why the two surfaces used to
+   * look like different apps.
+   */
+  game: ScheduleGame | null;
 }
 
 /** One season's row in the Dynasty Trends dashboard — assembled server-side from that season's snapshots + ranking_history. */
@@ -3131,6 +3182,12 @@ export interface DynastyApi {
       teamIndex: number,
       seasonId?: number,
     ) => Promise<LeagueTeamRoster | null>;
+    /** Which team (and which season's snapshot) holds this player leaguewide — see findLeaguePlayerTeam. */
+    findLeaguePlayerTeam: (
+      dynastyId: string,
+      playerId: number,
+      seasonId?: number,
+    ) => Promise<{ teamIndex: number; seasonId: number } | null>;
     getAllLeaguePlayers: (dynastyId: string, seasonId?: number) => Promise<NationalPlayer[] | null>;
     getLeagueTeamSchedule: (
       dynastyId: string,
@@ -3227,6 +3284,11 @@ export interface DynastyApi {
       teamIndex: number,
       seasonId?: number,
     ) => Promise<{ isUserTeam: boolean; rivals: SaveRival[] } | null>;
+    /** Every rivalry in the league as name pairings — empty for a season synced before this existed. */
+    getLeagueRivalries: (
+      dynastyId: string,
+      seasonId?: number,
+    ) => Promise<{ teamA: string; teamB: string; name: string | null }[]>;
     /** Team colors for a specific season (the team coached that season) — the coach-journey theming source; falls back to the dynasty theme. */
     getSeasonTheme: (dynastyId: string, seasonId?: number) => Promise<DynastyTheme | null>;
     getTeamAwardDefinitions: () => Promise<TeamAwardDefinitionSummary[]>;
