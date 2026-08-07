@@ -30,6 +30,7 @@ export const COACH_TABS: { to: string; label: string }[] = [
   { to: '', label: 'Overview' },
   { to: 'coach/season', label: 'Season' },
   { to: 'coach/career', label: 'Career' },
+  { to: 'coach/statistics', label: 'Statistics' },
   { to: 'coach/staff', label: 'Staff' },
   { to: 'coach/milestones', label: 'Milestones' },
   { to: 'coach/trophy-room', label: 'Trophy Room' },

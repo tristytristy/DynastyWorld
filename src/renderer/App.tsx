@@ -7,6 +7,7 @@ import { CoachHubLayout } from './pages/coach/CoachHubLayout';
 import { CoachOverview } from './pages/coach/CoachOverview';
 import { CoachSeason } from './pages/coach/CoachSeason';
 import { CoachCareer } from './pages/coach/CoachCareer';
+import { CoachStatistics } from './pages/coach/CoachStatistics';
 import { CoachStaff } from './pages/coach/CoachStaff';
 import { CoachMilestones } from './pages/coach/CoachMilestones';
 import { TrophyRoom } from './pages/coach/TrophyRoom';
@@ -175,6 +176,7 @@ export function App() {
                       <Route index element={<CoachOverview />} />
                       <Route path="coach/season" element={<CoachSeason />} />
                       <Route path="coach/career" element={<CoachCareer />} />
+                      <Route path="coach/statistics" element={<CoachStatistics />} />
                       <Route path="coach/staff" element={<CoachStaff />} />
                       <Route path="coach/milestones" element={<CoachMilestones />} />
                       <Route path="coach/trophy-room" element={<TrophyRoom />} />

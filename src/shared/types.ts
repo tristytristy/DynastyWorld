@@ -3153,6 +3153,8 @@ export interface DynastyApi {
       anchorSeasonId?: number,
     ) => Promise<PlayerStatSeason[]>;
     getCoachHall: (dynastyId: string) => Promise<CoachHall | undefined>;
+    /** The coach's own career production — see database/getCoachStatistics.ts. */
+    getCoachStatistics: (dynastyId: string) => Promise<CoachStatistics | undefined>;
     /** Everyone this coach coached — fetched lazily, only when the picker opens. */
     getHallEligible: (dynastyId: string) => Promise<HallEligiblePlayer[]>;
     getLegendStatus: (dynastyId: string, playerId: number) => Promise<LegendStatus>;
@@ -3534,3 +3536,60 @@ export interface DynastyApi {
   };
 }
 
+
+/**
+ * A coach's own career production — everything his players did while he coached
+ * them, added up. See database/getCoachStatistics.ts for why this sums SEASON
+ * lines rather than career lines.
+ */
+export interface CoachStatTotals {
+  passYards: number;
+  passTDs: number;
+  passInts: number;
+  passCompletions: number;
+  passAttempts: number;
+  rushYards: number;
+  rushTDs: number;
+  rushAttempts: number;
+  receivingYards: number;
+  receivingTDs: number;
+  receptions: number;
+  tackles: number;
+  sacks: number;
+  interceptions: number;
+  forcedFumbles: number;
+  passDeflections: number;
+}
+
+export interface CoachStatSeason {
+  seasonYear: number;
+  /** The school he coached that year — a career can span several. */
+  teamName: string | null;
+  totals: CoachStatTotals;
+}
+
+/** The best single season any of his players produced in one category. */
+export interface CoachStatLeader {
+  category: string;
+  unit: string;
+  value: number;
+  playerName: string;
+  position: string | null;
+  seasonYear: number;
+  teamName: string | null;
+}
+
+export interface CoachStatistics {
+  coachId: number;
+  /** Seasons that actually contributed numbers (had a stats snapshot). */
+  seasonsCounted: number;
+  /** Seasons he coached at all — larger than seasonsCounted when some were never synced. */
+  seasonsCoached: number;
+  playersCoached: number;
+  firstSeason: number;
+  lastSeason: number;
+  career: CoachStatTotals;
+  /** Newest first. */
+  seasons: CoachStatSeason[];
+  leaders: CoachStatLeader[];
+}

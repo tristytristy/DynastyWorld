@@ -84,6 +84,7 @@ import { getPlayerStatHistory } from '../../database/getPlayerStatHistory';
 import { getHeadToHead } from '../../database/getHeadToHead';
 import { activeCoachId, addLegend, assignLegend, getCoachHall, getHallEligible, getLegendStatus, removeLegend } from '../../database/hallOfLegends';
 import { getCoachingTree } from '../../database/getCoachingTree';
+import { getCoachStatistics } from '../../database/getCoachStatistics';
 import {
   confirmTeamAwardWinner,
   finalizeTeamAwards,
@@ -442,6 +443,10 @@ export function registerDatabaseHandlers(): void {
     dynasty's own seasons (`user_coach_id`), so letting a caller pass one in
     would be inventing a way to write into somebody else's Hall.
   */
+  ipcMain.handle(IPC.db.getCoachStatistics, async (_event, dynastyId: string) => {
+    return getCoachStatistics(dynastyId);
+  });
+
   ipcMain.handle(IPC.db.getCoachHall, async (_event, dynastyId: string) => {
     return getCoachHall(dynastyId);
   });

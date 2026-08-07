@@ -61,6 +61,7 @@ export const IPC = {
     getPlayerStatHistory: 'db:getPlayerStatHistory',
     getHeadToHead: 'db:getHeadToHead',
     getCoachHall: 'db:getCoachHall',
+    getCoachStatistics: 'db:getCoachStatistics',
     getHallEligible: 'db:getHallEligible',
     getLegendStatus: 'db:getLegendStatus',
     addLegend: 'db:addLegend',

@@ -95,7 +95,7 @@ export function activeCoachId(dynastyId: string): number | null {
   return found?.user_coach_id ? Number(found.user_coach_id) : null;
 }
 
-interface CoachSeason {
+export interface CoachSeason {
   seasonId: number;
   seasonYear: number;
   teamIndex: number | null;
@@ -110,7 +110,7 @@ interface CoachSeason {
  * fifteen — and it's called by three different entry points, so the waste
  * multiplied.
  */
-function coachSeasons(dynastyId: string, coachId: number): CoachSeason[] {
+export function coachSeasons(dynastyId: string, coachId: number): CoachSeason[] {
   const stmt = getDb().prepare(
     'SELECT id, season_year, user_team_id FROM seasons WHERE dynasty_id = ? AND user_coach_id = ? ORDER BY season_year ASC',
   );
