@@ -40,6 +40,34 @@ const SURFACE_CLASSES: Record<SurfaceLevel, string> = {
 };
 
 /**
+ * Utilities that style the RELATIONSHIP BETWEEN CHILDREN have to live on the
+ * element that actually holds them.
+ *
+ * Children are wrapped in a `relative` div (see below), so a caller's
+ * `space-y-*` or `divide-*` landed on the `<section>`, whose only children are
+ * that wrapper and — on raised/overlay — the gradient span. Both utilities
+ * style the gaps BETWEEN siblings, and with one real sibling there are none:
+ * the classes parsed, applied, and did nothing at all. Found via the recruit
+ * panel, whose sections were flush against each other because its `space-y-5`
+ * had never once taken effect (user report 2026-08-07); the Weekly Honors card
+ * had likewise been asking for row dividers it never got.
+ *
+ * So they are forwarded to the wrapper instead of silently swallowed. Padding,
+ * background and border stay on the section, where they describe the panel
+ * itself. Responsive and dark: prefixes are kept with their utility.
+ */
+const CHILD_SPACING_UTILITY = /^(?:[\w-]+:)*(?:space-[xy]-|divide-)/;
+
+function splitChildSpacing(className: string): { panel: string; body: string } {
+  const panel: string[] = [];
+  const body: string[] = [];
+  for (const token of className.split(/\s+/).filter(Boolean)) {
+    (CHILD_SPACING_UTILITY.test(token) ? body : panel).push(token);
+  }
+  return { panel: panel.join(' '), body: body.join(' ') };
+}
+
+/**
  * Flat panels with the signature single cut corner (see `.corner-cut` in
  * globals.css) — no box-shadow: clip-path would clip it, and the hard-edge
  * aesthetic is deliberately flat.
@@ -53,11 +81,12 @@ export function SurfaceCard({
   className?: string;
   surface?: SurfaceLevel;
 }) {
+  const { panel, body } = splitChildSpacing(className);
   return (
     <section
       // `surface-card` is the hook the between-sections divider selects on; it
       // carries no styling of its own.
-      className={`surface-card corner-cut relative backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${className}`}
+      className={`surface-card corner-cut relative backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${panel}`}
     >
       {/* The gradient rides on its own layer rather than replacing the surface
           colour: SURFACE_CLASSES still defines what this panel IS, and this only
@@ -71,7 +100,7 @@ export function SurfaceCard({
       {surface !== 'primary' && (
         <span aria-hidden className={`pointer-events-none absolute inset-0 ${GRADIENT_SURFACE}`} />
       )}
-      <div className="relative">{children}</div>
+      <div className={`relative ${body}`}>{children}</div>
     </section>
   );
 }
