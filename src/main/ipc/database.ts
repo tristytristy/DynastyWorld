@@ -48,7 +48,7 @@ import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../data
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
 import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
 import { getTeamTheme } from '../../database/getTeamTheme';
-import { getSaveRivals } from '../../database/getSaveRivals';
+import { getSaveRivals, getLeagueRivalries } from '../../database/getSaveRivals';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
 import { getRoster } from '../../database/getRoster';
@@ -65,7 +65,7 @@ import { getCoaches } from '../../database/getCoaches';
 import { getAwards } from '../../database/getAwards';
 import { getRankings } from '../../database/getRankings';
 import { getRecruits } from '../../database/getRecruits';
-import { getLeagueTeams, getLeagueTeamOverview, getLeagueTeamRoster, getAllLeaguePlayers, getLeagueTeamSchedule, getLeagueTeamHonors, getTeamCard } from '../../database/getLeagueRoster';
+import { getLeagueTeams, getLeagueTeamOverview, getLeagueTeamRoster, findLeaguePlayerTeam, getAllLeaguePlayers, getLeagueTeamSchedule, getLeagueTeamHonors, getTeamCard } from '../../database/getLeagueRoster';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getPlayoffBracket } from '../../database/getPlayoffBracket';
 import { getNationalTeamStats } from '../../database/getNationalTeamStats';
@@ -376,6 +376,13 @@ export function registerDatabaseHandlers(): void {
     return getLeagueTeamRoster(dynastyId, teamIndex, seasonId) ?? null;
   });
 
+  ipcMain.handle(
+    IPC.db.findLeaguePlayerTeam,
+    async (_event, dynastyId: string, playerId: number, seasonId?: number) => {
+      return findLeaguePlayerTeam(dynastyId, playerId, seasonId);
+    },
+  );
+
   ipcMain.handle(IPC.db.getAllLeaguePlayers, async (_event, dynastyId: string, seasonId?: number) => {
     return getAllLeaguePlayers(dynastyId, seasonId) ?? null;
   });
@@ -522,6 +529,10 @@ export function registerDatabaseHandlers(): void {
       return getSaveRivals(dynastyId, teamIndex, seasonId);
     },
   );
+
+  ipcMain.handle(IPC.db.getLeagueRivalries, async (_event, dynastyId: string, seasonId?: number) => {
+    return getLeagueRivalries(dynastyId, seasonId);
+  });
 
   ipcMain.handle(
     IPC.db.getSeasonTheme,

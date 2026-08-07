@@ -10,6 +10,7 @@ import { CLASS_ORDER } from '../../lib/rosterOrder';
 import { formatAwardLabel, groupWeeklyHonors } from '../../lib/awardFormat';
 import { getAwardTrophyPath } from '../../lib/trophyAssetMapping';
 import { gameImpactScore, gameResultLine } from '../../../shared/gameImpactScore';
+import { formatLinePasserRating } from '../../../shared/passerRating';
 import { findSamePlayer } from '../../../shared/playerIdentity';
 import type { PlayerModalFallback } from '../../data/PlayerModalProvider';
 import { useEditorModal } from '../../data/EditorModalProvider';
@@ -170,6 +171,9 @@ function HonorsSection({
   );
 }
 
+/** What a stat with nothing behind it prints. Shared so the tile strips can recognise and drop it — see `seasonTiles`. */
+const DASH = '-';
+
 /** The statistical families a stat belongs to — what `RELEVANT_GROUPS` filters on so a quarterback isn't shown a receiving grid full of zeros. */
 type StatGroup = 'passing' | 'rushing' | 'receiving' | 'tackling' | 'coverage' | 'takeaways' | 'passRush';
 
@@ -190,6 +194,23 @@ const OFFENSIVE_FIELDS: StatField<OffensiveStatLine | OffensiveGameLine>[] = [
   // INT belongs to the passing group, so a quarterback always sees it — a clean
   // sheet is a fact worth showing, and it was missing from the season table.
   { label: 'INT', short: 'INT', group: 'passing', value: (l) => l.passInts, recorded: (l) => l.passInts },
+  /*
+    NCAA passer rating (shared/passerRating.ts) — the one number that says how
+    well he actually threw it, rather than how often. Serves the season tiles,
+    the career totals and the season-by-season table from this single entry.
+
+    `recorded` is ATTEMPTS, not the rating: a rating of 0 is a real (dreadful)
+    performance, so testing the rating itself would hide the very quarterback it
+    describes. Anyone who threw a pass has a rating; nobody else does, and they
+    get the dash.
+  */
+  {
+    label: 'Rating',
+    short: 'Rtg',
+    group: 'passing',
+    value: (l) => formatLinePasserRating(l) ?? DASH,
+    recorded: (l) => l.passAttempts,
+  },
   { label: 'Rush Att', group: 'rushing', value: (l) => l.rushAttempts, recorded: (l) => l.rushAttempts },
   { label: 'Rush Yds', short: 'Rush Yds', group: 'rushing', value: (l) => l.rushYards, recorded: (l) => l.rushYards },
   { label: 'Rush TD', short: 'Rush TD', group: 'rushing', value: (l) => l.rushTDs, recorded: (l) => l.rushTDs },
@@ -1770,27 +1791,43 @@ export function PlayerProfileContent({
     setRoster(undefined);
     setResolvedSeasonId(seasonId);
 
+    /**
+     * Render from a team's league snapshot. LeagueRosterPlayer extends
+     * RosterPlayer, so the full profile layout renders as-is; per-player game
+     * logs aren't tracked leaguewide, so those sections keep their honest
+     * empties. Returns false when that team's snapshot has nothing to show,
+     * which leaves the caller free to fall through.
+     */
+    async function loadFromLeague(teamIndex: number, snapshotSeasonId?: number): Promise<boolean> {
+      const leagueRoster = await window.api.db.getLeagueTeamRoster(dynastyId, teamIndex, snapshotSeasonId);
+      if (cancelled) return true;
+      if (!leagueRoster) return false;
+      setResolvedSeasonId(leagueRoster.seasonId);
+      setRoster(leagueRoster.players);
+      setAllStats(
+        leagueRoster.players
+          .filter((p) => p.seasonStat)
+          .map((p) => ({ playerId: p.id, category: p.seasonStat!.category, career: null, season: p.seasonStat!.season })),
+      );
+      setHeroTeamName(leagueRoster.displayName ?? fallback?.teamDisplayName ?? null);
+      setPlayerSeasonGamelog(null);
+      setSchedule(null);
+      return true;
+    }
+
     async function load() {
       const seasons = await window.api.db.getSeasons(dynastyId);
       if (!cancelled) setSeasonsList(seasons);
 
-      // League mode: the player lives on another team's league snapshot, not
-      // the user's roster. LeagueRosterPlayer extends RosterPlayer, so the
-      // full profile layout renders as-is; per-player game logs aren't
-      // tracked leaguewide, so those sections keep their honest empties.
+      // League mode: the caller already knows which team's snapshot the player
+      // lives on (the team switcher, the national pages), so go straight there.
       if (leagueTeamIndex !== undefined) {
-        const leagueRoster = await window.api.db.getLeagueTeamRoster(dynastyId, leagueTeamIndex, seasonId);
+        if (await loadFromLeague(leagueTeamIndex, seasonId)) return;
         if (cancelled) return;
-        setResolvedSeasonId(leagueRoster?.seasonId);
-        setRoster(leagueRoster?.players ?? null);
-        setAllStats(
-          leagueRoster
-            ? leagueRoster.players
-                .filter((p) => p.seasonStat)
-                .map((p) => ({ playerId: p.id, category: p.seasonStat!.category, career: null, season: p.seasonStat!.season }))
-            : null,
-        );
-        setHeroTeamName(leagueRoster?.displayName ?? fallback?.teamDisplayName ?? null);
+        setResolvedSeasonId(undefined);
+        setRoster(null);
+        setAllStats(null);
+        setHeroTeamName(fallback?.teamDisplayName ?? null);
         setPlayerSeasonGamelog(null);
         setSchedule(null);
         return;
@@ -1842,6 +1879,28 @@ export function PlayerProfileContent({
             break;
           }
         }
+      }
+
+      /*
+        STILL NOTHING — so he plays for somebody else, and that is not the same
+        as "no data" (user report 2026-08-07: clicking an Annual Award winner
+        from another program opened a stub reading "Full profile unavailable").
+        The league snapshot covers all 138 programs, so an opposing team's
+        Heisman winner has the same bio, ratings and season line as any player
+        the user browses through the team switcher — the surface that opened him
+        just had no `teamIndex` to point at. Resolve one and take the same
+        league path, which renders the real profile.
+
+        AFTER the user-roster search on purpose: a player on the user's own team
+        resolves to snapshots that also carry his game log and schedule, and the
+        league path has neither. The order costs an opposing player nothing (his
+        user-roster search always missed anyway) and protects the richer
+        rendering for everyone else.
+      */
+      if (!resolved) {
+        const location = await window.api.db.findLeaguePlayerTeam(dynastyId, playerId, seasonId);
+        if (cancelled) return;
+        if (location && (await loadFromLeague(location.teamIndex, location.seasonId))) return;
       }
 
       if (cancelled) return;
@@ -1925,11 +1984,16 @@ export function PlayerProfileContent({
       return <p className="text-slate-500 dark:text-slate-400">Player not found.</p>;
     }
 
-    // Leaguewide award data (Heisman, Annual Awards, All-American/Conference) references
-    // players from every team, but the local roster snapshot only covers the user's own
-    // team — so this branch is the common case for those, not an error. `awards` is keyed
-    // off the same leaguewide extraction, so honors for this player are still available
-    // even though a full roster/stats profile isn't.
+    /*
+      THE LAST RESORT, and no longer the ordinary fate of an opposing team's
+      award winner — the resolution above now finds those on the league snapshot
+      and renders the real profile. What reaches here is a player no synced
+      season holds a roster row for at all: a history-only dynasty (no league
+      snapshot was ever captured), or an award from a season imported before
+      leaguewide rosters were extracted. `awards` comes from a separate
+      leaguewide extraction, so his honors survive even when his roster row
+      doesn't — which is exactly the résumé this stub is worth showing for.
+    */
     const honorSeasons = buildPlayerHonorSeasons(awardHistory ?? [], playerId);
 
     const [fallbackFirstName, ...fallbackLastNameParts] = fallback.name.trim().split(/\s+/);
@@ -1955,7 +2019,7 @@ export function PlayerProfileContent({
         </SurfaceCard>
         <EmptySection
           title="Full profile unavailable"
-          message="This player is on an opposing team, so detailed bio, stats, and game log data aren't tracked for them in this dynasty — only your own team's roster is fully extracted."
+          message="No synced season in this dynasty has a roster entry for this player, so there's no bio, stats, or game log to show — only the honors below, which come from the league's award data. Syncing the season he played in fills the rest of this in."
         />
         <HonorsSection seasons={honorSeasons} />
       </div>
@@ -2004,7 +2068,7 @@ export function PlayerProfileContent({
               label: f.label,
               value: f.value(stats.season as DefensiveStatLine),
             }))
-        ).filter((t) => t.value !== 0 && t.value !== '0' && t.value !== '0/0')
+        ).filter((t) => t.value !== 0 && t.value !== '0' && t.value !== '0/0' && t.value !== DASH)
       : [];
 
   /**

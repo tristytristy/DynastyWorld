@@ -206,6 +206,49 @@ export function getLeagueTeamRoster(dynastyId: string, teamIndex: number, season
 }
 
 /**
+ * WHICH TEAM does this player belong to — asked of the whole league, not the
+ * user's roster.
+ *
+ * Leaguewide surfaces (Annual Awards, All-America teams, weekly honors, the
+ * Heisman board) carry a player id and a team NAME, but nothing that resolves to
+ * a `teamIndex` — so a click on an opposing team's award winner had no way to
+ * reach the league snapshot his full profile is sitting in, and the modal fell
+ * back to a name-and-portrait stub reading "Full profile unavailable". The data
+ * was there the whole time; only the join was missing.
+ *
+ * Searches the caller's season first, then every full-data season newest-first,
+ * because a career-spanning surface may hand over an id whose player has since
+ * left. The FCS pool and any team with no conference are skipped for the same
+ * reason getPlayerDevelopment skips them: index 255 is where the league parks
+ * departed players and un-enrolled recruits, and "resolving" one to it would
+ * open a roster of 4,500 strangers.
+ */
+export function findLeaguePlayerTeam(
+  dynastyId: string,
+  playerId: number,
+  seasonId?: number,
+): { teamIndex: number; seasonId: number } | null {
+  const seasons = getSeasonsByDynasty(dynastyId).filter((s) => s.hasFullData);
+  const searchOrder = [
+    ...(seasonId !== undefined ? seasons.filter((s) => s.id === seasonId) : []),
+    ...[...seasons].sort((a, b) => b.seasonYear - a.seasonYear),
+  ];
+
+  for (const season of searchOrder) {
+    const league = getSnapshot<LeagueRosterData>(season.id, 'leagueRoster');
+    const player = league?.players.find((p) => p.id === playerId);
+    if (!player || isFcsPool(player.teamIndex)) continue;
+    const team = (getSnapshot<TeamsSnapshotEntry[]>(season.id, 'teams') ?? []).find(
+      (t) => t.teamIndex === player.teamIndex,
+    );
+    // No team, or one with no conference, is the pool by another name.
+    if (!team || team.conferenceName == null) continue;
+    return { teamIndex: player.teamIndex, seasonId: season.id };
+  }
+  return null;
+}
+
+/**
  * Every player in the league for a season — the national counterpart to the
  * Team Hub roster. Same per-team league snapshot the browse pages use, but
  * flattened across all teams with each player's team name + conference joined
@@ -248,6 +291,30 @@ export function getAllLeaguePlayers(dynastyId: string, seasonId?: number): Natio
 }
 
 /** Any team's season schedule from the league-wide game snapshot, mapped relative to that team (their opponent, their W/L). */
+/**
+ * Wins-losses through each played game, in week order — the browsed-team twin of
+ * getSchedule's `applyRunningRecords`, and deliberately the same rule: ties
+ * count toward neither column, matching how season totals are read everywhere
+ * else in this app. Mutates in place; the caller has already sorted by week.
+ */
+function applyLeagueRunningRecords(games: LeagueTeamGame[]): void {
+  let overallWins = 0;
+  let overallLosses = 0;
+  let conferenceWins = 0;
+  let conferenceLosses = 0;
+  for (const game of games) {
+    if (game.result === null) continue;
+    if (game.result === 'W') {
+      overallWins++;
+      if (game.gameType === 'conference') conferenceWins++;
+    } else if (game.result === 'L') {
+      overallLosses++;
+      if (game.gameType === 'conference') conferenceLosses++;
+    }
+    game.runningRecord = { overallWins, overallLosses, conferenceWins, conferenceLosses };
+  }
+}
+
 export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seasonId?: number): LeagueTeamGame[] | null {
   if (isFcsPool(teamIndex)) return null;
   const resolved = resolveSeasonId(dynastyId, seasonId);
@@ -284,11 +351,22 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
   const bowlByGameId = new Map(
     (getSnapshot<GameData[]>(resolved, 'schedule') ?? []).map((g) => [
       g.gameId,
-      { bowlName: g.bowlName, bowlAssetName: g.bowlAssetName, isNationalChampionship: g.isNationalChampionship },
+      {
+        bowlName: g.bowlName,
+        bowlAssetName: g.bowlAssetName,
+        isNationalChampionship: g.isNationalChampionship,
+        // The venue reference rides along for the same reason the bowl name
+        // does: it is what identifies which bowl a CFP round actually is, and
+        // the leaguewide copy of it is the one that can be missing.
+        neutralVenueId: g.neutralVenueId ?? null,
+        // And whether it was played at anybody's home at all — the first thing
+        // the venue lookup asks before it tries to name a stadium.
+        isNeutralSite: g.isNeutralSite,
+      },
     ]),
   );
 
-  return games
+  const rows = games
     .filter((g) => g.homeTeamIndex === teamIndex || g.awayTeamIndex === teamIndex)
     .filter(
       (g) =>
@@ -333,6 +411,11 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         weekType: g.weekType,
         bowlName: bowlByGameId.get(g.gameId)?.bowlName ?? g.bowlName,
         bowlAssetName: bowlByGameId.get(g.gameId)?.bowlAssetName ?? null,
+        neutralVenueId: bowlByGameId.get(g.gameId)?.neutralVenueId ?? g.neutralVenueId ?? null,
+        siteType: (bowlByGameId.get(g.gameId)?.isNeutralSite ? 'neutral' : isHome ? 'home' : 'away') as LeagueTeamGame['siteType'],
+        // Filled by applyLeagueRunningRecords below, once the whole season is
+        // in week order — one game can't know the record it produced.
+        runningRecord: null,
         isNationalChampionship: bowlByGameId.get(g.gameId)?.isNationalChampionship ?? g.weekType === 'NationalChampionship',
         isConferenceChampionship: gameType === 'conference' && championshipWeek !== null && g.week === championshipWeek,
         isHome,
@@ -347,6 +430,9 @@ export function getLeagueTeamSchedule(dynastyId: string, teamIndex: number, seas
         opponentRecord: oppRecord ?? null,
       };
     });
+
+  applyLeagueRunningRecords(rows);
+  return rows;
 }
 
 /**
