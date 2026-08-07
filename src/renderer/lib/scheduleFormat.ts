@@ -6,6 +6,7 @@ import {
   getNationalChampionshipTrophyPath,
   getPlayoffRoundImagePath,
 } from './trophyAssetMapping';
+import { getRivalryName, isKnownRivalry } from './rivalryAssetMapping';
 import { getBowlVenue, getChampionshipVenue, getNeutralVenue } from './neutralVenues';
 import type { StadiumInfo } from './stadiumData';
 import type { ScheduleGame } from '../../shared/types';
@@ -85,8 +86,25 @@ export interface LocationDisplay {
  * identity via the Type column, and no other neutral-site venue data exists
  * to show instead.
  */
+/**
+ * Structural rather than `ScheduleGame`: a browsed team's schedule resolves its
+ * venues through exactly this chain and carries exactly these fields, and there
+ * is no reason a second table should have to fake a whole ScheduleGame to ask
+ * where a game was played.
+ */
+export interface LocationFields {
+  siteType: 'home' | 'away' | 'neutral';
+  isHome: boolean;
+  teamName: string;
+  opponent: string;
+  neutralVenueId: string | null;
+  isConferenceChampionship: boolean;
+  conferenceName: string | null;
+  bowlAssetName: string | null;
+}
+
 export function getLocationDisplay(
-  game: ScheduleGame,
+  game: LocationFields,
   getStadium: (teamName: string) => StadiumInfo | null,
 ): LocationDisplay {
   const at = (venue: { stadium: string; city: string; state: string }, badgeText = 'Neutral Site') => ({
@@ -200,4 +218,41 @@ export function getGameTypeImagePath(game: GameTypeFields, background: 'light' |
 export function getCfpBowlImagePath(game: GameTypeFields): string | null {
   const bowl = resolveCfpBowl(game.bowlName, game.neutralVenueId);
   return bowl ? getBowlLogoPath(bowl.assetName) : null;
+}
+
+/**
+ * WHAT THIS GAME IS — for the Game Info header, and nowhere else.
+ *
+ * It shipped on the schedule too, and the user's own screenshot of five straight
+ * rows each carrying a name AND a "#2 VS #4" made the case against it better
+ * than any argument: "I see what you're saying about noise now." So it lives on
+ * the one surface that is already about a single game, and the ranks are gone
+ * entirely — the schedule prints them in their own column and the Game Info
+ * header prints them above each helmet, so a third telling was the noisiest part
+ * of the line.
+ *
+ * ONE LINE, MOST SPECIFIC FIRST: the postseason event, then a conference title,
+ * then the rivalry. A rivalry the save hasn't named still says "Rivalry" — the
+ * matchup is the fact, and the name is a nicety the game only supplies for some
+ * of them.
+ *
+ * Null for an ordinary game.
+ */
+export function gameOccasion(
+  game: GameTypeFields & {
+    teamName: string;
+    opponent: string;
+    isRivalryGame?: boolean;
+    rivalryName?: string | null;
+  },
+): string | null {
+  // The postseason names itself — bowl, playoff round, or the title game.
+  if (game.gameType === 'bowl') return bowlLabel(game);
+  if (game.isConferenceChampionship && game.conferenceName) {
+    return `${game.conferenceName} Championship`;
+  }
+  // The save's own name for the matchup, or the user's if they renamed it.
+  const named = getRivalryName(game.teamName, game.opponent, game.rivalryName);
+  if (named) return named;
+  return isKnownRivalry(game.teamName, game.opponent, game.isRivalryGame) ? 'Rivalry' : null;
 }

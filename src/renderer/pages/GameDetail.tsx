@@ -6,14 +6,16 @@ import { TeamLink } from '../components/common/TeamLink';
 import { PlayerPortrait } from '../components/common/PlayerPortrait';
 import { StatisticsCategorySection, type ColumnDef, type LeaderCardRow, type LeaderMetric } from '../components/common/StatisticsCategorySection';
 import type { StatTableRow } from '../components/common/StatisticsTable';
-import { gameTypeLabel, getCfpBowlImagePath, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
-import { getBowlLogoPath, getConferenceChampionshipGamePath, getConferenceLogoPath } from '../lib/trophyAssetMapping';
+import { gameOccasion, getCfpBowlImagePath, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
+import { getBowlLogoPath, getConferenceChampionshipGamePath, getConferenceLogoPath, getRivalryTrophyPath } from '../lib/trophyAssetMapping';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
+import { rivalryTrophyFor } from '../../shared/rivalryTrophies';
 import { HelmetImg } from '../components/common/HelmetImg';
 import type { HelmetSide } from '../lib/helmetAssetMapping';
 import { useProgramStadium } from '../data/ProgramArtProvider';
 import { buildTeamColorVars, type TeamColorVars } from '../lib/teamTheme';
 import { gameImpactScore } from '../../shared/gameImpactScore';
+import { passerRating } from '../../shared/passerRating';
 import { offenseYards, returnYards } from '../../shared/teamYards';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerModal } from '../data/PlayerModalProvider';
@@ -264,6 +266,13 @@ const PASSING_GAME_COLUMNS: ColumnDef<OffensiveGameLine>[] = [
   // but never shown — a box score that reports touchdowns and hides picks only
   // tells half of how the quarterback played.
   { key: 'passInts', label: 'INT', raw: (l) => l.passInts },
+  /*
+    NCAA passer rating (see shared/passerRating.ts). Uncapped by design, so a
+    single game swings far harder than a season does — 238.9 for a 5-touchdown
+    afternoon is correct, not a bug. That volatility is the whole reason it
+    belongs on a BOX SCORE, where one game is the subject.
+  */
+  { key: 'passerRating', label: 'Rtg', raw: (l) => passerRating(l), format: gameOneDecimal },
 ];
 
 const RUSHING_GAME_COLUMNS: ColumnDef<OffensiveGameLine>[] = [
@@ -745,6 +754,7 @@ export function GameDetailContent({
     opponentScore: played ? secondary.score : null,
     result,
     opponentCurrentRank: secondary.currentRank,
+    teamRank: primary.currentRank,
     // getGameDetail already resolved this side's rank through the captured
     // context where one exists, so the value above is historical when it can be.
     opponentContextCaptured: true,
@@ -859,7 +869,21 @@ export function GameDetailContent({
     rivals meet in the Playoff, the round is the occasion, and the bowl art is
     the thing you'd actually want on the wall.
   */
-  const rivalryLogoSrc = getRivalryLogoPath(home.name, away.name);
+  /*
+    THE TROPHY, NOT THE SHIELD, when there is one to win (user direction
+    2026-08-07: "if the game has a trophy to win, lets show that instead of the
+    rivalry logo. it holds more visual value").
+
+    And it is true of the occasion as well as the art: the Little Brown Jug is a
+    thing you can hold, the rivalry shield is a badge saying this fixture counts.
+    Where both exist the object wins. ~92 pairings have trophy art; the rest keep
+    the shield, which is why the fallback stays rather than being replaced.
+
+    Asked of the MATCHUP, not of a won trophy — the question is what is on the
+    table tonight, and that has an answer before kickoff.
+  */
+  const rivalryTrophySrc = getRivalryTrophyPath(rivalryTrophyFor(home.name, away.name));
+  const rivalryLogoSrc = rivalryTrophySrc ?? getRivalryLogoPath(home.name, away.name);
   const conferenceLogoSrc =
     game.gameType === 'conference' && game.conferenceName
       ? // The championship game's own mark, falling back to the plain
@@ -906,7 +930,14 @@ export function GameDetailContent({
     Stadium, Memphis, TN"), splitting the stadium's own name across two rows.
     Giving each fact its own line means the wrap point is never inside one.
   */
-  const eventName = gameTypeLabel(game);
+  /*
+    The occasion in words, from the shared resolver rather than gameTypeLabel:
+    that one reads `game.rivalryName`, which this page's adapter has no value for
+    (it builds a ScheduleGame out of neutral game detail), so a rivalry printed
+    nothing here at all. `gameOccasion` resolves the name from the pairing
+    instead, and falls back to "Rivalry" for the ones the save never named.
+  */
+  const eventName = gameOccasion(game);
   const location = getLocationDisplay(game, getStadium);
   // Stadium + CITY, not city+state: the state orphaned onto a line of its own
   // in a column this narrow, and "Memphis" carries the meaning by itself.

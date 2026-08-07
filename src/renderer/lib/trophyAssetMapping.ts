@@ -238,6 +238,18 @@ export function getNationalChampionshipAppearanceImagePath(background: 'light' |
   return background === 'dark' ? NATIONAL_CHAMPIONSHIP_APPEARANCE.dark : NATIONAL_CHAMPIONSHIP_APPEARANCE.light;
 }
 
+/**
+ * A rivalry trophy's art from its file stem — the stem IS the filename, because
+ * the rename encoded both schools into it (see docs/RIVALRY_TROPHIES.md).
+ *
+ * Exported for the surfaces that know a MATCHUP rather than a won trophy: the
+ * Game Info header asks "is there silverware on the table tonight", which is a
+ * question about the pairing and has an answer before anyone has won anything.
+ */
+export function getRivalryTrophyPath(stem: string | null): string | null {
+  return stem ? `${RIVALRY_TROPHY_BASE_PATH}/${stem}.webp` : null;
+}
+
 /** Resolves a Trophy DTO to its image path, or null if this trophy kind has nothing to show (unrecognized conference name). */
 export function getTrophyImagePath(trophy: Trophy): string | null {
   switch (trophy.kind) {
@@ -250,7 +262,7 @@ export function getTrophyImagePath(trophy: Trophy): string | null {
     // assetKey IS the file stem here - the rename encoded the schools into the
     // filename, so no second lookup is needed. See docs/RIVALRY_TROPHIES.md.
     case 'rivalry-win':
-      return trophy.assetKey ? `${RIVALRY_TROPHY_BASE_PATH}/${trophy.assetKey}.webp` : null;
+      return getRivalryTrophyPath(trophy.assetKey);
     default:
       return null;
   }

@@ -10,7 +10,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useProgramStadium } from '../data/ProgramArtProvider';
 import { useSelectedSeason } from '../data/SelectedSeasonProvider';
 import { useViewedTeam } from '../data/ViewedTeamProvider';
-import { bowlLabel, gameTypeLabel, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl } from '../lib/scheduleFormat';
+import { bowlLabel, gameTypeLabel, getCfpBowlImagePath, getGameTypeImagePath, getLocationDisplay, isTraditionalBowl, type LocationFields } from '../lib/scheduleFormat';
 import { getBowlLogoPath } from '../lib/trophyAssetMapping';
 import { getRivalryLogoPath } from '../lib/rivalryAssetMapping';
 import type { LeagueTeamGame, ScheduleGame, ScheduleOverview } from '../../shared/types';
@@ -94,17 +94,41 @@ function TypeCell({ game }: { game: ScheduleGame }) {
 
   const imagePath = getGameTypeImagePath(game, appearance);
   const label = gameTypeLabel(game);
+  /*
+    THE BOWL BESIDE THE ROUND (user direction 2026-08-07). A CFP quarterfinal or
+    semifinal is played IN a bowl, and the two marks answer different questions:
+    the round says how deep into the bracket this is, the bowl says which one it
+    was. The Game Info header has paired them for a while — the schedule now
+    reads the same way, which also replaces the "CFP Quarterfinal" text badge
+    that used to sit in the Location column.
+
+    Null for everything else, including the first round (on campus, no bowl) and
+    the national championship (its mark is already the trophy) — see
+    getCfpBowlImagePath.
+  */
+  const cfpBowlPath = getCfpBowlImagePath(game);
 
   if (!imagePath) return null;
 
   return (
-    <img
-      src={imagePath}
-      alt={label}
-      onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
-      className="h-12 w-12 shrink-0 object-contain"
-      draggable={false}
-    />
+    <div className="flex items-center gap-1.5">
+      <img
+        src={imagePath}
+        alt={label}
+        onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
+        className="h-12 w-12 shrink-0 object-contain"
+        draggable={false}
+      />
+      {cfpBowlPath && (
+        <img
+          src={cfpBowlPath}
+          alt=""
+          onError={fallbackToDefaultBowlLogo}
+          className="h-12 w-12 shrink-0 object-contain"
+          draggable={false}
+        />
+      )}
+    </div>
   );
 }
 
@@ -126,22 +150,31 @@ function RankBadge({ rank, captured }: { rank: number | null; captured?: boolean
   return <span title={title} className="proportional-nums text-base text-slate-500 dark:text-slate-400">#{rank}</span>;
 }
 
-function LocationCell({ game }: { game: ScheduleGame }) {
+function LocationCell({ game, fallbackLabel }: { game: LocationFields; fallbackLabel?: string }) {
   // Program-editor overrides layered over the built-in reference data.
   const getStadium = useProgramStadium();
   const { badge, stadium, cityState } = getLocationDisplay(game, getStadium);
-  // A neutral-site bowl/championship game shows its real event name here
-  // instead of the generic "Neutral Site" label — the event IS the location
-  // that matters. Plain neutral-site games with no bowl identity (rare, but
-  // possible) still fall back to the generic badge.
-  const eventName = game.gameType === 'bowl' ? gameTypeLabel(game) : null;
+  /*
+    NO BOXES, BUT NEVER BLANK (user direction 2026-08-07, twice).
+
+    The first pass removed the indigo badge that printed "Neutral Site" or the
+    event's own name above the venue — right, because Type already draws the
+    occasion's mark. But on a playoff game whose venue reference is missing the
+    badge had been the ONLY thing in the cell, so removing it emptied the column
+    outright, which read as the stadium having been deleted. It hadn't: those
+    games never resolved one.
+
+    So the venue still leads whenever it resolves, and when it doesn't the cell
+    falls back to naming the occasion — as plain grey text on the same line the
+    venue would occupy, not as a chip. "I just didn't want the boxes" is a
+    statement about the treatment, not about the information.
+  */
+  // The occasion's name comes from the CALLER, because naming a game needs
+  // fields that have nothing to do with where it was played — and dragging them
+  // into LocationFields would make a venue lookup depend on bowl identity.
+  const label = fallbackLabel || badge;
   return (
     <div className="flex flex-col gap-1">
-      {game.siteType === 'neutral' && (
-        <span className="inline-flex w-fit items-center bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {eventName || badge}
-        </span>
-      )}
       {stadium ? (
         <div className="flex flex-wrap items-baseline gap-x-1 text-sm text-slate-600 dark:text-slate-300">
           <span className="whitespace-nowrap">
@@ -151,7 +184,7 @@ function LocationCell({ game }: { game: ScheduleGame }) {
           {cityState && <span className="whitespace-nowrap">{cityState}</span>}
         </div>
       ) : (
-        game.siteType !== 'neutral' && <span className="text-sm text-slate-400 dark:text-slate-500">-</span>
+        <span className="text-sm text-slate-400 dark:text-slate-500">{label || '-'}</span>
       )}
     </div>
   );
@@ -197,18 +230,16 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
         <TypeCell game={game} />
       </td>
       <td className="px-5 py-4">
-        <LocationCell game={game} />
+        <LocationCell game={game} fallbackLabel={game.gameType === 'bowl' ? gameTypeLabel(game) : undefined} />
       </td>
       <td className="px-5 py-4 text-slate-500 dark:text-slate-400">
         {game.dayOfWeek} {game.kickoffTime}
       </td>
       <td className="px-5 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <ResultChip result={game.result} teamScore={game.teamScore} opponentScore={game.opponentScore} />
-          {runningRecordText && (
-            <span className="proportional-nums text-sm font-normal text-slate-400 dark:text-slate-500">{runningRecordText}</span>
-          )}
-        </div>
+        <ResultChip result={game.result} teamScore={game.teamScore} opponentScore={game.opponentScore} />
+      </td>
+      <td className="whitespace-nowrap px-5 py-4 text-right proportional-nums text-sm text-slate-400 dark:text-slate-500">
+        {runningRecordText ?? ''}
       </td>
     </tr>
   );
@@ -216,9 +247,14 @@ function GameRow({ game, onOpen }: { game: ScheduleGame; onOpen: () => void }) {
 
 /**
  * League-mode schedule (viewing another team): compact all-games table from
- * the league schedule snapshot — opponent, type, result from that team's
- * perspective. No stadiums/kickoff/game-detail links: those are only tracked
- * for the user's own games.
+ * the league schedule snapshot — opponent, type, location and result from that
+ * team's perspective.
+ *
+ * Stadiums used to be excluded here on the grounds that they were "only tracked
+ * for the user's own games", which was never quite true and is now plainly not:
+ * the venue chain is shipped reference data plus the save's own neutral-venue
+ * id, and both halves travel on a browsed game. Kickoff time and the
+ * game-detail link stay user-only — those really are.
  */
 /**
  * Type-column content for a league-view game — now the SAME treatment as the
@@ -254,18 +290,44 @@ function LeagueTypeCell({ game, appearance }: { game: LeagueTeamGame; appearance
     const imagePath = getGameTypeImagePath(game, appearance);
     const label = bowlLabel(game);
     if (!imagePath) return <span className="text-slate-600 dark:text-slate-300">{label}</span>;
+    /*
+      The bowl beside the round here too (user direction 2026-08-07). This table
+      already matched the user's own schedule in every other respect, and a
+      browsed team's playoff run is exactly when you want to know WHICH bowl —
+      it's somebody else's season, so you have no memory of it to fall back on.
+      The venue reference this needs now travels on LeagueTeamGame; see
+      getLeagueTeamSchedule.
+    */
+    const cfpBowlPath = getCfpBowlImagePath(game);
     return (
-      <img
-        src={imagePath}
-        alt={label}
-        title={label}
-        onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
-        className="h-12 w-12 shrink-0 object-contain"
-        draggable={false}
-      />
+      <div className="flex items-center gap-1.5">
+        <img
+          src={imagePath}
+          alt={label}
+          title={label}
+          onError={isTraditionalBowl(game) ? fallbackToDefaultBowlLogo : undefined}
+          className="h-12 w-12 shrink-0 object-contain"
+          draggable={false}
+        />
+        {cfpBowlPath && (
+          <img
+            src={cfpBowlPath}
+            alt=""
+            onError={fallbackToDefaultBowlLogo}
+            className="h-12 w-12 shrink-0 object-contain"
+            draggable={false}
+          />
+        )}
+      </div>
     );
   }
-  return <span className="text-slate-400 dark:text-slate-500">Non-Conf</span>;
+  /*
+    NOTHING for a non-conference game (user direction 2026-08-07). Every other
+    row in this column carries a MARK — a conference crest, a bowl logo, a
+    playoff round — and "Non-Conf" was a word describing the absence of one.
+    A blank cell says the same thing without asking to be read.
+  */
+  return null;
 }
 
 function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dynastyId: string; teamIndex: number; teamName: string; seasonId?: number }) {
@@ -315,11 +377,22 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                       record AS THEY STOOD at kickoff, so browsing another
                       program shows their season as it actually unfolded. */}
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Rank</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Rec</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opp Rec</th>
                   <th className="w-16 px-2 py-3.5" aria-label="Rivalry" />
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opponent</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
+                  {/* Venues resolve for ANY team (user direction 2026-08-07) —
+                      the chain is stadium reference data plus the save's own
+                      neutral-venue id, neither of which was ever user-only. The
+                      old note here said stadiums "are only tracked for the
+                      user's own games", which stopped being true once
+                      neutralVenueId and siteType travelled on a browsed game. */}
+                  <th className="min-w-[14rem] px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Location</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-[0.2em]">Result</th>
+                  {/* The browsed team's own record after each game, in the same
+                      place the user's schedule puts it — a season should read
+                      the same way whoever is having it. */}
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-[0.2em]">Rec</th>
                 </tr>
               </thead>
               <tbody>
@@ -355,9 +428,29 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                       </td>
                       <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400"><LeagueTypeCell game={g} appearance={appearance} /></td>
                       <td className="px-5 py-3.5">
+                        <LocationCell
+                          game={{
+                            siteType: g.siteType,
+                            isHome: g.isHome,
+                            teamName,
+                            opponent: g.opponent,
+                            neutralVenueId: g.neutralVenueId,
+                            isConferenceChampionship: g.isConferenceChampionship,
+                            conferenceName: g.conferenceName,
+                            bowlAssetName: g.bowlAssetName,
+                          }}
+                          fallbackLabel={g.gameType === 'bowl' ? bowlLabel(g) : undefined}
+                        />
+                      </td>
+                      <td className="px-5 py-3.5">
                         <div className="flex justify-end">
                           <ResultChip result={g.result} teamScore={g.teamScore} opponentScore={g.opponentScore} />
                         </div>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3.5 text-right proportional-nums text-xs text-slate-400 dark:text-slate-500">
+                        {g.runningRecord
+                          ? `${g.runningRecord.overallWins}-${g.runningRecord.overallLosses} (${g.runningRecord.conferenceWins}-${g.runningRecord.conferenceLosses})`
+                          : ''}
                       </td>
                     </tr>
                   );
@@ -436,7 +529,11 @@ export function Schedule() {
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Wk</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Date</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Rank</th>
-                <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Rec</th>
+                {/* OPP REC, not "Rec" (user direction 2026-08-07). Two columns
+                    on this table are a won-lost record — the opponent's, and
+                    yours after the game — and calling both of them "Rec" left
+                    the reader to work out which was which from position. */}
+                <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Opp Rec</th>
                 {/* Rivalry mark — intentionally unlabelled, and shortening Record to
                     Rec is what bought the width. A header over a column that's
                     empty on eleven of thirteen rows reads as missing data. */}
@@ -446,6 +543,12 @@ export function Schedule() {
                 <th className="min-w-[16rem] px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Location</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Kickoff</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Result</th>
+                {/* YOUR record, in its own column (user direction 2026-08-07).
+                    It used to ride inside Result as a small grey parenthetical,
+                    which put two different facts — what happened in this game,
+                    and where the season stood after it — in one cell where the
+                    eye had to separate them. */}
+                <th className="px-5 py-4 text-right text-sm font-semibold uppercase tracking-[0.22em]">Rec</th>
               </tr>
             </thead>
             <tbody>

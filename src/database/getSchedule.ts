@@ -89,6 +89,19 @@ function toScheduleGame(
     : opponentIndex !== null
       ? rankByTeam.get(opponentIndex)
       : undefined;
+  /*
+    OUR OWN rank at kickoff, resolved exactly as the opponent's is above — it is
+    what makes "ranked vs ranked" a real test rather than half of one. Same
+    capture-first rule and the same separate "was anything captured" check, so a
+    team genuinely unranked that week resolves to null instead of falling
+    through to its rank today.
+  */
+  const ourCapturedMedia = isHome ? context?.homeMediaRank : context?.awayMediaRank;
+  const ourCapturedCfp = isHome ? context?.homeCfpRank : context?.awayCfpRank;
+  const teamRank = ourCapturedMedia != null || ourCapturedCfp != null
+    ? displayRank(ourCapturedMedia, ourCapturedCfp)
+    : rankByTeam.get(userTeamIndex);
+
   const capturedRecord = isHome ? context?.awayRecord : context?.homeRecord;
   const teamQuarterScores = isHome ? game.homeQuarterScores : game.awayQuarterScores;
   const opponentQuarterScores = isHome ? game.awayQuarterScores : game.homeQuarterScores;
@@ -116,6 +129,7 @@ function toScheduleGame(
     opponentScore: played ? opponentScore : null,
     result,
     opponentCurrentRank: opponentRank && opponentRank > 0 ? opponentRank : null,
+    teamRank: teamRank && teamRank > 0 ? teamRank : null,
     // true  = captured around kickoff (historical)
     // false = no capture for this game, so these are today's values
     opponentContextCaptured: !!context && !context.approximate && (hasCapturedRank || !!capturedRecord),
