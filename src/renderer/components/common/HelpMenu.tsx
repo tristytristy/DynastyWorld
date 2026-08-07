@@ -380,6 +380,36 @@ const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'force-commit',
+    title: 'Force Commit — signing a recruit yourself',
+    content: (
+      <>
+        <p>
+          Turn on <strong>Experimental save editing</strong> in Settings, then open the recruit from the Recruiting
+          page and use <strong>Force Commit to User Team</strong>.
+        </p>
+        <p>
+          <strong>He has to already be on your board in the game.</strong> Add him in College Football 27 first. The
+          app edits an existing board entry, which is safe; creating one from outside the game corrupts the save, so
+          the button stays hidden until he&apos;s boarded.
+        </p>
+        <p>
+          It makes two changes. First it marks him signed to your school — scholarship offered, his NIL number met,
+          and you the clear leader — so he reads correctly in-game. Second, and this is the part that actually
+          matters, it adds him to your team&apos;s incoming class. That list is what the game builds next
+          year&apos;s roster from; a recruit who looks signed but isn&apos;t on it simply disappears at the
+          rollover.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Your save is backed up before anything is written, and the result is checked by reopening the file
+          afterwards — if it doesn&apos;t verify, the backup goes back automatically and nothing is kept. To confirm
+          it worked, sim to the next season and look at your roster. If a recruit ever ends up stuck, running Force
+          Commit on him again repairs it.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'media',
     title: 'The Media gallery',
     content: (
