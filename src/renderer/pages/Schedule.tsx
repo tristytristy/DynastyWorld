@@ -380,7 +380,10 @@ function LeagueTeamSchedule({ dynastyId, teamIndex, teamName, seasonId }: { dyna
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opp Rec</th>
                   <th className="w-16 px-2 py-3.5" aria-label="Rivalry" />
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Opponent</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
+                  {/* Same two-mark reservation as the user's table above — this
+                      one had no width at all, which under `w-full` leaves the
+                      browser free to under-allocate it and spill the marks. */}
+                  <th className="min-w-[9rem] px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-[0.2em]">Type</th>
                   {/* Venues resolve for ANY team (user direction 2026-08-07) —
                       the chain is stadium reference data plus the save's own
                       neutral-venue id, neither of which was ever user-only. The
@@ -539,7 +542,13 @@ export function Schedule() {
                     empty on eleven of thirteen rows reads as missing data. */}
                 <th className="w-16 px-2 py-4" aria-label="Rivalry" />
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Opponent</th>
-                <th className="w-16 px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Type</th>
+                {/* WIDE ENOUGH FOR TWO MARKS. This was w-16 (64px), set when the
+                    column could only ever hold one — a CFP row now draws the
+                    round AND its bowl, 102px of shrink-0 images, which spilled
+                    out of the cell and printed on top of the Location text.
+                    Sized to what the column can actually contain: 2x48 + the
+                    gap + px-5 either side. */}
+                <th className="min-w-[9rem] px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Type</th>
                 <th className="min-w-[16rem] px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Location</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Kickoff</th>
                 <th className="px-5 py-4 text-left text-sm font-semibold uppercase tracking-[0.22em]">Result</th>

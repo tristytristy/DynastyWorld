@@ -11308,3 +11308,62 @@ written into UPDATER.md so it cannot be guessed at later.
 
 **The 4.4.0 draft predates all of this** and has to be rebuilt and re-uploaded
 before it is published.
+
+---
+
+## Phase — The bowl logo stopped printing on the venue (2026-08-07)
+
+User screenshot: the Rose Bowl and Hard Rock marks sitting ON TOP of "Rose Bowl,
+Pasadena, CA" and "Hard Rock Stadium, Miami Gardens, FL".
+
+**A regression from this morning's own feature, and the arithmetic says so.** The
+user's Type header was `w-16` — 64px, minus `px-5` either side, leaves 24px of
+content box. It was sized when the column could only ever hold ONE mark. Pairing
+the CFP round with its bowl put 102px of `shrink-0` images in it (48 + 48 + a 6px
+gap), and images that cannot shrink inside a cell that will not grow simply draw
+outside it. Tables don't clip, so they landed on the neighbouring text.
+
+Worth noting the column was *already* too narrow for a single 48px mark; nothing
+looked wrong because one mark's 88px overhang had nothing but empty Location
+padding to spill into. The second mark is what pushed it into the words.
+
+**Sized to what the column can actually contain** rather than nudged until the
+screenshot looked right: `min-w-[9rem]` = 144px against a worst case of 142.
+`min-w` not `w`, so the browser may still give it more; it may never give it less.
+
+**The browsed table had no width at all**, which is the same bug wearing different
+clothes — under `w-full` the browser is free to under-allocate a column with no
+stated minimum, and the marks spill exactly the same way. Both tables now reserve
+the same 144px.
+
+### Verified on Alabama's real playoff run
+
+`DYNASTY-AUBURNNATTY`, disposable copy, isolated user-data dir. Alabama (team 2)
+is the case that exercises everything: first round, quarterfinal, semifinal AND
+the national championship. Measured, not eyeballed:
+
+- Type column **144px** on both tables.
+- Two-mark rows: **2** (Peach Bowl quarterfinal, Cotton Bowl semifinal). Marks end
+  at 885 against a cell edge of 907 — **22px inside**, and the Location cell
+  starts at exactly 907. `spillsCell: false`, `overlapsNext: false`.
+- User's own table: `anySpill: false`, `anyOverlap: false`, single marks sitting
+  85px clear of the edge.
+
+The screenshot confirms the rest of the design still holds: the first round draws
+the round alone (no bowl — it's on campus), and the national championship draws
+the trophy alone.
+
+**Folded into 4.4.0 rather than held for the next update.** The bug does not exist
+in any released build — it was introduced this morning and 4.4.0 is still an
+unpublished draft. Shipping a known overlap and fixing it in 4.4.1 would put it in
+front of every user for no reason other than that the draft had already been
+built.
+
+### Harness notes worth keeping
+
+Two traps cost real time and are now in the diagnostics memory: `ELECTRON_RUN_AS_NODE=1`
+is present in the ambient PowerShell environment (inherited from the host, which
+is itself an Electron app) and makes `electron.exe` run as plain node — the symptom
+is a `getVersion` TypeError in updateService.ts that reads exactly like an updater
+bug. And `SCREENSHOT_DIR` must already exist: the write is unwrapped and `app.quit()`
+sits after it, so a missing directory hangs the run instead of failing.
