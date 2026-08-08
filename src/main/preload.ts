@@ -14,6 +14,7 @@ const api: DynastyApi = {
   assets: {
     getStatus: () => ipcRenderer.invoke(IPC.assets.getStatus),
     chooseFolder: () => ipcRenderer.invoke(IPC.assets.chooseFolder),
+    getAddons: () => ipcRenderer.invoke(IPC.assets.getAddons),
   },
   db: {
     getDynasties: () => ipcRenderer.invoke(IPC.db.getDynasties),

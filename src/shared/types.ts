@@ -2911,6 +2911,22 @@ export interface AssetChooseResult extends AssetStatus {
 }
 
 /**
+ * An artwork add-on and whether the image folder already has it. Derived by
+ * probing files on disk (see shared/assetPacks.ts), so it stays true however the
+ * user got the art — the add-on installer, or a later full library that includes
+ * it.
+ */
+export interface AssetAddonStatus {
+  id: string;
+  label: string;
+  blurb: string;
+  sizeLabel: string;
+  downloadUrl: string;
+  /** False when any of the pack's probe files are absent from the image folder. */
+  installed: boolean;
+}
+
+/**
  * Where the user's OWN uploaded media (Media Hub photos/videos) is stored.
  * Distinct from AssetStatus, which locates the shipped portrait/logo library:
  * that's app content, this is the user's irreplaceable screenshots. See
@@ -3106,6 +3122,8 @@ export interface DynastyApi {
   assets: {
     getStatus: () => Promise<AssetStatus>;
     chooseFolder: () => Promise<AssetChooseResult>;
+    /** Every known artwork add-on, each flagged with whether the image folder already has it. Empty when no image folder is found at all. */
+    getAddons: () => Promise<AssetAddonStatus[]>;
   };
   db: {
     getDynasties: () => Promise<DynastySummary[]>;

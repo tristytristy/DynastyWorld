@@ -114,6 +114,18 @@ function candidateRoots(): string[] {
 
 /** The resolved image-data root, or null if none is found (cached per session). */
 export function getAssetsRoot(): string | null {
+  /*
+    THE ONLY WAY TO SEE THE FIRST-RUN SCREEN ON A MACHINE THAT HAS THE LIBRARY.
+    AssetGate is what a brand-new user meets before anything else, and it is
+    unreachable for anyone who can build the app: the lookup below falls through
+    to the installer's registry key, then to the bundled dev copy, so it always
+    finds something. That is why it has historically shipped unverified.
+
+    Env-gated and diagnostic-only, the same shape as the SCREENSHOT_* hooks in
+    main.ts. Nothing sets it in a real launch, and being an env var rather than a
+    setting means it cannot be reached from inside the running app at all.
+  */
+  if (process.env.FORCE_NO_ASSETS === '1') return null;
   if (cachedRoot === undefined) {
     cachedRoot = candidateRoots().find((r) => isAssetRoot(r)) ?? null;
   }

@@ -150,6 +150,41 @@ like a config value.
 
 ---
 
+## Artwork is published separately — and the app links to it by exact URL
+
+The app updater only ever ships **the app**. Portraits, logos, helmets and
+jerseys are stripped from a slim build (`MEDIA_GLOBS` in `electron-builder.js`),
+so when a game patch adds artwork **no app release can deliver it**.
+
+That artwork lives in a different repository — **`matevanz/DynastyOS-Assets`** —
+and the app points at it with hardcoded URLs in `src/shared/assetPacks.ts`:
+
+| Pack | Release tag | Asset filename |
+| --- | --- | --- |
+| Content Library (~928 MB, one-time) | `v4.0.0` | `DynastyOS-ContentLibrary-v4.exe` |
+| Patch Art 2026-08-06 (190 KB) | `patch-art-2026.08.06` | `DynastyOS-PatchArt-2026.08.06.exe` |
+
+**The tag and the filename are a contract, not a preference.** GitHub builds the
+download link as `…/releases/download/<tag>/<filename>`, so renaming either half
+breaks the in-app button with a 404 — the same class of failure as the 4.2.0
+installer-name mismatch above, and just as invisible until someone clicks it.
+After publishing, click the button (or `HEAD` the URL) and confirm a 200.
+
+### Adding a new artwork pack
+
+1. Compile it: `node build/compile-assets-installer.js <your>-installer.nsi`.
+2. Publish it on `DynastyOS-Assets` with the tag and filename you are about to
+   hardcode.
+3. Add an entry to `ASSET_ADDONS` in `src/shared/assetPacks.ts`.
+
+`probeFiles` is what decides whether a user is nagged, so pick files the pack
+**introduces** rather than ones it replaces — a replaced file exists either way
+and would report "installed" for everybody, including the people who need it.
+Existence on disk is checked rather than the installer's registry version key, so
+someone who gets the art from a later full library is never asked for it twice.
+
+---
+
 ## Testing an update end to end
 
 1. Build and install **the older version** (e.g. 4.0.0) with its NSIS installer.

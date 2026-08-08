@@ -9,6 +9,7 @@ export const IPC = {
   assets: {
     getStatus: 'assets:getStatus',
     chooseFolder: 'assets:chooseFolder',
+    getAddons: 'assets:getAddons',
   },
   db: {
     getDynasties: 'db:getDynasties',

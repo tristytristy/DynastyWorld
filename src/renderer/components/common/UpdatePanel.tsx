@@ -3,9 +3,15 @@ import { Markdown } from '../ui/Markdown';
 import { useUpdater } from '../../data/useUpdater';
 import { formatReleaseDate, formatSpeed, formatTransferred } from '../../lib/updateFormat';
 
-const PRIMARY_BTN =
+/*
+  Exported so the artwork notice (AssetAddonNotice) wears the same buttons. Two
+  cards that appear in the same corner, sometimes on the same launch, have to be
+  visibly the same kind of thing — and a second copy of these strings is a
+  guarantee they eventually stop being.
+*/
+export const PRIMARY_BTN =
   'shrink-0 border border-[var(--team-primary)] bg-[var(--team-primary)] px-4 py-2 text-sm font-semibold text-[var(--team-on-primary)] transition hover:opacity-90 disabled:opacity-60';
-const SECONDARY_BTN =
+export const SECONDARY_BTN =
   'shrink-0 border border-slate-300/80 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800';
 
 /**

@@ -116,6 +116,24 @@ program now takes **that program's colours**.
 The **Theme Source** preference is gone with it. It offered a choice between your
 team's colours and a custom palette, and the team's colours are the entire point.
 
+## DynastyOS tells you when there's new artwork
+
+Portraits and logos live outside the app so you never re-download a gigabyte to
+get a bug fix. The cost of that split was silent: when a game patch added new
+artwork, no app update could deliver it and **nothing told you it existed**. You
+just kept seeing a generic capped model where Bill Belichick should be.
+
+DynastyOS now checks your image folder at launch and puts a card in the corner if
+there's artwork you don't have, with a download button. These are small — the
+2026-08-06 coach portraits are **190 KB**, not another library.
+
+It checks the actual files, so if you get the artwork some other way it never
+asks again. Dismiss with **Not now** and it stays dismissed.
+
+And if you've never installed the image folder at all, the setup screen now has a
+**Download content library** button instead of telling you to go and find an
+installer it didn't give you a link to.
+
 ---
 
 ## Fixes

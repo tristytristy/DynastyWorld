@@ -11240,3 +11240,71 @@ size confirms it: 195,268 bytes against the twelve files' 195,220.
 **Still owed:** the full ~928 MB Content Library is now stale — a NEW install
 gets library v4 without these portraits and needs the add-on too. Folding them in
 means recutting the pack, which is the one thing to ask about first.
+
+---
+
+## Phase — The app says when new artwork exists (2026-08-07)
+
+User direction, immediately after the 4.4.0 draft went up: a popup when new
+assets are added with a click-to-download link, and a Download Content Library
+button on the no-assets screen.
+
+**THIS IS THE BILL FOR THE SLIM SPLIT, AND IT HAD NEVER BEEN PAID.** Shipping the
+artwork outside the app is what keeps a bug fix at 110 MB instead of a gigabyte.
+The cost is that a game patch adding portraits produces artwork NO app release
+can deliver — and until now nothing told the user it existed. They kept seeing a
+generic capped model where Belichick should be, with no way to learn otherwise.
+
+**Files on disk, not a version number.** The add-on installer writes
+`PatchArtVersion` to the registry and reading it would be less code, but it is
+wrong for the case that matters: someone who gets these portraits inside a future
+full library has the art and no registry key, and would be nagged forever for
+something they already have. `probeFiles` names the two coaches the patch
+INTRODUCED (Bloesch, Neal Brown) rather than any of the ten it replaced — a
+replaced file exists either way and would report "installed" for everybody,
+including exactly the people who need it.
+
+**Nothing when there is no image folder at all**, deliberately. That user is
+looking at AssetGate being asked for ~928 MB; telling them they are also missing
+190 KB answers a question they have not reached, and the library they are about
+to install may contain it. Verified: `addonCardShown: false` on the gate screen.
+
+**One card in the corner at a time.** UpdateNotice claims the same fixed
+position, so both showing meant both drawn on top of each other. The app update
+wins — time-sensitive, one click, and the only one of the two that changes what
+the app can do. Asked of the updater directly rather than re-derived, so it
+cannot drift out of step with UpdateNotice's own conditions.
+
+### Verified in the running app, all three states
+
+Built two fake asset roots in the scratchpad (a sentinel `playerportrait/` plus a
+`coaches/` folder with and without the probe files) so nothing touched the real
+~928 MB library:
+
+- **Missing** — card present, "New coach portraits", buttons `Download (190 KB)`
+  and `Not now`, rect `[1032,673,352,211]` in a 1400x900 window: 16px off both
+  the right and bottom edges, which is the corner it was asked for.
+- **Installed** — no card, and zero `[role=status]` nodes at all.
+- **No library** — the gate screen reads
+  `Download content library (~928 MB)` then `I already have it — locate the
+  folder…`, download first because that is the answer for almost everyone who
+  reaches it. No add-on card.
+
+`FORCE_NO_ASSETS=1` had to be added to `assetRoot.ts` to see that last one: the
+lookup falls through to the installer's registry key and then the bundled dev
+copy, so AssetGate is unreachable on any machine that can build the app — which
+is precisely why the first screen a new user meets had shipped unverified.
+
+### The URL is a contract, and half of it is not live yet
+
+`assetPacks.ts` hardcodes `…/releases/download/<tag>/<filename>`, so the tag and
+the asset name have to match the release exactly or the button 404s — the same
+class of failure as the 4.2.0 installer-name mismatch, and just as invisible
+until someone clicks. Checked both: the Content Library returns **200, 927.5 MB**;
+the patch art returns **404**, because the GH_TOKEN here is scoped to DynastyHub
+and cannot write to DynastyOS-Assets. That upload is the user's, and the tag
+`patch-art-2026.08.06` with filename `DynastyOS-PatchArt-2026.08.06.exe` is now
+written into UPDATER.md so it cannot be guessed at later.
+
+**The 4.4.0 draft predates all of this** and has to be rebuilt and re-uploaded
+before it is published.

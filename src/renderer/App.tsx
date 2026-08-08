@@ -44,6 +44,7 @@ import { CustomRivalsProvider } from './data/CustomRivalsProvider';
 import { EditorModalHost } from './components/common/EditorModalHost';
 import { RecruitProfileModal } from './components/common/RecruitProfileModal';
 import { UpdateNotice } from './components/common/UpdateNotice';
+import { AssetAddonNotice } from './components/common/AssetAddonNotice';
 import { SyncGuideHost } from './components/common/SyncGuideModal';
 import { ANGLED_FRAME, angledFrame } from './components/ui/angledClip';
 
@@ -245,6 +246,7 @@ export function App() {
       <RecruitProfileModal />
       <EditorModalHost />
       <UpdateNotice />
+      <AssetAddonNotice />
       <SyncGuideHost />
     </div>
     </CustomRivalsProvider>

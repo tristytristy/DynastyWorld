@@ -167,6 +167,36 @@ const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'artwork-updates',
+    title: 'New coach and player artwork (why an app update doesn’t bring it)',
+    content: (
+      <>
+        <p>
+          Portraits, logos, helmets and jerseys are <strong>not inside DynastyOS</strong>. They live in a separate
+          image folder you install once, which is why the app itself is a ~110 MB download instead of a gigabyte, and
+          why updating DynastyOS never makes you re-download the artwork.
+        </p>
+        <p>
+          The trade-off: when the game gets a patch that adds new artwork, an app update <em>cannot</em> deliver it —
+          it isn&apos;t app content. DynastyOS checks your image folder at launch, and if new artwork exists that you
+          don&apos;t have, a card appears in the bottom corner with a <strong>Download</strong> button. These are tiny
+          — the 2026-08-06 coach portraits are 190 KB, not another gigabyte.
+        </p>
+        <p>
+          Run the installer it gives you and restart DynastyOS. It finds your existing image folder on its own and adds
+          the new files beside what you already have; nothing else is touched or re-downloaded. If you dismiss the card
+          with <strong>Not now</strong>, it stays gone — the artwork is optional, and a coach you never look at showing
+          a generic model harms nothing.
+        </p>
+        <p>
+          <strong>Never installed the image folder at all?</strong> That&apos;s a different screen — DynastyOS shows a
+          setup page on launch with a download button for the full library, because without it nearly every image in
+          the app would be missing.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'media-storage',
     title: 'Where your photos are stored (and how to move them)',
     content: (

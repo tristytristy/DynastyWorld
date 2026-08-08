@@ -1,7 +1,10 @@
 import { dialog, ipcMain } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
-import { getAssetStatus, isAssetRoot, setAssetsPath } from '../assetRoot';
-import type { AssetChooseResult, AssetStatus } from '../../shared/types';
+import { ASSET_ADDONS } from '../../shared/assetPacks';
+import { getAssetsRoot, getAssetStatus, isAssetRoot, setAssetsPath } from '../assetRoot';
+import type { AssetAddonStatus, AssetChooseResult, AssetStatus } from '../../shared/types';
 
 /**
  * IPC for locating the external image-data folder. The heavy assets ship as a
@@ -28,5 +31,33 @@ export function registerAssetHandlers(): void {
     }
     setAssetsPath(chosen);
     return { ...getAssetStatus(), picked: true };
+  });
+
+  /*
+    WHICH ARTWORK ADD-ONS THE IMAGE FOLDER IS MISSING.
+
+    NOTHING WHEN THERE IS NO IMAGE FOLDER AT ALL, deliberately. Someone in that
+    state is looking at AssetGate, being asked for the ~928 MB library — telling
+    them they are also missing a 190 KB add-on is answering a question they have
+    not reached yet, and the library they are about to install may well contain
+    it. An empty list is the honest answer: we cannot know what is missing from a
+    folder that does not exist.
+
+    Probing is a handful of existsSync calls against a folder the app has already
+    resolved, and the renderer asks once per launch. It is not cached: the whole
+    point is to notice the moment the user comes back from running an installer,
+    and a cache would keep the notice up until the next restart.
+  */
+  ipcMain.handle(IPC.assets.getAddons, (): AssetAddonStatus[] => {
+    const root = getAssetsRoot();
+    if (!root) return [];
+    return ASSET_ADDONS.map((pack) => ({
+      id: pack.id,
+      label: pack.label,
+      blurb: pack.blurb,
+      sizeLabel: pack.sizeLabel,
+      downloadUrl: pack.downloadUrl,
+      installed: pack.probeFiles.every((rel) => fs.existsSync(path.join(root, ...rel.split('/')))),
+    }));
   });
 }
