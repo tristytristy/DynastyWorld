@@ -11367,3 +11367,18 @@ is itself an Electron app) and makes `electron.exe` run as plain node — the sy
 is a `getVersion` TypeError in updateService.ts that reads exactly like an updater
 bug. And `SCREENSHOT_DIR` must already exist: the write is unwrapped and `app.quit()`
 sits after it, so a missing directory hangs the run instead of failing.
+
+## Phase — DynastyNet: the save's own internet (2026-08-09)
+
+**Shipped:**
+- New top-level section **The Net** (after Media) with four tabs: **Feed** (social network — bots react to the week's real results; the user posts as `@Coach` and the cast replies), **DynastyTube** (every Media upload becomes a "video" with a bot comment section grounded in the clip's tagged game/players), **The Paper** (The Crystal Football writes a front page per generated week), **Podcasts** (4th & Forever episode summaries).
+- Schema v24 (`net_accounts`, `net_posts`): one posts table for all surfaces, discriminated by `kind` ('post'|'reply'|'comment'|'article'|'podcast'); accounts are the recurring cast per dynasty (fixed media voices + fan accounts minted for teams in the news + the user). User content never wiped by regenerate; bot content per-week replaceable (`clearWeek`).
+- Two generation engines behind one orchestrator (`src/main/net/generate.ts`): **Claude live** (`@anthropic-ai/sdk`, model `claude-opus-5`, adaptive thinking, streaming; API key stored main-process-side in `userData/dynastynet-settings.json`, renderer only ever sees a has-key flag) with automatic fallback to a **deterministic offline template engine** (`offline.ts`) — the Net always works with no key/network; same (season, week) renders the same feed.
+- Context builder (`src/main/net/context.ts`) assembles the week's story from existing DAL reads only (getLeagueScores, getStandings, getNationalStatLeaders, getSeasonOverview): user results, upsets, ranked wins, championships, top 10, stat leaders, teams-in-the-news.
+- IPC: `net:*` channels (getFeed/getEditions/getMediaComments/generateWeek/postAsUser/generateMediaComments/getSettings/setApiKey), registered alongside the other handler sets at all three startup paths.
+
+**Scope decisions:** Comments generate on demand per clip (not bulk) to keep API cost user-controlled. Articles/podcasts ride the weekly generate call rather than having their own buttons — one action populates all three surfaces.
+
+**Errors hit & fixes:** none beyond type-shape corrections during development (LeagueScoreGame rank fields are `homeRank`/`awayRank`; media list returns `MediaItemWithPath`, not resolved items).
+
+**Verification:** `tsc --noEmit` clean; full webpack build (main/preload/splash/renderer) compiles successfully (with placeholder `public/assets` in the dev container — art library lives outside git as before); `check:refs` unchanged from baseline (pre-existing manual-font miss only); eslint clean on all new files.

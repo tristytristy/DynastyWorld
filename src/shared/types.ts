@@ -1,3 +1,4 @@
+import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -3650,6 +3651,16 @@ export interface DynastyApi {
     /** The updater's own settings, owned by the main process (the launch check reads them before any renderer exists). */
     getPrefs: () => Promise<UpdatePreferences>;
     setPrefs: (next: Partial<UpdatePreferences>) => Promise<UpdatePreferences>;
+  };
+  net: {
+    getFeed: (dynastyId: string, seasonId: number) => Promise<NetFeedView>;
+    getEditions: (dynastyId: string, seasonId: number, kind: 'article' | 'podcast') => Promise<NetPost[]>;
+    getMediaComments: (dynastyId: string, mediaId: number) => Promise<NetPost[]>;
+    generateWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
+    postAsUser: (dynastyId: string, seasonId: number, accountId: number, body: string) => Promise<NetGenerateResult>;
+    generateMediaComments: (dynastyId: string, seasonId: number, mediaId: number) => Promise<NetGenerateResult>;
+    getSettings: () => Promise<NetSettings>;
+    setApiKey: (apiKey: string) => Promise<NetSettings>;
   };
   window: {
     /**

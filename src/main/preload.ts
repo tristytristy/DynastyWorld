@@ -346,6 +346,16 @@ const api: DynastyApi = {
   window: {
     setTitleBarTheme: (appearance) => ipcRenderer.invoke(IPC.window.setTitleBarTheme, appearance),
   },
+  net: {
+    getFeed: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.getFeed, dynastyId, seasonId),
+    getEditions: (dynastyId, seasonId, kind) => ipcRenderer.invoke(IPC.net.getEditions, dynastyId, seasonId, kind),
+    getMediaComments: (dynastyId, mediaId) => ipcRenderer.invoke(IPC.net.getMediaComments, dynastyId, mediaId),
+    generateWeek: (dynastyId, seasonId, regenerate) => ipcRenderer.invoke(IPC.net.generateWeek, dynastyId, seasonId, regenerate),
+    postAsUser: (dynastyId, seasonId, accountId, body) => ipcRenderer.invoke(IPC.net.postAsUser, dynastyId, seasonId, accountId, body),
+    generateMediaComments: (dynastyId, seasonId, mediaId) => ipcRenderer.invoke(IPC.net.generateMediaComments, dynastyId, seasonId, mediaId),
+    getSettings: () => ipcRenderer.invoke(IPC.net.getSettings),
+    setApiKey: (apiKey) => ipcRenderer.invoke(IPC.net.setApiKey, apiKey),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

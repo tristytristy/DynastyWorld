@@ -16,6 +16,11 @@ import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
 import { PairLayout } from './components/common/PairLayout';
 import { NcaaHubLayout } from './pages/NcaaHubLayout';
+import { NetHubLayout } from './pages/net/NetHubLayout';
+import { NetFeed } from './pages/net/NetFeed';
+import { NetTube } from './pages/net/NetTube';
+import { NetPaper } from './pages/net/NetPaper';
+import { NetPods } from './pages/net/NetPods';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
@@ -185,6 +190,13 @@ export function App() {
                     </Route>
                     {/* Media Hub — its own top-level section (dynasty-wide, season-scoped), not team-scoped. */}
                     <Route path="media" element={<Media />} />
+                    {/* The Net — the save's own internet (DynastyNet). */}
+                    <Route element={<NetHubLayout />}>
+                      <Route path="net" element={<NetFeed />} />
+                      <Route path="net/tube" element={<NetTube />} />
+                      <Route path="net/paper" element={<NetPaper />} />
+                      <Route path="net/pods" element={<NetPods />} />
+                    </Route>
                     {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
                     <Route element={<TeamHubLayout />}>
                       <Route path="team-hub" element={<DynastyOverview />} />

@@ -11,6 +11,7 @@ import { CommandPalette } from './CommandPalette';
 import { TEAM_TABS } from '../../pages/TeamHubLayout';
 import { NCAA_TABS } from '../../pages/NcaaHubLayout';
 import { RECRUIT_TABS } from '../../pages/RecruitHubLayout';
+import { NET_TABS } from '../../pages/net/NetHubLayout';
 import { TeamProfileModal } from './TeamProfileModal';
 import type { DynastyTheme, TeamTheme } from '../../../shared/types';
 
@@ -44,6 +45,7 @@ const TEAM_PATHS = new Set(TEAM_TABS.flatMap((tab) => tab.paths).filter(Boolean)
 const LEAGUE_PATHS = new Set(NCAA_TABS.map((tab) => stripSlash(tab.to)));
 const RECRUIT_PATHS = new Set(RECRUIT_TABS.map((tab) => stripSlash(tab.to)));
 const MEDIA_PATHS = new Set(['media']);
+const NET_PATHS = new Set(NET_TABS.map((tab) => stripSlash(tab.to)));
 
 function SeasonSwitcher() {
   const { seasons, selectedSeasonId, setSelectedSeasonId } = useSelectedSeason();
@@ -127,10 +129,12 @@ function DynastyNav({ id }: { id: string }) {
         ? 'recruit'
         : MEDIA_PATHS.has(sub)
           ? 'media'
-          : 'coach';
+          : NET_PATHS.has(sub)
+            ? 'net'
+            : 'coach';
   // The glider is driven by position, so the sections need a declared order —
   // the same order they're rendered in below.
-  const activeIndex = ['coach', 'team', 'league', 'recruit', 'media'].indexOf(section);
+  const activeIndex = ['coach', 'team', 'league', 'recruit', 'media', 'net'].indexOf(section);
 
   /*
     Publishes this row's real height as `--section-nav-h` so the rows that pin
@@ -216,6 +220,9 @@ function DynastyNav({ id }: { id: string }) {
           </Link>
           <Link to={`/dynasty/${id}/media`} className={gliderItemClass(section === 'media')}>
             Media
+          </Link>
+          <Link to={`/dynasty/${id}/net`} className={gliderItemClass(section === 'net')}>
+            The Net
           </Link>
         </GliderNav>
         {/* Switcher and search travel together as one right-hand group. They

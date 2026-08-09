@@ -211,4 +211,14 @@ export const IPC = {
     /** Recolours the Windows Control Overlay strip when the app's light/dark appearance flips. */
     setTitleBarTheme: 'window:setTitleBarTheme',
   },
+  net: {
+    getFeed: 'net:getFeed',
+    getEditions: 'net:getEditions',
+    getMediaComments: 'net:getMediaComments',
+    generateWeek: 'net:generateWeek',
+    postAsUser: 'net:postAsUser',
+    generateMediaComments: 'net:generateMediaComments',
+    getSettings: 'net:getSettings',
+    setApiKey: 'net:setApiKey',
+  },
 } as const;
