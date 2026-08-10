@@ -148,7 +148,15 @@ export function insertPosts(dynastyId: string, posts: NewNetPost[]): number {
   return posts.length;
 }
 
-/** The id of the most recently inserted post — sql.js exposes it via last_insert_rowid(). */
+/**
+ * The id of the most recently inserted post.
+ *
+ * ONLY VALID BEFORE THE NEXT FLUSH: sql.js's export() (inside persist())
+ * closes and reopens the connection, which resets last_insert_rowid() to 0 —
+ * the same reopen that resets PRAGMA foreign_keys (see init.ts). Callers that
+ * need this id for a reply's parent_id must run their inserts inside
+ * withBatchedPersist(), which defers the flush until the batch ends.
+ */
 export function lastInsertId(): number {
   const rows = selectRows<{ id: number }>('SELECT last_insert_rowid() AS id', []);
   return rows[0]?.id ?? 0;

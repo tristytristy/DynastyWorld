@@ -11,6 +11,7 @@ import {
   weekHasPosts,
 } from '../../database/dynastyNet';
 import { listMediaItems } from '../../database/media';
+import { withBatchedPersist } from '../../database/init';
 import { getRoster } from '../../database/getRoster';
 import { getSchedule } from '../../database/getSchedule';
 import type { NetAccount, NetGenerateResult, NetPost } from '../../shared/netTypes';
@@ -78,6 +79,9 @@ function draftsToRows(
     ]);
     const parentId = lastInsertId();
     added += 1;
+    // parentId of 0 means the connection was flushed underneath us (see
+    // dynastyNet.ts) — drop the replies rather than crash the whole week.
+    if (parentId === 0) continue;
     for (const r of d.replies) {
       const replier = byHandle.get(r.handle);
       if (!replier) continue;
@@ -139,21 +143,28 @@ export async function generateWeek(
     podcast = offline.podcast;
   }
 
-  let added = draftsToRows(seasonId, ctx.week, drafts, byHandle, dynastyId);
-  const paper = byHandle.get('@TheCrystalFB');
-  if (article && paper) {
-    insertPosts(dynastyId, [
-      { seasonId, accountId: paper.id, kind: 'article', title: article.headline, body: article.body, week: ctx.week },
-    ]);
-    added += 1;
-  }
-  const pod = byHandle.get('@4thAndForever');
-  if (podcast && pod) {
-    insertPosts(dynastyId, [
-      { seasonId, accountId: pod.id, kind: 'podcast', title: podcast.title, body: podcast.body, week: ctx.week },
-    ]);
-    added += 1;
-  }
+  // One batch for the whole landing: a reply's parent_id comes from
+  // lastInsertId(), which only survives until the next flush (see
+  // dynastyNet.ts) — and one flush instead of ~30 is the same perf rule
+  // persistExtraction follows.
+  const added = withBatchedPersist(() => {
+    let n = draftsToRows(seasonId, ctx.week, drafts, byHandle, dynastyId);
+    const paper = byHandle.get('@TheCrystalFB');
+    if (article && paper) {
+      insertPosts(dynastyId, [
+        { seasonId, accountId: paper.id, kind: 'article', title: article.headline, body: article.body, week: ctx.week },
+      ]);
+      n += 1;
+    }
+    const pod = byHandle.get('@4thAndForever');
+    if (podcast && pod) {
+      insertPosts(dynastyId, [
+        { seasonId, accountId: pod.id, kind: 'podcast', title: podcast.title, body: podcast.body, week: ctx.week },
+      ]);
+      n += 1;
+    }
+    return n;
+  });
   return { ok: true, engine, message, postsAdded: added };
 }
 
@@ -169,10 +180,12 @@ export async function replyToUserPost(
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
   const byHandle = ensureCastFor(dynastyId, ctx);
 
-  insertPosts(dynastyId, [
-    { seasonId, accountId: userAccountId, kind: 'post', body, week: ctx.week },
-  ]);
-  const parentId = lastInsertId();
+  const parentId = withBatchedPersist(() => {
+    insertPosts(dynastyId, [
+      { seasonId, accountId: userAccountId, kind: 'post', body, week: ctx.week },
+    ]);
+    return lastInsertId();
+  });
 
   let replies: { handle: string; body: string; likes: number }[];
   let engine: 'claude' | 'offline' = 'offline';
@@ -193,15 +206,18 @@ export async function replyToUserPost(
     replies = offlineReplies(body, ctx);
   }
 
-  let added = 1;
-  for (const r of replies) {
-    const account = byHandle.get(r.handle);
-    if (!account) continue;
-    insertPosts(dynastyId, [
-      { seasonId, accountId: account.id, kind: 'reply', parentId, body: r.body, likes: r.likes, week: ctx.week },
-    ]);
-    added += 1;
-  }
+  const added = withBatchedPersist(() => {
+    let n = 1;
+    for (const r of replies) {
+      const account = byHandle.get(r.handle);
+      if (!account) continue;
+      insertPosts(dynastyId, [
+        { seasonId, accountId: account.id, kind: 'reply', parentId, body: r.body, likes: r.likes, week: ctx.week },
+      ]);
+      n += 1;
+    }
+    return n;
+  });
   return { ok: true, engine, message, postsAdded: added };
 }
 
@@ -257,24 +273,28 @@ export async function generateMediaComments(
     drafts = offlineMediaComments(item?.description ?? '', gameLabel, players, ctx);
   }
 
-  let added = 0;
-  for (const d of drafts) {
-    const account = byHandle.get(d.handle);
-    if (!account) continue;
-    insertPosts(dynastyId, [
-      { seasonId, accountId: account.id, kind: 'comment', mediaId, body: d.body, likes: d.likes, week: ctx.week },
-    ]);
-    const parentId = lastInsertId();
-    added += 1;
-    for (const r of d.replies) {
-      const replier = byHandle.get(r.handle);
-      if (!replier) continue;
+  const added = withBatchedPersist(() => {
+    let n = 0;
+    for (const d of drafts) {
+      const account = byHandle.get(d.handle);
+      if (!account) continue;
       insertPosts(dynastyId, [
-        { seasonId, accountId: replier.id, kind: 'comment', mediaId, parentId, body: r.body, likes: r.likes, week: ctx.week },
+        { seasonId, accountId: account.id, kind: 'comment', mediaId, body: d.body, likes: d.likes, week: ctx.week },
       ]);
-      added += 1;
+      const parentId = lastInsertId();
+      n += 1;
+      if (parentId === 0) continue;
+      for (const r of d.replies) {
+        const replier = byHandle.get(r.handle);
+        if (!replier) continue;
+        insertPosts(dynastyId, [
+          { seasonId, accountId: replier.id, kind: 'comment', mediaId, parentId, body: r.body, likes: r.likes, week: ctx.week },
+        ]);
+        n += 1;
+      }
     }
-  }
+    return n;
+  });
   return { ok: true, engine, message, postsAdded: added };
 }
 
