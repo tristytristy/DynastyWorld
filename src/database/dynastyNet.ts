@@ -227,6 +227,69 @@ export function getMediaComments(dynastyId: string, mediaId: number): NetPost[] 
   return attachReplies(dynastyId, tops);
 }
 
+/**
+ * Rename (or lazily create) the user's account. Handles are normalized to
+ * @letters/digits/underscores; collisions with cast handles are refused so
+ * the user can't impersonate a bot.
+ */
+export function setUserIdentity(
+  dynastyId: string,
+  rawHandle: string,
+  rawDisplayName: string,
+): { ok: boolean; message?: string; account?: NetAccount } {
+  const db = getDb();
+  const handle = '@' + rawHandle.replace(/^@+/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 24);
+  if (handle.length < 3) return { ok: false, message: 'Handle needs at least 2 letters or digits.' };
+  const displayName = (rawDisplayName.trim() || handle.slice(1)).slice(0, 40);
+  const accounts = getAccounts(dynastyId);
+  const user = accounts.find((a) => a.kind === 'user');
+  if (accounts.some((a) => a.handle.toLowerCase() === handle.toLowerCase() && a.id !== user?.id)) {
+    return { ok: false, message: `${handle} is taken by someone on the Net. Pick another.` };
+  }
+  if (user) {
+    db.run('UPDATE net_accounts SET handle = ?, display_name = ? WHERE id = ?', [handle, displayName, user.id]);
+  } else {
+    db.run(
+      "INSERT INTO net_accounts (dynasty_id, handle, display_name, kind, persona, created_at) VALUES (?, ?, ?, 'user', '', ?)",
+      [dynastyId, handle, displayName, new Date().toISOString()],
+    );
+  }
+  persist();
+  const account = getAccounts(dynastyId).find((a) => a.kind === 'user');
+  return { ok: true, account };
+}
+
+/**
+ * The Net's recent history, oldest first — the memory every generator is
+ * handed so feuds, takes and bad predictions carry across weeks. Bounded:
+ * bodies truncated, newest `limit` posts only.
+ */
+export function getRecentPosts(
+  dynastyId: string,
+  limit = 40,
+): { handle: string; week: number; body: string; isUser: boolean }[] {
+  return selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind IN ('post', 'reply') ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId],
+  )
+    .reverse()
+    .map((r) => ({
+      handle: r.handle,
+      week: r.week,
+      body: r.body.slice(0, 180),
+      isUser: r.account_kind === 'user',
+    }));
+}
+
+/** One post and its replies, oldest first — the context for replying in-thread. */
+export function getThread(dynastyId: string, postId: number): NetPost | null {
+  const tops = selectRows<PostRow>(`${POST_SELECT} WHERE p.dynasty_id = ? AND p.id = ?`, [dynastyId, postId]).map(
+    mapPost,
+  );
+  if (!tops.length) return null;
+  return attachReplies(dynastyId, tops)[0];
+}
+
 /** True when a week already has generated feed chatter — the regenerate guard. */
 export function weekHasPosts(dynastyId: string, seasonId: number, week: number): boolean {
   return (

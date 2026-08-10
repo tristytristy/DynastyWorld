@@ -355,6 +355,10 @@ const api: DynastyApi = {
     generateMediaComments: (dynastyId, seasonId, mediaId) => ipcRenderer.invoke(IPC.net.generateMediaComments, dynastyId, seasonId, mediaId),
     getSettings: () => ipcRenderer.invoke(IPC.net.getSettings),
     setApiKey: (apiKey) => ipcRenderer.invoke(IPC.net.setApiKey, apiKey),
+    setUserIdentity: (dynastyId, handle, displayName) =>
+      ipcRenderer.invoke(IPC.net.setUserIdentity, dynastyId, handle, displayName),
+    replyToPost: (dynastyId, seasonId, accountId, parentId, body) =>
+      ipcRenderer.invoke(IPC.net.replyToPost, dynastyId, seasonId, accountId, parentId, body),
   },
 };
 

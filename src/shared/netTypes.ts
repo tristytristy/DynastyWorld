@@ -50,6 +50,12 @@ export interface NetGenerateResult {
   postsAdded: number;
 }
 
+export interface NetIdentityResult {
+  ok: boolean;
+  message?: string;
+  account?: NetAccount;
+}
+
 export interface NetSettings {
   /** Anthropic API key; empty = offline template engine only. */
   apiKey: string;

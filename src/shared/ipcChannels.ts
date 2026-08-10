@@ -220,5 +220,7 @@ export const IPC = {
     generateMediaComments: 'net:generateMediaComments',
     getSettings: 'net:getSettings',
     setApiKey: 'net:setApiKey',
+    setUserIdentity: 'net:setUserIdentity',
+    replyToPost: 'net:replyToPost',
   },
 } as const;

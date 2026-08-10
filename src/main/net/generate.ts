@@ -5,7 +5,10 @@ import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import {
   clearWeek,
   ensureAccounts,
+  getAccounts,
   getMediaComments,
+  getRecentPosts,
+  getThread,
   insertPosts,
   lastInsertId,
   weekHasPosts,
@@ -37,6 +40,22 @@ function ensureCastFor(dynastyId: string, ctx: NetWeekContext): Map<string, NetA
   ];
   const accounts = ensureAccounts(dynastyId, wanted);
   return new Map(accounts.map((a) => [a.handle, a]));
+}
+
+/**
+ * The Net's memory, formatted for a prompt. Everything the cast has said
+ * recently (and everything the user said) — so feuds continue, old takes get
+ * quoted back, and bad predictions get receipts.
+ */
+function memoryDigest(dynastyId: string): string {
+  const recent = getRecentPosts(dynastyId, 40);
+  if (!recent.length) return '';
+  const lines = recent.map((r) => `${r.handle}${r.isUser ? ' [the human fan]' : ''} (wk ${r.week}): ${r.body}`);
+  return `\n\nTHE NET'S RECENT HISTORY (memory — stay consistent with it, continue feuds, call back to old takes, hold accounts accountable for bad predictions):\n${lines.join('\n')}`;
+}
+
+function userHandleOf(dynastyId: string, accountId: number): string {
+  return getAccounts(dynastyId).find((a) => a.id === accountId)?.handle ?? '@fan';
 }
 
 interface ModelPost {
@@ -117,7 +136,7 @@ export async function generateWeek(
     try {
       const out = await generateJson<ModelWeek>(
         WEEK_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nTHIS WEEK'S DATA:\n${JSON.stringify(ctx, null, 1)}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nTHIS WEEK'S DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}`,
         6000,
       );
       drafts = (out.posts ?? []).map((p) => ({
@@ -193,8 +212,8 @@ export async function replyToUserPost(
   if (hasLiveEngine()) {
     try {
       replies = await generateJson<{ handle: string; body: string; likes?: number }[]>(
-        REPLY_SYSTEM.replace('{HANDLE}', '@SaturdayFaithful'),
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}\n\nUSER POST:\n${body}`,
+        REPLY_SYSTEM.replace('{HANDLE}', userHandleOf(dynastyId, userAccountId)),
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}\n\nUSER POST:\n${body}`,
         1500,
       ).then((rs) => rs.map((r) => ({ handle: r.handle, body: r.body, likes: r.likes ?? 0 })));
       engine = 'claude';
@@ -299,3 +318,64 @@ export async function generateMediaComments(
 }
 
 export type { NetPost };
+
+const THREAD_SYSTEM = `You write the next replies in an ongoing thread on a fictional college-football social network for a video-game dynasty. The newest reply is from {HANDLE} — an ordinary fan account (the human player); never treat them as a coach or insider. Cast members already in the thread stay consistent with what they said; others may jump in. Argue, agree, dunk, escalate — stay factual to the data. Return ONLY JSON: [{"handle","body","likes":int}] with 1-3 replies continuing the thread. Use only cast handles.`;
+
+export async function replyInThread(
+  dynastyId: string,
+  seasonId: number,
+  userAccountId: number,
+  parentId: number,
+  body: string,
+): Promise<NetGenerateResult> {
+  const ctx = buildWeekContext(dynastyId, seasonId);
+  if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
+  const byHandle = ensureCastFor(dynastyId, ctx);
+  const thread = getThread(dynastyId, parentId);
+  if (!thread) return { ok: false, engine: 'offline', message: 'That post no longer exists.', postsAdded: 0 };
+
+  withBatchedPersist(() => {
+    insertPosts(dynastyId, [
+      { seasonId, accountId: userAccountId, kind: 'reply', parentId, body, week: ctx.week },
+    ]);
+  });
+
+  const transcript = [
+    `${thread.handle}: ${thread.body}`,
+    ...thread.replies.map((r) => `${r.handle}: ${r.body}`),
+    `${userHandleOf(dynastyId, userAccountId)}: ${body}`,
+  ].join('\n');
+
+  let replies: { handle: string; body: string; likes: number }[];
+  let engine: 'claude' | 'offline' = 'offline';
+  let message: string | undefined;
+  if (hasLiveEngine()) {
+    try {
+      replies = await generateJson<{ handle: string; body: string; likes?: number }[]>(
+        THREAD_SYSTEM.replace('{HANDLE}', userHandleOf(dynastyId, userAccountId)),
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
+        1200,
+      ).then((rs) => rs.map((r) => ({ handle: r.handle, body: r.body, likes: r.likes ?? 0 })));
+      engine = 'claude';
+    } catch (err) {
+      message = err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined;
+      replies = offlineReplies(body, ctx).slice(0, 2);
+    }
+  } else {
+    replies = offlineReplies(body, ctx).slice(0, 2);
+  }
+
+  const added = withBatchedPersist(() => {
+    let n = 1;
+    for (const r of replies) {
+      const account = byHandle.get(r.handle);
+      if (!account) continue;
+      insertPosts(dynastyId, [
+        { seasonId, accountId: account.id, kind: 'reply', parentId, body: r.body, likes: r.likes, week: ctx.week },
+      ]);
+      n += 1;
+    }
+    return n;
+  });
+  return { ok: true, engine, message, postsAdded: added };
+}

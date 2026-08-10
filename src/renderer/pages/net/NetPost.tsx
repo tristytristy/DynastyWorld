@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { NetPost } from '../../../shared/netTypes';
 
 /**
@@ -21,7 +22,19 @@ function Avatar({ handle, isUser }: { handle: string; isUser: boolean }) {
   );
 }
 
-export function PostCard({ post, compact = false }: { post: NetPost; compact?: boolean }) {
+export function PostCard({
+  post,
+  compact = false,
+  onReply,
+  replyBox,
+}: {
+  post: NetPost;
+  compact?: boolean;
+  /** When set, the card offers a Reply action (used by the Feed). */
+  onReply?: (post: NetPost) => void;
+  /** Rendered under the replies while this card's composer is open. */
+  replyBox?: ReactNode;
+}) {
   const isUser = post.accountKind === 'user';
   return (
     <div
@@ -40,7 +53,20 @@ export function PostCard({ post, compact = false }: { post: NetPost; compact?: b
             </span>
           </p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.body}</p>
-          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">♥ {post.likes.toLocaleString()}</p>
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+            ♥ {post.likes.toLocaleString()}
+            {onReply && (
+              <>
+                {' · '}
+                <button
+                  className="font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  onClick={() => onReply(post)}
+                >
+                  Reply
+                </button>
+              </>
+            )}
+          </p>
           {post.replies.length > 0 && (
             <div className="mt-3 space-y-2 border-l-2 border-slate-200/80 pl-3 dark:border-slate-700">
               {post.replies.map((reply) => (
@@ -48,6 +74,7 @@ export function PostCard({ post, compact = false }: { post: NetPost; compact?: b
               ))}
             </div>
           )}
+          {replyBox}
         </div>
       </div>
     </div>

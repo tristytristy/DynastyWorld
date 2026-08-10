@@ -1,4 +1,4 @@
-import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from './netTypes';
+import type { NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -3661,6 +3661,14 @@ export interface DynastyApi {
     generateMediaComments: (dynastyId: string, seasonId: number, mediaId: number) => Promise<NetGenerateResult>;
     getSettings: () => Promise<NetSettings>;
     setApiKey: (apiKey: string) => Promise<NetSettings>;
+    setUserIdentity: (dynastyId: string, handle: string, displayName: string) => Promise<NetIdentityResult>;
+    replyToPost: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      parentId: number,
+      body: string,
+    ) => Promise<NetGenerateResult>;
   };
   window: {
     /**

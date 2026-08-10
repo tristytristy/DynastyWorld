@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
-import { getEditions, getFeedView, getMediaComments } from '../../database/dynastyNet';
-import { generateMediaComments, generateWeek, replyToUserPost } from '../net/generate';
+import { getEditions, getFeedView, getMediaComments, setUserIdentity } from '../../database/dynastyNet';
+import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
 import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
 
@@ -40,6 +40,25 @@ export function registerNetHandlers(): void {
     IPC.net.generateMediaComments,
     async (_e, dynastyId: string, seasonId: number, mediaId: number): Promise<NetGenerateResult> => {
       return generateMediaComments(dynastyId, seasonId, mediaId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.net.setUserIdentity,
+    (_e, dynastyId: string, handle: string, displayName: string) => setUserIdentity(dynastyId, handle, displayName),
+  );
+
+  ipcMain.handle(
+    IPC.net.replyToPost,
+    async (
+      _e,
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      parentId: number,
+      body: string,
+    ): Promise<NetGenerateResult> => {
+      return replyInThread(dynastyId, seasonId, accountId, parentId, body);
     },
   );
 

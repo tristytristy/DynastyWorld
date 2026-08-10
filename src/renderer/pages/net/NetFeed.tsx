@@ -24,6 +24,11 @@ export function NetFeed() {
   const [notice, setNotice] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [keyDraft, setKeyDraft] = useState('');
+  const [editingIdentity, setEditingIdentity] = useState(false);
+  const [handleDraft, setHandleDraft] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
 
   const reload = useCallback(() => {
     if (!id || selectedSeasonId === undefined) return;
@@ -76,6 +81,32 @@ export function NetFeed() {
     setShowSettings(false);
   };
 
+  const saveIdentity = async () => {
+    const result = await window.api.net.setUserIdentity(id, handleDraft, nameDraft);
+    if (!result.ok) {
+      setNotice(result.message ?? 'Could not change your handle.');
+      return;
+    }
+    setEditingIdentity(false);
+    setNotice(`You are now ${result.account?.displayName} (${result.account?.handle}).`);
+    reload();
+  };
+
+  const submitReply = async (parentId: number) => {
+    if (!replyDraft.trim() || !view?.userAccount) return;
+    setBusy('post');
+    setNotice(null);
+    try {
+      const result = await window.api.net.replyToPost(id, selectedSeasonId, view.userAccount.id, parentId, replyDraft.trim());
+      setReplyDraft('');
+      setReplyingTo(null);
+      if (result.message) setNotice(result.message);
+      reload();
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const buttonClass =
     'border border-slate-300/80 px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-500 hover:text-slate-950 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:border-slate-400 dark:hover:text-white';
 
@@ -124,12 +155,46 @@ export function NetFeed() {
       </SurfaceCard>
 
       <SurfaceCard>
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">
-          Post as {view?.userAccount?.displayName ?? 'a fan'}{' '}
-          <span className="font-normal text-slate-400 dark:text-slate-500">
-            {view?.userAccount ? view.userAccount.handle + ' — just another fan on the Net' : ''}
-          </span>
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            Post as {view?.userAccount?.displayName ?? 'a fan'}{' '}
+            <span className="font-normal text-slate-400 dark:text-slate-500">
+              {view?.userAccount ? view.userAccount.handle + ' — just another fan on the Net' : ''}
+            </span>
+          </p>
+          <button
+            className="ml-auto text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+            onClick={() => {
+              setEditingIdentity((v) => !v);
+              setHandleDraft(view?.userAccount?.handle.replace(/^@/, '') ?? '');
+              setNameDraft(view?.userAccount?.displayName ?? '');
+            }}
+          >
+            {editingIdentity ? 'cancel' : 'change handle'}
+          </button>
+        </div>
+        {editingIdentity && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-1 items-center border border-slate-300/80 dark:border-slate-600">
+              <span className="pl-3 text-sm text-slate-400 dark:text-slate-500">@</span>
+              <input
+                value={handleDraft}
+                onChange={(e) => setHandleDraft(e.target.value)}
+                placeholder="YourHandle"
+                className="min-w-0 flex-1 bg-transparent px-1 py-1.5 text-sm outline-none"
+              />
+            </div>
+            <input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              placeholder="Display name"
+              className="min-w-0 flex-1 border border-slate-300/80 bg-transparent px-3 py-1.5 text-sm dark:border-slate-600"
+            />
+            <button className={buttonClass} onClick={saveIdentity}>
+              Save
+            </button>
+          </div>
+        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -158,7 +223,39 @@ export function NetFeed() {
       )}
 
       <div className="space-y-3">
-        {view?.posts.map((post) => <PostCard key={post.id} post={post} />)}
+        {view?.posts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            onReply={view.userAccount ? (p) => {
+              setReplyingTo(replyingTo === p.id ? null : p.id);
+              setReplyDraft('');
+            } : undefined}
+            replyBox={
+              replyingTo === post.id ? (
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={replyDraft}
+                    onChange={(e) => setReplyDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && replyDraft.trim() && busy === null) void submitReply(post.id);
+                    }}
+                    placeholder={`Reply as ${view.userAccount?.handle ?? 'you'}…`}
+                    className="min-w-0 flex-1 border border-slate-300/80 bg-transparent px-3 py-1.5 text-sm dark:border-slate-600"
+                    autoFocus
+                  />
+                  <button
+                    className={buttonClass}
+                    disabled={busy !== null || !replyDraft.trim()}
+                    onClick={() => void submitReply(post.id)}
+                  >
+                    {busy === 'post' ? '…' : 'Reply'}
+                  </button>
+                </div>
+              ) : undefined
+            }
+          />
+        ))}
       </div>
     </div>
   );
