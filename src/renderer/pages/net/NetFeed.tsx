@@ -125,7 +125,10 @@ export function NetFeed() {
 
       <SurfaceCard>
         <p className="text-sm font-semibold text-slate-900 dark:text-white">
-          Post as {view?.userAccount?.displayName ?? 'Coach'}
+          Post as {view?.userAccount?.displayName ?? 'a fan'}{' '}
+          <span className="font-normal text-slate-400 dark:text-slate-500">
+            {view?.userAccount ? view.userAccount.handle + ' — just another fan on the Net' : ''}
+          </span>
         </p>
         <textarea
           value={draft}

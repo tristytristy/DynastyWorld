@@ -75,11 +75,15 @@ export function fanFor(teamName: string): CastMember {
   };
 }
 
-/** The user's own account — created once per dynasty, posts as "you". */
-export function userAccountFor(coachTeam: string | null): CastMember {
+/**
+ * The user's own account — created once per dynasty. Deliberately an
+ * ordinary fan identity: on the Net you're just another account in the
+ * crowd, and the bots are told exactly that (see REPLY_SYSTEM).
+ */
+export function userAccountFor(): CastMember {
   return {
-    handle: '@Coach',
-    displayName: coachTeam ? `Coach (${coachTeam})` : 'Coach',
+    handle: '@SaturdayFaithful',
+    displayName: 'Saturday Faithful',
     kind: 'user',
     persona: '',
   };

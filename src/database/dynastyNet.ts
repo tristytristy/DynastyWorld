@@ -93,8 +93,23 @@ export function ensureAccounts(
   wanted: { handle: string; displayName: string; kind: NetAccountKind; persona: string }[],
 ): NetAccount[] {
   const db = getDb();
-  const existing = new Set(getAccounts(dynastyId).map((a) => a.handle));
+  const current = getAccounts(dynastyId);
   let added = false;
+  // The user's identity is singular: if it already exists under an old
+  // handle (early builds used @Coach), rename it in place so every past
+  // post follows the new name instead of a second user account appearing.
+  const wantedUser = wanted.find((w) => w.kind === 'user');
+  const existingUser = current.find((a) => a.kind === 'user');
+  if (wantedUser && existingUser && existingUser.handle !== wantedUser.handle) {
+    db.run('UPDATE net_accounts SET handle = ?, display_name = ? WHERE id = ?', [
+      wantedUser.handle,
+      wantedUser.displayName,
+      existingUser.id,
+    ]);
+    existingUser.handle = wantedUser.handle;
+    added = true;
+  }
+  const existing = new Set(current.map((a) => a.handle));
   for (const w of wanted) {
     if (existing.has(w.handle)) continue;
     db.run('INSERT INTO net_accounts (dynasty_id, handle, display_name, kind, persona, created_at) VALUES (?, ?, ?, ?, ?, ?)', [

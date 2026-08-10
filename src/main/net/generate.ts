@@ -33,7 +33,7 @@ function ensureCastFor(dynastyId: string, ctx: NetWeekContext): Map<string, NetA
   const wanted: CastMember[] = [
     ...FIXED_CAST,
     ...ctx.teamsInTheNews.map((t) => fanFor(t)),
-    userAccountFor(ctx.userTeam),
+    userAccountFor(),
   ];
   const accounts = ensureAccounts(dynastyId, wanted);
   return new Map(accounts.map((a) => [a.handle, a]));
@@ -168,7 +168,7 @@ export async function generateWeek(
   return { ok: true, engine, message, postsAdded: added };
 }
 
-const REPLY_SYSTEM = `You write replies on a fictional college-football social network for a video-game dynasty. The user (the human coach of {TEAM}) just posted. The cast replies in character — argue, agree, pile on, reminisce; stay factual to the data. Return ONLY JSON: [{"handle","body","likes":int}] with 2-4 replies. Use only cast handles.`;
+const REPLY_SYSTEM = `You write replies on a fictional college-football social network for a video-game dynasty. The post below is from {HANDLE} — to everyone on the Net this is just another ordinary fan account. Never treat them as a coach, insider, or anyone special; they get the same energy any random fan gets: argue, agree, dunk, pile on, reminisce. Stay factual to the data. Return ONLY JSON: [{"handle","body","likes":int}] with 2-4 replies. Use only cast handles.`;
 
 export async function replyToUserPost(
   dynastyId: string,
@@ -193,7 +193,7 @@ export async function replyToUserPost(
   if (hasLiveEngine()) {
     try {
       replies = await generateJson<{ handle: string; body: string; likes?: number }[]>(
-        REPLY_SYSTEM.replace('{TEAM}', ctx.userTeam),
+        REPLY_SYSTEM.replace('{HANDLE}', '@SaturdayFaithful'),
         `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}\n\nUSER POST:\n${body}`,
         1500,
       ).then((rs) => rs.map((r) => ({ handle: r.handle, body: r.body, likes: r.likes ?? 0 })));
