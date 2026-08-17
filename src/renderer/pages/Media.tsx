@@ -3,7 +3,7 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { CustomAlbum, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
@@ -61,6 +61,22 @@ function gameLabel(game: ScheduleGame): string {
       ? ` ${game.result ?? ''} ${game.teamScore}-${game.opponentScore}`
       : '';
   return `Wk ${game.week} ${game.isHome ? 'vs' : '@'} ${game.opponent}${score}`;
+}
+
+/**
+ * A game from anywhere in the nation, for the Set-game pickers. The archive
+ * stores every league game (that's the Scores page), so tagging isn't limited
+ * to the user's own schedule — you watched the game, you can file the clip.
+ */
+function nationalGameLabel(game: LeagueScoreGame): string {
+  const score =
+    game.homeScore !== null && game.awayScore !== null ? ` ${game.awayScore}-${game.homeScore}` : '';
+  const stage = game.isNationalChampionship
+    ? ' · National Championship'
+    : game.bowlName
+      ? ` · ${game.bowlName}`
+      : '';
+  return `Wk ${game.week} · ${game.awayTeamName} @ ${game.homeTeamName}${score}${stage}`;
 }
 
 function playerLabel(player: RosterPlayer): string {
@@ -664,6 +680,7 @@ function LookPanel({
 function MediaDetailsForm({
   item,
   games,
+  nationalGames,
   roster,
   albums,
   onCreateAlbum,
@@ -672,6 +689,7 @@ function MediaDetailsForm({
 }: {
   item: MediaItemWithPath;
   games: ScheduleGame[];
+  nationalGames: LeagueScoreGame[];
   roster: RosterPlayer[];
   albums: CustomAlbum[];
   /** Creates an album and hands back its id, so the photo can be filed into it immediately. */
@@ -752,6 +770,7 @@ function MediaDetailsForm({
             options={[
               { value: '', label: 'Not from a specific game' },
               ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+              ...nationalGames.map((game) => ({ value: String(game.gameId), label: nationalGameLabel(game) })),
             ]}
           />
         ) : (
@@ -861,6 +880,7 @@ function MediaLightbox({
   items,
   index,
   games,
+  nationalGames,
   roster,
   albums,
   onCreateAlbum,
@@ -876,6 +896,7 @@ function MediaLightbox({
   items: MediaItemWithPath[];
   index: number;
   games: ScheduleGame[];
+  nationalGames: LeagueScoreGame[];
   roster: RosterPlayer[];
   albums: CustomAlbum[];
   onCreateAlbum: (name: string) => Promise<number | null>;
@@ -1174,6 +1195,7 @@ function MediaLightbox({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {editTab === 'details' ? (
                 <MediaDetailsForm
+                  nationalGames={nationalGames}
                   item={item}
                   games={games}
                   roster={roster}
@@ -1213,6 +1235,7 @@ export function Media() {
   const { seasons, selectedSeasonId: seasonId } = useSelectedSeason();
   const [items, setItems] = useState<MediaItemWithPath[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
+  const [leagueGames, setLeagueGames] = useState<LeagueScoreGame[]>([]);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   /** Which game's roll is open. Empty = all closed, which is where the page starts. */
@@ -1452,6 +1475,7 @@ export function Media() {
     setSelectedIds(new Set());
     refresh();
     window.api.db.getSchedule(id, seasonId).then((result) => setSchedule(result ?? null));
+    window.api.db.getLeagueScores(id, seasonId).then((result) => setLeagueGames(result?.games ?? []));
     window.api.db.getRoster(id, seasonId).then((result) => setRoster(result ?? []));
   }, [id, seasonId, refresh]);
 
@@ -1700,6 +1724,13 @@ export function Media() {
   if (!id) return null;
 
   const games = schedule?.games ?? [];
+  // Every game in the nation the user's own schedule doesn't already cover —
+  // the archive has the full slate, so any game can be tagged, not just yours.
+  const ownGameIds = new Set(games.map((g) => g.gameId));
+  const nationalGames = leagueGames
+    .filter((g) => !ownGameIds.has(g.gameId))
+    .sort((a, b) => a.week - b.week || a.homeTeamName.localeCompare(b.homeTeamName));
+  const nationalById = new Map(nationalGames.map((g) => [g.gameId, g]));
   const hasItems = !!items && items.length > 0;
 
   /*
@@ -1782,12 +1813,13 @@ export function Media() {
     let roll = rollByKey.get(key);
     if (!roll) {
       const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
+      const nationalGame = !game && item.gameId !== null ? nationalById.get(item.gameId) : undefined;
       /*
         THE USER'S NAME WINS, and the game's own label becomes the placeholder
         rather than disappearing — a folder called "Senior Day" still has to be
         findable as the Purdue game, so the game line stays underneath it.
       */
-      const defaultLabel = game ? gameLabel(game) : 'Not from a game';
+      const defaultLabel = game ? gameLabel(game) : nationalGame ? nationalGameLabel(nationalGame) : 'Not from a game';
       const saved = albums.find((a) => a.gameId === item.gameId);
       const custom = saved?.name ? saved.name : null;
       roll = {
@@ -2054,6 +2086,7 @@ export function Media() {
                   { value: '', label: 'Leave the game as it is' },
                   { value: CLEAR_GAME, label: 'Not from a specific game' },
                   ...games.map((game) => ({ value: String(game.gameId), label: gameLabel(game) })),
+                  ...nationalGames.map((game) => ({ value: String(game.gameId), label: nationalGameLabel(game) })),
                 ]}
               />
             </div>
@@ -2207,12 +2240,13 @@ export function Media() {
         <div className="media-fade-in grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {items.map((item, index) => {
             const game = item.gameId !== null ? games.find((g) => g.gameId === item.gameId) : undefined;
+            const nationalGame = !game && item.gameId !== null ? nationalById.get(item.gameId) : undefined;
             return (
               <MediaTile
                 key={item.id}
                 item={item}
                 index={index}
-                caption={item.description || (game ? gameLabel(game) : 'Add details')}
+                caption={item.description || (game ? gameLabel(game) : nationalGame ? nationalGameLabel(nationalGame) : 'Add details')}
                 selectMode={selectMode}
                 selected={selectedIds.has(item.id)}
                 onOpen={() => setLightboxIndex(index)}
@@ -2477,6 +2511,7 @@ export function Media() {
           items={items}
           index={lightboxIndex}
           games={games}
+          nationalGames={nationalGames}
           roster={roster}
           albums={customAlbums}
           onCreateAlbum={createAlbumNamed}

@@ -17,6 +17,7 @@ import { listMediaItems } from '../../database/media';
 import { withBatchedPersist } from '../../database/init';
 import { getRoster } from '../../database/getRoster';
 import { getSchedule } from '../../database/getSchedule';
+import { getLeagueScores } from '../../database/getLeagueScores';
 import type { NetAccount, NetGenerateResult, NetPost } from '../../shared/netTypes';
 
 /**
@@ -263,9 +264,17 @@ export async function generateMediaComments(
     .map((p) => `${p.firstName} ${p.lastName} (${p.position})`);
   const schedule = getSchedule(dynastyId, seasonId);
   const game = item?.gameId != null ? schedule?.games.find((g) => g.gameId === item.gameId) ?? null : null;
+  // National games (taggable since the pickers opened up to the whole slate)
+  // aren't on the user's schedule — resolve them from the league scores.
+  const leagueGame =
+    !game && item?.gameId != null
+      ? getLeagueScores(dynastyId, seasonId)?.games.find((g) => g.gameId === item.gameId) ?? null
+      : null;
   const gameLabel = game
     ? `${ctx.userTeam} ${game.teamScore ?? ''}-${game.opponentScore ?? ''} ${game.isHome ? 'vs' : 'at'} ${game.opponent}, week ${game.week}`
-    : null;
+    : leagueGame
+      ? `${leagueGame.awayTeamName} ${leagueGame.awayScore ?? ''}-${leagueGame.homeScore ?? ''} at ${leagueGame.homeTeamName}, week ${leagueGame.week}`
+      : null;
 
   let drafts: DraftPost[];
   let engine: 'claude' | 'offline' = 'offline';
