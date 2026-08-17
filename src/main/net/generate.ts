@@ -3,6 +3,7 @@ import { FIXED_CAST, fanFor, userAccountFor, type CastMember } from './cast';
 import { offlineWeek, offlineReplies, offlineMediaComments, type DraftPost } from './offline';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import {
+  clearMediaComments,
   clearWeek,
   ensureAccounts,
   getAccounts,
@@ -18,6 +19,7 @@ import { withBatchedPersist } from '../../database/init';
 import { getRoster } from '../../database/getRoster';
 import { getSchedule } from '../../database/getSchedule';
 import { getLeagueScores } from '../../database/getLeagueScores';
+import { getAllLeaguePlayers } from '../../database/getLeagueRoster';
 import type { NetAccount, NetGenerateResult, NetPost } from '../../shared/netTypes';
 
 /**
@@ -241,27 +243,31 @@ export async function replyToUserPost(
   return { ok: true, engine, message, postsAdded: added };
 }
 
-const COMMENTS_SYSTEM = `You write the comment section under a highlight upload on a fictional video site for a college-football video-game dynasty. Bots argue about GOATs, stats, worst moments, favorite plays, clutch moments — grounded in the clip's real game and players. Return ONLY JSON: [{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}] with 3-5 top-level comments, 0-2 replies each. Use only cast handles.`;
+const COMMENTS_SYSTEM = `You write the comment section under a highlight upload on a fictional video site for a college-football video-game dynasty. Bots argue about GOATs, stats, worst moments, favorite plays, clutch moments — grounded in the clip's real game and players. If still frames from the clip are attached, you have WATCHED it: react to what actually happens on screen (the play, the formations, the broadcast score bug — read it for score/time/quarter if visible). Return ONLY JSON: [{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}] with 3-5 top-level comments, 0-2 replies each. Use only cast handles.`;
+
+export type MediaCommentMode = 'more' | 'fresh';
 
 export async function generateMediaComments(
   dynastyId: string,
   seasonId: number,
   mediaId: number,
+  mode: MediaCommentMode = 'more',
+  frames: string[] = [],
 ): Promise<NetGenerateResult> {
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
-  if (getMediaComments(dynastyId, mediaId).length > 0) {
-    return { ok: true, engine: 'offline', message: 'Comments already loaded.', postsAdded: 0 };
-  }
+  if (mode === 'fresh') clearMediaComments(dynastyId, mediaId);
+  const existing = getMediaComments(dynastyId, mediaId);
   const byHandle = ensureCastFor(dynastyId, ctx);
 
   const items = listMediaItems(dynastyId, seasonId) ?? [];
   const item = items.find((m) => m.id === mediaId);
   const roster = getRoster(dynastyId, seasonId) ?? [];
+  const leaguePlayers = getAllLeaguePlayers(dynastyId, seasonId) ?? [];
   const players = (item?.playerIds ?? [])
-    .map((pid) => roster.find((p) => p.id === pid))
+    .map((pid) => roster.find((p) => p.id === pid) ?? leaguePlayers.find((p) => p.id === pid))
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    .map((p) => `${p.firstName} ${p.lastName} (${p.position})`);
+    .map((p) => `${p.firstName} ${p.lastName} (${p.position}${'teamDisplayName' in p ? `, ${(p as { teamDisplayName: string }).teamDisplayName}` : ''})`);
   const schedule = getSchedule(dynastyId, seasonId);
   const game = item?.gameId != null ? schedule?.games.find((g) => g.gameId === item.gameId) ?? null : null;
   // National games (taggable since the pickers opened up to the whole slate)
@@ -281,10 +287,16 @@ export async function generateMediaComments(
   let message: string | undefined;
   if (hasLiveEngine()) {
     try {
+      const alreadySaid = existing.length
+        ? `\n\nCOMMENTS ALREADY POSTED (write NEW comments — react to them or take new angles, never repeat):\n${existing
+            .flatMap((c) => [`${c.handle}: ${c.body}`, ...c.replies.map((r) => `${r.handle}: ${r.body}`)])
+            .join('\n')}`
+        : '';
       const raw = await generateJson<ModelPost[]>(
         COMMENTS_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP: ${item?.description || 'untitled highlight'}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP: ${item?.description || 'untitled highlight'}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}`,
         2500,
+        frames,
       );
       drafts = raw.map((p) => ({
         handle: p.handle,

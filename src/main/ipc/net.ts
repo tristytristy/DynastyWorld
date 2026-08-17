@@ -40,8 +40,15 @@ export function registerNetHandlers(): void {
 
   ipcMain.handle(
     IPC.net.generateMediaComments,
-    async (_e, dynastyId: string, seasonId: number, mediaId: number): Promise<NetGenerateResult> => {
-      return generateMediaComments(dynastyId, seasonId, mediaId);
+    async (
+      _e,
+      dynastyId: string,
+      seasonId: number,
+      mediaId: number,
+      mode: 'more' | 'fresh' = 'more',
+      frames: string[] = [],
+    ): Promise<NetGenerateResult> => {
+      return generateMediaComments(dynastyId, seasonId, mediaId, mode, frames);
     },
   );
 

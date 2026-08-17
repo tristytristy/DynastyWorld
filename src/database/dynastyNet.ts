@@ -301,6 +301,13 @@ export function getThread(dynastyId: string, postId: number): NetPost | null {
   return attachReplies(dynastyId, tops)[0];
 }
 
+/** Wipe one media item's comment section ahead of a fresh generation. */
+export function clearMediaComments(dynastyId: string, mediaId: number): void {
+  const db = getDb();
+  db.run('DELETE FROM net_posts WHERE dynasty_id = ? AND media_id = ?', [dynastyId, mediaId]);
+  persist();
+}
+
 /** True when a week already has generated feed chatter — the regenerate guard. */
 export function weekHasPosts(dynastyId: string, seasonId: number, week: number): boolean {
   return (

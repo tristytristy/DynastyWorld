@@ -3,7 +3,7 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, NationalPlayer, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
@@ -390,11 +390,14 @@ function PlayerTagList({
   selected,
   onToggle,
   maxHeightClass = 'max-h-48',
+  teamOf,
 }: {
   roster: RosterPlayer[];
   selected: number[];
   onToggle: (playerId: number) => void;
   maxHeightClass?: string;
+  /** School name per player id for entries beyond the user's own roster — the list can span the whole league now. */
+  teamOf?: Map<number, string>;
 }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
@@ -407,10 +410,15 @@ function PlayerTagList({
       const q = raw.toLowerCase();
       matches = roster.filter((p) => playerLabel(p).toLowerCase().includes(q) || p.position.toLowerCase() === q);
     } else matches = roster;
-    return [...matches].sort((a, b) => {
+    const sorted = [...matches].sort((a, b) => {
       const at = selected.includes(a.id) ? 0 : 1;
       const bt = selected.includes(b.id) ? 0 : 1;
       if (at !== bt) return at - bt;
+      // The user's own roster outranks the rest of the league in a tie —
+      // that's who the overwhelming majority of tags are.
+      const ao = teamOf?.has(a.id) ? 1 : 0;
+      const bo = teamOf?.has(b.id) ? 1 : 0;
+      if (ao !== bo) return ao - bo;
       if (jerseyQuery !== null) {
         const ae = String(a.jerseyNumber) === jerseyQuery ? 0 : 1;
         const be = String(b.jerseyNumber) === jerseyQuery ? 0 : 1;
@@ -419,7 +427,10 @@ function PlayerTagList({
       }
       return b.overallRating - a.overallRating;
     });
-  }, [roster, query, selected]);
+    // The list can span ~7,000 league players now — cap what's rendered and
+    // let the search box do the narrowing (tagged players always survive).
+    return sorted.slice(0, 300);
+  }, [roster, query, selected, teamOf]);
 
   return (
     <>
@@ -450,6 +461,11 @@ function PlayerTagList({
                   #{player.jerseyNumber}
                 </span>
                 {playerLabel(player)}
+                {teamOf?.has(player.id) && (
+                  <span className={`ml-1.5 text-xs ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+                    {teamOf.get(player.id)}
+                  </span>
+                )}
               </span>
               <span className={`shrink-0 text-xs ${tagged ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
                 {player.position} {player.overallRating}
@@ -682,6 +698,7 @@ function MediaDetailsForm({
   games,
   nationalGames,
   roster,
+  teamOf,
   albums,
   onCreateAlbum,
   onSave,
@@ -691,6 +708,7 @@ function MediaDetailsForm({
   games: ScheduleGame[];
   nationalGames: LeagueScoreGame[];
   roster: RosterPlayer[];
+  teamOf?: Map<number, string>;
   albums: CustomAlbum[];
   /** Creates an album and hands back its id, so the photo can be filed into it immediately. */
   onCreateAlbum: (name: string) => Promise<number | null>;
@@ -840,6 +858,7 @@ function MediaDetailsForm({
         <div className="mt-1.5">
           <PlayerTagList
             roster={roster}
+            teamOf={teamOf}
             selected={playerIds}
             onToggle={(playerId) =>
               setPlayerIds((prev) =>
@@ -882,6 +901,7 @@ function MediaLightbox({
   games,
   nationalGames,
   roster,
+  teamOf,
   albums,
   onCreateAlbum,
   onNavigate,
@@ -898,6 +918,7 @@ function MediaLightbox({
   games: ScheduleGame[];
   nationalGames: LeagueScoreGame[];
   roster: RosterPlayer[];
+  teamOf?: Map<number, string>;
   albums: CustomAlbum[];
   onCreateAlbum: (name: string) => Promise<number | null>;
   onNavigate: (index: number) => void;
@@ -1199,6 +1220,7 @@ function MediaLightbox({
                   item={item}
                   games={games}
                   roster={roster}
+                  teamOf={teamOf}
                   albums={albums}
                   onCreateAlbum={onCreateAlbum}
                   onSave={(patch) => {
@@ -1236,6 +1258,7 @@ export function Media() {
   const [items, setItems] = useState<MediaItemWithPath[] | null | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleOverview | null>(null);
   const [leagueGames, setLeagueGames] = useState<LeagueScoreGame[]>([]);
+  const [leaguePlayers, setLeaguePlayers] = useState<NationalPlayer[]>([]);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   /** Which game's roll is open. Empty = all closed, which is where the page starts. */
@@ -1476,6 +1499,7 @@ export function Media() {
     refresh();
     window.api.db.getSchedule(id, seasonId).then((result) => setSchedule(result ?? null));
     window.api.db.getLeagueScores(id, seasonId).then((result) => setLeagueGames(result?.games ?? []));
+    window.api.db.getAllLeaguePlayers(id, seasonId).then((result) => setLeaguePlayers(result ?? []));
     window.api.db.getRoster(id, seasonId).then((result) => setRoster(result ?? []));
   }, [id, seasonId, refresh]);
 
@@ -1731,6 +1755,11 @@ export function Media() {
     .filter((g) => !ownGameIds.has(g.gameId))
     .sort((a, b) => a.week - b.week || a.homeTeamName.localeCompare(b.homeTeamName));
   const nationalById = new Map(nationalGames.map((g) => [g.gameId, g]));
+  // Tagging spans the whole league: your roster first, then everyone else in
+  // the nation (same PresentationId space, so tags resolve everywhere).
+  const ownPlayerIds = new Set(roster.map((p) => p.id));
+  const taggableRoster: RosterPlayer[] = [...roster, ...leaguePlayers.filter((p) => !ownPlayerIds.has(p.id))];
+  const teamOfPlayer = new Map(leaguePlayers.filter((p) => !ownPlayerIds.has(p.id)).map((p) => [p.id, p.teamDisplayName]));
   const hasItems = !!items && items.length > 0;
 
   /*
@@ -2096,7 +2125,8 @@ export function Media() {
               </p>
               <div className="mt-1.5">
                 <PlayerTagList
-                  roster={roster}
+                  roster={taggableRoster}
+                  teamOf={teamOfPlayer}
                   selected={batchPlayerIds}
                   maxHeightClass="max-h-40"
                   onToggle={(playerId) =>
@@ -2512,7 +2542,8 @@ export function Media() {
           index={lightboxIndex}
           games={games}
           nationalGames={nationalGames}
-          roster={roster}
+          roster={taggableRoster}
+          teamOf={teamOfPlayer}
           albums={customAlbums}
           onCreateAlbum={createAlbumNamed}
           onNavigate={setLightboxIndex}

@@ -24,17 +24,37 @@ export class NetClaudeError extends Error {}
  * asked for. Throws NetClaudeError on any failure (bad key, network, refusal,
  * unparseable output) — callers fall back to the offline engine.
  */
-export async function generateJson<T>(system: string, user: string, maxTokens = 4000): Promise<T> {
+export async function generateJson<T>(
+  system: string,
+  user: string,
+  maxTokens = 4000,
+  /** data: URLs of stills — lets the model actually SEE a clip's frames. */
+  images: string[] = [],
+): Promise<T> {
   const apiKey = getApiKey();
   if (!apiKey) throw new NetClaudeError('No API key configured.');
   const client = new Anthropic({ apiKey });
+  const imageBlocks: Anthropic.ImageBlockParam[] = [];
+  for (const dataUrl of images.slice(0, 4)) {
+    const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) continue;
+    imageBlocks.push({
+      type: 'image',
+      source: { type: 'base64', media_type: match[1] as 'image/jpeg' | 'image/png' | 'image/webp', data: match[2] },
+    });
+  }
   try {
     const stream = client.messages.stream({
       model: MODEL,
       max_tokens: maxTokens,
       thinking: { type: 'adaptive' },
       system,
-      messages: [{ role: 'user', content: user }],
+      messages: [
+        {
+          role: 'user',
+          content: imageBlocks.length ? [...imageBlocks, { type: 'text', text: user }] : user,
+        },
+      ],
     });
     const message = await stream.finalMessage();
     const text = message.content

@@ -2,6 +2,8 @@ import { getDb, persist } from './init';
 import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
 import { getRoster } from './getRoster';
 import { getSchedule } from './getSchedule';
+import { getAllLeaguePlayers } from './getLeagueRoster';
+import { getLeagueScores } from './getLeagueScores';
 import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer, ScheduleGame } from '../shared/types';
 import type { MediaLook } from '../shared/mediaLook';
 
@@ -121,6 +123,18 @@ export function reorderMedia(dynastyId: string, seasonId: number, orderedIds: nu
 function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[] {
   const rosterBySeason = new Map<number, ReturnType<typeof getRoster>>();
   const scheduleBySeason = new Map<number, ReturnType<typeof getSchedule>>();
+  // League-wide lookups, resolved lazily: tags and games can point anywhere in
+  // the nation now, and most items never need them.
+  const leaguePlayersBySeason = new Map<number, ReturnType<typeof getAllLeaguePlayers>>();
+  const leagueScoresBySeason = new Map<number, ReturnType<typeof getLeagueScores>>();
+  const leaguePlayersOf = (seasonId: number) => {
+    if (!leaguePlayersBySeason.has(seasonId)) leaguePlayersBySeason.set(seasonId, getAllLeaguePlayers(dynastyId, seasonId));
+    return leaguePlayersBySeason.get(seasonId) ?? null;
+  };
+  const leagueScoresOf = (seasonId: number) => {
+    if (!leagueScoresBySeason.has(seasonId)) leagueScoresBySeason.set(seasonId, getLeagueScores(dynastyId, seasonId));
+    return leagueScoresBySeason.get(seasonId) ?? null;
+  };
 
   return items.map((item) => {
     if (!rosterBySeason.has(item.seasonId)) {
@@ -142,11 +156,21 @@ function resolveItems(dynastyId: string, items: MediaItem[]): MediaItemDisplay[]
             ? ` ${game.result ?? ''} ${game.teamScore}-${game.opponentScore}`
             : '';
         gameLabel = `Wk ${game.week} ${game.isHome ? 'vs' : '@'} ${game.opponent}${score}`;
+      } else {
+        // A game from anywhere in the nation — taggable since the pickers
+        // opened up to the whole slate. Label it from the league scores.
+        const lg = leagueScoresOf(item.seasonId)?.games.find((g) => g.gameId === item.gameId);
+        if (lg) {
+          const score = lg.homeScore !== null && lg.awayScore !== null ? ` ${lg.awayScore}-${lg.homeScore}` : '';
+          gameLabel = `Wk ${lg.week} · ${lg.awayTeamName} @ ${lg.homeTeamName}${score}`;
+        }
       }
     }
 
     const taggedPlayers: MediaTaggedPlayer[] = item.playerIds.map((playerId) => {
-      const player = roster?.find((p) => p.id === playerId);
+      const player =
+        roster?.find((p) => p.id === playerId) ??
+        (item.playerIds.length ? leaguePlayersOf(item.seasonId)?.find((p) => p.id === playerId) : undefined);
       return player
         ? {
             playerId,

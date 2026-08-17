@@ -3662,7 +3662,13 @@ export interface DynastyApi {
     getMediaComments: (dynastyId: string, mediaId: number) => Promise<NetPost[]>;
     generateWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
     postAsUser: (dynastyId: string, seasonId: number, accountId: number, body: string) => Promise<NetGenerateResult>;
-    generateMediaComments: (dynastyId: string, seasonId: number, mediaId: number) => Promise<NetGenerateResult>;
+    generateMediaComments: (
+      dynastyId: string,
+      seasonId: number,
+      mediaId: number,
+      mode: 'more' | 'fresh',
+      frames: string[],
+    ) => Promise<NetGenerateResult>;
     getSettings: () => Promise<NetSettings>;
     setApiKey: (apiKey: string) => Promise<NetSettings>;
     setUserIdentity: (dynastyId: string, handle: string, displayName: string) => Promise<NetIdentityResult>;
