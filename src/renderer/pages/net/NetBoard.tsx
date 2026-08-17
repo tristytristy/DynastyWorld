@@ -87,7 +87,7 @@ export function NetBoard() {
       <PageMasthead
         eyebrow="The Net"
         title="TheSideline.net"
-        description="Est. before the board software had CSS. No likes, no algorithm — just threads, essays, and grudges. Start one or jump into the pile."
+        description="The national board. Game threads for every big game in the country, team flairs, rival fanbases in each other's replies — and the flairless old guard keeping order. Start a thread or jump into the pile."
         mark={{ kind: 'logo', teamAssetName: teamName ?? '' }}
       />
 
@@ -160,20 +160,20 @@ export function NetBoard() {
                   </p>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                  started by <span className={isUser ? 'font-semibold text-amber-700 dark:text-amber-400' : 'font-semibold'}>{t.handle}</span>
+                  started by <span className={isUser ? 'font-semibold text-amber-700 dark:text-amber-400' : 'font-semibold'}>{t.displayName}</span>
                   {t.week > 0 ? ` · wk ${t.week}` : ''}
                 </p>
               </button>
               {open && (
                 <div className="mt-3 space-y-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
                   <div>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.handle} <span className="font-normal opacity-60">(OP)</span></p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.displayName} <span className="font-normal opacity-60">(OP)</span></p>
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{t.body}</p>
                   </div>
                   {t.replies.map((r) => (
                     <div key={r.id} className="border-t border-dashed border-slate-200/80 pt-2 dark:border-slate-800">
                       <p className={`text-xs font-bold ${r.accountKind === 'user' ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {r.handle}
+                        {r.displayName}
                       </p>
                       <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{r.body}</p>
                     </div>

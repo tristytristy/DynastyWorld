@@ -90,7 +90,7 @@ Return ONLY JSON (no fences) shaped as:
  * then with the @ stripped. A generated voice we can't place is better
  * attributed to a real cast member than silently dropped.
  */
-function resolveHandle(byHandle: Map<string, NetAccount>, handle: string): NetAccount | undefined {
+export function resolveHandle(byHandle: Map<string, NetAccount>, handle: string): NetAccount | undefined {
   const direct = byHandle.get(handle);
   if (direct) return direct;
   const wanted = handle.replace(/^@/, '').toLowerCase();

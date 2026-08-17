@@ -1,5 +1,7 @@
 import { buildWeekContext } from './context';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
+import { resolveHandle } from './generate';
+import { getLeagueScores } from '../../database/getLeagueScores';
 import {
   ensureAccounts,
   getAccounts,
@@ -14,11 +16,11 @@ import type { CastMember } from './cast';
 import type { NetAccount, NetGenerateResult } from '../../shared/netTypes';
 
 /**
- * TheSideline.net — the Net's message board. A different internet culture
- * from the Feed: no character limit, no likes, decade-old usernames who type
- * in paragraphs, quote each other, and hold grudges older than the roster.
- * Threads react to the week; the user starts threads and replies like any
- * other poster, and the regulars pile in.
+ * TheSideline.net — the Net's message board, run like the national CFB
+ * board: game threads for the week's biggest games ANYWHERE in the country,
+ * rival fanbases with team flairs piling in, and a core of flairless
+ * regulars who've been posting since dial-up. The user posts like any other
+ * member.
  */
 
 export const BOARD_CAST: CastMember[] = [
@@ -60,12 +62,84 @@ export const BOARD_CAST: CastMember[] = [
   },
 ];
 
-function boardCastPrompt(): string {
-  return BOARD_CAST.map((c) => `${c.handle}: ${c.persona}`).join('\n');
+/** A team's resident board poster — the flair in the display name is the whole identity, r/CFB style. */
+function flairPoster(teamName: string): CastMember {
+  const compact = teamName.replace(/[^A-Za-z0-9]/g, '');
+  return {
+    handle: `${compact}_faithful`,
+    displayName: `${compact}_faithful [${teamName}]`,
+    kind: 'bot',
+    persona: `${teamName} flair. Lives in that team's game threads: euphoric in wins, inconsolable in losses, always convinced the refs were against them. Feuds with rival flairs.`,
+  };
 }
 
-function ensureBoardAccounts(dynastyId: string): Map<string, NetAccount> {
-  const accounts = ensureAccounts(dynastyId, BOARD_CAST);
+interface FeaturedGame {
+  away: string;
+  home: string;
+  awayRank: number | null;
+  homeRank: number | null;
+  awayScore: number;
+  homeScore: number;
+  winner: string;
+  loser: string;
+  bowlName: string | null;
+  isNationalChampionship: boolean;
+  weight: number;
+}
+
+/** The week's slate, ranked by how loudly the national board would care. */
+function featuredGames(dynastyId: string, seasonId: number, week: number, userTeam: string): FeaturedGame[] {
+  const games = getLeagueScores(dynastyId, seasonId)?.games ?? [];
+  const out: FeaturedGame[] = [];
+  for (const g of games) {
+    if (g.week !== week || g.homeScore === null || g.awayScore === null) continue;
+    const homeWon = g.homeScore > g.awayScore;
+    const winnerRank = homeWon ? g.homeRank : g.awayRank;
+    const loserRank = homeWon ? g.awayRank : g.homeRank;
+    let weight = 0;
+    if (g.isNationalChampionship) weight += 100;
+    else if (g.weekType === 'ConferenceChampionship') weight += 60;
+    else if (g.bowlName) weight += 35;
+    if (winnerRank !== null && loserRank !== null) weight += 30;
+    else if (winnerRank !== null || loserRank !== null) weight += 12;
+    if (loserRank !== null && winnerRank === null) weight += 30; // upset
+    const margin = Math.abs(g.homeScore - g.awayScore);
+    if (margin <= 3) weight += 12;
+    if (g.homeScore + g.awayScore >= 80) weight += 8;
+    if (g.homeTeamName === userTeam || g.awayTeamName === userTeam) weight += 20;
+    if (weight === 0) continue;
+    out.push({
+      away: g.awayTeamName,
+      home: g.homeTeamName,
+      awayRank: g.awayRank,
+      homeRank: g.homeRank,
+      awayScore: g.awayScore,
+      homeScore: g.homeScore,
+      winner: homeWon ? g.homeTeamName : g.awayTeamName,
+      loser: homeWon ? g.awayTeamName : g.homeTeamName,
+      bowlName: g.bowlName,
+      isNationalChampionship: g.isNationalChampionship,
+      weight,
+    });
+  }
+  return out.sort((a, b) => b.weight - a.weight).slice(0, 5);
+}
+
+function gameThreadTitle(g: FeaturedGame): string {
+  const r = (rank: number | null) => (rank ? `#${rank} ` : '');
+  return `[Post Game Thread] ${r(g.winner === g.home ? g.homeRank : g.awayRank)}${g.winner} defeats ${r(g.winner === g.home ? g.awayRank : g.homeRank)}${g.loser} ${Math.max(g.homeScore, g.awayScore)}-${Math.min(g.homeScore, g.awayScore)}${g.bowlName ? ` (${g.bowlName})` : ''}`;
+}
+
+function castPromptOf(cast: CastMember[]): string {
+  return cast.map((c) => `${c.handle}${c.displayName !== c.handle ? ` (${c.displayName})` : ''}: ${c.persona}`).join('\n');
+}
+
+function boardCastPrompt(): string {
+  return castPromptOf(BOARD_CAST);
+}
+
+function ensureBoardAccounts(dynastyId: string, extra: CastMember[] = []): Map<string, NetAccount> {
+  const accounts = ensureAccounts(dynastyId, [...BOARD_CAST, ...extra]);
   return new Map(accounts.map((a) => [a.handle, a]));
 }
 
@@ -83,19 +157,36 @@ interface ModelThread {
   replies?: { author: string; body: string }[];
 }
 
-const BOARD_WEEK_SYSTEM = `You write TheSideline.net — an old-school college-football message board in a video-game dynasty universe. Culture: no character limits, no likes, decade-old usernames, people quote each other with >, essays get posted at 1am, threads derail and come back. Everything factual must come from the week's data — never invent results.
+const BOARD_WEEK_SYSTEM = `You write TheSideline.net — the NATIONAL college-football message board of a video-game dynasty universe, in the culture of the big CFB subreddit: game threads for every big game anywhere in the country, team flairs in display names, rival fanbases brigading each other's threads, flairless old-guard regulars keeping order. People quote with >, essays land at 1am, everyone has a conspiracy about the committee. Everything factual must come from the data — never invent results.
 
-Return ONLY JSON: [{"title","author","body","replies":[{"author","body"}]}] — 2 to 4 threads reacting to the week (a game thread post-mortem, a hot-take thread, a "remember when" thread, a poll-griping thread — pick what fits the week). Titles in authentic board style ("OFFICIAL: ...", "Unpopular opinion:", "Am I crazy or..."). 3-6 replies each. Use only the given usernames as authors.`;
+Return ONLY JSON: [{"title","author","body","replies":[{"author","body"}]}].
+- One [Post Game Thread] for EACH featured game, using EXACTLY the provided title. OP is a fan of the winning team or a regular; body is a quick emotional or wry summary. 4-7 replies each: BOTH fanbases (their flair accounts are in the cast), plus regulars wandering in. Winners gloat, losers spiral, neutrals eat popcorn.
+- Then 1-2 national talk threads (poll reactions, upset meltdown, "Am I crazy or...", weekly overreactions).
+Use only the given usernames as authors.`;
 
 export async function generateBoardWeek(dynastyId: string, seasonId: number): Promise<NetGenerateResult> {
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
-  const byHandle = ensureBoardAccounts(dynastyId);
   // One board-generation per week: threads carry the week, so bail politely if it's covered.
   const existing = getThreads(dynastyId, seasonId).filter((t) => t.week === ctx.week && t.accountKind !== 'user');
   if (existing.length > 0) {
     return { ok: true, engine: 'offline', message: 'The board already argued about this week.', postsAdded: 0 };
   }
+
+  // The week's slate from anywhere in the nation, plus a resident flair
+  // poster for every fanbase involved — accounts persist, so a team's
+  // poster is the same account next time they're featured.
+  const featured = featuredGames(dynastyId, seasonId, ctx.week, ctx.userTeam);
+  const flairTeams = [...new Set(featured.flatMap((g) => [g.home, g.away]))];
+  const flairs = flairTeams.map(flairPoster);
+  const byHandle = ensureBoardAccounts(dynastyId, flairs);
+
+  const gameList = featured
+    .map(
+      (g, i) =>
+        `${i + 1}. TITLE: ${gameThreadTitle(g)}\n   final: ${g.away}${g.awayRank ? ` (#${g.awayRank})` : ''} ${g.awayScore} @ ${g.home}${g.homeRank ? ` (#${g.homeRank})` : ''} ${g.homeScore}${g.isNationalChampionship ? ' — NATIONAL CHAMPIONSHIP' : ''}\n   fan accounts: ${flairPoster(g.winner).handle} (winner), ${flairPoster(g.loser).handle} (loser)`,
+    )
+    .join('\n');
 
   let threads: ModelThread[];
   let engine: 'claude' | 'offline' = 'offline';
@@ -104,22 +195,22 @@ export async function generateBoardWeek(dynastyId: string, seasonId: number): Pr
     try {
       threads = await generateJson<ModelThread[]>(
         BOARD_WEEK_SYSTEM,
-        `USERNAMES:\n${boardCastPrompt()}\n\nTHIS WEEK'S DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}`,
-        5000,
+        `USERNAMES (regulars):\n${boardCastPrompt()}\n\nUSERNAMES (team flairs this week):\n${castPromptOf(flairs)}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}`,
+        9000,
       );
       engine = 'claude';
     } catch (err) {
       message = err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined;
-      threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week);
+      threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week, featured);
     }
   } else {
-    threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week);
+    threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week, featured);
   }
 
   const added = withBatchedPersist(() => {
     let n = 0;
     for (const t of threads) {
-      const author = byHandle.get(t.author);
+      const author = resolveHandle(byHandle, t.author);
       if (!author) continue;
       insertPosts(dynastyId, [
         { seasonId, accountId: author.id, kind: 'thread', title: t.title, body: t.body, week: ctx.week },
@@ -128,7 +219,7 @@ export async function generateBoardWeek(dynastyId: string, seasonId: number): Pr
       n += 1;
       if (threadId === 0) continue;
       for (const r of t.replies ?? []) {
-        const replier = byHandle.get(r.author);
+        const replier = resolveHandle(byHandle, r.author);
         if (!replier) continue;
         insertPosts(dynastyId, [
           { seasonId, accountId: replier.id, kind: 'reply', parentId: threadId, body: r.body, week: ctx.week },
@@ -141,8 +232,21 @@ export async function generateBoardWeek(dynastyId: string, seasonId: number): Pr
   return { ok: true, engine, message, postsAdded: added };
 }
 
-function offlineBoardWeek(team: string, record: string, week: number): ModelThread[] {
+function offlineBoardWeek(team: string, record: string, week: number, featured: FeaturedGame[] = []): ModelThread[] {
+  const gameThreads: ModelThread[] = featured.map((g) => ({
+    title: gameThreadTitle(g),
+    author: flairPoster(g.winner).handle,
+    body: g.isNationalChampionship
+      ? 'NATIONAL CHAMPIONS. I have nothing coherent to add. See everyone at the parade.'
+      : `Ball game. ${g.winner} ${Math.max(g.homeScore, g.awayScore)}, ${g.loser} ${Math.min(g.homeScore, g.awayScore)}. Good game thread everyone.`,
+    replies: [
+      { author: flairPoster(g.loser).handle, body: 'I am never watching this sport again. See everyone next Saturday.' },
+      { author: 'xX_BlitzKing_Xx', body: 'both of these fanbases are insufferable and I read every post. carry on.' },
+      { author: 'StatGuy_Larry', body: `Final margin: ${Math.abs(g.homeScore - g.awayScore)}. The numbers don't lie. People do.` },
+    ],
+  }));
   return [
+    ...gameThreads,
     {
       title: `OFFICIAL: Week ${week} post-mortem thread`,
       author: 'OldGold_Stan',
