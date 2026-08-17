@@ -267,10 +267,12 @@ export function setUserIdentity(
 export function getRecentPosts(
   dynastyId: string,
   limit = 40,
+  kinds: string[] = ['post', 'reply'],
 ): { handle: string; week: number; body: string; isUser: boolean }[] {
+  const placeholders = kinds.map(() => '?').join(', ');
   return selectRows<PostRow>(
-    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind IN ('post', 'reply') ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
-    [dynastyId],
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind IN (${placeholders}) ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId, ...kinds],
   )
     .reverse()
     .map((r) => ({
@@ -279,6 +281,15 @@ export function getRecentPosts(
       body: r.body.slice(0, 180),
       isUser: r.account_kind === 'user',
     }));
+}
+
+/** Board threads for a season, newest first, replies attached (oldest first inside). */
+export function getThreads(dynastyId: string, seasonId: number): NetPost[] {
+  const tops = selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind = 'thread' ORDER BY p.id DESC`,
+    [dynastyId, seasonId],
+  ).map(mapPost);
+  return attachReplies(dynastyId, tops);
 }
 
 /** One post and its replies, oldest first — the context for replying in-thread. */

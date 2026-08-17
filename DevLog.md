@@ -11393,3 +11393,12 @@ sits after it, so a missing directory hangs the run instead of failing.
 **Scope decisions:** catalog shipped at ~40 topics rather than the aspirational 100 — the six dataset builders are the real surface; topics are one-line additions from here.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.
+
+## Phase — TheSideline.net: the message board (2026-08-17)
+
+**Shipped:**
+- New Net tab **The Board** — a second internet culture beside the Feed: threads (post kind `thread` + `reply` children), no likes, board-native voices. Six forum-only regulars (OldGold_Stan the essayist elder, xX_BlitzKing_Xx the doomer, StatGuy_Larry, FireEveryone_Frank, ConcessionsConnie, Lurker_Since_09) kept separate from the Feed cast — each surface has its own culture.
+- "Let the board react to this week": 2-4 threads (post-mortems, hot takes, remember-whens) with 3-6 replies each, one generation per week (guarded), grounded in the week context + board-specific memory (getRecentPosts now takes a kinds filter).
+- The user starts threads and replies like any member; the regulars quote them with > and pile in (2-4 replies per user action). Offline fallbacks for all three actions.
+
+**Verification:** tsc clean, all four bundles compile, eslint clean on new files.

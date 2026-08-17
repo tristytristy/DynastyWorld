@@ -3673,6 +3673,22 @@ export interface DynastyApi {
       parentId: number,
       body: string,
     ) => Promise<NetGenerateResult>;
+    getThreads: (dynastyId: string, seasonId: number) => Promise<NetPost[]>;
+    generateBoardWeek: (dynastyId: string, seasonId: number) => Promise<NetGenerateResult>;
+    createThread: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      title: string,
+      body: string,
+    ) => Promise<NetGenerateResult>;
+    replyToThread: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      threadId: number,
+      body: string,
+    ) => Promise<NetGenerateResult>;
     getTop10Topics: () => Promise<Top10Topic[]>;
     generateThrowback: (dynastyId: string) => Promise<NetGenerateResult>;
     generateTop10: (dynastyId: string, topicKey: string) => Promise<NetGenerateResult>;

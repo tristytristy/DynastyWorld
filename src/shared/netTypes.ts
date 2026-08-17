@@ -4,7 +4,7 @@
  */
 
 export type NetAccountKind = 'bot' | 'user' | 'paper' | 'podcast';
-export type NetPostKind = 'post' | 'reply' | 'comment' | 'article' | 'podcast' | 'throwback' | 'top10';
+export type NetPostKind = 'post' | 'reply' | 'comment' | 'article' | 'podcast' | 'throwback' | 'top10' | 'thread';
 
 export interface NetAccount {
   id: number;

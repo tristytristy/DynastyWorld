@@ -11,6 +11,7 @@ import { PINNED_SUB_NAV_CLASS, usePinnedSubNav } from '../../lib/pinnedSubNav';
 export const NET_TABS: { to: string; label: string; end?: boolean }[] = [
   { to: '/net', label: 'Feed', end: true },
   { to: '/net/tube', label: 'DynastyTube' },
+  { to: '/net/board', label: 'The Board' },
   { to: '/net/paper', label: 'The Paper' },
   { to: '/net/pods', label: 'Podcasts' },
   { to: '/net/shows', label: 'The Shows' },

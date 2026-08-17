@@ -22,6 +22,7 @@ import { NetTube } from './pages/net/NetTube';
 import { NetPaper } from './pages/net/NetPaper';
 import { NetPods } from './pages/net/NetPods';
 import { NetShows } from './pages/net/NetShows';
+import { NetBoard } from './pages/net/NetBoard';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
@@ -195,6 +196,7 @@ export function App() {
                     <Route element={<NetHubLayout />}>
                       <Route path="net" element={<NetFeed />} />
                       <Route path="net/tube" element={<NetTube />} />
+                      <Route path="net/board" element={<NetBoard />} />
                       <Route path="net/paper" element={<NetPaper />} />
                       <Route path="net/pods" element={<NetPods />} />
                       <Route path="net/shows" element={<NetShows />} />

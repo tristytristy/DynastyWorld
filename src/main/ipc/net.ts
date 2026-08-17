@@ -1,9 +1,10 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
-import { getEditions, getFeedView, getMediaComments, setUserIdentity } from '../../database/dynastyNet';
+import { getEditions, getFeedView, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
 import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
+import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
 import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
 
 /** DynastyNet IPC — the fake internet's read + generate surface. */
@@ -60,6 +61,28 @@ export function registerNetHandlers(): void {
       body: string,
     ): Promise<NetGenerateResult> => {
       return replyInThread(dynastyId, seasonId, accountId, parentId, body);
+    },
+  );
+
+  ipcMain.handle(IPC.net.getThreads, (_e, dynastyId: string, seasonId: number): NetPost[] => {
+    return getThreads(dynastyId, seasonId);
+  });
+
+  ipcMain.handle(IPC.net.generateBoardWeek, async (_e, dynastyId: string, seasonId: number): Promise<NetGenerateResult> => {
+    return generateBoardWeek(dynastyId, seasonId);
+  });
+
+  ipcMain.handle(
+    IPC.net.createThread,
+    async (_e, dynastyId: string, seasonId: number, accountId: number, title: string, body: string): Promise<NetGenerateResult> => {
+      return createBoardThread(dynastyId, seasonId, accountId, title, body);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.net.replyToThread,
+    async (_e, dynastyId: string, seasonId: number, accountId: number, threadId: number, body: string): Promise<NetGenerateResult> => {
+      return replyToBoardThread(dynastyId, seasonId, accountId, threadId, body);
     },
   );
 
