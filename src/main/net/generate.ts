@@ -85,6 +85,21 @@ Return ONLY JSON (no fences) shaped as:
 - "article" is the front page of The Crystal Football, the nation's paper of record: pick the week's biggest story, write 2 vivid newspaper paragraphs.
 - "podcast" is the episode summary of 4th & Forever (two hosts who disagree): teams rising/falling, hot seats, one overreaction-of-the-week, 1 paragraph.`;
 
+/**
+ * Handle lookup that survives model drift: exact, then case-insensitive,
+ * then with the @ stripped. A generated voice we can't place is better
+ * attributed to a real cast member than silently dropped.
+ */
+function resolveHandle(byHandle: Map<string, NetAccount>, handle: string): NetAccount | undefined {
+  const direct = byHandle.get(handle);
+  if (direct) return direct;
+  const wanted = handle.replace(/^@/, '').toLowerCase();
+  for (const [key, account] of byHandle) {
+    if (key.replace(/^@/, '').toLowerCase() === wanted) return account;
+  }
+  return undefined;
+}
+
 function draftsToRows(
   seasonId: number,
   week: number,
@@ -94,7 +109,7 @@ function draftsToRows(
 ): number {
   let added = 0;
   for (const d of drafts) {
-    const account = byHandle.get(d.handle);
+    const account = resolveHandle(byHandle, d.handle);
     if (!account) continue;
     insertPosts(dynastyId, [
       { seasonId, accountId: account.id, kind: 'post', body: d.body, likes: d.likes, week },
@@ -105,7 +120,7 @@ function draftsToRows(
     // dynastyNet.ts) — drop the replies rather than crash the whole week.
     if (parentId === 0) continue;
     for (const r of d.replies) {
-      const replier = byHandle.get(r.handle);
+      const replier = resolveHandle(byHandle, r.handle);
       if (!replier) continue;
       insertPosts(dynastyId, [
         { seasonId, accountId: replier.id, kind: 'reply', parentId, body: r.body, likes: r.likes, week },
@@ -322,7 +337,7 @@ export async function generateMediaComments(
   const added = withBatchedPersist(() => {
     let n = 0;
     for (const d of drafts) {
-      const account = byHandle.get(d.handle);
+      const account = resolveHandle(byHandle, d.handle);
       if (!account) continue;
       insertPosts(dynastyId, [
         { seasonId, accountId: account.id, kind: 'comment', mediaId, body: d.body, likes: d.likes, week: ctx.week },
@@ -331,7 +346,7 @@ export async function generateMediaComments(
       n += 1;
       if (parentId === 0) continue;
       for (const r of d.replies) {
-        const replier = byHandle.get(r.handle);
+        const replier = resolveHandle(byHandle, r.handle);
         if (!replier) continue;
         insertPosts(dynastyId, [
           { seasonId, accountId: replier.id, kind: 'comment', mediaId, parentId, body: r.body, likes: r.likes, week: ctx.week },
@@ -341,6 +356,9 @@ export async function generateMediaComments(
     }
     return n;
   });
+  if (added === 0 && !message) {
+    message = 'The engine came back with nothing usable — hit the button again.';
+  }
   return { ok: true, engine, message, postsAdded: added };
 }
 

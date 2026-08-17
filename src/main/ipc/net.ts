@@ -48,7 +48,19 @@ export function registerNetHandlers(): void {
       mode: 'more' | 'fresh' = 'more',
       frames: string[] = [],
     ): Promise<NetGenerateResult> => {
-      return generateMediaComments(dynastyId, seasonId, mediaId, mode, frames);
+      try {
+        return await generateMediaComments(dynastyId, seasonId, mediaId, mode, frames);
+      } catch (err) {
+        // Surface instead of vanish: an uncaught throw here left the renderer
+        // spinning with no comments and no explanation.
+        console.error('[net] generateMediaComments failed:', err);
+        return {
+          ok: false,
+          engine: 'offline',
+          message: `Comment generation failed: ${err instanceof Error ? err.message : String(err)}`,
+          postsAdded: 0,
+        };
+      }
     },
   );
 

@@ -33,7 +33,9 @@ export async function generateJson<T>(
 ): Promise<T> {
   const apiKey = getApiKey();
   if (!apiKey) throw new NetClaudeError('No API key configured.');
-  const client = new Anthropic({ apiKey });
+  // 3-minute ceiling: a stalled request must fail into the offline engine,
+  // never leave the renderer spinning on "typing..." forever.
+  const client = new Anthropic({ apiKey, timeout: 180_000, maxRetries: 1 });
   const imageBlocks: Anthropic.ImageBlockParam[] = [];
   for (const dataUrl of images.slice(0, 4)) {
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);

@@ -19,7 +19,7 @@ function fileUrl(absolutePath: string): string {
   return encodeURI(`file:///${absolutePath.replace(/\\/g, '/')}`);
 }
 
-const FRAME_WIDTH = 800;
+const FRAME_WIDTH = 640;
 
 function drawFrame(source: HTMLVideoElement | HTMLImageElement, width: number, height: number): string | null {
   const canvas = document.createElement('canvas');
@@ -61,7 +61,7 @@ async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
       resolve(frames);
     };
     video.onloadedmetadata = () => {
-      const points = [0.1, 0.4, 0.7, 0.95].map((f) => video.duration * f);
+      const points = [0.15, 0.5, 0.85].map((f) => video.duration * f);
       let at = 0;
       video.onseeked = () => {
         const frame = drawFrame(video, video.videoWidth, video.videoHeight);
@@ -129,6 +129,10 @@ export function NetTube() {
         setNotice(`The commenters watched ${frames.length > 1 ? `${frames.length} frames of` : ''} the clip before posting.`);
       }
       await loadThread(item.id);
+    } catch (err) {
+      // A failure with no message is indistinguishable from "nothing
+      // happened" — always say what broke.
+      setNotice(`Something broke generating comments: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusyId(null);
     }
