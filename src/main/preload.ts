@@ -275,6 +275,8 @@ const api: DynastyApi = {
     addFiles: (dynastyId, seasonId, filePaths) =>
       ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),
     list: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.list, dynastyId, seasonId),
+    scoringPlays: (dynastyId, seasonId, gameId) =>
+      ipcRenderer.invoke(IPC.media.scoringPlays, dynastyId, seasonId, gameId),
     listForPlayer: (dynastyId, playerId) =>
       ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
     listForGame: (dynastyId, seasonId, gameId) =>

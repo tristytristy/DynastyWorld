@@ -2234,6 +2234,8 @@ export interface MediaItem {
   /** A user-made album (schema v22). Mutually exclusive with `gameId` — a photo is filed in exactly one place. */
   albumId: number | null;
   description: string;
+  /** The scoring plays this clip shows, picked from the game's play-by-play (schema v25). */
+  plays: MediaPlayTag[];
   /** Tagged players, as the same opaque roster player ids used app-wide; names resolve from that season's roster snapshot. */
   playerIds: number[];
   createdAt: string;
@@ -2244,12 +2246,32 @@ export interface MediaItemWithPath extends MediaItem {
   absolutePath: string;
 }
 
+/**
+ * One scoring play a clip shows — a self-contained descriptor picked from the
+ * game's play-by-play in the tagger (schema v25). Carries everything needed to
+ * caption it without a join back to the scoring snapshot.
+ */
+export interface MediaPlayTag {
+  quarter: number;
+  /** Seconds remaining in the quarter. */
+  clockSeconds: number;
+  teamName: string | null;
+  playType: 'touchdown' | 'fieldGoal' | 'safety';
+  points: number;
+  conversionPoints: number;
+  /** Score after the play and its try. */
+  homeScore: number;
+  awayScore: number;
+}
+
 export interface MediaItemPatch {
   gameId: number | null;
   /** Ignored unless `gameId` is null — the two are alternatives, not a pair. */
   albumId?: number | null;
   description: string;
   playerIds: number[];
+  /** Omitted = leave the item's play tags as they are (batch updates never touch them). */
+  plays?: MediaPlayTag[];
 }
 
 /** An album the user created (schema v22) — its own folder, filled by hand. */
@@ -3543,6 +3565,8 @@ export interface DynastyApi {
       filePaths: string[],
     ) => Promise<MediaItemWithPath[]>;
     list: (dynastyId: string, seasonId?: number) => Promise<MediaItemWithPath[] | undefined>;
+    /** The archived play-by-play for one game (any game in the nation), for the clip tagger. Empty when no scoring was captured for it. */
+    scoringPlays: (dynastyId: string, seasonId: number, gameId: number) => Promise<MediaPlayTag[]>;
     /** Everything this player is tagged in, across all seasons — the Media tab on player bios. */
     listForPlayer: (dynastyId: string, playerId: number) => Promise<MediaItemResolved[]>;
     /** Everything linked to one game — the media section on the Game info page. */

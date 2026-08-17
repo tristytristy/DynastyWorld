@@ -157,6 +157,7 @@ export const IPC = {
     pickFiles: 'media:pickFiles',
     addFiles: 'media:addFiles',
     list: 'media:list',
+    scoringPlays: 'media:scoringPlays',
     listForPlayer: 'media:listForPlayer',
     listForGame: 'media:listForGame',
     listAlbums: 'media:listAlbums',

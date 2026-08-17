@@ -1,10 +1,10 @@
 import { getDb, persist } from './init';
-import { getCurrentSeason, getDynastyById, getSeasonById } from './helpers';
+import { getCurrentSeason, getDynastyById, getSeasonById, getSnapshot } from './helpers';
 import { getRoster } from './getRoster';
 import { getSchedule } from './getSchedule';
 import { getAllLeaguePlayers } from './getLeagueRoster';
 import { getLeagueScores } from './getLeagueScores';
-import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaTaggedPlayer, ScheduleGame } from '../shared/types';
+import type { MediaFraming, MediaItem, MediaItemPatch, MediaItemResolved, MediaPlayTag, MediaTaggedPlayer, ScheduleGame } from '../shared/types';
 import type { MediaLook } from '../shared/mediaLook';
 
 /** Resolved display shape minus the absolute path — the media IPC layer adds the path (it owns the on-disk library location; see withPath in src/main/ipc/media.ts). */
@@ -27,6 +27,7 @@ interface MediaRow {
   album_id: number | null;
   description: string;
   player_ids_json: string;
+  plays_json: string;
   frame_x: number | null;
   frame_y: number | null;
   frame_scale: number | null;
@@ -36,7 +37,7 @@ interface MediaRow {
 
 /** The one column list every read uses, so a new column can't be added to three of four queries. */
 const MEDIA_COLS =
-  'id, season_id, file_name, media_type, game_id, album_id, description, player_ids_json, frame_x, frame_y, frame_scale, look_json, created_at';
+  'id, season_id, file_name, media_type, game_id, album_id, description, player_ids_json, plays_json, frame_x, frame_y, frame_scale, look_json, created_at';
 
 function mapRow(row: MediaRow): MediaItem {
   let playerIds: number[] = [];
@@ -46,6 +47,13 @@ function mapRow(row: MediaRow): MediaItem {
   } catch {
     // Corrupt tag data degrades to "no tags", never a crash.
   }
+  let plays: MediaPlayTag[] = [];
+  try {
+    const parsed = JSON.parse(row.plays_json ?? '[]');
+    if (Array.isArray(parsed)) plays = parsed as MediaPlayTag[];
+  } catch {
+    // Same rule as player tags: corrupt play data degrades to none.
+  }
   return {
     id: row.id,
     seasonId: row.season_id,
@@ -54,6 +62,7 @@ function mapRow(row: MediaRow): MediaItem {
     gameId: row.game_id,
     albumId: row.album_id,
     description: row.description,
+    plays,
     playerIds,
     // Scale is the presence flag: no scale, no saved framing.
     framing:
@@ -248,6 +257,7 @@ export function addMediaItem(
     gameId: null,
     albumId: null,
     description: '',
+    plays: [],
     playerIds: [],
     framing: null,
     look: null,
@@ -262,15 +272,59 @@ export function addMediaItem(
  * path through this function that leaves a row in two places at once.
  */
 export function updateMediaItem(id: number, patch: MediaItemPatch): void {
-  getDb().run('UPDATE media_items SET game_id = ?, album_id = ?, description = ?, player_ids_json = ? WHERE id = ?', [
-    patch.gameId ?? null,
-    // Exclusive by construction: a game means no album, an album means no game.
-    patch.gameId === null ? patch.albumId ?? null : null,
-    patch.description,
-    JSON.stringify(patch.playerIds),
-    id,
-  ]);
+  // COALESCE keeps existing play tags when the patch doesn't carry them —
+  // batch updates set game/players without wiping a clip's picked plays.
+  getDb().run(
+    'UPDATE media_items SET game_id = ?, album_id = ?, description = ?, player_ids_json = ?, plays_json = COALESCE(?, plays_json) WHERE id = ?',
+    [
+      patch.gameId ?? null,
+      // Exclusive by construction: a game means no album, an album means no game.
+      patch.gameId === null ? patch.albumId ?? null : null,
+      patch.description,
+      JSON.stringify(patch.playerIds),
+      patch.plays !== undefined ? JSON.stringify(patch.plays) : null,
+      id,
+    ],
+  );
   persist();
+}
+
+/**
+ * The archived play-by-play for one game — any game in the nation — shaped
+ * for the clip tagger. Empty when the week was never synced while its
+ * scoring summaries were still in the save.
+ */
+export function getScoringPlaysForGame(dynastyId: string, seasonId: number, gameId: number): MediaPlayTag[] {
+  const season = getSeasonById(seasonId);
+  if (!season || season.dynastyId !== dynastyId) return [];
+  const plays = (getSnapshot<ScoringPlayRaw[]>(season.id, 'scoring') ?? [])
+    .filter((p) => p.gameId === gameId)
+    .sort((a, b) => a.quarter - b.quarter || b.clockSeconds - a.clockSeconds);
+  if (!plays.length) return [];
+  const teams = getSnapshot<{ teamIndex: number; displayName: string }[]>(season.id, 'teams') ?? [];
+  const nameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
+  return plays.map((p) => ({
+    quarter: p.quarter,
+    clockSeconds: p.clockSeconds,
+    teamName: p.teamIndex !== null ? nameByIndex.get(p.teamIndex) ?? null : null,
+    playType: p.playType,
+    points: p.points,
+    conversionPoints: p.conversionPoints,
+    homeScore: p.homeScore,
+    awayScore: p.awayScore,
+  }));
+}
+
+interface ScoringPlayRaw {
+  gameId: number;
+  quarter: number;
+  clockSeconds: number;
+  teamIndex: number | null;
+  points: number;
+  conversionPoints: number;
+  playType: 'touchdown' | 'fieldGoal' | 'safety';
+  homeScore: number;
+  awayScore: number;
 }
 
 /**

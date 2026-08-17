@@ -3,7 +3,7 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
-import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, NationalPlayer, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
+import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, MediaPlayTag, NationalPlayer, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { Select } from '../components/ui/Select';
@@ -379,6 +379,72 @@ function RollRenamer({
   );
 }
 
+/** "Q2 9:24" style clock for a play tag. */
+function playClock(play: MediaPlayTag): string {
+  const m = Math.floor(play.clockSeconds / 60);
+  const sec = play.clockSeconds % 60;
+  return `Q${play.quarter} ${m}:${String(sec).padStart(2, '0')}`;
+}
+
+export function playKey(play: MediaPlayTag): string {
+  return `${play.quarter}:${play.clockSeconds}:${play.homeScore}:${play.awayScore}:${play.playType}`;
+}
+
+export function playLine(play: MediaPlayTag): string {
+  const kind = play.playType === 'touchdown' ? 'TD' : play.playType === 'fieldGoal' ? 'FG' : 'Safety';
+  return `${playClock(play)} · ${play.teamName ?? 'Score'} ${kind} +${play.points + play.conversionPoints} → ${play.awayScore}-${play.homeScore}`;
+}
+
+/**
+ * The game's scoring plays as a pick-list — same interaction as the player
+ * tagger, so a clip can say exactly which plays it shows. Only scoring plays
+ * exist in the archive (the save keeps no full play-by-play), which is also
+ * what highlight clips overwhelmingly are.
+ */
+function PlayPickList({
+  plays,
+  selected,
+  onToggle,
+  maxHeightClass = 'max-h-40',
+}: {
+  plays: MediaPlayTag[];
+  selected: MediaPlayTag[];
+  onToggle: (play: MediaPlayTag) => void;
+  maxHeightClass?: string;
+}) {
+  const selectedKeys = new Set(selected.map(playKey));
+  if (plays.length === 0) {
+    return (
+      <p className="px-0.5 py-1 text-xs text-slate-400 dark:text-slate-500">
+        No play-by-play captured for this game — the save only carries scoring summaries for the week being played, so
+        sync weekly to bank them.
+      </p>
+    );
+  }
+  return (
+    <div className={`${maxHeightClass} overflow-y-auto border border-slate-200/80 dark:border-slate-800`}>
+      {plays.map((play) => {
+        const tagged = selectedKeys.has(playKey(play));
+        return (
+          <button
+            key={playKey(play)}
+            type="button"
+            onClick={() => onToggle(play)}
+            className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition ${
+              tagged
+                ? 'bg-[var(--team-primary)] text-[var(--team-on-primary)]'
+                : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
+            }`}
+          >
+            <span className="min-w-0 flex-1 truncate">{playLine(play)}</span>
+            {tagged && <span aria-hidden>✓</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The roster list with its search box — the same control the photo's own detail
  * editor uses, lifted out so batch tagging is the SAME interaction rather than
@@ -694,6 +760,7 @@ function LookPanel({
  * players from that season's roster, write a description.
  */
 function MediaDetailsForm({
+  dynastyId,
   item,
   games,
   nationalGames,
@@ -704,6 +771,7 @@ function MediaDetailsForm({
   onSave,
   onCancel,
 }: {
+  dynastyId: string;
   item: MediaItemWithPath;
   games: ScheduleGame[];
   nationalGames: LeagueScoreGame[];
@@ -728,6 +796,15 @@ function MediaDetailsForm({
   const [newAlbum, setNewAlbum] = useState('');
   const [description, setDescription] = useState(item.description);
   const [playerIds, setPlayerIds] = useState<number[]>(item.playerIds);
+  const [plays, setPlays] = useState<MediaPlayTag[]>(item.plays);
+  const [availablePlays, setAvailablePlays] = useState<MediaPlayTag[]>([]);
+  useEffect(() => {
+    if (gameId === null) {
+      setAvailablePlays([]);
+      return;
+    }
+    window.api.media.scoringPlays(dynastyId, item.seasonId, gameId).then(setAvailablePlays);
+  }, [dynastyId, item.seasonId, gameId]);
 
   async function addAlbum() {
     const name = newAlbum.trim();
@@ -869,6 +946,27 @@ function MediaDetailsForm({
         </div>
       </div>
 
+      {filedUnder === 'game' && gameId !== null && (
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+            Plays in this clip {plays.length > 0 ? `(${plays.length})` : ''}
+          </p>
+          <div className="mt-1.5">
+            <PlayPickList
+              plays={availablePlays}
+              selected={plays}
+              onToggle={(play) =>
+                setPlays((prev) =>
+                  prev.some((p) => playKey(p) === playKey(play))
+                    ? prev.filter((p) => playKey(p) !== playKey(play))
+                    : [...prev, play],
+                )
+              }
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <Button
           onClick={() =>
@@ -879,6 +977,7 @@ function MediaDetailsForm({
               albumId: filedUnder === 'album' ? albumId : null,
               description: description.trim(),
               playerIds,
+              plays: filedUnder === 'game' && gameId !== null ? plays : [],
             })
           }
         >
@@ -1216,6 +1315,7 @@ function MediaLightbox({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {editTab === 'details' ? (
                 <MediaDetailsForm
+                  dynastyId={dynastyId}
                   nationalGames={nationalGames}
                   item={item}
                   games={games}
@@ -1321,6 +1421,8 @@ export function Media() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchGameId, setBatchGameId] = useState('');
+  const [batchPlays, setBatchPlays] = useState<MediaPlayTag[]>([]);
+  const [batchAvailablePlays, setBatchAvailablePlays] = useState<MediaPlayTag[]>([]);
   /** Players to ADD to every selected photo. Empty = leave tags alone. */
   const [batchPlayerIds, setBatchPlayerIds] = useState<number[]>([]);
   const dragIndexRef = useRef<number | null>(null);
@@ -1382,7 +1484,7 @@ export function Media() {
 
   const seasonYear = seasons.find((s) => s.id === seasonId)?.seasonYear;
   /** Apply stays inert until the panel actually says to change something. */
-  const canApplyBatch = selectedIds.size > 0 && (batchGameId !== '' || batchPlayerIds.length > 0);
+  const canApplyBatch = selectedIds.size > 0 && (batchGameId !== '' || batchPlayerIds.length > 0 || batchPlays.length > 0);
   const importing = importProgress !== null;
 
   useEffect(() => {
@@ -1666,6 +1768,7 @@ export function Media() {
     setSelectedIds(new Set());
     setBatchGameId('');
     setBatchPlayerIds([]);
+    setBatchPlays([]);
   }
 
   /**
@@ -1684,16 +1787,28 @@ export function Media() {
    * silently unfile every photo in the selection. Clearing is its own explicit
    * option in the list.
    */
+  useEffect(() => {
+    const gid = batchGameId !== '' && batchGameId !== CLEAR_GAME ? Number(batchGameId) : null;
+    setBatchPlays([]);
+    if (!id || seasonId === undefined || gid === null) {
+      setBatchAvailablePlays([]);
+      return;
+    }
+    window.api.media.scoringPlays(id, seasonId, gid).then(setBatchAvailablePlays);
+  }, [id, seasonId, batchGameId]);
+
   async function applyBatch() {
     if (!items || selectedIds.size === 0) return;
     const changeGame = batchGameId !== '';
-    if (!changeGame && batchPlayerIds.length === 0) return;
+    if (!changeGame && batchPlayerIds.length === 0 && batchPlays.length === 0) return;
     const gid = batchGameId === CLEAR_GAME ? null : Number(batchGameId);
     for (const m of items.filter((it) => selectedIds.has(it.id))) {
       await window.api.media.update(m.id, {
         gameId: changeGame ? gid : m.gameId,
         description: m.description,
         playerIds: [...new Set([...m.playerIds, ...batchPlayerIds])],
+        // Only touch play tags when the batch actually picked some.
+        ...(batchPlays.length > 0 ? { plays: batchPlays } : {}),
       });
     }
     refresh();
@@ -2118,6 +2233,26 @@ export function Media() {
                   ...nationalGames.map((game) => ({ value: String(game.gameId), label: nationalGameLabel(game) })),
                 ]}
               />
+              {batchGameId !== '' && batchGameId !== CLEAR_GAME && (
+                <div className="mt-2">
+                  <p className="type-eyebrow text-slate-400 dark:text-slate-500">
+                    Plays in this clip {batchPlays.length > 0 ? `(${batchPlays.length})` : ''}
+                  </p>
+                  <div className="mt-1.5">
+                    <PlayPickList
+                      plays={batchAvailablePlays}
+                      selected={batchPlays}
+                      onToggle={(play) =>
+                        setBatchPlays((prev) =>
+                          prev.some((p) => playKey(p) === playKey(play))
+                            ? prev.filter((p) => playKey(p) !== playKey(play))
+                            : [...prev, play],
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <p className="type-eyebrow text-slate-400 dark:text-slate-500">

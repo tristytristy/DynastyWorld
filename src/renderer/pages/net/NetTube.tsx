@@ -177,6 +177,7 @@ export function NetTube() {
                     {item.mediaType === 'video' ? 'Clip' : 'Screenshot'}
                     {item.gameId !== null ? ' · tagged to a game' : ' · no game tagged'}
                     {item.playerIds.length > 0 && ` · ${item.playerIds.length} player${item.playerIds.length === 1 ? '' : 's'} tagged`}
+                    {item.plays.length > 0 && ` · ${item.plays.length} play${item.plays.length === 1 ? '' : 's'}`}
                   </p>
                 </div>
                 <button className={buttonClass} onClick={() => setOpenId(open ? null : item.id)}>
@@ -210,6 +211,17 @@ export function NetTube() {
                       )}
                     </div>
                   </div>
+                  {item.plays.length > 0 && (
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      In this clip:{' '}
+                      {item.plays
+                        .map(
+                          (p) =>
+                            `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} ${p.teamName ?? ''} ${p.playType === 'touchdown' ? 'TD' : p.playType === 'fieldGoal' ? 'FG' : 'safety'} (${p.awayScore}-${p.homeScore})`,
+                        )
+                        .join(' · ')}
+                    </p>
+                  )}
                   {notice && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{notice}</p>}
                   <div className="mt-3 space-y-2">
                     {thread.map((c) => (
