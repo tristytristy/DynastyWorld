@@ -416,8 +416,9 @@ function PlayPickList({
   if (plays.length === 0) {
     return (
       <p className="px-0.5 py-1 text-xs text-slate-400 dark:text-slate-500">
-        No play-by-play captured for this game — the save only carries scoring summaries for the week being played, so
-        sync weekly to bank them.
+        No verified play-by-play for this game. The save only carries scoring for the week being played — and plays
+        synced before a week settled are discarded when they don&apos;t match the final score (the game pre-simulates
+        the week on entry, then re-rolls it). Sync after playing each week to bank the real ones.
       </p>
     );
   }

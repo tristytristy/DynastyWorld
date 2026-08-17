@@ -301,6 +301,25 @@ export function getScoringPlaysForGame(dynastyId: string, seasonId: number, game
     .filter((p) => p.gameId === gameId)
     .sort((a, b) => a.quarter - b.quarter || b.clockSeconds - a.clockSeconds);
   if (!plays.length) return [];
+  /*
+    VERIFY BEFORE SHOWING. The save pre-simulates the whole current week on
+    entry, and a sync taken then banks THOSE summaries; when the week later
+    resolves differently (playing your own game re-rolls the others), the
+    banked plays describe a game that never officially happened — right
+    teams, plausible plays, wrong outcome. A real capture reconciles to the
+    final score exactly (extract-scoring verified 131/131), so the last
+    play's score-after must equal the game's final. Anything else is a stale
+    pre-sim and showing nothing beats showing a fiction.
+  */
+  const leagueGames = getSnapshot<{ gameId: number; homeScore: number | null; awayScore: number | null }[]>(
+    season.id,
+    'leagueSchedule',
+  ) ?? [];
+  const game = leagueGames.find((g) => g.gameId === gameId);
+  if (game && game.homeScore !== null && game.awayScore !== null) {
+    const last = plays[plays.length - 1];
+    if (last.homeScore !== game.homeScore || last.awayScore !== game.awayScore) return [];
+  }
   const teams = getSnapshot<{ teamIndex: number; displayName: string }[]>(season.id, 'teams') ?? [];
   const nameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
   return plays.map((p) => ({
