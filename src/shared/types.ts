@@ -1,4 +1,4 @@
-import type { NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings } from './netTypes';
+import type { NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings, Top10Topic } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -3654,7 +3654,11 @@ export interface DynastyApi {
   };
   net: {
     getFeed: (dynastyId: string, seasonId: number) => Promise<NetFeedView>;
-    getEditions: (dynastyId: string, seasonId: number, kind: 'article' | 'podcast') => Promise<NetPost[]>;
+    getEditions: (
+      dynastyId: string,
+      seasonId: number,
+      kind: 'article' | 'podcast' | 'throwback' | 'top10',
+    ) => Promise<NetPost[]>;
     getMediaComments: (dynastyId: string, mediaId: number) => Promise<NetPost[]>;
     generateWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
     postAsUser: (dynastyId: string, seasonId: number, accountId: number, body: string) => Promise<NetGenerateResult>;
@@ -3669,6 +3673,9 @@ export interface DynastyApi {
       parentId: number,
       body: string,
     ) => Promise<NetGenerateResult>;
+    getTop10Topics: () => Promise<Top10Topic[]>;
+    generateThrowback: (dynastyId: string) => Promise<NetGenerateResult>;
+    generateTop10: (dynastyId: string, topicKey: string) => Promise<NetGenerateResult>;
   };
   window: {
     /**

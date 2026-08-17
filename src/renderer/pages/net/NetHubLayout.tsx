@@ -13,6 +13,7 @@ export const NET_TABS: { to: string; label: string; end?: boolean }[] = [
   { to: '/net/tube', label: 'DynastyTube' },
   { to: '/net/paper', label: 'The Paper' },
   { to: '/net/pods', label: 'Podcasts' },
+  { to: '/net/shows', label: 'The Shows' },
 ];
 
 export function NetHubLayout() {

@@ -11382,3 +11382,14 @@ sits after it, so a missing directory hangs the run instead of failing.
 **Errors hit & fixes:** none beyond type-shape corrections during development (LeagueScoreGame rank fields are `homeRank`/`awayRank`; media list returns `MediaItemWithPath`, not resolved items).
 
 **Verification:** `tsc --noEmit` clean; full webpack build (main/preload/splash/renderer) compiles successfully (with placeholder `public/assets` in the dev container — art library lives outside git as before); `check:refs` unchanged from baseline (pre-existing manual-font miss only); eslint clean on all new files.
+
+## Phase — The Shows: Throwback Thursday + The Top 10 (2026-08-17)
+
+**Shipped:**
+- New Net tab **The Shows** with two archive-driven programs (post kinds `throwback` / `top10`, show accounts `@ThrowbackThursday` and `@TheTop10Show`).
+- **Throwback Thursday**: candidate moments scored from every archived season's league scores (championships 100, conf title 60, bowls 40, ranked-vs-ranked, upsets, one-scores, shootouts), rotates among the top tier, skips already-aired matchups. Year-one fallback: throws back to the current season's own weeks (≥4 weeks old). If a Media upload is tagged to the chosen game, the episode stores its media_id and the UI renders a "Watch the highlight on DynastyTube" link. Prompted as classic sports-doc narration with the season's final top-5 as context.
+- **The Top 10**: ~40-topic catalog (grouped: QBs, RBs, receivers, defense, teams, games) mapped to six cross-season dataset builders (national stat leaders per category; team stats + records extremes; notable games). Countdown 10→1 written from the data pool only; prompt told to acknowledge a young era and rank what the sample supports — so depth scales with dynasty length automatically. Offline fallback prints the raw ranked board.
+
+**Scope decisions:** catalog shipped at ~40 topics rather than the aspirational 100 — the six dataset builders are the real surface; topics are one-line additions from here.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.

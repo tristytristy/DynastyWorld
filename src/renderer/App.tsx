@@ -21,6 +21,7 @@ import { NetFeed } from './pages/net/NetFeed';
 import { NetTube } from './pages/net/NetTube';
 import { NetPaper } from './pages/net/NetPaper';
 import { NetPods } from './pages/net/NetPods';
+import { NetShows } from './pages/net/NetShows';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
@@ -196,6 +197,7 @@ export function App() {
                       <Route path="net/tube" element={<NetTube />} />
                       <Route path="net/paper" element={<NetPaper />} />
                       <Route path="net/pods" element={<NetPods />} />
+                      <Route path="net/shows" element={<NetShows />} />
                     </Route>
                     {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
                     <Route element={<TeamHubLayout />}>

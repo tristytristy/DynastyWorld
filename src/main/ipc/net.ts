@@ -3,6 +3,7 @@ import { IPC } from '../../shared/ipcChannels';
 import { getEditions, getFeedView, getMediaComments, setUserIdentity } from '../../database/dynastyNet';
 import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
+import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
 import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
 
 /** DynastyNet IPC — the fake internet's read + generate surface. */
@@ -59,6 +60,19 @@ export function registerNetHandlers(): void {
       body: string,
     ): Promise<NetGenerateResult> => {
       return replyInThread(dynastyId, seasonId, accountId, parentId, body);
+    },
+  );
+
+  ipcMain.handle(IPC.net.getTop10Topics, () => TOP10_TOPICS.map(({ key, label, group, angle }) => ({ key, label, group, angle })));
+
+  ipcMain.handle(IPC.net.generateThrowback, async (_e, dynastyId: string): Promise<NetGenerateResult> => {
+    return generateThrowback(dynastyId);
+  });
+
+  ipcMain.handle(
+    IPC.net.generateTop10,
+    async (_e, dynastyId: string, topicKey: string): Promise<NetGenerateResult> => {
+      return generateTop10(dynastyId, topicKey);
     },
   );
 

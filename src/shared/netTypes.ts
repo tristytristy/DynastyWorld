@@ -4,7 +4,7 @@
  */
 
 export type NetAccountKind = 'bot' | 'user' | 'paper' | 'podcast';
-export type NetPostKind = 'post' | 'reply' | 'comment' | 'article' | 'podcast';
+export type NetPostKind = 'post' | 'reply' | 'comment' | 'article' | 'podcast' | 'throwback' | 'top10';
 
 export interface NetAccount {
   id: number;
@@ -48,6 +48,13 @@ export interface NetGenerateResult {
   /** Human-readable failure (bad key, network) — generation fell back or aborted. */
   message?: string;
   postsAdded: number;
+}
+
+export interface Top10Topic {
+  key: string;
+  label: string;
+  group: string;
+  angle: string;
 }
 
 export interface NetIdentityResult {

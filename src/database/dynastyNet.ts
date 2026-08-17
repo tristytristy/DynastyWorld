@@ -211,7 +211,7 @@ export function getFeedView(dynastyId: string, seasonId: number): NetFeedView {
 }
 
 /** Articles or podcast episodes for a season, newest week first. */
-export function getEditions(dynastyId: string, seasonId: number, kind: 'article' | 'podcast'): NetPost[] {
+export function getEditions(dynastyId: string, seasonId: number, kind: 'article' | 'podcast' | 'throwback' | 'top10'): NetPost[] {
   return selectRows<PostRow>(
     `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind = ? ORDER BY p.week DESC, p.id ASC`,
     [dynastyId, seasonId, kind],
