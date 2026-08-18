@@ -225,7 +225,12 @@ export async function generateBoardWeek(
   // One board-generation per week: threads carry the week, so bail politely if it's covered.
   const existing = getThreads(dynastyId, seasonId).filter((t) => t.week === ctx.week && t.accountKind !== 'user');
   if (existing.length > 0) {
-    return { ok: true, engine: 'offline', message: 'The board already argued about this week — use Regenerate to redo it.', postsAdded: 0 };
+    return {
+      ok: true,
+      engine: 'offline',
+      message: `The board already argued about Week ${ctx.week} — Regenerate redoes it; fresh threads arrive once more games are in the books (play or advance, then sync).`,
+      postsAdded: 0,
+    };
   }
 
   const featured = featuredGames(dynastyId, seasonId, ctx.week, ctx.userTeam);

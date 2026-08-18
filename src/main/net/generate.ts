@@ -139,7 +139,15 @@ export async function generateWeek(
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
   if (weekHasPosts(dynastyId, seasonId, ctx.week) && !regenerate) {
-    return { ok: true, engine: 'offline', message: 'This week already has chatter.', postsAdded: 0 };
+    // Name the week: the Net runs on the latest week with REVEALED results, so
+    // right after advancing (bowl entry especially) this fires for the same
+    // week as before and needs to say why nothing new appeared.
+    return {
+      ok: true,
+      engine: 'offline',
+      message: `Week ${ctx.week} already has chatter — the next round drops once more games are in the books (play or advance, then sync).`,
+      postsAdded: 0,
+    };
   }
   const byHandle = ensureCastFor(dynastyId, ctx);
   if (regenerate) clearWeek(dynastyId, seasonId, ctx.week);

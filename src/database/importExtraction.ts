@@ -21,7 +21,13 @@ import {
 import { compactDatabase, getReusableSpaceBytes, withBatchedPersist } from './init';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
 import { captureGameContext } from './gameContext';
-import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
+import {
+  deriveSyncPhase,
+  formatSaveWeek,
+  isScheduleFinal,
+  isSeasonFinalizing,
+  isSeasonLocked,
+} from '../shared/syncPhase';
 import {
   holdGameResult,
   holdLeagueGameResult,
@@ -450,9 +456,18 @@ export async function syncDynasty(dynastyId: string): Promise<ImportResult> {
       }
       return persisted;
     });
+    // Name the calendar point the save was actually read at ("Week 16",
+    // "Postseason · Week 17"). Proof-of-movement: a postseason sync changes
+    // little that's immediately visible (bowls unplayed, current week's
+    // pre-sim held), so without this the sync looked like it did nothing.
+    const weekLabel = formatSaveWeek({
+      currentWeekType: extraction.league.currentWeekType,
+      currentOffseasonStage: extraction.league.currentOffseasonStage,
+      currentWeek: extraction.league.currentWeek,
+    });
     return {
       success: true,
-      message: `Synced — season ${extraction.league.seasonYear}.${formatBackfillSuffix(backfilledSeasonYears)}`,
+      message: `Synced — season ${extraction.league.seasonYear} · ${weekLabel}.${formatBackfillSuffix(backfilledSeasonYears)}`,
       dynastyId,
     };
   } catch (err) {
