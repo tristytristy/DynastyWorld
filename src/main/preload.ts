@@ -363,7 +363,8 @@ const api: DynastyApi = {
     replyToPost: (dynastyId, seasonId, accountId, parentId, body) =>
       ipcRenderer.invoke(IPC.net.replyToPost, dynastyId, seasonId, accountId, parentId, body),
     getThreads: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.getThreads, dynastyId, seasonId),
-    generateBoardWeek: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.generateBoardWeek, dynastyId, seasonId),
+    generateBoardWeek: (dynastyId, seasonId, regenerate) =>
+      ipcRenderer.invoke(IPC.net.generateBoardWeek, dynastyId, seasonId, regenerate),
     createThread: (dynastyId, seasonId, accountId, title, body) =>
       ipcRenderer.invoke(IPC.net.createThread, dynastyId, seasonId, accountId, title, body),
     replyToThread: (dynastyId, seasonId, accountId, threadId, body) =>

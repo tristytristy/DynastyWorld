@@ -3704,7 +3704,7 @@ export interface DynastyApi {
       body: string,
     ) => Promise<NetGenerateResult>;
     getThreads: (dynastyId: string, seasonId: number) => Promise<NetPost[]>;
-    generateBoardWeek: (dynastyId: string, seasonId: number) => Promise<NetGenerateResult>;
+    generateBoardWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
     createThread: (
       dynastyId: string,
       seasonId: number,

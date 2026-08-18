@@ -37,13 +37,15 @@ export function NetBoard() {
 
   if (!id || selectedSeasonId === undefined) return null;
 
-  const generateWeek = async () => {
+  const generateWeek = async (regenerate: boolean) => {
     setBusy('week');
     setNotice(null);
     try {
-      const result = await window.api.net.generateBoardWeek(id, selectedSeasonId);
+      const result = await window.api.net.generateBoardWeek(id, selectedSeasonId, regenerate);
       if (result.message) setNotice(result.message);
       reload();
+    } catch (err) {
+      setNotice(`Something broke: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(null);
     }
@@ -93,8 +95,16 @@ export function NetBoard() {
 
       <SurfaceCard>
         <div className="flex flex-wrap items-center gap-2">
-          <button className={buttonClass} disabled={busy !== null} onClick={generateWeek}>
+          <button className={buttonClass} disabled={busy !== null} onClick={() => void generateWeek(false)}>
             {busy === 'week' ? 'The board is typing…' : "Let the board react to this week"}
+          </button>
+          <button
+            className={buttonClass}
+            disabled={busy !== null}
+            onClick={() => void generateWeek(true)}
+            title="Wipe this week's bot threads and regenerate them (your threads and replies stay)"
+          >
+            Regenerate week
           </button>
           <button
             className={`${buttonClass} ml-auto`}

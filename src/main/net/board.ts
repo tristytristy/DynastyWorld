@@ -3,6 +3,7 @@ import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { resolveHandle } from './generate';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import {
+  clearWeekThreads,
   ensureAccounts,
   getAccounts,
   getRecentPosts,
@@ -143,6 +144,55 @@ function ensureBoardAccounts(dynastyId: string, extra: CastMember[] = []): Map<s
   return new Map(accounts.map((a) => [a.handle, a]));
 }
 
+/** The living, Claude-invented board population (kind 'board'). Grows over time. */
+function boardPopulation(dynastyId: string): NetAccount[] {
+  return getAccounts(dynastyId).filter((a) => a.kind === 'board');
+}
+
+function sanitizeBoardHandle(raw: string): string {
+  return raw.replace(/^@+/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 28);
+}
+
+interface ModelUser {
+  handle: string;
+  displayName: string;
+  persona: string;
+}
+
+const POPULATION_SYSTEM = `You invent the user base of TheSideline.net — the national college-football message board of a video-game dynasty universe, in the culture of the big CFB subreddit. Create 14 distinct posters: reddit-style usernames (mixed styles — years, puns, references, underscores; no two alike), most carrying a team flair in the display name like "corn_husked_2011 [Nebraska]", spread across conferences and including the listed must-cover teams; 3-4 flairless veterans with no allegiance. Each gets a one-line persona with a specific quirk or running bit (posting habits, obsessions, catchphrases, rivalries). No real-world people. Return ONLY JSON: [{"handle","displayName","persona"}] — handle is letters/digits/underscores only.`;
+
+/**
+ * Populate (or grow) the board with Claude-invented posters. Called on the
+ * live path only; inventing nobody is fine — the board just posts with who
+ * it has.
+ */
+async function ensurePopulation(dynastyId: string, mustCoverTeams: string[]): Promise<void> {
+  if (boardPopulation(dynastyId).length >= 8) return;
+  const users = await generateJson<ModelUser[]>(
+    POPULATION_SYSTEM,
+    `MUST-COVER TEAMS (at least one flaired poster each):\n${mustCoverTeams.join(', ')}`,
+    2500,
+  );
+  installBoardUsers(dynastyId, users);
+}
+
+function installBoardUsers(dynastyId: string, users: ModelUser[]): void {
+  const taken = new Set(getAccounts(dynastyId).map((a) => a.handle.toLowerCase()));
+  const wanted: CastMember[] = [];
+  for (const u of users ?? []) {
+    const handle = sanitizeBoardHandle(u.handle ?? '');
+    if (handle.length < 3 || taken.has(handle.toLowerCase())) continue;
+    taken.add(handle.toLowerCase());
+    wanted.push({
+      handle,
+      displayName: (u.displayName ?? handle).slice(0, 60),
+      kind: 'board',
+      persona: (u.persona ?? '').slice(0, 300),
+    });
+  }
+  if (wanted.length) ensureAccounts(dynastyId, wanted);
+}
+
 function boardMemory(dynastyId: string): string {
   const recent = getRecentPosts(dynastyId, 30, ['thread', 'reply']);
   if (!recent.length) return '';
@@ -157,54 +207,64 @@ interface ModelThread {
   replies?: { author: string; body: string }[];
 }
 
-const BOARD_WEEK_SYSTEM = `You write TheSideline.net — the NATIONAL college-football message board of a video-game dynasty universe, in the culture of the big CFB subreddit: game threads for every big game anywhere in the country, team flairs in display names, rival fanbases brigading each other's threads, flairless old-guard regulars keeping order. People quote with >, essays land at 1am, everyone has a conspiracy about the committee. Everything factual must come from the data — never invent results.
+const BOARD_WEEK_SYSTEM = `You write TheSideline.net — the NATIONAL college-football message board of a video-game dynasty universe, in the culture of the big CFB subreddit: game threads for every big game anywhere in the country, team flairs in display names, rival fanbases brigading each other's threads, flairless veterans keeping order. People quote with >, essays land at 1am, everyone has a conspiracy about the committee. Everything factual must come from the data — never invent results.
 
-Return ONLY JSON: [{"title","author","body","replies":[{"author","body"}]}].
-- One [Post Game Thread] for EACH featured game, using EXACTLY the provided title. OP is a fan of the winning team or a regular; body is a quick emotional or wry summary. 4-7 replies each: BOTH fanbases (their flair accounts are in the cast), plus regulars wandering in. Winners gloat, losers spiral, neutrals eat popcorn.
-- Then 1-2 national talk threads (poll reactions, upset meltdown, "Am I crazy or...", weekly overreactions).
-Use only the given usernames as authors.`;
+Return ONLY JSON: {"newUsers":[{"handle","displayName","persona"}],"threads":[{"title","author","body","replies":[{"author","body"}]}]}.
+- "newUsers": if a featured fanbase has no flaired poster in the population (or the moment calls for a fresh voice), invent up to 4 new posters — reddit-style usernames, flair in displayName like "corn_husked_2011 [Nebraska]", one-line persona. They may then author posts. Empty array if nobody new is needed.
+- "threads": one [Post Game Thread] for EACH featured game, using EXACTLY the provided title. OP is a fan of the winning team or a veteran; body is a quick emotional or wry summary. 4-7 replies each: BOTH fanbases, plus neutrals wandering in. Winners gloat, losers spiral, popcorn is eaten. Then 1-2 national talk threads (poll reactions, upset meltdown, "Am I crazy or...").
+Authors must be existing population usernames or your newUsers.`;
 
-export async function generateBoardWeek(dynastyId: string, seasonId: number): Promise<NetGenerateResult> {
+export async function generateBoardWeek(
+  dynastyId: string,
+  seasonId: number,
+  regenerate = false,
+): Promise<NetGenerateResult> {
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
+  if (regenerate) clearWeekThreads(dynastyId, seasonId, ctx.week);
   // One board-generation per week: threads carry the week, so bail politely if it's covered.
   const existing = getThreads(dynastyId, seasonId).filter((t) => t.week === ctx.week && t.accountKind !== 'user');
   if (existing.length > 0) {
-    return { ok: true, engine: 'offline', message: 'The board already argued about this week.', postsAdded: 0 };
+    return { ok: true, engine: 'offline', message: 'The board already argued about this week — use Regenerate to redo it.', postsAdded: 0 };
   }
 
-  // The week's slate from anywhere in the nation, plus a resident flair
-  // poster for every fanbase involved — accounts persist, so a team's
-  // poster is the same account next time they're featured.
   const featured = featuredGames(dynastyId, seasonId, ctx.week, ctx.userTeam);
-  const flairTeams = [...new Set(featured.flatMap((g) => [g.home, g.away]))];
-  const flairs = flairTeams.map(flairPoster);
-  const byHandle = ensureBoardAccounts(dynastyId, flairs);
+  const featuredTeams = [...new Set(featured.flatMap((g) => [g.home, g.away]))];
 
   const gameList = featured
     .map(
       (g, i) =>
-        `${i + 1}. TITLE: ${gameThreadTitle(g)}\n   final: ${g.away}${g.awayRank ? ` (#${g.awayRank})` : ''} ${g.awayScore} @ ${g.home}${g.homeRank ? ` (#${g.homeRank})` : ''} ${g.homeScore}${g.isNationalChampionship ? ' — NATIONAL CHAMPIONSHIP' : ''}\n   fan accounts: ${flairPoster(g.winner).handle} (winner), ${flairPoster(g.loser).handle} (loser)`,
+        `${i + 1}. TITLE: ${gameThreadTitle(g)}\n   final: ${g.away}${g.awayRank ? ` (#${g.awayRank})` : ''} ${g.awayScore} @ ${g.home}${g.homeRank ? ` (#${g.homeRank})` : ''} ${g.homeScore}${g.isNationalChampionship ? ' — NATIONAL CHAMPIONSHIP' : ''}`,
     )
     .join('\n');
 
   let threads: ModelThread[];
   let engine: 'claude' | 'offline' = 'offline';
   let message: string | undefined;
+  let byHandle: Map<string, NetAccount>;
   if (hasLiveEngine()) {
     try {
-      threads = await generateJson<ModelThread[]>(
+      // The population is Claude-invented too: seeded on first live run,
+      // grown by the weekly call's newUsers as fresh fanbases get featured.
+      await ensurePopulation(dynastyId, [ctx.userTeam, ...featuredTeams]);
+      const population = boardPopulation(dynastyId);
+      const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
         BOARD_WEEK_SYSTEM,
-        `USERNAMES (regulars):\n${boardCastPrompt()}\n\nUSERNAMES (team flairs this week):\n${castPromptOf(flairs)}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}`,
         9000,
       );
+      installBoardUsers(dynastyId, out.newUsers ?? []);
+      threads = out.threads ?? [];
       engine = 'claude';
+      byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
     } catch (err) {
       message = err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined;
       threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week, featured);
+      byHandle = ensureBoardAccounts(dynastyId, featuredTeams.map(flairPoster));
     }
   } else {
     threads = offlineBoardWeek(ctx.userTeam, ctx.userRecord, ctx.week, featured);
+    byHandle = ensureBoardAccounts(dynastyId, featuredTeams.map(flairPoster));
   }
 
   const added = withBatchedPersist(() => {
@@ -281,9 +341,13 @@ async function boardReplies(
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (hasLiveEngine() && ctx) {
     try {
+      const population = boardPopulation(dynastyId);
+      const roster = population.length
+        ? population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')
+        : boardCastPrompt();
       const replies = await generateJson<{ author: string; body: string }[]>(
         BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
-        `USERNAMES:\n${boardCastPrompt()}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
+        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
         1500,
       );
       return { replies, engine: 'claude' };
@@ -330,11 +394,11 @@ export async function createBoardThread(
     userHandle,
     `${userHandle} (OP): ${title}\n${body}`,
   );
-  const byHandle = ensureBoardAccounts(dynastyId);
+  const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
   const added = withBatchedPersist(() => {
     let n = 1;
     for (const r of replies) {
-      const author = byHandle.get(r.author);
+      const author = resolveHandle(byHandle, r.author);
       if (!author) continue;
       insertPosts(dynastyId, [
         { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, week },
@@ -357,7 +421,7 @@ export async function replyToBoardThread(
   if (!thread) return { ok: false, engine: 'offline', message: 'That thread no longer exists.', postsAdded: 0 };
   const ctx = buildWeekContext(dynastyId, seasonId);
   const week = ctx?.week ?? thread.week;
-  const byHandle = ensureBoardAccounts(dynastyId);
+  const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
 
   withBatchedPersist(() => {
     insertPosts(dynastyId, [
@@ -376,7 +440,7 @@ export async function replyToBoardThread(
   const added = withBatchedPersist(() => {
     let n = 1;
     for (const r of replies) {
-      const author = byHandle.get(r.author);
+      const author = resolveHandle(byHandle, r.author);
       if (!author) continue;
       insertPosts(dynastyId, [
         { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, week },

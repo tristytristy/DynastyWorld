@@ -3,7 +3,7 @@
  * process (generation + storage) and the renderer (Feed/Tube/Paper/Pods).
  */
 
-export type NetAccountKind = 'bot' | 'user' | 'paper' | 'podcast';
+export type NetAccountKind = 'bot' | 'user' | 'paper' | 'podcast' | 'board';
 export type NetPostKind = 'post' | 'reply' | 'comment' | 'article' | 'podcast' | 'throwback' | 'top10' | 'thread';
 
 export interface NetAccount {

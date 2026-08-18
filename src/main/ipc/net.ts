@@ -87,9 +87,22 @@ export function registerNetHandlers(): void {
     return getThreads(dynastyId, seasonId);
   });
 
-  ipcMain.handle(IPC.net.generateBoardWeek, async (_e, dynastyId: string, seasonId: number): Promise<NetGenerateResult> => {
-    return generateBoardWeek(dynastyId, seasonId);
-  });
+  ipcMain.handle(
+    IPC.net.generateBoardWeek,
+    async (_e, dynastyId: string, seasonId: number, regenerate = false): Promise<NetGenerateResult> => {
+      try {
+        return await generateBoardWeek(dynastyId, seasonId, regenerate);
+      } catch (err) {
+        console.error('[net] generateBoardWeek failed:', err);
+        return {
+          ok: false,
+          engine: 'offline',
+          message: `Board generation failed: ${err instanceof Error ? err.message : String(err)}`,
+          postsAdded: 0,
+        };
+      }
+    },
+  );
 
   ipcMain.handle(
     IPC.net.createThread,
