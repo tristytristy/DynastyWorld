@@ -14,6 +14,7 @@ export const IPC = {
   db: {
     getDynasties: 'db:getDynasties',
     importDynasty: 'db:importDynasty',
+    importLegacyDynasty: 'db:importLegacyDynasty',
     checkDynastyMatch: 'db:checkDynastyMatch',
     relinkDynasty: 'db:relinkDynasty',
     syncDynasty: 'db:syncDynasty',

@@ -3151,6 +3151,8 @@ export interface DynastyApi {
   db: {
     getDynasties: () => Promise<DynastySummary[]>;
     importDynasty: (savePath: string) => Promise<ImportResult>;
+    /** Opens its own .json picker; null when the user cancels. */
+    importLegacyDynasty: () => Promise<ImportResult | null>;
     checkDynastyMatch: (savePath: string) => Promise<DynastyMatchCandidate | null>;
     relinkDynasty: (dynastyId: string, savePath: string) => Promise<ImportResult>;
     syncDynasty: (dynastyId: string) => Promise<ImportResult>;

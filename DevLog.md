@@ -11402,3 +11402,14 @@ sits after it, so a missing directory hangs the run instead of failing.
 - The user starts threads and replies like any member; the regulars quote them with > and pile in (2-4 replies per user action). Offline fallbacks for all three actions.
 
 **Verification:** tsc clean, all four bundles compile, eslint clean on new files.
+
+## Phase — Legacy dynasty import: the CFB 26 record book (2026-08-21)
+
+**Shipped:**
+- **"Import record book"** on the Dashboard — brings a whole finished dynasty into the app from a hand-kept record document (parsed to JSON), no save file involved. First instance: the owner's 30-season CFB 26 dynasty (2025-2054), the document whose months of hand-tracking motivated this program — now browsable like any other dynasty.
+- `legacy/` in the repo holds the original .docx, the parser (`parse_masterdoc.py`, tolerant of 30 years of hand-typing drift: dash variants, singular/plural round headers, `St.`/`State`, nickname suffixes, rank prefixes), and the parsed `cfb26-dynasty.json` (format `dynastyos-legacy-dynasty-v1`).
+- Importer (`src/database/importLegacyDynasty.ts`) synthesizes real snapshot shapes so existing pages just work: `teams` (standings records + final ranks + CFP seeds; logos resolve because the renderer keys logos on display names), `schedule`/`leagueSchedule` (conference title games at week 16, CFP rounds at 17-20 with correct `playoffBracketSlot` geometry — semifinal slots assigned per-season so a differently-paired year still renders), `yearSummary`, `conferenceChampionship`, plus a `legacy` snapshot holding what has no native home yet (coach journey snapshots + season notes, national team-stat tables, the end-of-dynasty coaching table).
+- Honesty rules: only documented games become games; quarter lines stay zeros; conference records read 0-0 (unknown) rather than a guessed split; seasons are history-only (`hasFullData=false`) so stub-season handling applies; import is idempotent by `legacy:<slug>` savePath and re-imports upsert snapshots without changing season ids.
+- Validation before shipping: all 30 seasons parse to the full template (11 CFP games ×30, 9 conference championships ×30, 8-9 standings tables/yr), zero winner/score integrity failures, bracket slots verified unique 0-10 for every season.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.

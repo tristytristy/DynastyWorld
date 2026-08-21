@@ -19,6 +19,7 @@ const api: DynastyApi = {
   db: {
     getDynasties: () => ipcRenderer.invoke(IPC.db.getDynasties),
     importDynasty: (savePath) => ipcRenderer.invoke(IPC.db.importDynasty, savePath),
+    importLegacyDynasty: () => ipcRenderer.invoke(IPC.db.importLegacyDynasty),
     checkDynastyMatch: (savePath) => ipcRenderer.invoke(IPC.db.checkDynastyMatch, savePath),
     relinkDynasty: (dynastyId, savePath) =>
       ipcRenderer.invoke(IPC.db.relinkDynasty, dynastyId, savePath),
