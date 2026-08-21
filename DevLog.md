@@ -11413,3 +11413,13 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Validation before shipping: all 30 seasons parse to the full template (11 CFP games ×30, 9 conference championships ×30, 8-9 standings tables/yr), zero winner/score integrity failures, bracket slots verified unique 0-10 for every season.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.
+
+## Phase — The Historian: ask the archive anything (2026-08-21)
+
+**Shipped:**
+- New Net tab **The Historian** — free-form questions about the dynasty's whole history ("which teams kept making the CFP and never won?", "ESPN-style breakdown of the MAC era by era"), answered as a persisted long-form article (post kind `historian`, account @TheHistorian). This closes the loop the CFB 26 record book opened: its owner kept that document specifically so an AI could be asked these questions — now the archive itself is what gets read.
+- Archive pack (`src/main/net/historian.ts`): champions/title games, all postseason results, final standings by conference, record-book team-stat tables, national player stat leaders (synced seasons), the coach journey + hand-written season notes, and the end-of-dynasty coaching table — every season contributes, cross-season questions get the full sweep.
+- **The DynastyTube rule** (owner-requested): the full media index (descriptions, game labels, tagged players, tagged plays) rides in the prompt; when the article discusses a team/game/player with matching footage it cites `[tube:ID]` inline. The renderer turns markers into "▶ watch on DynastyTube" links; NetTube gained a `?media=ID` deep link that opens the cited clip — switching seasons automatically when the clip lives in another year. Citations can only point at clips that exist (the index is the whitelist).
+- Honest no-key behavior: analysis can't be templated, so without an API key the Historian says exactly that instead of producing a fake answer.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

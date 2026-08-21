@@ -218,6 +218,14 @@ export function getEditions(dynastyId: string, seasonId: number, kind: 'article'
   ).map(mapPost);
 }
 
+/** The Historian's published articles for a whole dynasty, newest first — cross-season by nature, unlike getEditions. */
+export function getHistorianArticles(dynastyId: string): NetPost[] {
+  return selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind = 'historian' ORDER BY p.id DESC`,
+    [dynastyId],
+  ).map(mapPost);
+}
+
 /** Comment threads under one media item ("video"), oldest first, replies attached. */
 export function getMediaComments(dynastyId: string, mediaId: number): NetPost[] {
   const tops = selectRows<PostRow>(

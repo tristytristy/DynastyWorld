@@ -105,6 +105,26 @@ export function listMediaItems(dynastyId: string, seasonId?: number): MediaItem[
 }
 
 /**
+ * Every upload across ALL of a dynasty's seasons, with game labels and player
+ * names resolved. Built for The Historian: when a question touches a team, it
+ * checks DynastyTube for that team's footage and cites the clip in its
+ * article — so the answer can point at highlights that actually exist.
+ */
+export function listAllResolvedMedia(dynastyId: string): MediaItemDisplay[] {
+  if (!getDynastyById(dynastyId)) return [];
+  const stmt = getDb().prepare(
+    `SELECT ${MEDIA_COLS} FROM media_items WHERE dynasty_id = ? ORDER BY season_id ASC, id ASC`,
+  );
+  stmt.bind([dynastyId]);
+  const items: MediaItem[] = [];
+  while (stmt.step()) {
+    items.push(mapRow(stmt.getAsObject() as unknown as MediaRow));
+  }
+  stmt.free();
+  return resolveItems(dynastyId, items);
+}
+
+/**
  * Persist a user-chosen drag order for a season's media. `orderedIds` is the
  * full list of that season's item ids in the desired display order; each row's
  * sort_order becomes its index. Ignored ids not in the season are harmless.

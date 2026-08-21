@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import type { MediaItemWithPath } from '../../../shared/types';
 import type { NetPost } from '../../../shared/netTypes';
 import { PageMasthead } from '../../components/common/PageMasthead';
@@ -81,8 +81,9 @@ async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
 
 export function NetTube() {
   const { id } = useParams<{ id: string }>();
-  const { selectedSeasonId, seasons } = useSelectedSeason();
+  const { selectedSeasonId, seasons, setSelectedSeasonId } = useSelectedSeason();
   const teamName = seasons.find((s) => s.id === selectedSeasonId)?.teamName ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<MediaItemWithPath[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [comments, setComments] = useState<Record<number, NetPost[]>>({});
@@ -114,6 +115,44 @@ export function NetTube() {
   useEffect(() => {
     if (openId !== null) void loadThread(openId);
   }, [openId, loadThread]);
+
+  /*
+    ?media=ID deep link (from The Historian's footage citations). If the clip
+    is in the selected season, open it and scroll to it; if it belongs to
+    another season, find its owner and switch the season — the effect then
+    fires again with the right list. The param is cleared once handled so
+    normal browsing isn't stuck on an old citation.
+  */
+  useEffect(() => {
+    const raw = searchParams.get('media');
+    if (!raw || !id || items.length === 0) return;
+    const target = Number(raw);
+    if (items.some((m) => m.id === target)) {
+      setOpenId(target);
+      setSearchParams({}, { replace: true });
+      window.setTimeout(() => {
+        document.getElementById(`tube-item-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      for (const season of seasons) {
+        if (season.id === selectedSeasonId) continue;
+        const list = (await window.api.media.list(id, season.id).catch(() => null)) ?? [];
+        if (cancelled) return;
+        if (list.some((m) => m.id === target)) {
+          setSelectedSeasonId(season.id);
+          return;
+        }
+      }
+      // Nobody owns it (deleted clip) — drop the param quietly.
+      if (!cancelled) setSearchParams({}, { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams, items, id, seasons, selectedSeasonId, setSelectedSeasonId]);
 
   if (!id || selectedSeasonId === undefined) return null;
 
@@ -171,7 +210,7 @@ export function NetTube() {
           const thread = comments[item.id] ?? [];
           const busy = busyId === item.id;
           return (
-            <SurfaceCard key={item.id}>
+            <SurfaceCard key={item.id} id={`tube-item-${item.id}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">

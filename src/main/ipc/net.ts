@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
-import { getEditions, getFeedView, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
+import { getEditions, getFeedView, getHistorianArticles, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
+import { askHistorian } from '../net/historian';
 import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
@@ -130,6 +131,24 @@ export function registerNetHandlers(): void {
       return generateTop10(dynastyId, topicKey);
     },
   );
+
+  ipcMain.handle(IPC.net.askHistorian, async (_e, dynastyId: string, question: string): Promise<NetGenerateResult> => {
+    try {
+      return await askHistorian(dynastyId, question);
+    } catch (err) {
+      console.error('[net] askHistorian failed:', err);
+      return {
+        ok: false,
+        engine: 'offline',
+        message: `The Historian hit a snag: ${err instanceof Error ? err.message : String(err)}`,
+        postsAdded: 0,
+      };
+    }
+  });
+
+  ipcMain.handle(IPC.net.getHistorianArticles, (_e, dynastyId: string): NetPost[] => {
+    return getHistorianArticles(dynastyId);
+  });
 
   ipcMain.handle(IPC.net.getSettings, (): NetSettings => getPublicSettings());
 

@@ -373,6 +373,8 @@ const api: DynastyApi = {
     getTop10Topics: () => ipcRenderer.invoke(IPC.net.getTop10Topics),
     generateThrowback: (dynastyId) => ipcRenderer.invoke(IPC.net.generateThrowback, dynastyId),
     generateTop10: (dynastyId, topicKey) => ipcRenderer.invoke(IPC.net.generateTop10, dynastyId, topicKey),
+    askHistorian: (dynastyId, question) => ipcRenderer.invoke(IPC.net.askHistorian, dynastyId, question),
+    getHistorianArticles: (dynastyId) => ipcRenderer.invoke(IPC.net.getHistorianArticles, dynastyId),
   },
 };
 

@@ -3724,6 +3724,9 @@ export interface DynastyApi {
     getTop10Topics: () => Promise<Top10Topic[]>;
     generateThrowback: (dynastyId: string) => Promise<NetGenerateResult>;
     generateTop10: (dynastyId: string, topicKey: string) => Promise<NetGenerateResult>;
+    /** The Historian: free-form archive question -> persisted long-form article (kind 'historian'). */
+    askHistorian: (dynastyId: string, question: string) => Promise<NetGenerateResult>;
+    getHistorianArticles: (dynastyId: string) => Promise<NetPost[]>;
   };
   window: {
     /**
