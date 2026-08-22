@@ -11423,3 +11423,16 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Honest no-key behavior: analysis can't be templated, so without an API key the Historian says exactly that instead of producing a fake answer.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Multiple user coach profiles: the spectator workaround (2026-08-21)
+
+**The report:** sync said "Postseason · Week 17" but the archive froze at Week 15; the dashboard claimed the coach was "OC at Clemson." The user's correction of my first diagnosis revealed the real mechanism: CFB 27 only lets you watch games your coach is part of, so the community workaround is creating throwaway user coach profiles (Members screen) at whatever teams have games worth watching — the ACC Championship means a temporary Clemson coach. Their save carries FIVE user-controlled coaches: one real (Akron) plus LSU/Clemson/Indiana/Texas Tech spectators.
+
+**The break:** every "find the user" site assumed exactly one IsUserControlled row and took the first match — which could be a spectator. The extractor then treated the dynasty as belonging to Clemson, finalizedElsewhere saw a school change, and the season write was refused.
+
+**Shipped:**
+- `pickPrimaryUserCoach` (extract-coaches): among user-controlled coaches, an archive-supplied `preferredTeamIndex` wins (the dynasty's own recorded team, passed through on sync/relink), else most YearsCoaching (spectators are brand-new; the career coach has tenure), ties keep creation order.
+- Threaded through every consumer: extractAll (which now also uses the SAME picked coach for team and coach id), syncDynasty (prefers the current season row's team over dynasty.teamId — the latter is a display cache the bad syncs had already clobbered), relinkDynasty's team-match guard, persistExtraction's coach-id anchor, helpers' season backfills, peek-save's import dialog, and recruitingWrite's board lookup.
+- Belt and braces with the previous commit: a GENUINE mid-year school change still gets the partial (league-wide-only) sync with the explanatory message; spectator profiles no longer masquerade as one.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

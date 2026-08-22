@@ -2,9 +2,11 @@ import { isGamePlayed } from '../shared/gameStatus';
 import { extractAll } from '../extractors/extract-all';
 import type { ExtractionData } from '../extractors/extract-all';
 import type { ScoringPlayData } from '../extractors/extract-scoring';
+import { pickPrimaryUserCoach } from '../extractors/extract-coaches';
 import {
   createDynasty,
   createSeason,
+  getCurrentSeason,
   getDynastyById,
   getDynastyBySavePath,
   getSeasonByYear,
@@ -141,7 +143,9 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
 
   // The user coach's stable id (Coach.PresentationId) — the identity anchor for
   // the coaching journey. 0 (generated coordinators) is treated as "no real id".
-  const userCoach = extraction.coaches.find((c) => c.isUserControlled);
+  // With multiple user profiles in the save (spectator coaches — see
+  // pickPrimaryUserCoach), the user coach must be the one AT the chosen team.
+  const userCoach = pickPrimaryUserCoach(extraction.coaches, userTeam.teamIndex);
   const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
 
   // Move-year attribution: a coach moves after the bowl but before the season
@@ -471,7 +475,16 @@ export async function syncDynasty(dynastyId: string): Promise<ImportResult> {
   }
 
   try {
-    const extraction = await extractAll(dynasty.savePath);
+    // The archive's record of this dynasty's team anchors user-coach
+    // selection, so spectator profiles can't hijack the sync. The current
+    // season row is preferred over dynasty.teamId — the latter is a display
+    // cache refreshed even by syncs whose season write was blocked.
+    const currentSeason = getCurrentSeason(dynastyId);
+    const extraction = await extractAll(
+      dynasty.savePath,
+      undefined,
+      currentSeason?.userTeamId ?? dynasty.teamId ?? undefined,
+    );
     // One batch across BOTH halves, so the award recalculation's own writes
     // don't each trigger another full-archive flush after the import's single one.
     const { backfilledSeasonYears, coachMovedPartial } = withBatchedPersist(() => {

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { BindParams, SqlValue } from 'sql.js';
 import { compactDatabase, getDatabaseFileBytes, getDb, getDbEpoch, getReusableSpaceBytes, persist } from './init';
-import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
+import { findUserTeamIndex, pickPrimaryUserCoach, type CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { SeasonOverviewCoach } from '../shared/types';
 
@@ -514,7 +514,7 @@ export function backfillMissingSeasonTeamIds(): void {
   const coachRows = all<SeasonRow>('SELECT * FROM seasons WHERE user_coach_id IS NULL AND has_full_data = 1', []);
   for (const row of coachRows) {
     const coaches = getSnapshot<CoachData[]>(row.id, 'coaches') ?? [];
-    const userCoach = coaches.find((c) => c.isUserControlled);
+    const userCoach = pickPrimaryUserCoach(coaches, row.user_team_id ?? undefined);
     const coachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
     if (coachId === null) continue;
     run('UPDATE seasons SET user_coach_id = ? WHERE id = ?', [coachId, row.id]);
