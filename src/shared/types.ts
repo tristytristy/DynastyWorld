@@ -3727,6 +3727,9 @@ export interface DynastyApi {
     /** The Historian: free-form archive question -> persisted long-form article (kind 'historian'). */
     askHistorian: (dynastyId: string, question: string) => Promise<NetGenerateResult>;
     getHistorianArticles: (dynastyId: string) => Promise<NetPost[]>;
+    /** Neutral observer (commissioner) mode — the Net covers the nation with no home team. Per dynasty. */
+    getNeutralMode: (dynastyId: string) => Promise<boolean>;
+    setNeutralMode: (dynastyId: string, neutral: boolean) => Promise<boolean>;
   };
   window: {
     /**

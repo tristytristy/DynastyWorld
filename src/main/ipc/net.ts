@@ -4,6 +4,7 @@ import { getEditions, getFeedView, getHistorianArticles, getMediaComments, getTh
 import { askHistorian } from '../net/historian';
 import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
+import { getDynastyById, setDynastyNeutralMode } from '../../database/helpers';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
 import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
 import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
@@ -148,6 +149,15 @@ export function registerNetHandlers(): void {
 
   ipcMain.handle(IPC.net.getHistorianArticles, (_e, dynastyId: string): NetPost[] => {
     return getHistorianArticles(dynastyId);
+  });
+
+  ipcMain.handle(IPC.net.getNeutralMode, (_e, dynastyId: string): boolean => {
+    return getDynastyById(dynastyId)?.neutralMode ?? false;
+  });
+
+  ipcMain.handle(IPC.net.setNeutralMode, (_e, dynastyId: string, neutral: boolean): boolean => {
+    setDynastyNeutralMode(dynastyId, neutral);
+    return getDynastyById(dynastyId)?.neutralMode ?? false;
   });
 
   ipcMain.handle(IPC.net.getSettings, (): NetSettings => getPublicSettings());

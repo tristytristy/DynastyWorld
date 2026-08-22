@@ -152,7 +152,8 @@ export function offlineMediaComments(
     ],
   });
   out.push({
-    handle: fanFor(ctx.userTeam).handle,
+    // Neutral mode has no home team — a top-team fan carries the nostalgia post.
+    handle: fanFor(ctx.userTeam || ctx.top10[0]?.team || 'College Football').handle,
     body: gameLabel ? `Was there. ${gameLabel}. Still not over it.` : 'I remember exactly where I was for this one.',
     likes: likes(),
     replies: [{ handle: '@TheGoalLineShow', body: 'GOAT conversation. I said what I said. Call in Monday.', likes: likes() }],

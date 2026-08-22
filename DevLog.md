@@ -11436,3 +11436,12 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Belt and braces with the previous commit: a GENUINE mid-year school change still gets the partial (league-wide-only) sync with the explanatory message; spectator profiles no longer masquerade as one.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Neutral observer (commissioner) mode (2026-08-22)
+
+**Shipped:**
+- Per-dynasty toggle (schema v26, `dynasties.neutral_mode`) in the Feed's settings panel: for dynasties whose user coach is a throwaway commissioner anchor, the Net covers the whole nation with no home team. The archive keeps the anchor untouched — it identifies the dynasty and drives sync semantics — only the fake internet's editorial stance changes.
+- Week context gains `neutral`: user team/record/rank/games blank out and the anchor never enters teamsInTheNews, so no hometown fan account gets minted. Every generation prompt (feed week, user-post replies, thread replies, media comments, board week) carries an explicit NEUTRAL COMMISSIONER note so the model can't gloss over the empty fields.
+- Board: featured-game weighting loses the +20 user-team bump (empty team matches nothing), must-cover population list drops the empty anchor, offline post-mortem thread skips the home-team line. Offline podcast already guarded its local segment; offline media comments fall back to a top-team fan for the nostalgia post.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

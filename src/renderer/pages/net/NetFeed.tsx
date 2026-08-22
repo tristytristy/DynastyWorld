@@ -24,6 +24,7 @@ export function NetFeed() {
   const [notice, setNotice] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [keyDraft, setKeyDraft] = useState('');
+  const [neutral, setNeutral] = useState(false);
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [handleDraft, setHandleDraft] = useState('');
   const [nameDraft, setNameDraft] = useState('');
@@ -39,6 +40,10 @@ export function NetFeed() {
     reload();
     window.api.net.getSettings().then(setSettings);
   }, [reload]);
+
+  useEffect(() => {
+    if (id) window.api.net.getNeutralMode(id).then(setNeutral);
+  }, [id]);
 
   if (!id || selectedSeasonId === undefined) return null;
 
@@ -149,6 +154,24 @@ export function NetFeed() {
                 Save
               </button>
             </div>
+            <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-slate-200/80 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <input
+                type="checkbox"
+                checked={neutral}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setNeutral(next);
+                  void window.api.net.setNeutralMode(id, next).then(setNeutral);
+                }}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Neutral observer (commissioner) mode.</span>{' '}
+                For dynasties where your coach is just a throwaway to sim the league: the Net covers the whole nation with
+                no home team — no hometown fan bias in the Feed, no extra weight for &ldquo;your&rdquo; team on the Board, no local
+                segment on the podcast. Applies to newly generated content for this dynasty.
+              </span>
+            </label>
           </div>
         )}
         {notice && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{notice}</p>}

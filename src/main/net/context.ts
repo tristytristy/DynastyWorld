@@ -1,3 +1,4 @@
+import { getDynastyById } from '../../database/helpers';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getStandings } from '../../database/getStandings';
 import { getNationalStatLeaders } from '../../database/getNationalStatLeaders';
@@ -33,6 +34,14 @@ export interface NetLeaderLine {
 export interface NetWeekContext {
   seasonYear: number;
   week: number;
+  /**
+   * Neutral observer mode (schema_v26): the dynasty's anchor team is a
+   * throwaway commissioner profile, so the Net must cover the nation with no
+   * home team. When true, userTeam/userRecord/userGames are blanked and the
+   * anchor never enters teamsInTheNews.
+   */
+  neutral: boolean;
+  /** Empty string in neutral mode — there is no home team. */
   userTeam: string;
   userRecord: string;
   userRank: number | null;
@@ -87,8 +96,11 @@ export function buildWeekContext(dynastyId: string, seasonId: number): NetWeekCo
     .map(toLine)
     .filter((g): g is NetGameLine => g !== null);
 
-  const userTeam = overview.teamName;
-  const userGames = windowGames.filter((g) => g.winner === userTeam || g.loser === userTeam);
+  const neutral = getDynastyById(dynastyId)?.neutralMode ?? false;
+  const userTeam = neutral ? '' : overview.teamName;
+  const userGames = neutral
+    ? []
+    : windowGames.filter((g) => g.winner === userTeam || g.loser === userTeam);
   const upsets = windowGames
     .filter((g) => g.isUpset && g.loserRank !== null)
     .sort((a, b) => (a.loserRank ?? 99) - (b.loserRank ?? 99))
@@ -130,7 +142,7 @@ export function buildWeekContext(dynastyId: string, seasonId: number): NetWeekCo
   };
 
   const news = new Set<string>();
-  news.add(userTeam);
+  if (!neutral) news.add(userTeam);
   for (const t of top10.slice(0, 3)) news.add(t.team);
   for (const u of upsets.slice(0, 2)) news.add(u.winner);
   for (const c of championships) news.add(c.winner);
@@ -138,9 +150,10 @@ export function buildWeekContext(dynastyId: string, seasonId: number): NetWeekCo
   return {
     seasonYear: overview.seasonYear,
     week: latestWeek,
+    neutral,
     userTeam,
-    userRecord: `${overview.record.wins}-${overview.record.losses}`,
-    userRank: overview.rankings.media,
+    userRecord: neutral ? '' : `${overview.record.wins}-${overview.record.losses}`,
+    userRank: neutral ? null : overview.rankings.media,
     userGames,
     upsets,
     rankedWins,

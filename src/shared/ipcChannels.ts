@@ -233,5 +233,7 @@ export const IPC = {
     generateTop10: 'net:generateTop10',
     askHistorian: 'net:askHistorian',
     getHistorianArticles: 'net:getHistorianArticles',
+    getNeutralMode: 'net:getNeutralMode',
+    setNeutralMode: 'net:setNeutralMode',
   },
 } as const;

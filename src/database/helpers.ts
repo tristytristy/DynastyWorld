@@ -56,6 +56,7 @@ interface DynastyRow {
   updated_at: string;
   notes: string | null;
   is_active: number;
+  neutral_mode: number;
 }
 
 export interface Dynasty {
@@ -70,6 +71,8 @@ export interface Dynasty {
   updatedAt: string;
   notes: string | null;
   isActive: boolean;
+  /** Neutral observer ("commissioner") mode — the Net covers the nation with no home-team bias. See schema_v26. */
+  neutralMode: boolean;
 }
 
 function mapDynasty(row: DynastyRow): Dynasty {
@@ -85,7 +88,13 @@ function mapDynasty(row: DynastyRow): Dynasty {
     updatedAt: row.updated_at,
     notes: row.notes,
     isActive: row.is_active === 1,
+    neutralMode: row.neutral_mode === 1,
   };
+}
+
+/** Flip neutral observer mode for one dynasty — see schema_v26_neutral_mode.sql. */
+export function setDynastyNeutralMode(dynastyId: string, neutral: boolean): void {
+  run('UPDATE dynasties SET neutral_mode = ? WHERE id = ?', [neutral ? 1 : 0, dynastyId]);
 }
 
 export interface CreateDynastyInput {

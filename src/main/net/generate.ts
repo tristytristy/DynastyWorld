@@ -131,6 +131,18 @@ function draftsToRows(
   return added;
 }
 
+
+/**
+ * One line the model can't miss when a dynasty runs in neutral observer mode
+ * — appended to every prompt that carries the week context, because the ctx
+ * JSON alone ("userTeam": "") is too easy to gloss over.
+ */
+function neutralNote(ctx: NetWeekContext): string {
+  return ctx.neutral
+    ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". Cover the whole nation impartially, like a national desk; never invent a home team or address the user as a fan of one.'
+    : '';
+}
+
 export async function generateWeek(
   dynastyId: string,
   seasonId: number,
@@ -162,7 +174,7 @@ export async function generateWeek(
     try {
       const out = await generateJson<ModelWeek>(
         WEEK_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nTHIS WEEK'S DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nTHIS WEEK'S DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}${neutralNote(ctx)}`,
         6000,
       );
       drafts = (out.posts ?? []).map((p) => ({
@@ -239,7 +251,7 @@ export async function replyToUserPost(
     try {
       replies = await generateJson<{ handle: string; body: string; likes?: number }[]>(
         REPLY_SYSTEM.replace('{HANDLE}', userHandleOf(dynastyId, userAccountId)),
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}\n\nUSER POST:\n${body}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}${neutralNote(ctx)}\n\nUSER POST:\n${body}`,
         1500,
       ).then((rs) => rs.map((r) => ({ handle: r.handle, body: r.body, likes: r.likes ?? 0 })));
       engine = 'claude';
@@ -323,7 +335,7 @@ export async function generateMediaComments(
         .join('\n');
       const raw = await generateJson<ModelPost[]>(
         COMMENTS_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP: ${item?.description || 'untitled highlight'}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP: ${item?.description || 'untitled highlight'}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}`,
         2500,
         frames,
       );
@@ -406,7 +418,7 @@ export async function replyInThread(
     try {
       replies = await generateJson<{ handle: string; body: string; likes?: number }[]>(
         THREAD_SYSTEM.replace('{HANDLE}', userHandleOf(dynastyId, userAccountId)),
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${memoryDigest(dynastyId)}${neutralNote(ctx)}\n\nTHREAD (oldest first):\n${transcript}`,
         1200,
       ).then((rs) => rs.map((r) => ({ handle: r.handle, body: r.body, likes: r.likes ?? 0 })));
       engine = 'claude';

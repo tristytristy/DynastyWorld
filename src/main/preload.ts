@@ -375,6 +375,8 @@ const api: DynastyApi = {
     generateTop10: (dynastyId, topicKey) => ipcRenderer.invoke(IPC.net.generateTop10, dynastyId, topicKey),
     askHistorian: (dynastyId, question) => ipcRenderer.invoke(IPC.net.askHistorian, dynastyId, question),
     getHistorianArticles: (dynastyId) => ipcRenderer.invoke(IPC.net.getHistorianArticles, dynastyId),
+    getNeutralMode: (dynastyId) => ipcRenderer.invoke(IPC.net.getNeutralMode, dynastyId),
+    setNeutralMode: (dynastyId, neutral) => ipcRenderer.invoke(IPC.net.setNeutralMode, dynastyId, neutral),
   },
 };
 
