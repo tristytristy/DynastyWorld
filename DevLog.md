@@ -11458,3 +11458,11 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Offline fallback rewritten in the same casual register with the bot OP shape.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Denser watching + the Board film room (2026-08-22)
+
+**Shipped (both user-requested):**
+- Frame capture bumped 3 → 7 evenly spaced stills (10%-90%, 640px) with the API image cap raised to 8 and a longer seek budget — Tube commenters now follow a highlight's arc instead of glimpsing three moments.
+- **The film room**: Board game threads now read the DynastyTube uploads tagged to their game. Each featured game's clips contribute description, tagged players, and tagged scoring plays to the prompt, and the thread is told 1-3 commenters watched them — so details only the footage knows ("fumbled with :25 left") surface in the game thread naturally, and never get contradicted. FeaturedGame carries the save-native gameId as the join key.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

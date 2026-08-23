@@ -37,7 +37,8 @@ export async function generateJson<T>(
   // never leave the renderer spinning on "typing..." forever.
   const client = new Anthropic({ apiKey, timeout: 180_000, maxRetries: 1 });
   const imageBlocks: Anthropic.ImageBlockParam[] = [];
-  for (const dataUrl of images.slice(0, 4)) {
+  // 8 stills is genuinely 'watching' a highlight; still a modest payload at 640px q0.7.
+  for (const dataUrl of images.slice(0, 8)) {
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) continue;
     imageBlocks.push({

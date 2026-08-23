@@ -55,13 +55,15 @@ async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
     video.muted = true;
     video.preload = 'auto';
     const frames: string[] = [];
-    const fail = window.setTimeout(() => resolve(frames), 15000);
+    const fail = window.setTimeout(() => resolve(frames), 25000);
     video.onerror = () => {
       window.clearTimeout(fail);
       resolve(frames);
     };
     video.onloadedmetadata = () => {
-      const points = [0.15, 0.5, 0.85].map((f) => video.duration * f);
+      // 7 evenly spaced stills (10%..90%) - enough to follow a highlight's
+      // arc rather than glimpse it; the API call carries up to 8 images.
+      const points = [0.1, 0.23, 0.36, 0.5, 0.63, 0.77, 0.9].map((f) => video.duration * f);
       let at = 0;
       video.onseeked = () => {
         const frame = drawFrame(video, video.videoWidth, video.videoHeight);

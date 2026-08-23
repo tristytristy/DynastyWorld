@@ -2,6 +2,7 @@ import { buildWeekContext } from './context';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { resolveHandle } from './generate';
 import { getLeagueScores } from '../../database/getLeagueScores';
+import { listMediaForGame } from '../../database/media';
 import {
   clearWeekThreads,
   ensureAccounts,
@@ -75,6 +76,7 @@ function flairPoster(teamName: string): CastMember {
 }
 
 interface FeaturedGame {
+  gameId: number;
   away: string;
   home: string;
   awayRank: number | null;
@@ -110,6 +112,7 @@ function featuredGames(dynastyId: string, seasonId: number, week: number, userTe
     if (g.homeTeamName === userTeam || g.awayTeamName === userTeam) weight += 20;
     if (weight === 0) continue;
     out.push({
+      gameId: g.gameId,
       away: g.awayTeamName,
       home: g.homeTeamName,
       awayRank: g.awayRank,
@@ -288,6 +291,32 @@ export async function generateBoardWeek(
     )
     .join('\n');
 
+  /*
+    THE FILM ROOM (user idea, 2026-08-22): DynastyTube uploads tagged to a
+    featured game are eyewitness material — the description, tagged players,
+    and tagged scoring plays carry details the box score doesn't ("Indiana
+    fumbled with :25 left"). Fed into the prompt per game so a few commenters
+    in that game's thread talk like people who actually watched.
+  */
+  const filmRoom = featured
+    .map((g) => {
+      const clips = listMediaForGame(dynastyId, seasonId, g.gameId);
+      if (!clips.length) return null;
+      const lines = clips.slice(0, 4).map((m) => {
+        const players = m.taggedPlayers.map((tp) => `${tp.firstName} ${tp.lastName}`).join(', ');
+        const plays = (m.plays ?? [])
+          .slice(0, 6)
+          .map((pl) => `${pl.teamName ?? ''} ${pl.playType} Q${pl.quarter} (${pl.awayScore}-${pl.homeScore} after)`.trim())
+          .join('; ');
+        return `  - "${m.description || m.fileName}"${players ? ` — players: ${players}` : ''}${plays ? ` — plays shown: ${plays}` : ''}`;
+      });
+      return `${gameThreadTitle(g)}:\n${lines.join('\n')}`;
+    })
+    .filter((entry): entry is string => entry !== null);
+  const filmRoomSection = filmRoom.length
+    ? `\n\nTHE FILM ROOM (fan-uploaded highlights for these games — commenters have watched them; in those threads let 1-3 comments reference these specific details naturally, like people who saw the broadcast; never contradict them):\n${filmRoom.join('\n')}`
+    : '';
+
   let threads: ModelThread[];
   let engine: 'claude' | 'offline' = 'offline';
   let message: string | undefined;
@@ -300,7 +329,7 @@ export async function generateBoardWeek(
       const population = boardPopulation(dynastyId);
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}`,
         9000,
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
