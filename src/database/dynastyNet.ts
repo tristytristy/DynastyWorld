@@ -177,7 +177,7 @@ export function lastInsertId(): number {
   return rows[0]?.id ?? 0;
 }
 
-function attachReplies(dynastyId: string, tops: NetPost[]): NetPost[] {
+function attachReplies(dynastyId: string, tops: NetPost[], deep = false): NetPost[] {
   if (tops.length === 0) return tops;
   const byId = new Map(tops.map((p) => [p.id, p]));
   const replies = selectRows<PostRow>(
@@ -186,7 +186,12 @@ function attachReplies(dynastyId: string, tops: NetPost[]): NetPost[] {
   ).map(mapPost);
   for (const r of replies) {
     const parent = r.parentId !== null ? byId.get(r.parentId) : undefined;
-    if (parent) parent.replies.push(r);
+    if (!parent) continue;
+    parent.replies.push(r);
+    // Deep mode (the board's reddit-style nesting): a reply can parent further
+    // replies. Rows come back id-ascending and parents insert before children,
+    // so registering each reply as it lands is sufficient for any depth.
+    if (deep) byId.set(r.id, r);
   }
   return tops;
 }
@@ -297,7 +302,8 @@ export function getThreads(dynastyId: string, seasonId: number): NetPost[] {
     `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind = 'thread' ORDER BY p.id DESC`,
     [dynastyId, seasonId],
   ).map(mapPost);
-  return attachReplies(dynastyId, tops);
+  // deep: the board renders reddit-style one-level nesting under comments.
+  return attachReplies(dynastyId, tops, true);
 }
 
 /** One post and its replies, oldest first — the context for replying in-thread. */

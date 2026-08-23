@@ -6,11 +6,105 @@ import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
 
 /**
- * TheSideline.net — the message board. A different internet than the Feed:
- * threads, essays, quotes, decade-old usernames, zero likes. The regulars
- * react to the week; the user posts threads and replies like any other
- * member and the board piles in.
+ * TheSideline.net — the message board, rendered the way its culture demands
+ * (user direction, 2026-08-22, with real r/CFB game threads as reference):
+ * reddit-shaped, not forum-shaped. Vote counts, "Posted by" metadata, team
+ * flairs as chips, one level of comment nesting with an indent rail, and
+ * quote lines (">") styled as quotes. Game threads are OP'd by the score bot
+ * with a box-score body; the life is in the comments.
  */
+
+/** "corn_husked_2011 [Nebraska]" -> name + flair chip text. */
+function splitFlair(displayName: string): { name: string; flair: string | null } {
+  const m = /^(.*?)\s*\[([^\]]+)\]\s*$/.exec(displayName);
+  return m ? { name: m[1], flair: m[2] } : { name: displayName, flair: null };
+}
+
+function formatVotes(n: number): string {
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
+}
+
+function countComments(t: NetPost): number {
+  return t.replies.reduce((sum, r) => sum + 1 + r.replies.length, 0);
+}
+
+function FlairChip({ flair, bot }: { flair: string | null; bot: boolean }) {
+  if (!flair) return null;
+  return (
+    <span
+      className={`ml-1.5 inline-block rounded-sm px-1.5 py-px text-[10px] font-semibold leading-4 ${
+        bot
+          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+          : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+      }`}
+    >
+      {flair}
+    </span>
+  );
+}
+
+/** Body text with ">" quote lines and "- " stat bullets styled reddit-style. */
+function CommentBody({ body }: { body: string }) {
+  const lines = body.split('\n');
+  return (
+    <div className="mt-0.5 text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+      {lines.map((line, i) => {
+        if (line.startsWith('>')) {
+          return (
+            <p key={i} className="my-0.5 border-l-2 border-slate-300 pl-2 text-slate-500 dark:border-slate-600 dark:text-slate-400">
+              {line.replace(/^>\s?/, '')}
+            </p>
+          );
+        }
+        if (line.startsWith('- ')) {
+          return (
+            <p key={i} className="my-0.5 pl-4">
+              <span className="mr-1.5 text-slate-400">•</span>
+              {line.slice(2)}
+            </p>
+          );
+        }
+        return line.trim() === '' ? <div key={i} className="h-2" /> : <p key={i} className="my-0.5">{line}</p>;
+      })}
+    </div>
+  );
+}
+
+function CommentHeader({ post }: { post: NetPost }) {
+  const { name, flair } = splitFlair(post.displayName);
+  const isUser = post.accountKind === 'user';
+  const bot = flair === 'Bot';
+  return (
+    <p className="flex flex-wrap items-baseline text-xs">
+      <span className={`font-bold ${isUser ? 'text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>{name}</span>
+      <FlairChip flair={flair} bot={bot} />
+      <span className={`ml-2 ${post.likes < 0 ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
+        {formatVotes(post.likes)} point{Math.abs(post.likes) === 1 ? '' : 's'}
+      </span>
+    </p>
+  );
+}
+
+function Comment({ post }: { post: NetPost }) {
+  return (
+    <div className="pt-3">
+      <CommentHeader post={post} />
+      <CommentBody body={post.body} />
+      {post.replies.length > 0 && (
+        <div className="ml-2 mt-1 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
+          {post.replies.map((r) => (
+            <div key={r.id} className="pt-2">
+              <CommentHeader post={r} />
+              <CommentBody body={r.body} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NetBoard() {
   const { id } = useParams<{ id: string }>();
   const { selectedSeasonId, seasons } = useSelectedSeason();
@@ -89,7 +183,7 @@ export function NetBoard() {
       <PageMasthead
         eyebrow="The Net"
         title="TheSideline.net"
-        description="The national board. Game threads for every big game in the country, team flairs, rival fanbases in each other's replies — and the flairless old guard keeping order. Start a thread or jump into the pile."
+        description="The national board. Game threads for every big game in the country, team flairs, rival fanbases in each other's replies. Start a thread or jump into the pile."
         mark={{ kind: 'logo', teamAssetName: teamName ?? '' }}
       />
 
@@ -119,14 +213,14 @@ export function NetBoard() {
             <input
               value={titleDraft}
               onChange={(e) => setTitleDraft(e.target.value)}
-              placeholder='Thread title ("OFFICIAL: ...", "Unpopular opinion: ...")'
+              placeholder='Thread title ("Unpopular opinion: ...", "Am I crazy or ...")'
               className="w-full border border-slate-300/80 bg-transparent px-3 py-1.5 text-sm dark:border-slate-600"
             />
             <textarea
               value={bodyDraft}
               onChange={(e) => setBodyDraft(e.target.value)}
               rows={3}
-              placeholder="Say your piece. No character limit here — this is a real board."
+              placeholder="Say your piece."
               className="w-full resize-y border border-slate-300/80 bg-transparent px-3 py-2 text-sm dark:border-slate-600"
             />
             <div className="flex justify-end">
@@ -159,44 +253,52 @@ export function NetBoard() {
       <div className="space-y-2">
         {threads.map((t) => {
           const open = openId === t.id;
+          const { name: opName, flair: opFlair } = splitFlair(t.displayName);
           const isUser = t.accountKind === 'user';
+          const commentCount = countComments(t);
           return (
             <SurfaceCard key={t.id}>
               <button className="block w-full text-left" onClick={() => { setOpenId(open ? null : t.id); setReplyDraft(''); }}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="min-w-0 truncate text-sm font-bold text-slate-950 dark:text-white">{t.title}</p>
-                  <p className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
-                    {t.replies.length} {t.replies.length === 1 ? 'reply' : 'replies'}
-                  </p>
+                <div className="flex items-start gap-3">
+                  {/* vote column, reddit-style */}
+                  <div className="flex w-10 shrink-0 flex-col items-center pt-0.5 text-slate-400 dark:text-slate-500">
+                    <span aria-hidden className="text-sm leading-none">▲</span>
+                    <span className="mt-0.5 text-xs font-bold text-slate-600 dark:text-slate-300">{formatVotes(t.likes)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-bold leading-snug text-slate-950 dark:text-white">{t.title}</p>
+                    <p className="mt-0.5 flex flex-wrap items-baseline text-xs text-slate-400 dark:text-slate-500">
+                      Posted by&nbsp;
+                      <span className={isUser ? 'font-semibold text-amber-700 dark:text-amber-400' : 'font-semibold text-slate-500 dark:text-slate-400'}>
+                        {opName}
+                      </span>
+                      <FlairChip flair={opFlair} bot={opFlair === 'Bot'} />
+                      <span className="ml-2">· wk {t.week} · {commentCount} comment{commentCount === 1 ? '' : 's'}</span>
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                  started by <span className={isUser ? 'font-semibold text-amber-700 dark:text-amber-400' : 'font-semibold'}>{t.displayName}</span>
-                  {t.week > 0 ? ` · wk ${t.week}` : ''}
-                </p>
               </button>
               {open && (
-                <div className="mt-3 space-y-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.displayName} <span className="font-normal opacity-60">(OP)</span></p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{t.body}</p>
-                  </div>
-                  {t.replies.map((r) => (
-                    <div key={r.id} className="border-t border-dashed border-slate-200/80 pt-2 dark:border-slate-800">
-                      <p className={`text-xs font-bold ${r.accountKind === 'user' ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {r.displayName}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{r.body}</p>
+                <div className="mt-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+                  {t.body.trim() !== '' && (
+                    <div className="mb-2 border-b border-dashed border-slate-200/80 pb-3 dark:border-slate-800">
+                      <CommentBody body={t.body} />
                     </div>
-                  ))}
+                  )}
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {t.replies.map((r) => (
+                      <Comment key={r.id} post={r} />
+                    ))}
+                  </div>
                   {userAccount && (
-                    <div className="flex gap-2 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+                    <div className="mt-3 flex gap-2 border-t border-slate-200/80 pt-3 dark:border-slate-800">
                       <input
                         value={replyDraft}
                         onChange={(e) => setReplyDraft(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && replyDraft.trim() && busy === null) void submitReply(t.id);
                         }}
-                        placeholder={`Reply as ${userAccount.handle}…`}
+                        placeholder={`Comment as ${userAccount.handle}…`}
                         className="min-w-0 flex-1 border border-slate-300/80 bg-transparent px-3 py-1.5 text-sm dark:border-slate-600"
                       />
                       <button
@@ -204,7 +306,7 @@ export function NetBoard() {
                         disabled={busy !== null || !replyDraft.trim()}
                         onClick={() => void submitReply(t.id)}
                       >
-                        {busy === 'reply' ? '…' : 'Reply'}
+                        {busy === 'reply' ? '…' : 'Comment'}
                       </button>
                     </div>
                   )}

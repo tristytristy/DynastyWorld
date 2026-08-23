@@ -140,7 +140,7 @@ function boardCastPrompt(): string {
 }
 
 function ensureBoardAccounts(dynastyId: string, extra: CastMember[] = []): Map<string, NetAccount> {
-  const accounts = ensureAccounts(dynastyId, [...BOARD_CAST, ...extra]);
+  const accounts = ensureAccounts(dynastyId, [SIDELINE_BOT, ...BOARD_CAST, ...extra]);
   return new Map(accounts.map((a) => [a.handle, a]));
 }
 
@@ -200,19 +200,64 @@ function boardMemory(dynastyId: string): string {
   return `\n\nRECENT BOARD HISTORY (stay consistent, keep the grudges and running bits going):\n${lines.join('\n')}`;
 }
 
+interface ModelReply {
+  author: string;
+  body: string;
+  likes?: number;
+  /** One level of nesting only — a direct response to the parent comment. */
+  replies?: { author: string; body: string; likes?: number }[];
+}
+
 interface ModelThread {
   title: string;
   author: string;
   body: string;
-  replies?: { author: string; body: string }[];
+  upvotes?: number;
+  replies?: ModelReply[];
 }
 
-const BOARD_WEEK_SYSTEM = `You write TheSideline.net — the NATIONAL college-football message board of a video-game dynasty universe, in the culture of the big CFB subreddit: game threads for every big game anywhere in the country, team flairs in display names, rival fanbases brigading each other's threads, flairless veterans keeping order. People quote with >, essays land at 1am, everyone has a conspiracy about the committee. Everything factual must come from the data — never invent results.
+/**
+ * The board's scorekeeping bot — every [Post Game Thread] is OP'd by it with a
+ * plain box-score body, the way the real CFB subreddit's referee bot posts
+ * game threads. Mechanical on purpose: the OP is data, the comments are life.
+ */
+const SIDELINE_BOT: CastMember = {
+  handle: 'SidelineBot',
+  displayName: 'SidelineBot [Bot]',
+  kind: 'bot',
+  persona: 'Automated game-thread poster. Posts the final score and says nothing else, ever.',
+};
 
-Return ONLY JSON: {"newUsers":[{"handle","displayName","persona"}],"threads":[{"title","author","body","replies":[{"author","body"}]}]}.
-- "newUsers": if a featured fanbase has no flaired poster in the population (or the moment calls for a fresh voice), invent up to 4 new posters — reddit-style usernames, flair in displayName like "corn_husked_2011 [Nebraska]", one-line persona. They may then author posts. Empty array if nobody new is needed.
-- "threads": one [Post Game Thread] for EACH featured game, using EXACTLY the provided title. OP is a fan of the winning team or a veteran; body is a quick emotional or wry summary. 4-7 replies each: BOTH fanbases, plus neutrals wandering in. Winners gloat, losers spiral, popcorn is eaten. Then 1-2 national talk threads (poll reactions, upset meltdown, "Am I crazy or...").
-Authors must be existing population usernames or your newUsers.`;
+function pgtBody(g: FeaturedGame): string {
+  const r = (rank: number | null) => (rank ? `#${rank} ` : '');
+  const lines = [
+    `Final: ${r(g.awayRank)}${g.away} ${g.awayScore} — ${r(g.homeRank)}${g.home} ${g.homeScore}`,
+  ];
+  if (g.isNationalChampionship) lines.push('National Championship');
+  else if (g.bowlName) lines.push(g.bowlName);
+  lines.push('', 'Box score provided by The Sideline Wire');
+  return lines.join('\n');
+}
+
+const BOARD_WEEK_SYSTEM = `You write the comments of TheSideline.net — the national college-football board of a video-game dynasty universe, with the exact culture of the big CFB subreddit's game threads. Everything factual (scores, records, ranks, streaks) must come from the provided data — never invent results.
+
+Return ONLY JSON: {"newUsers":[{"handle","displayName","persona"}],"threads":[{"title","author","body","upvotes":int,"replies":[{"author","body","likes":int,"replies":[{"author","body","likes":int}]}]}]}.
+
+STRUCTURE:
+- One thread for EACH featured game, title EXACTLY as provided. For these game threads the OP is already posted by a score bot — set "author" to "SidelineBot" and "body" to "" and write ONLY the replies (6-10 for the biggest game, 4-7 for the rest).
+- Then 1-2 national talk threads (poll gripes, "so the top four are...", coach hot seat, am-I-crazy posts) — these you author fully: a real poster as OP, short body, 3-6 replies.
+- "newUsers": up to 4 new posters if a featured fanbase has nobody (reddit-style usernames, flair in displayName like "corn_husked_2011 [Nebraska]"). Empty array if not needed.
+- Authors must be existing population usernames, your newUsers, or "SidelineBot" (OP only).
+
+HOW REAL GAME-THREAD COMMENTS SOUND — follow this closely:
+- SHORT. Most comments are 5-25 words. Several under 10. lowercase is common, so are "lol", "lmao", "bro", "man". Fragments are fine.
+- NOT EVERYONE IS CLEVER. Most comments are plain gut reactions: "WE ARE SO BACK", "i hate this sport", "fire him. i mean it this time", "nobody can tell him anything right now lol", "that man is playing a different sport". At most ONE longer, effortful comment per thread — never polished stand-up bits with twist endings on ordinary comments.
+- ONE stats-dump comment in the BIGGEST game's thread only: a bullet list (use "- " lines) of 4-7 dry factual nuggets pulled strictly from the data (records, ranks, margins, season points). It gets huge likes. Its author is a numbers-account type.
+- Quote-riffs: a reply quoting a fragment of the parent with "&gt;" on its own line, then one short line back.
+- Nested replies (the inner "replies" array) are direct responses — pile-ons, corrections, one-word agreements.
+- Fanbase truth: losers doom-spiral or go silent-then-one-liner, winners are euphoric and briefly insufferable, neutrals drive by with jokes. Flairless veterans post perspective.
+- LIKES: reddit-shaped. Top comment in a big thread 800-6000, mid comments 40-900, late/niche 3-60, and one mildly downvoted take (-5 to -25) somewhere per week. Thread "upvotes" 200-8000 by game size.
+- Continuity: keep grudges and running bits from the board history going; call back to old takes.`;
 
 export async function generateBoardWeek(
   dynastyId: string,
@@ -261,6 +306,7 @@ export async function generateBoardWeek(
       installBoardUsers(dynastyId, out.newUsers ?? []);
       threads = out.threads ?? [];
       engine = 'claude';
+      ensureBoardAccounts(dynastyId); // the score bot must exist before PGT OPs insert
       byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
     } catch (err) {
       message = err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined;
@@ -272,13 +318,26 @@ export async function generateBoardWeek(
     byHandle = ensureBoardAccounts(dynastyId, featuredTeams.map(flairPoster));
   }
 
+  // Game threads are OP'd by the score bot with a mechanical box-score body,
+  // whatever the model set — exact titles are the join key back to the game.
+  const pgtByTitle = new Map(featured.map((g) => [gameThreadTitle(g), g]));
+
   const added = withBatchedPersist(() => {
     let n = 0;
     for (const t of threads) {
-      const author = resolveHandle(byHandle, t.author);
+      const game = pgtByTitle.get(t.title);
+      const author = game ? resolveHandle(byHandle, SIDELINE_BOT.handle) : resolveHandle(byHandle, t.author);
       if (!author) continue;
       insertPosts(dynastyId, [
-        { seasonId, accountId: author.id, kind: 'thread', title: t.title, body: t.body, week: ctx.week },
+        {
+          seasonId,
+          accountId: author.id,
+          kind: 'thread',
+          title: t.title,
+          body: game ? pgtBody(game) : t.body,
+          likes: t.upvotes ?? Math.max(150, (game?.weight ?? 4) * 60),
+          week: ctx.week,
+        },
       ]);
       const threadId = lastInsertId();
       n += 1;
@@ -287,9 +346,19 @@ export async function generateBoardWeek(
         const replier = resolveHandle(byHandle, r.author);
         if (!replier) continue;
         insertPosts(dynastyId, [
-          { seasonId, accountId: replier.id, kind: 'reply', parentId: threadId, body: r.body, week: ctx.week },
+          { seasonId, accountId: replier.id, kind: 'reply', parentId: threadId, body: r.body, likes: r.likes ?? 0, week: ctx.week },
         ]);
+        const replyId = lastInsertId();
         n += 1;
+        if (replyId === 0) continue;
+        for (const rr of r.replies ?? []) {
+          const child = resolveHandle(byHandle, rr.author);
+          if (!child) continue;
+          insertPosts(dynastyId, [
+            { seasonId, accountId: child.id, kind: 'reply', parentId: replyId, body: rr.body, likes: rr.likes ?? 0, week: ctx.week },
+          ]);
+          n += 1;
+        }
       }
     }
     return n;
@@ -298,51 +367,49 @@ export async function generateBoardWeek(
 }
 
 function offlineBoardWeek(team: string, record: string, week: number, featured: FeaturedGame[] = []): ModelThread[] {
-  const gameThreads: ModelThread[] = featured.map((g) => ({
+  // PGT bodies are overridden with the score-bot box score at insert time
+  // (see pgtByTitle) — offline only supplies the comment section.
+  const gameThreads: ModelThread[] = featured.map((g, i) => ({
     title: gameThreadTitle(g),
-    author: flairPoster(g.winner).handle,
-    body: g.isNationalChampionship
-      ? 'NATIONAL CHAMPIONS. I have nothing coherent to add. See everyone at the parade.'
-      : `Ball game. ${g.winner} ${Math.max(g.homeScore, g.awayScore)}, ${g.loser} ${Math.min(g.homeScore, g.awayScore)}. Good game thread everyone.`,
+    author: SIDELINE_BOT.handle,
+    body: '',
+    upvotes: 400 + g.weight * 40,
     replies: [
-      { author: flairPoster(g.loser).handle, body: 'I am never watching this sport again. See everyone next Saturday.' },
-      { author: 'xX_BlitzKing_Xx', body: 'both of these fanbases are insufferable and I read every post. carry on.' },
-      { author: 'StatGuy_Larry', body: `Final margin: ${Math.abs(g.homeScore - g.awayScore)}. The numbers don't lie. People do.` },
+      { author: flairPoster(g.winner).handle, body: g.isNationalChampionship ? 'NATIONAL CHAMPS. im not okay lol' : 'never a doubt. ok several doubts', likes: 900 - i * 120 },
+      {
+        author: flairPoster(g.loser).handle,
+        body: 'i am never watching this sport again. see everyone next saturday',
+        likes: 640 - i * 90,
+        replies: [{ author: 'xX_BlitzKing_Xx', body: 'welcome to how i feel EVERY week', likes: 88 }],
+      },
+      { author: 'StatGuy_Larry', body: `- Final margin: ${Math.abs(g.homeScore - g.awayScore)}\n- Combined points: ${g.homeScore + g.awayScore}\n\nThe numbers don't lie. People do.`, likes: 1200 - i * 150 },
+      { author: 'Lurker_Since_09', body: 'good game', likes: 45 },
     ],
   }));
   return [
     ...gameThreads,
     {
-      title: `OFFICIAL: Week ${week} post-mortem thread`,
-      author: 'OldGold_Stan',
-      body: `Long-time readers know I don't overreact to a single week. That said, let us review the tape together, as a community, like we have since the board software still had frames. ${team} sits at ${record}. Discuss respectfully.\n\n— Stan`,
+      title: `week ${week} was a psyop and i can prove it`,
+      author: 'xX_BlitzKing_Xx',
+      body: 'i watched every one of these games. none of them were real.' + (team ? ` also ${team} is ${record} and nobody wants to talk about it` : ''),
+      upvotes: 310,
       replies: [
-        { author: 'xX_BlitzKing_Xx', body: 'RESPECTFULLY, we are COOKED.' },
-        { author: 'StatGuy_Larry', body: `${record}. That's the record. The numbers don't lie. People do.` },
-        { author: 'FireEveryone_Frank', body: 'It’s time for a change. I’ve said it before and I’ll say it again.' },
-        { author: 'ConcessionsConnie', body: 'The new brisket stand behind section 114 is worth the halftime line. Also our red-zone play calling is too cute by half and everyone knows it.' },
-      ],
-    },
-    {
-      title: 'Unpopular opinion: this board overreacts every single week',
-      author: 'Lurker_Since_09',
-      body: 'That’s it. That’s the post.',
-      replies: [
-        { author: 'xX_BlitzKing_Xx', body: 'the LURKER is out of their CAVE. must be serious.' },
-        { author: 'OldGold_Stan', body: 'A rare appearance, and a correct one. Welcome back, friend.\n\n— Stan' },
+        { author: 'OldGold_Stan', body: 'They were real. I attended one.\n\n\u2014 Stan', likes: 240 },
+        { author: 'FireEveryone_Frank', body: 'fire everyone involved. the refs too', likes: 96 },
+        { author: 'ConcessionsConnie', body: 'the brisket stand behind 114 was real. best thing i saw all day', likes: 71 },
       ],
     },
   ];
 }
 
-const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, an old-school college-football message board in a video-game dynasty universe. The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other board member: quote them with >, argue, agree, essay-post, derail slightly. Stay factual to the data. Return ONLY JSON: [{"author","body"}] with 2-4 replies. Use only the given usernames as authors.`;
+const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. KEEP IT SHORT — most replies 5-25 words, lowercase fine, "lol" fine, not everyone is clever; no polished bits. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 2-4 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
 
 async function boardReplies(
   dynastyId: string,
   seasonId: number,
   userHandle: string,
   transcript: string,
-): Promise<{ replies: { author: string; body: string }[]; engine: 'claude' | 'offline'; message?: string }> {
+): Promise<{ replies: { author: string; body: string; likes?: number }[]; engine: 'claude' | 'offline'; message?: string }> {
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (hasLiveEngine() && ctx) {
     try {
@@ -350,7 +417,7 @@ async function boardReplies(
       const roster = population.length
         ? population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')
         : boardCastPrompt();
-      const replies = await generateJson<{ author: string; body: string }[]>(
+      const replies = await generateJson<{ author: string; body: string; likes?: number }[]>(
         BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
         `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
         1500,
@@ -367,7 +434,7 @@ async function boardReplies(
   return { replies: offlineBoardReplies(), engine: 'offline' };
 }
 
-function offlineBoardReplies(): { author: string; body: string }[] {
+function offlineBoardReplies(): { author: string; body: string; likes?: number }[] {
   return [
     { author: 'OldGold_Stan', body: 'An interesting contribution. I have thoughts, which I will share at length this evening.\n\n— Stan' },
     { author: 'xX_BlitzKing_Xx', body: '>see above post\n\nthis is either genius or the worst thing ever posted here. no in between.' },
@@ -406,7 +473,7 @@ export async function createBoardThread(
       const author = resolveHandle(byHandle, r.author);
       if (!author) continue;
       insertPosts(dynastyId, [
-        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, week },
+        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, likes: r.likes ?? 0, week },
       ]);
       n += 1;
     }
@@ -448,7 +515,7 @@ export async function replyToBoardThread(
       const author = resolveHandle(byHandle, r.author);
       if (!author) continue;
       insertPosts(dynastyId, [
-        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, week },
+        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, likes: r.likes ?? 0, week },
       ]);
       n += 1;
     }

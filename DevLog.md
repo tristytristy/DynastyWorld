@@ -11445,3 +11445,16 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Board: featured-game weighting loses the +20 user-team bump (empty team matches nothing), must-cover population list drops the empty anchor, offline post-mortem thread skips the home-team line. Offline podcast already guarded its local segment; offline media comments fall back to a top-team fan for the nostalgia post.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Board v2: r/CFB authenticity + reddit-shaped UI (2026-08-22)
+
+**The direction:** the user compared generated game threads against real r/CFB post-game threads (screenshots supplied) and called the gap precisely — every generated poster wrote polished long-form bits, and the layout read as an old forum. Real game threads are short, visceral, lowercase, mostly NOT clever, with one big stats-dump comment, quote-riffs, votes, flairs, and nesting.
+
+**Shipped:**
+- BOARD_WEEK_SYSTEM rewritten as a style guide distilled from the reference threads: most comments 5-25 words, several under 10, lowercase/lol register, at most ONE effortful longer comment per thread, exactly one bullet-list stats-dump comment in the biggest game's thread (data-only nuggets, huge likes), quote-riffs ("&gt; fragment" then one line), one-level nested pile-ons, reddit-shaped like counts (top comment 800-6000, long tail small, one mildly downvoted take per week), fanbase truth (losers spiral, winners insufferable, neutrals drive by).
+- [Post Game Thread] OPs are now authored by **SidelineBot [Bot]** with a mechanical box-score body (Final line, bowl/NC label, "Box score provided by The Sideline Wire") — code-built from game data at insert time, exact titles as the join key; the model writes only the comments. Talk threads stay human-authored.
+- Replies carry likes end-to-end (weekly generation, user-thread pile-ins, in-thread replies) and support one nesting level; attachReplies gained a deep mode (board only) that assembles arbitrary reply chains.
+- NetBoard.tsx rebuilt reddit-style: vote column with ▲ and k-formatted counts, "Posted by name [flair] · wk N · M comments" metadata, flair chips (emerald for [Bot]), OP body block, comment headers with points (negative = red), nested replies behind an indent rail, ">" lines styled as quotes and "- " lines as stat bullets.
+- Offline fallback rewritten in the same casual register with the bot OP shape.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
