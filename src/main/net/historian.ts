@@ -202,7 +202,7 @@ function buildTubeIndex(dynastyId: string): string {
     const plays = m.plays?.length
       ? ` — shows: ${m.plays
           .slice(0, 3)
-          .map((p) => `${p.teamName ?? ''} ${p.playType} Q${p.quarter}`.trim())
+          .map((p) => `${p.teamName ?? ''} ${p.playType}${p.scorerNames?.length ? ` by ${p.scorerNames.join(' to ')}` : ''} Q${p.quarter}`.trim())
           .join('; ')}`
       : '';
     return `[tube:${m.id}] ${m.mediaType} "${m.description || m.fileName}"${m.gameLabel ? ` — ${m.gameLabel}` : ''}${players ? ` — players: ${players}` : ''}${plays}`;

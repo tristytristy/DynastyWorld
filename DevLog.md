@@ -11466,3 +11466,11 @@ sits after it, so a missing directory hangs the run instead of failing.
 - **The film room**: Board game threads now read the DynastyTube uploads tagged to their game. Each featured game's clips contribute description, tagged players, and tagged scoring plays to the prompt, and the thread is told 1-3 commenters watched them — so details only the footage knows ("fumbled with :25 left") surface in the game thread naturally, and never get contradicted. FeaturedGame carries the save-native gameId as the join key.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Scorer names on play tags (2026-08-23)
+
+**The report:** long TD passes and a defensive TD in a tagged clip drew no specific comments — because MediaPlayTag dropped the `scorers` extract-scoring derives (thrower + catcher on passing TDs, via stat-snapshot diffing), and yardage genuinely does not exist in the save.
+
+**Shipped:** `scorerNames` baked into play tags at pick time (league-roster resolution, self-contained thereafter); surfaced in the Media play picker, the Tube "In this clip" line, and all three prompt sites (media comments, Board film room, Historian index). TD tags with NO credited scorer now carry an honest hint — "scorer not among the offensive leaders — possibly a defensive/special-teams or role-player TD; the frames may show which" — so a pick-six can be talked about as one without being invented. Existing tags predate the field; re-picking a clip's plays refreshes them.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

@@ -2262,6 +2262,14 @@ export interface MediaPlayTag {
   /** Score after the play and its try. */
   homeScore: number;
   awayScore: number;
+  /**
+   * Who scored, resolved to names at tag time — the thrower AND catcher on a
+   * passing TD (see extract-scoring's snapshot diffing). Empty/absent means
+   * "not recorded" (defensive, special-teams, or a role player outside the
+   * three-man stat snapshot), never "nobody". Absent on tags saved before
+   * this field existed — re-picking the plays refreshes them.
+   */
+  scorerNames?: string[];
 }
 
 export interface MediaItemPatch {

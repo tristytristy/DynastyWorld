@@ -262,7 +262,7 @@ export function NetTube() {
                       {item.plays
                         .map(
                           (p) =>
-                            `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} ${p.teamName ?? ''} ${p.playType === 'touchdown' ? 'TD' : p.playType === 'fieldGoal' ? 'FG' : 'safety'} (${p.awayScore}-${p.homeScore})`,
+                            `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} ${p.teamName ?? ''} ${p.playType === 'touchdown' ? 'TD' : p.playType === 'fieldGoal' ? 'FG' : 'safety'}${p.scorerNames?.length ? ` — ${p.scorerNames.join(' → ')}` : ''} (${p.awayScore}-${p.homeScore})`,
                         )
                         .join(' · ')}
                     </p>

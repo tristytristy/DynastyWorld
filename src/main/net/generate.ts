@@ -330,7 +330,7 @@ export async function generateMediaComments(
       const playLines = (item?.plays ?? [])
         .map(
           (p) =>
-            `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} — ${p.teamName ?? 'score'} ${p.playType} (+${p.points + p.conversionPoints}), score after: ${p.awayScore}-${p.homeScore}`,
+            `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} — ${p.teamName ?? 'score'} ${p.playType}${p.scorerNames?.length ? ` by ${p.scorerNames.join(' to ')}` : p.playType === 'touchdown' ? ' (scorer not among the offensive leaders — possibly a defensive/special-teams or role-player TD; the frames may show which)' : ''} (+${p.points + p.conversionPoints}), score after: ${p.awayScore}-${p.homeScore}`,
         )
         .join('\n');
       const raw = await generateJson<ModelPost[]>(

@@ -342,6 +342,16 @@ export function getScoringPlaysForGame(dynastyId: string, seasonId: number, game
   }
   const teams = getSnapshot<{ teamIndex: number; displayName: string }[]>(season.id, 'teams') ?? [];
   const nameByIndex = new Map(teams.map((t) => [t.teamIndex, t.displayName]));
+  // Scorer ids -> names, resolved once per call and only when any play carries
+  // them (league roster reads are the expensive part). Baked into the tag so
+  // it stays self-contained after rosters churn.
+  const anyScorers = plays.some((p) => (p.scorers ?? []).length > 0);
+  const playerName = new Map<number, string>();
+  if (anyScorers) {
+    for (const pl of getAllLeaguePlayers(dynastyId, seasonId) ?? []) {
+      playerName.set(pl.id, `${pl.firstName} ${pl.lastName}`.trim());
+    }
+  }
   return plays.map((p) => ({
     quarter: p.quarter,
     clockSeconds: p.clockSeconds,
@@ -351,6 +361,7 @@ export function getScoringPlaysForGame(dynastyId: string, seasonId: number, game
     conversionPoints: p.conversionPoints,
     homeScore: p.homeScore,
     awayScore: p.awayScore,
+    scorerNames: (p.scorers ?? []).map((id) => playerName.get(id)).filter((n): n is string => !!n),
   }));
 }
 
@@ -364,6 +375,8 @@ interface ScoringPlayRaw {
   playType: 'touchdown' | 'fieldGoal' | 'safety';
   homeScore: number;
   awayScore: number;
+  /** PresentationIds credited by extract-scoring's snapshot diff; absent on old snapshots. */
+  scorers?: number[];
 }
 
 /**

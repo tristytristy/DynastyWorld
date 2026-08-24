@@ -392,7 +392,8 @@ export function playKey(play: MediaPlayTag): string {
 
 export function playLine(play: MediaPlayTag): string {
   const kind = play.playType === 'touchdown' ? 'TD' : play.playType === 'fieldGoal' ? 'FG' : 'Safety';
-  return `${playClock(play)} · ${play.teamName ?? 'Score'} ${kind} +${play.points + play.conversionPoints} → ${play.awayScore}-${play.homeScore}`;
+  const who = play.scorerNames?.length ? ` (${play.scorerNames.join(' → ')})` : '';
+  return `${playClock(play)} · ${play.teamName ?? 'Score'} ${kind}${who} +${play.points + play.conversionPoints} → ${play.awayScore}-${play.homeScore}`;
 }
 
 /**
