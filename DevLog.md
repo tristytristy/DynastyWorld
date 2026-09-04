@@ -11474,3 +11474,11 @@ sits after it, so a missing directory hangs the run instead of failing.
 **Shipped:** `scorerNames` baked into play tags at pick time (league-roster resolution, self-contained thereafter); surfaced in the Media play picker, the Tube "In this clip" line, and all three prompt sites (media comments, Board film room, Historian index). TD tags with NO credited scorer now carry an honest hint — "scorer not among the offensive leaders — possibly a defensive/special-teams or role-player TD; the frames may show which" — so a pick-six can be talked about as one without being invented. Existing tags predate the field; re-picking a clip's plays refreshes them.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Every CFP game gets a game thread (2026-09-03)
+
+**The report:** first-round week showed only 2 of 4 CFP game threads — playoff games carried mere bowl-tier weight, so loud regular bowls out-scored them and the top-5 cap dropped the rest.
+
+**Shipped:** featuredGames now flags CFP games (isNationalChampionship or a CFP_ROUND_NAMES bowl) and weights them above any regular bowl; selection guarantees EVERY playoff game a thread, with the cap applying only to the undercard (playoff week = all CFP games + 3 loudest bowls; normal week = top 5 unchanged). Board generation budget raised 9000 → 12000 tokens for 7-thread playoff weeks.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.

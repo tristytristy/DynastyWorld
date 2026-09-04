@@ -3,6 +3,7 @@ import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { resolveHandle } from './generate';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { listMediaForGame } from '../../database/media';
+import { CFP_ROUND_NAMES } from '../../shared/cfpBowls';
 import {
   clearWeekThreads,
   ensureAccounts,
@@ -77,6 +78,8 @@ function flairPoster(teamName: string): CastMember {
 
 interface FeaturedGame {
   gameId: number;
+  /** A CFP game of any round — always featured, never crowded out by bowls. */
+  isPlayoff: boolean;
   away: string;
   home: string;
   awayRank: number | null;
@@ -99,8 +102,13 @@ function featuredGames(dynastyId: string, seasonId: number, week: number, userTe
     const homeWon = g.homeScore > g.awayScore;
     const winnerRank = homeWon ? g.homeRank : g.awayRank;
     const loserRank = homeWon ? g.awayRank : g.homeRank;
+    const isPlayoff = g.isNationalChampionship || CFP_ROUND_NAMES.has(g.bowlName ?? '');
     let weight = 0;
     if (g.isNationalChampionship) weight += 100;
+    // Every playoff game outranks any regular bowl: a chaotic Potato Bowl can
+    // join the slate, but never displace a CFP game from it (user report,
+    // 2026-09-03 — first-round week showed 2 of 4 CFP games).
+    else if (isPlayoff) weight += 90;
     else if (g.weekType === 'ConferenceChampionship') weight += 60;
     else if (g.bowlName) weight += 35;
     if (winnerRank !== null && loserRank !== null) weight += 30;
@@ -113,6 +121,7 @@ function featuredGames(dynastyId: string, seasonId: number, week: number, userTe
     if (weight === 0) continue;
     out.push({
       gameId: g.gameId,
+      isPlayoff,
       away: g.awayTeamName,
       home: g.homeTeamName,
       awayRank: g.awayRank,
@@ -126,7 +135,15 @@ function featuredGames(dynastyId: string, seasonId: number, week: number, userTe
       weight,
     });
   }
-  return out.sort((a, b) => b.weight - a.weight).slice(0, 5);
+  /*
+    EVERY playoff game gets a thread — the cap only limits the undercard. A
+    CFP first-round week reads as 4 playoff threads plus the 3 loudest bowls;
+    a normal week stays at the top 5.
+  */
+  const sorted = out.sort((a, b) => b.weight - a.weight);
+  const playoff = sorted.filter((g) => g.isPlayoff);
+  const rest = sorted.filter((g) => !g.isPlayoff);
+  return [...playoff, ...rest.slice(0, Math.max(5 - playoff.length, 3))];
 }
 
 function gameThreadTitle(g: FeaturedGame): string {
@@ -330,7 +347,7 @@ export async function generateBoardWeek(
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
         BOARD_WEEK_SYSTEM,
         `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}`,
-        9000,
+        12000, // a playoff week carries up to 7 threads' worth of comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
       threads = out.threads ?? [];
