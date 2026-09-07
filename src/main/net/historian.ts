@@ -206,7 +206,7 @@ function buildTubeIndex(dynastyId: string): string {
           .map((p) => `${p.teamName ?? ''} ${p.playType}${p.scorerNames?.length ? ` by ${p.scorerNames.join(' to ')}` : ''} Q${p.quarter}`.trim())
           .join('; ')}`
       : '';
-    return `[tube:${m.id}] ${m.mediaType} "${m.description || m.fileName}"${m.gameLabel ? ` — ${m.gameLabel}` : ''}${players ? ` — players: ${players}` : ''}${plays}`;
+    return `[tube:${m.id}] ${m.mediaType} "${m.tubeTitle || m.description || m.fileName}"${m.gameLabel ? ` — ${m.gameLabel}` : ''}${players ? ` — players: ${players}` : ''}${plays}`;
   });
   return `DYNASTYTUBE INDEX (cite with [tube:ID] where relevant):\n${lines.join('\n')}`;
 }

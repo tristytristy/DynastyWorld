@@ -32,12 +32,14 @@ interface MediaRow {
   frame_y: number | null;
   frame_scale: number | null;
   look_json: string | null;
+  tube_title: string;
+  thumb_time: number | null;
   created_at: string;
 }
 
 /** The one column list every read uses, so a new column can't be added to three of four queries. */
 const MEDIA_COLS =
-  'id, season_id, file_name, media_type, game_id, album_id, description, player_ids_json, plays_json, frame_x, frame_y, frame_scale, look_json, created_at';
+  'id, season_id, file_name, media_type, game_id, album_id, description, player_ids_json, plays_json, frame_x, frame_y, frame_scale, look_json, tube_title, thumb_time, created_at';
 
 function mapRow(row: MediaRow): MediaItem {
   let playerIds: number[] = [];
@@ -72,6 +74,8 @@ function mapRow(row: MediaRow): MediaItem {
     // Presentation only, so bad JSON degrades to "untreated" rather than taking
     // the photo down with it.
     look: parseLook(row.look_json),
+    tubeTitle: row.tube_title ?? '',
+    thumbTime: row.thumb_time,
     createdAt: row.created_at,
   };
 }
@@ -281,6 +285,8 @@ export function addMediaItem(
     playerIds: [],
     framing: null,
     look: null,
+    tubeTitle: '',
+    thumbTime: null,
     createdAt,
   };
 }
@@ -295,7 +301,9 @@ export function updateMediaItem(id: number, patch: MediaItemPatch): void {
   // COALESCE keeps existing play tags when the patch doesn't carry them —
   // batch updates set game/players without wiping a clip's picked plays.
   getDb().run(
-    'UPDATE media_items SET game_id = ?, album_id = ?, description = ?, player_ids_json = ?, plays_json = COALESCE(?, plays_json) WHERE id = ?',
+    // COALESCE also guards tube_title/thumb_time: batch updates patch game and
+    // players without carrying (or clobbering) a clip's Tube presentation.
+    'UPDATE media_items SET game_id = ?, album_id = ?, description = ?, player_ids_json = ?, plays_json = COALESCE(?, plays_json), tube_title = COALESCE(?, tube_title), thumb_time = COALESCE(?, thumb_time) WHERE id = ?',
     [
       patch.gameId ?? null,
       // Exclusive by construction: a game means no album, an album means no game.
@@ -303,6 +311,8 @@ export function updateMediaItem(id: number, patch: MediaItemPatch): void {
       patch.description,
       JSON.stringify(patch.playerIds),
       patch.plays !== undefined ? JSON.stringify(patch.plays) : null,
+      patch.tubeTitle ?? null,
+      patch.thumbTime ?? null,
       id,
     ],
   );

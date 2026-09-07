@@ -2238,6 +2238,10 @@ export interface MediaItem {
   plays: MediaPlayTag[];
   /** Tagged players, as the same opaque roster player ids used app-wide; names resolve from that season's roster snapshot. */
   playerIds: number[];
+  /** The DynastyTube title — what the feed shows (schema v27). Empty = fall back to the description. */
+  tubeTitle: string;
+  /** Chosen thumbnail, as seconds into the clip (schema v27). Null = default (first moments). Images ignore it. */
+  thumbTime: number | null;
   createdAt: string;
 }
 
@@ -2280,6 +2284,10 @@ export interface MediaItemPatch {
   playerIds: number[];
   /** Omitted = leave the item's play tags as they are (batch updates never touch them). */
   plays?: MediaPlayTag[];
+  /** DynastyTube title; undefined = leave as is (batch updates never carry it). */
+  tubeTitle?: string;
+  /** Thumbnail timestamp in seconds; undefined = leave as is. */
+  thumbTime?: number;
 }
 
 /** An album the user created (schema v22) — its own folder, filled by hand. */

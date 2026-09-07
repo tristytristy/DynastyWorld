@@ -262,7 +262,7 @@ export function NetTube() {
           <img src={fileUrl(item.absolutePath)} alt={item.description} className="max-h-[480px] w-full rounded-xl bg-black object-contain" />
         )}
         <h3 className="mt-3 text-lg font-bold leading-snug text-slate-950 dark:text-white">
-          {item.description || 'Untitled highlight'}
+          {item.tubeTitle || item.description || 'Untitled highlight'}
         </h3>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {/* channel row */}
@@ -293,6 +293,9 @@ export function NetTube() {
           <p className="font-semibold text-slate-800 dark:text-slate-100">
             {formatCount(stats.views)} views · {stats.age}
           </p>
+          {item.tubeTitle && item.description && (
+            <p className="mt-1 whitespace-pre-wrap">{item.description}</p>
+          )}
           <p className="mt-1">
             {item.gameId !== null ? 'Tagged to a game' : 'No game tagged'}
             {item.playerIds.length > 0 && ` · ${item.playerIds.length} player${item.playerIds.length === 1 ? '' : 's'} tagged`}
@@ -388,7 +391,7 @@ export function NetTube() {
                   {item.mediaType === 'video' ? (
                     // #t=0.5 nudges Chromium to paint a real frame as the poster.
                     <video
-                      src={`${fileUrl(item.absolutePath)}#t=0.5`}
+                      src={`${fileUrl(item.absolutePath)}#t=${item.thumbTime ?? 0.5}`}
                       preload="metadata"
                       muted
                       className="pointer-events-none h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
@@ -408,7 +411,7 @@ export function NetTube() {
                   </div>
                   <div className="min-w-0">
                     <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-950 dark:text-white">
-                      {item.description || 'Untitled highlight'}
+                      {item.tubeTitle || item.description || 'Untitled highlight'}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                       {channel?.displayName ?? 'Your channel'}

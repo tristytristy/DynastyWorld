@@ -11508,3 +11508,12 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Divergence year is per-dynasty (min archived season year, carried on NetWeekContext as firstSeasonYear): the live save forked after real 2025; the imported CFB 26 record book forked after real 2024 — its own 2025 champion stays its own.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Tube titles + chosen thumbnails (2026-09-07)
+
+**Shipped (user request):**
+- Schema v27: `media_items.tube_title` (the YouTube-style headline the feed shows; empty falls back to the description, which now renders in the watch page's info box when both exist) and `thumb_time` (the chosen thumbnail as a timestamp into the clip — no image files to store or carry between machines; the grid seeks the video there via the #t poster nudge).
+- Media details form: a "DynastyTube title" input, and for videos a thumbnail picker that IS the video — scrub to the frame, "Use this frame as thumbnail", shown as "Pinned at M:SS". Both ride the normal Save details patch; COALESCE guards keep batch updates from clobbering either.
+- The bots see the official title too: media-comment prompts carry CLIP TITLE + the uploader's description, and the Board film room and Historian's tube index prefer the title.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.

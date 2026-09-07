@@ -797,6 +797,9 @@ function MediaDetailsForm({
   const [creatingHere, setCreatingHere] = useState(false);
   const [newAlbum, setNewAlbum] = useState('');
   const [description, setDescription] = useState(item.description);
+  const [tubeTitle, setTubeTitle] = useState(item.tubeTitle);
+  const [thumbTime, setThumbTime] = useState<number | null>(item.thumbTime);
+  const thumbVideoRef = useRef<HTMLVideoElement | null>(null);
   const [playerIds, setPlayerIds] = useState<number[]>(item.playerIds);
   const [plays, setPlays] = useState<MediaPlayTag[]>(item.plays);
   const [availablePlays, setAvailablePlays] = useState<MediaPlayTag[]>([]);
@@ -919,6 +922,52 @@ function MediaDetailsForm({
       </div>
 
       <div>
+        <p className="type-eyebrow text-slate-400 dark:text-slate-500">DynastyTube title</p>
+        <input
+          value={tubeTitle}
+          onChange={(e) => setTubeTitle(e.target.value)}
+          placeholder="The headline the Tube feed shows — leave blank to use the description"
+          aria-label="DynastyTube title"
+          className={`${inputClass} mt-1.5`}
+        />
+      </div>
+
+      {item.mediaType === 'video' && (
+        <div>
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">Thumbnail</p>
+          {/*
+            The picker IS the video: scrub to the frame you want and pin it.
+            Stored as a timestamp (schema v27), so nothing extra travels
+            between machines — the Tube grid just seeks the clip there.
+          */}
+          <video
+            ref={thumbVideoRef}
+            src={fileUrl(item.absolutePath)}
+            controls
+            muted
+            preload="metadata"
+            className="mt-1.5 max-h-44 w-full rounded bg-black"
+          />
+          <div className="mt-1.5 flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const v = thumbVideoRef.current;
+                if (v) setThumbTime(Math.round(v.currentTime * 10) / 10);
+              }}
+            >
+              Use this frame as thumbnail
+            </Button>
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              {thumbTime !== null
+                ? `Pinned at ${Math.floor(thumbTime / 60)}:${String(Math.floor(thumbTime % 60)).padStart(2, '0')}`
+                : 'Default: the opening moments'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div>
         <p className="type-eyebrow text-slate-400 dark:text-slate-500">Description</p>
         <textarea
           value={description}
@@ -978,6 +1027,8 @@ function MediaDetailsForm({
               gameId: filedUnder === 'game' ? gameId : null,
               albumId: filedUnder === 'album' ? albumId : null,
               description: description.trim(),
+              tubeTitle: tubeTitle.trim(),
+              thumbTime: thumbTime ?? undefined,
               playerIds,
               plays: filedUnder === 'game' && gameId !== null ? plays : [],
             })

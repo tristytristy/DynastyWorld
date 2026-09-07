@@ -336,7 +336,7 @@ export async function generateMediaComments(
         .join('\n');
       const raw = await generateJson<ModelPost[]>(
         COMMENTS_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP: ${item?.description || 'untitled highlight'}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP TITLE: ${item?.tubeTitle || item?.description || 'untitled highlight'}${item?.tubeTitle && item?.description ? `\nUPLOADER'S DESCRIPTION: ${item.description}` : ''}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
         2500,
         frames,
       );

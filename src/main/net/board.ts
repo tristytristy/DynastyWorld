@@ -326,7 +326,7 @@ export async function generateBoardWeek(
           .slice(0, 6)
           .map((pl) => `${pl.teamName ?? ''} ${pl.playType}${pl.scorerNames?.length ? ` by ${pl.scorerNames.join(' to ')}` : pl.playType === 'touchdown' ? ' (unlisted scorer — possibly defense/special teams)' : ''} Q${pl.quarter} (${pl.awayScore}-${pl.homeScore} after)`.trim())
           .join('; ');
-        return `  - "${m.description || m.fileName}"${players ? ` — players: ${players}` : ''}${plays ? ` — plays shown: ${plays}` : ''}`;
+        return `  - "${m.tubeTitle || m.description || m.fileName}"${m.tubeTitle && m.description ? ` (${m.description})` : ''}${players ? ` — players: ${players}` : ''}${plays ? ` — plays shown: ${plays}` : ''}`;
       });
       return `${gameThreadTitle(g)}:\n${lines.join('\n')}`;
     })
