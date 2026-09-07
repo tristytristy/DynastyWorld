@@ -1,4 +1,4 @@
-import { getDynastyById } from '../../database/helpers';
+import { getDynastyById, getSeasonsByDynasty } from '../../database/helpers';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getStandings } from '../../database/getStandings';
 import { getNationalStatLeaders } from '../../database/getNationalStatLeaders';
@@ -33,6 +33,8 @@ export interface NetLeaderLine {
 
 export interface NetWeekContext {
   seasonYear: number;
+  /** The dynasty's earliest archived season — the year this universe diverged from real CFB history (see net/canon.ts). */
+  firstSeasonYear: number;
   week: number;
   /**
    * Neutral observer mode (schema_v26): the dynasty's anchor team is a
@@ -147,8 +149,12 @@ export function buildWeekContext(dynastyId: string, seasonId: number): NetWeekCo
   for (const u of upsets.slice(0, 2)) news.add(u.winner);
   for (const c of championships) news.add(c.winner);
 
+  const seasonYears = getSeasonsByDynasty(dynastyId).map((s) => s.seasonYear);
+  const firstSeasonYear = seasonYears.length ? Math.min(...seasonYears) : overview.seasonYear;
+
   return {
     seasonYear: overview.seasonYear,
+    firstSeasonYear,
     week: latestWeek,
     neutral,
     userTeam,

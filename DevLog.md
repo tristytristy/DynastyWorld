@@ -11495,3 +11495,16 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Deep links (?media=ID from the Historian) and the season-switching lookup still work — the watch panel carries the same scroll anchor.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Shared history: real CFB canon in the Net's minds (2026-09-07)
+
+**The request:** real college-football history from before the dynasty should live in the bots' heads — occasional IRL callbacks in the feed/board, and real-team comparisons in The Shows and the Historian, the way actual coverage works.
+
+**The realization:** the knowledge was already in the generation model; our own "everything factual must come from the data" rule (written to prevent invented dynasty scores) was gagging it. No data pipeline needed — a canon declaration.
+
+**Shipped (`src/main/net/canon.ts`):**
+- `realHistoryNote(firstSeasonYear)` — seasoning strength, appended to feed weeks, user-post replies, thread replies, media comments, board weeks, and board replies: this universe IS real CFB, diverged at the dynasty's first season; everything real through the prior season is shared canon for callbacks and comparisons; dynasty-era facts still come only from the archive; nothing real after the divergence exists here.
+- `realHistoryAnalysisNote(firstSeasonYear)` — analysis strength for Throwback Thursday, The Top 10, and the Historian: real-history comparisons are expected, not just permitted ("a case against 2011 Alabama's defense"), with precision demanded. The Historian's data-only rule was rewritten to carve out pre-divergence canon explicitly.
+- Divergence year is per-dynasty (min archived season year, carried on NetWeekContext as firstSeasonYear): the live save forked after real 2025; the imported CFB 26 record book forked after real 2024 — its own 2025 champion stays its own.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.

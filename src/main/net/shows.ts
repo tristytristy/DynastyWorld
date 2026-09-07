@@ -8,6 +8,7 @@ import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { ensureAccounts, getEditions, insertPosts } from '../../database/dynastyNet';
 import { FIXED_CAST } from './cast';
 import { withBatchedPersist } from '../../database/init';
+import { realHistoryAnalysisNote } from './canon';
 import type { LeagueScoreGame } from '../../shared/types';
 import type { NetGenerateResult, Top10Topic } from '../../shared/netTypes';
 
@@ -21,6 +22,11 @@ import type { NetGenerateResult, Top10Topic } from '../../shared/netTypes';
  * database. Both get richer every archived season — a year-15 dynasty has a
  * year-15 sample to argue from.
  */
+
+function firstSeasonYearOf(dynastyId: string): number {
+  const years = getSeasonsByDynasty(dynastyId).map((s) => s.seasonYear);
+  return years.length ? Math.min(...years) : new Date().getFullYear();
+}
 
 // ---------------------------------------------------------------- throwback
 
@@ -147,8 +153,8 @@ export async function generateThrowback(dynastyId: string): Promise<NetGenerateR
     try {
       const out = await generateJson<{ title: string; body: string }>(
         THROWBACK_SYSTEM,
-        `THE MOMENT:\n${JSON.stringify(facts, null, 1)}`,
-        1200,
+        `THE MOMENT:\n${JSON.stringify(facts, null, 1)}${realHistoryAnalysisNote(firstSeasonYearOf(dynastyId))}`,
+        1400,
       );
       title = out.title;
       body = out.body;
@@ -371,7 +377,7 @@ export async function generateTop10(dynastyId: string, topicKey: string): Promis
     try {
       const out = await generateJson<{ title: string; body: string }>(
         TOP10_SYSTEM.replace('{YEARS}', data.years).replace('{N}', String(data.seasonsCount)),
-        `TOPIC: ${topic.label}\nANGLE: ${topic.angle}\n\nDATA POOL:\n${data.rows.join('\n')}`,
+        `TOPIC: ${topic.label}\nANGLE: ${topic.angle}\n\nDATA POOL:\n${data.rows.join('\n')}${realHistoryAnalysisNote(firstSeasonYearOf(dynastyId))}`,
         4000,
       );
       title = out.title;

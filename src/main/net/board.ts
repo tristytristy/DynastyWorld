@@ -4,6 +4,7 @@ import { resolveHandle } from './generate';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { listMediaForGame } from '../../database/media';
 import { CFP_ROUND_NAMES } from '../../shared/cfpBowls';
+import { realHistoryNote } from './canon';
 import {
   clearWeekThreads,
   ensureAccounts,
@@ -346,7 +347,7 @@ export async function generateBoardWeek(
       const population = boardPopulation(dynastyId);
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}`,
         12000, // a playoff week carries up to 7 threads' worth of comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
@@ -465,7 +466,7 @@ async function boardReplies(
         : boardCastPrompt();
       const replies = await generateJson<{ author: string; body: string; likes?: number }[]>(
         BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
-        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
+        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${realHistoryNote(ctx.firstSeasonYear)}\n\nTHREAD (oldest first):\n${transcript}`,
         1500,
       );
       return { replies, engine: 'claude' };

@@ -6,6 +6,7 @@ import { listAllResolvedMedia } from '../../database/media';
 import { ensureAccounts, insertPosts } from '../../database/dynastyNet';
 import { withBatchedPersist } from '../../database/init';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
+import { realHistoryAnalysisNote } from './canon';
 import type { YearSummaryData } from '../../extractors/extract-league-history';
 import type { NetGenerateResult } from '../../shared/netTypes';
 import type { NationalLeaderEntry } from '../../shared/types';
@@ -32,7 +33,7 @@ import type { NationalLeaderEntry } from '../../shared/types';
 const HISTORIAN_SYSTEM = `You are The Historian — the senior college football archivist and long-form columnist for one dynasty's private sports network. You answer questions about this dynasty's history the way a great ESPN retrospective reads: authoritative, vivid, specific, with real affection for the material.
 
 RULES:
-- Use ONLY the archive data provided. Every score, record, seed, year, and name must come from it. If the archive can't answer part of the question (e.g. seasons that carry no player stats), say so plainly and answer what it CAN support.
+- Every DYNASTY-ERA fact — scores, records, seeds, years, names from this dynasty's seasons — must come from the archive data provided. If the archive can't answer part of the question (e.g. seasons that carry no player stats), say so plainly and answer what it CAN support. Real college-football history from before this universe diverged is shared canon (see SHARED HISTORY below) and may be drawn on for comparison and context, as any real columnist would.
 - Structure the answer as an article: a strong opening, clear sections or a countdown when the question calls for a ranking, and a closing line worth quoting.
 - FOOTAGE CITATIONS: the DYNASTYTUBE INDEX lists every uploaded highlight with its id, description, game, and tagged players. When your article discusses a team, game, or player that has a matching upload, cite it inline by placing the marker [tube:ID] immediately after the sentence it supports. Only cite ids from the index — never invent footage, and don't force a citation where none fits.
 - Plain text only otherwise (no markdown headers with #; use short ALL-CAPS section labels or numbered entries instead).
@@ -233,7 +234,7 @@ export async function askHistorian(dynastyId: string, question: string): Promise
   try {
     const out = await generateJson<{ headline: string; body: string }>(
       HISTORIAN_SYSTEM,
-      `QUESTION FROM THE OWNER OF THIS DYNASTY:\n${trimmed}\n\n${tube}\n\nTHE ARCHIVE:\n${pack}`,
+      `QUESTION FROM THE OWNER OF THIS DYNASTY:\n${trimmed}\n\n${tube}\n\nTHE ARCHIVE:\n${pack}${realHistoryAnalysisNote(Math.min(...seasons.map((s) => s.seasonYear)))}`,
       9000,
     );
     if (!out.headline || !out.body) throw new NetClaudeError('Malformed article.');
