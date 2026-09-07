@@ -55,15 +55,19 @@ async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
     video.muted = true;
     video.preload = 'auto';
     const frames: string[] = [];
-    const fail = window.setTimeout(() => resolve(frames), 25000);
+    const fail = window.setTimeout(() => resolve(frames), 45000);
     video.onerror = () => {
       window.clearTimeout(fail);
       resolve(frames);
     };
     video.onloadedmetadata = () => {
-      // 7 evenly spaced stills (10%..90%) - enough to follow a highlight's
-      // arc rather than glimpse it; the API call carries up to 8 images.
-      const points = [0.1, 0.23, 0.36, 0.5, 0.63, 0.77, 0.9].map((f) => video.duration * f);
+      // Filmstrip: one frame roughly every 2 seconds - 6 at minimum, 16 at
+      // most (the API call carries up to 16 images) - evenly spaced across
+      // 5%..95% so the bots see the play develop, not three glimpses of it.
+      const frameCount = Math.max(6, Math.min(16, Math.round(video.duration / 2)));
+      const points = Array.from({ length: frameCount }, (_, i) =>
+        video.duration * (0.05 + (0.9 * i) / Math.max(1, frameCount - 1)),
+      );
       let at = 0;
       video.onseeked = () => {
         const frame = drawFrame(video, video.videoWidth, video.videoHeight);

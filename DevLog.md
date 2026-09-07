@@ -11482,3 +11482,7 @@ sits after it, so a missing directory hangs the run instead of failing.
 **Shipped:** featuredGames now flags CFP games (isNationalChampionship or a CFP_ROUND_NAMES bowl) and weights them above any regular bowl; selection guarantees EVERY playoff game a thread, with the cap applying only to the undercard (playoff week = all CFP games + 3 loudest bowls; normal week = top 5 unchanged). Board generation budget raised 9000 → 12000 tokens for 7-thread playoff weeks.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Filmstrip watching (2026-09-07)
+
+**Shipped:** frame capture is now a filmstrip — one frame roughly every 2 seconds, 6 minimum, 16 maximum, evenly spaced across the clip (API image cap raised 8 → 16; the Messages API accepts up to 100 images/request with a stricter per-image size limit past 20, verified against current docs). A 30-second highlight now sends ~15 stills, so commenters follow the play developing instead of three glimpses. Video and audio input remain unsupported by the API — this is the honest ceiling of "watching" today.

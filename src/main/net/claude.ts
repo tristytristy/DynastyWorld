@@ -37,8 +37,10 @@ export async function generateJson<T>(
   // never leave the renderer spinning on "typing..." forever.
   const client = new Anthropic({ apiKey, timeout: 180_000, maxRetries: 1 });
   const imageBlocks: Anthropic.ImageBlockParam[] = [];
-  // 8 stills is genuinely 'watching' a highlight; still a modest payload at 640px q0.7.
-  for (const dataUrl of images.slice(0, 8)) {
+  // Filmstrip cap: the API takes up to 100 images/request, but past 20 a
+  // stricter per-image size limit kicks in (docs, 2026-09) - 16 frames at
+  // 640px is a real watch of a highlight while staying well clear of both.
+  for (const dataUrl of images.slice(0, 16)) {
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) continue;
     imageBlocks.push({
