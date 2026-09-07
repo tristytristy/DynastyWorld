@@ -19,6 +19,7 @@ const api: DynastyApi = {
   db: {
     getDynasties: () => ipcRenderer.invoke(IPC.db.getDynasties),
     importDynasty: (savePath) => ipcRenderer.invoke(IPC.db.importDynasty, savePath),
+    importLegacyDynasty: () => ipcRenderer.invoke(IPC.db.importLegacyDynasty),
     checkDynastyMatch: (savePath) => ipcRenderer.invoke(IPC.db.checkDynastyMatch, savePath),
     relinkDynasty: (dynastyId, savePath) =>
       ipcRenderer.invoke(IPC.db.relinkDynasty, dynastyId, savePath),
@@ -275,6 +276,8 @@ const api: DynastyApi = {
     addFiles: (dynastyId, seasonId, filePaths) =>
       ipcRenderer.invoke(IPC.media.addFiles, dynastyId, seasonId, filePaths),
     list: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.media.list, dynastyId, seasonId),
+    scoringPlays: (dynastyId, seasonId, gameId) =>
+      ipcRenderer.invoke(IPC.media.scoringPlays, dynastyId, seasonId, gameId),
     listForPlayer: (dynastyId, playerId) =>
       ipcRenderer.invoke(IPC.media.listForPlayer, dynastyId, playerId),
     listForGame: (dynastyId, seasonId, gameId) =>
@@ -345,6 +348,35 @@ const api: DynastyApi = {
   },
   window: {
     setTitleBarTheme: (appearance) => ipcRenderer.invoke(IPC.window.setTitleBarTheme, appearance),
+  },
+  net: {
+    getFeed: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.getFeed, dynastyId, seasonId),
+    getEditions: (dynastyId, seasonId, kind) => ipcRenderer.invoke(IPC.net.getEditions, dynastyId, seasonId, kind),
+    getMediaComments: (dynastyId, mediaId) => ipcRenderer.invoke(IPC.net.getMediaComments, dynastyId, mediaId),
+    generateWeek: (dynastyId, seasonId, regenerate) => ipcRenderer.invoke(IPC.net.generateWeek, dynastyId, seasonId, regenerate),
+    postAsUser: (dynastyId, seasonId, accountId, body) => ipcRenderer.invoke(IPC.net.postAsUser, dynastyId, seasonId, accountId, body),
+    generateMediaComments: (dynastyId, seasonId, mediaId, mode, frames) =>
+      ipcRenderer.invoke(IPC.net.generateMediaComments, dynastyId, seasonId, mediaId, mode, frames),
+    getSettings: () => ipcRenderer.invoke(IPC.net.getSettings),
+    setApiKey: (apiKey) => ipcRenderer.invoke(IPC.net.setApiKey, apiKey),
+    setUserIdentity: (dynastyId, handle, displayName) =>
+      ipcRenderer.invoke(IPC.net.setUserIdentity, dynastyId, handle, displayName),
+    replyToPost: (dynastyId, seasonId, accountId, parentId, body) =>
+      ipcRenderer.invoke(IPC.net.replyToPost, dynastyId, seasonId, accountId, parentId, body),
+    getThreads: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.getThreads, dynastyId, seasonId),
+    generateBoardWeek: (dynastyId, seasonId, regenerate) =>
+      ipcRenderer.invoke(IPC.net.generateBoardWeek, dynastyId, seasonId, regenerate),
+    createThread: (dynastyId, seasonId, accountId, title, body) =>
+      ipcRenderer.invoke(IPC.net.createThread, dynastyId, seasonId, accountId, title, body),
+    replyToThread: (dynastyId, seasonId, accountId, threadId, body) =>
+      ipcRenderer.invoke(IPC.net.replyToThread, dynastyId, seasonId, accountId, threadId, body),
+    getTop10Topics: () => ipcRenderer.invoke(IPC.net.getTop10Topics),
+    generateThrowback: (dynastyId) => ipcRenderer.invoke(IPC.net.generateThrowback, dynastyId),
+    generateTop10: (dynastyId, topicKey) => ipcRenderer.invoke(IPC.net.generateTop10, dynastyId, topicKey),
+    askHistorian: (dynastyId, question) => ipcRenderer.invoke(IPC.net.askHistorian, dynastyId, question),
+    getHistorianArticles: (dynastyId) => ipcRenderer.invoke(IPC.net.getHistorianArticles, dynastyId),
+    getNeutralMode: (dynastyId) => ipcRenderer.invoke(IPC.net.getNeutralMode, dynastyId),
+    setNeutralMode: (dynastyId, neutral) => ipcRenderer.invoke(IPC.net.setNeutralMode, dynastyId, neutral),
   },
 };
 

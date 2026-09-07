@@ -76,14 +76,18 @@ export function SurfaceCard({
   children,
   className = '',
   surface = 'primary',
+  id,
 }: {
   children: ReactNode;
   className?: string;
   surface?: SurfaceLevel;
+  /** DOM id, for scroll-to targets (e.g. DynastyTube's ?media deep link). */
+  id?: string;
 }) {
   const { panel, body } = splitChildSpacing(className);
   return (
     <section
+      id={id}
       // `surface-card` is the hook the between-sections divider selects on; it
       // carries no styling of its own.
       className={`surface-card corner-cut relative backdrop-blur-sm ${SURFACE_CLASSES[surface]} ${panel}`}

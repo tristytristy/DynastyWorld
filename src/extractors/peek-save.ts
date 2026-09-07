@@ -33,8 +33,16 @@ export async function peekSave(filePath: string): Promise<SavePeek | null> {
     if (!seasonInfo) return null;
 
     const coachTable = getLargestTable(franchise, 'Coach');
-    await coachTable.readRecords(['IsUserControlled', 'TeamIndex', 'FirstName', 'LastName', 'Position']);
-    const userCoach = nonEmpty(coachTable.records).find((r) => String(r.IsUserControlled) === 'true');
+    await coachTable.readRecords(['IsUserControlled', 'TeamIndex', 'FirstName', 'LastName', 'Position', 'YearsCoaching']);
+    // A save can hold several user profiles (spectator coaches — see
+    // pickPrimaryUserCoach in extract-coaches.ts); the career coach is the
+    // one with tenure, and that's whose name the import dialog should show.
+    const userCoach = nonEmpty(coachTable.records)
+      .filter((r) => String(r.IsUserControlled) === 'true')
+      .reduce(
+        (best, r) => (best === null || Number(r.YearsCoaching) > Number(best.YearsCoaching) ? r : best),
+        null as (typeof coachTable.records)[number] | null,
+      );
 
     const teamTable = getLargestTable(franchise, 'Team');
     await teamTable.readRecords(['DisplayName', 'TeamIndex']);

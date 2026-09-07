@@ -16,6 +16,15 @@ echo(
 echo  Isolated playtest data folder:
 echo    %CFB_USER_DATA_DIR%
 echo(
+
+REM A fresh clone has no node_modules, and `npm run build` can't find
+REM webpack without it — install once here so the playtest works on a
+REM brand-new machine the same as Launch DynastyOS.bat does.
+if not exist "node_modules" (
+  echo  First run on this machine - installing packages, takes a few minutes...
+  call npm install || goto :error
+)
+
 echo  Building the current code (fast after the first run)...
 call npm run build || goto :error
 

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { BindParams, SqlValue } from 'sql.js';
 import { compactDatabase, getDatabaseFileBytes, getDb, getDbEpoch, getReusableSpaceBytes, persist } from './init';
-import { findUserTeamIndex, type CoachData } from '../extractors/extract-coaches';
+import { findUserTeamIndex, pickPrimaryUserCoach, type CoachData } from '../extractors/extract-coaches';
 import type { TeamData } from '../extractors/extract-teams';
 import type { SeasonOverviewCoach } from '../shared/types';
 
@@ -56,6 +56,7 @@ interface DynastyRow {
   updated_at: string;
   notes: string | null;
   is_active: number;
+  neutral_mode: number;
 }
 
 export interface Dynasty {
@@ -70,6 +71,8 @@ export interface Dynasty {
   updatedAt: string;
   notes: string | null;
   isActive: boolean;
+  /** Neutral observer ("commissioner") mode — the Net covers the nation with no home-team bias. See schema_v26. */
+  neutralMode: boolean;
 }
 
 function mapDynasty(row: DynastyRow): Dynasty {
@@ -85,7 +88,13 @@ function mapDynasty(row: DynastyRow): Dynasty {
     updatedAt: row.updated_at,
     notes: row.notes,
     isActive: row.is_active === 1,
+    neutralMode: row.neutral_mode === 1,
   };
+}
+
+/** Flip neutral observer mode for one dynasty — see schema_v26_neutral_mode.sql. */
+export function setDynastyNeutralMode(dynastyId: string, neutral: boolean): void {
+  run('UPDATE dynasties SET neutral_mode = ? WHERE id = ?', [neutral ? 1 : 0, dynastyId]);
 }
 
 export interface CreateDynastyInput {
@@ -514,7 +523,7 @@ export function backfillMissingSeasonTeamIds(): void {
   const coachRows = all<SeasonRow>('SELECT * FROM seasons WHERE user_coach_id IS NULL AND has_full_data = 1', []);
   for (const row of coachRows) {
     const coaches = getSnapshot<CoachData[]>(row.id, 'coaches') ?? [];
-    const userCoach = coaches.find((c) => c.isUserControlled);
+    const userCoach = pickPrimaryUserCoach(coaches, row.user_team_id ?? undefined);
     const coachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
     if (coachId === null) continue;
     run('UPDATE seasons SET user_coach_id = ? WHERE id = ?', [coachId, row.id]);

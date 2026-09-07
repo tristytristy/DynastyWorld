@@ -1,3 +1,4 @@
+import type { NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings, Top10Topic } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -2233,8 +2234,14 @@ export interface MediaItem {
   /** A user-made album (schema v22). Mutually exclusive with `gameId` — a photo is filed in exactly one place. */
   albumId: number | null;
   description: string;
+  /** The scoring plays this clip shows, picked from the game's play-by-play (schema v25). */
+  plays: MediaPlayTag[];
   /** Tagged players, as the same opaque roster player ids used app-wide; names resolve from that season's roster snapshot. */
   playerIds: number[];
+  /** The DynastyTube title — what the feed shows (schema v27). Empty = fall back to the description. */
+  tubeTitle: string;
+  /** Chosen thumbnail, as seconds into the clip (schema v27). Null = default (first moments). Images ignore it. */
+  thumbTime: number | null;
   createdAt: string;
 }
 
@@ -2243,12 +2250,44 @@ export interface MediaItemWithPath extends MediaItem {
   absolutePath: string;
 }
 
+/**
+ * One scoring play a clip shows — a self-contained descriptor picked from the
+ * game's play-by-play in the tagger (schema v25). Carries everything needed to
+ * caption it without a join back to the scoring snapshot.
+ */
+export interface MediaPlayTag {
+  quarter: number;
+  /** Seconds remaining in the quarter. */
+  clockSeconds: number;
+  teamName: string | null;
+  playType: 'touchdown' | 'fieldGoal' | 'safety';
+  points: number;
+  conversionPoints: number;
+  /** Score after the play and its try. */
+  homeScore: number;
+  awayScore: number;
+  /**
+   * Who scored, resolved to names at tag time — the thrower AND catcher on a
+   * passing TD (see extract-scoring's snapshot diffing). Empty/absent means
+   * "not recorded" (defensive, special-teams, or a role player outside the
+   * three-man stat snapshot), never "nobody". Absent on tags saved before
+   * this field existed — re-picking the plays refreshes them.
+   */
+  scorerNames?: string[];
+}
+
 export interface MediaItemPatch {
   gameId: number | null;
   /** Ignored unless `gameId` is null — the two are alternatives, not a pair. */
   albumId?: number | null;
   description: string;
   playerIds: number[];
+  /** Omitted = leave the item's play tags as they are (batch updates never touch them). */
+  plays?: MediaPlayTag[];
+  /** DynastyTube title; undefined = leave as is (batch updates never carry it). */
+  tubeTitle?: string;
+  /** Thumbnail timestamp in seconds; undefined = leave as is. */
+  thumbTime?: number;
 }
 
 /** An album the user created (schema v22) — its own folder, filled by hand. */
@@ -3128,6 +3167,8 @@ export interface DynastyApi {
   db: {
     getDynasties: () => Promise<DynastySummary[]>;
     importDynasty: (savePath: string) => Promise<ImportResult>;
+    /** Opens its own .json picker; null when the user cancels. */
+    importLegacyDynasty: () => Promise<ImportResult | null>;
     checkDynastyMatch: (savePath: string) => Promise<DynastyMatchCandidate | null>;
     relinkDynasty: (dynastyId: string, savePath: string) => Promise<ImportResult>;
     syncDynasty: (dynastyId: string) => Promise<ImportResult>;
@@ -3542,6 +3583,8 @@ export interface DynastyApi {
       filePaths: string[],
     ) => Promise<MediaItemWithPath[]>;
     list: (dynastyId: string, seasonId?: number) => Promise<MediaItemWithPath[] | undefined>;
+    /** The archived play-by-play for one game (any game in the nation), for the clip tagger. Empty when no scoring was captured for it. */
+    scoringPlays: (dynastyId: string, seasonId: number, gameId: number) => Promise<MediaPlayTag[]>;
     /** Everything this player is tagged in, across all seasons — the Media tab on player bios. */
     listForPlayer: (dynastyId: string, playerId: number) => Promise<MediaItemResolved[]>;
     /** Everything linked to one game — the media section on the Game info page. */
@@ -3650,6 +3693,59 @@ export interface DynastyApi {
     /** The updater's own settings, owned by the main process (the launch check reads them before any renderer exists). */
     getPrefs: () => Promise<UpdatePreferences>;
     setPrefs: (next: Partial<UpdatePreferences>) => Promise<UpdatePreferences>;
+  };
+  net: {
+    getFeed: (dynastyId: string, seasonId: number) => Promise<NetFeedView>;
+    getEditions: (
+      dynastyId: string,
+      seasonId: number,
+      kind: 'article' | 'podcast' | 'throwback' | 'top10',
+    ) => Promise<NetPost[]>;
+    getMediaComments: (dynastyId: string, mediaId: number) => Promise<NetPost[]>;
+    generateWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
+    postAsUser: (dynastyId: string, seasonId: number, accountId: number, body: string) => Promise<NetGenerateResult>;
+    generateMediaComments: (
+      dynastyId: string,
+      seasonId: number,
+      mediaId: number,
+      mode: 'more' | 'fresh',
+      frames: string[],
+    ) => Promise<NetGenerateResult>;
+    getSettings: () => Promise<NetSettings>;
+    setApiKey: (apiKey: string) => Promise<NetSettings>;
+    setUserIdentity: (dynastyId: string, handle: string, displayName: string) => Promise<NetIdentityResult>;
+    replyToPost: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      parentId: number,
+      body: string,
+    ) => Promise<NetGenerateResult>;
+    getThreads: (dynastyId: string, seasonId: number) => Promise<NetPost[]>;
+    generateBoardWeek: (dynastyId: string, seasonId: number, regenerate: boolean) => Promise<NetGenerateResult>;
+    createThread: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      title: string,
+      body: string,
+    ) => Promise<NetGenerateResult>;
+    replyToThread: (
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      threadId: number,
+      body: string,
+    ) => Promise<NetGenerateResult>;
+    getTop10Topics: () => Promise<Top10Topic[]>;
+    generateThrowback: (dynastyId: string) => Promise<NetGenerateResult>;
+    generateTop10: (dynastyId: string, topicKey: string) => Promise<NetGenerateResult>;
+    /** The Historian: free-form archive question -> persisted long-form article (kind 'historian'). */
+    askHistorian: (dynastyId: string, question: string) => Promise<NetGenerateResult>;
+    getHistorianArticles: (dynastyId: string) => Promise<NetPost[]>;
+    /** Neutral observer (commissioner) mode — the Net covers the nation with no home team. Per dynasty. */
+    getNeutralMode: (dynastyId: string) => Promise<boolean>;
+    setNeutralMode: (dynastyId: string, neutral: boolean) => Promise<boolean>;
   };
   window: {
     /**

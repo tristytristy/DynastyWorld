@@ -11367,3 +11367,153 @@ is itself an Electron app) and makes `electron.exe` run as plain node — the sy
 is a `getVersion` TypeError in updateService.ts that reads exactly like an updater
 bug. And `SCREENSHOT_DIR` must already exist: the write is unwrapped and `app.quit()`
 sits after it, so a missing directory hangs the run instead of failing.
+
+## Phase — DynastyNet: the save's own internet (2026-08-09)
+
+**Shipped:**
+- New top-level section **The Net** (after Media) with four tabs: **Feed** (social network — bots react to the week's real results; the user posts as `@Coach` and the cast replies), **DynastyTube** (every Media upload becomes a "video" with a bot comment section grounded in the clip's tagged game/players), **The Paper** (The Crystal Football writes a front page per generated week), **Podcasts** (4th & Forever episode summaries).
+- Schema v24 (`net_accounts`, `net_posts`): one posts table for all surfaces, discriminated by `kind` ('post'|'reply'|'comment'|'article'|'podcast'); accounts are the recurring cast per dynasty (fixed media voices + fan accounts minted for teams in the news + the user). User content never wiped by regenerate; bot content per-week replaceable (`clearWeek`).
+- Two generation engines behind one orchestrator (`src/main/net/generate.ts`): **Claude live** (`@anthropic-ai/sdk`, model `claude-opus-5`, adaptive thinking, streaming; API key stored main-process-side in `userData/dynastynet-settings.json`, renderer only ever sees a has-key flag) with automatic fallback to a **deterministic offline template engine** (`offline.ts`) — the Net always works with no key/network; same (season, week) renders the same feed.
+- Context builder (`src/main/net/context.ts`) assembles the week's story from existing DAL reads only (getLeagueScores, getStandings, getNationalStatLeaders, getSeasonOverview): user results, upsets, ranked wins, championships, top 10, stat leaders, teams-in-the-news.
+- IPC: `net:*` channels (getFeed/getEditions/getMediaComments/generateWeek/postAsUser/generateMediaComments/getSettings/setApiKey), registered alongside the other handler sets at all three startup paths.
+
+**Scope decisions:** Comments generate on demand per clip (not bulk) to keep API cost user-controlled. Articles/podcasts ride the weekly generate call rather than having their own buttons — one action populates all three surfaces.
+
+**Errors hit & fixes:** none beyond type-shape corrections during development (LeagueScoreGame rank fields are `homeRank`/`awayRank`; media list returns `MediaItemWithPath`, not resolved items).
+
+**Verification:** `tsc --noEmit` clean; full webpack build (main/preload/splash/renderer) compiles successfully (with placeholder `public/assets` in the dev container — art library lives outside git as before); `check:refs` unchanged from baseline (pre-existing manual-font miss only); eslint clean on all new files.
+
+## Phase — The Shows: Throwback Thursday + The Top 10 (2026-08-17)
+
+**Shipped:**
+- New Net tab **The Shows** with two archive-driven programs (post kinds `throwback` / `top10`, show accounts `@ThrowbackThursday` and `@TheTop10Show`).
+- **Throwback Thursday**: candidate moments scored from every archived season's league scores (championships 100, conf title 60, bowls 40, ranked-vs-ranked, upsets, one-scores, shootouts), rotates among the top tier, skips already-aired matchups. Year-one fallback: throws back to the current season's own weeks (≥4 weeks old). If a Media upload is tagged to the chosen game, the episode stores its media_id and the UI renders a "Watch the highlight on DynastyTube" link. Prompted as classic sports-doc narration with the season's final top-5 as context.
+- **The Top 10**: ~40-topic catalog (grouped: QBs, RBs, receivers, defense, teams, games) mapped to six cross-season dataset builders (national stat leaders per category; team stats + records extremes; notable games). Countdown 10→1 written from the data pool only; prompt told to acknowledge a young era and rank what the sample supports — so depth scales with dynasty length automatically. Offline fallback prints the raw ranked board.
+
+**Scope decisions:** catalog shipped at ~40 topics rather than the aspirational 100 — the six dataset builders are the real surface; topics are one-line additions from here.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.
+
+## Phase — TheSideline.net: the message board (2026-08-17)
+
+**Shipped:**
+- New Net tab **The Board** — a second internet culture beside the Feed: threads (post kind `thread` + `reply` children), no likes, board-native voices. Six forum-only regulars (OldGold_Stan the essayist elder, xX_BlitzKing_Xx the doomer, StatGuy_Larry, FireEveryone_Frank, ConcessionsConnie, Lurker_Since_09) kept separate from the Feed cast — each surface has its own culture.
+- "Let the board react to this week": 2-4 threads (post-mortems, hot takes, remember-whens) with 3-6 replies each, one generation per week (guarded), grounded in the week context + board-specific memory (getRecentPosts now takes a kinds filter).
+- The user starts threads and replies like any member; the regulars quote them with > and pile in (2-4 replies per user action). Offline fallbacks for all three actions.
+
+**Verification:** tsc clean, all four bundles compile, eslint clean on new files.
+
+## Phase — Legacy dynasty import: the CFB 26 record book (2026-08-21)
+
+**Shipped:**
+- **"Import record book"** on the Dashboard — brings a whole finished dynasty into the app from a hand-kept record document (parsed to JSON), no save file involved. First instance: the owner's 30-season CFB 26 dynasty (2025-2054), the document whose months of hand-tracking motivated this program — now browsable like any other dynasty.
+- `legacy/` in the repo holds the original .docx, the parser (`parse_masterdoc.py`, tolerant of 30 years of hand-typing drift: dash variants, singular/plural round headers, `St.`/`State`, nickname suffixes, rank prefixes), and the parsed `cfb26-dynasty.json` (format `dynastyos-legacy-dynasty-v1`).
+- Importer (`src/database/importLegacyDynasty.ts`) synthesizes real snapshot shapes so existing pages just work: `teams` (standings records + final ranks + CFP seeds; logos resolve because the renderer keys logos on display names), `schedule`/`leagueSchedule` (conference title games at week 16, CFP rounds at 17-20 with correct `playoffBracketSlot` geometry — semifinal slots assigned per-season so a differently-paired year still renders), `yearSummary`, `conferenceChampionship`, plus a `legacy` snapshot holding what has no native home yet (coach journey snapshots + season notes, national team-stat tables, the end-of-dynasty coaching table).
+- Honesty rules: only documented games become games; quarter lines stay zeros; conference records read 0-0 (unknown) rather than a guessed split; seasons are history-only (`hasFullData=false`) so stub-season handling applies; import is idempotent by `legacy:<slug>` savePath and re-imports upsert snapshots without changing season ids.
+- Validation before shipping: all 30 seasons parse to the full template (11 CFP games ×30, 9 conference championships ×30, 8-9 standings tables/yr), zero winner/score integrity failures, bracket slots verified unique 0-10 for every season.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on new files.
+
+## Phase — The Historian: ask the archive anything (2026-08-21)
+
+**Shipped:**
+- New Net tab **The Historian** — free-form questions about the dynasty's whole history ("which teams kept making the CFP and never won?", "ESPN-style breakdown of the MAC era by era"), answered as a persisted long-form article (post kind `historian`, account @TheHistorian). This closes the loop the CFB 26 record book opened: its owner kept that document specifically so an AI could be asked these questions — now the archive itself is what gets read.
+- Archive pack (`src/main/net/historian.ts`): champions/title games, all postseason results, final standings by conference, record-book team-stat tables, national player stat leaders (synced seasons), the coach journey + hand-written season notes, and the end-of-dynasty coaching table — every season contributes, cross-season questions get the full sweep.
+- **The DynastyTube rule** (owner-requested): the full media index (descriptions, game labels, tagged players, tagged plays) rides in the prompt; when the article discusses a team/game/player with matching footage it cites `[tube:ID]` inline. The renderer turns markers into "▶ watch on DynastyTube" links; NetTube gained a `?media=ID` deep link that opens the cited clip — switching seasons automatically when the clip lives in another year. Citations can only point at clips that exist (the index is the whitelist).
+- Honest no-key behavior: analysis can't be templated, so without an API key the Historian says exactly that instead of producing a fake answer.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Multiple user coach profiles: the spectator workaround (2026-08-21)
+
+**The report:** sync said "Postseason · Week 17" but the archive froze at Week 15; the dashboard claimed the coach was "OC at Clemson." The user's correction of my first diagnosis revealed the real mechanism: CFB 27 only lets you watch games your coach is part of, so the community workaround is creating throwaway user coach profiles (Members screen) at whatever teams have games worth watching — the ACC Championship means a temporary Clemson coach. Their save carries FIVE user-controlled coaches: one real (Akron) plus LSU/Clemson/Indiana/Texas Tech spectators.
+
+**The break:** every "find the user" site assumed exactly one IsUserControlled row and took the first match — which could be a spectator. The extractor then treated the dynasty as belonging to Clemson, finalizedElsewhere saw a school change, and the season write was refused.
+
+**Shipped:**
+- `pickPrimaryUserCoach` (extract-coaches): among user-controlled coaches, an archive-supplied `preferredTeamIndex` wins (the dynasty's own recorded team, passed through on sync/relink), else most YearsCoaching (spectators are brand-new; the career coach has tenure), ties keep creation order.
+- Threaded through every consumer: extractAll (which now also uses the SAME picked coach for team and coach id), syncDynasty (prefers the current season row's team over dynasty.teamId — the latter is a display cache the bad syncs had already clobbered), relinkDynasty's team-match guard, persistExtraction's coach-id anchor, helpers' season backfills, peek-save's import dialog, and recruitingWrite's board lookup.
+- Belt and braces with the previous commit: a GENUINE mid-year school change still gets the partial (league-wide-only) sync with the explanatory message; spectator profiles no longer masquerade as one.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Neutral observer (commissioner) mode (2026-08-22)
+
+**Shipped:**
+- Per-dynasty toggle (schema v26, `dynasties.neutral_mode`) in the Feed's settings panel: for dynasties whose user coach is a throwaway commissioner anchor, the Net covers the whole nation with no home team. The archive keeps the anchor untouched — it identifies the dynasty and drives sync semantics — only the fake internet's editorial stance changes.
+- Week context gains `neutral`: user team/record/rank/games blank out and the anchor never enters teamsInTheNews, so no hometown fan account gets minted. Every generation prompt (feed week, user-post replies, thread replies, media comments, board week) carries an explicit NEUTRAL COMMISSIONER note so the model can't gloss over the empty fields.
+- Board: featured-game weighting loses the +20 user-team bump (empty team matches nothing), must-cover population list drops the empty anchor, offline post-mortem thread skips the home-team line. Offline podcast already guarded its local segment; offline media comments fall back to a top-team fan for the nostalgia post.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Board v2: r/CFB authenticity + reddit-shaped UI (2026-08-22)
+
+**The direction:** the user compared generated game threads against real r/CFB post-game threads (screenshots supplied) and called the gap precisely — every generated poster wrote polished long-form bits, and the layout read as an old forum. Real game threads are short, visceral, lowercase, mostly NOT clever, with one big stats-dump comment, quote-riffs, votes, flairs, and nesting.
+
+**Shipped:**
+- BOARD_WEEK_SYSTEM rewritten as a style guide distilled from the reference threads: most comments 5-25 words, several under 10, lowercase/lol register, at most ONE effortful longer comment per thread, exactly one bullet-list stats-dump comment in the biggest game's thread (data-only nuggets, huge likes), quote-riffs ("&gt; fragment" then one line), one-level nested pile-ons, reddit-shaped like counts (top comment 800-6000, long tail small, one mildly downvoted take per week), fanbase truth (losers spiral, winners insufferable, neutrals drive by).
+- [Post Game Thread] OPs are now authored by **SidelineBot [Bot]** with a mechanical box-score body (Final line, bowl/NC label, "Box score provided by The Sideline Wire") — code-built from game data at insert time, exact titles as the join key; the model writes only the comments. Talk threads stay human-authored.
+- Replies carry likes end-to-end (weekly generation, user-thread pile-ins, in-thread replies) and support one nesting level; attachReplies gained a deep mode (board only) that assembles arbitrary reply chains.
+- NetBoard.tsx rebuilt reddit-style: vote column with ▲ and k-formatted counts, "Posted by name [flair] · wk N · M comments" metadata, flair chips (emerald for [Bot]), OP body block, comment headers with points (negative = red), nested replies behind an indent rail, ">" lines styled as quotes and "- " lines as stat bullets.
+- Offline fallback rewritten in the same casual register with the bot OP shape.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Denser watching + the Board film room (2026-08-22)
+
+**Shipped (both user-requested):**
+- Frame capture bumped 3 → 7 evenly spaced stills (10%-90%, 640px) with the API image cap raised to 8 and a longer seek budget — Tube commenters now follow a highlight's arc instead of glimpsing three moments.
+- **The film room**: Board game threads now read the DynastyTube uploads tagged to their game. Each featured game's clips contribute description, tagged players, and tagged scoring plays to the prompt, and the thread is told 1-3 commenters watched them — so details only the footage knows ("fumbled with :25 left") surface in the game thread naturally, and never get contradicted. FeaturedGame carries the save-native gameId as the join key.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Scorer names on play tags (2026-08-23)
+
+**The report:** long TD passes and a defensive TD in a tagged clip drew no specific comments — because MediaPlayTag dropped the `scorers` extract-scoring derives (thrower + catcher on passing TDs, via stat-snapshot diffing), and yardage genuinely does not exist in the save.
+
+**Shipped:** `scorerNames` baked into play tags at pick time (league-roster resolution, self-contained thereafter); surfaced in the Media play picker, the Tube "In this clip" line, and all three prompt sites (media comments, Board film room, Historian index). TD tags with NO credited scorer now carry an honest hint — "scorer not among the offensive leaders — possibly a defensive/special-teams or role-player TD; the frames may show which" — so a pick-six can be talked about as one without being invented. Existing tags predate the field; re-picking a clip's plays refreshes them.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Every CFP game gets a game thread (2026-09-03)
+
+**The report:** first-round week showed only 2 of 4 CFP game threads — playoff games carried mere bowl-tier weight, so loud regular bowls out-scored them and the top-5 cap dropped the rest.
+
+**Shipped:** featuredGames now flags CFP games (isNationalChampionship or a CFP_ROUND_NAMES bowl) and weights them above any regular bowl; selection guarantees EVERY playoff game a thread, with the cap applying only to the undercard (playoff week = all CFP games + 3 loudest bowls; normal week = top 5 unchanged). Board generation budget raised 9000 → 12000 tokens for 7-thread playoff weeks.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Filmstrip watching (2026-09-07)
+
+**Shipped:** frame capture is now a filmstrip — one frame roughly every 2 seconds, 6 minimum, 16 maximum, evenly spaced across the clip (API image cap raised 8 → 16; the Messages API accepts up to 100 images/request with a stricter per-image size limit past 20, verified against current docs). A 30-second highlight now sends ~15 stills, so commenters follow the play developing instead of three glimpses. Video and audio input remain unsupported by the API — this is the honest ceiling of "watching" today.
+
+## Phase — DynastyTube goes YouTube (2026-09-07)
+
+**Shipped (user pick from the immersion menu):**
+- **Stats without storage**: views, likes, and upload age are deterministic — seeded by clip id, grown from real upload time (`views ∝ hours^0.62` on a heavy-tailed viral base, tag richness multiplies reach) — so numbers are identical on every machine, and higher every visit. Likes ride a seeded 3.5-8.5% ratio. Channel subscriber count = base + total library views, so it climbs as the library does.
+- **YouTube layout**: home grid of thumbnail cards (real video frame via the `#t=0.5` poster nudge, hover zoom, 2-line title clamp, channel line, "12K views · 3 weeks ago"), and a watch page — player up top, title, channel row with avatar + subscriber count + Subscribed pill, like/dislike pill, a description box holding views/age/tags/plays, and the "N Comments" section with the existing generate/regenerate controls and threads.
+- Deep links (?media=ID from the Historian) and the season-switching lookup still work — the watch panel carries the same scroll anchor.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Shared history: real CFB canon in the Net's minds (2026-09-07)
+
+**The request:** real college-football history from before the dynasty should live in the bots' heads — occasional IRL callbacks in the feed/board, and real-team comparisons in The Shows and the Historian, the way actual coverage works.
+
+**The realization:** the knowledge was already in the generation model; our own "everything factual must come from the data" rule (written to prevent invented dynasty scores) was gagging it. No data pipeline needed — a canon declaration.
+
+**Shipped (`src/main/net/canon.ts`):**
+- `realHistoryNote(firstSeasonYear)` — seasoning strength, appended to feed weeks, user-post replies, thread replies, media comments, board weeks, and board replies: this universe IS real CFB, diverged at the dynasty's first season; everything real through the prior season is shared canon for callbacks and comparisons; dynasty-era facts still come only from the archive; nothing real after the divergence exists here.
+- `realHistoryAnalysisNote(firstSeasonYear)` — analysis strength for Throwback Thursday, The Top 10, and the Historian: real-history comparisons are expected, not just permitted ("a case against 2011 Alabama's defense"), with precision demanded. The Historian's data-only rule was rewritten to carve out pre-divergence canon explicitly.
+- Divergence year is per-dynasty (min archived season year, carried on NetWeekContext as firstSeasonYear): the live save forked after real 2025; the imported CFB 26 record book forked after real 2024 — its own 2025 champion stays its own.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Tube titles + chosen thumbnails (2026-09-07)
+
+**Shipped (user request):**
+- Schema v27: `media_items.tube_title` (the YouTube-style headline the feed shows; empty falls back to the description, which now renders in the watch page's info box when both exist) and `thumb_time` (the chosen thumbnail as a timestamp into the clip — no image files to store or carry between machines; the grid seeks the video there via the #t poster nudge).
+- Media details form: a "DynastyTube title" input, and for videos a thumbnail picker that IS the video — scrub to the frame, "Use this frame as thumbnail", shown as "Pinned at M:SS". Both ride the normal Save details patch; COALESCE guards keep batch updates from clobbering either.
+- The bots see the official title too: media-comment prompts carry CLIP TITLE + the uploader's description, and the Board film room and Historian's tube index prefer the title.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
