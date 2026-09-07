@@ -11486,3 +11486,12 @@ sits after it, so a missing directory hangs the run instead of failing.
 ## Phase — Filmstrip watching (2026-09-07)
 
 **Shipped:** frame capture is now a filmstrip — one frame roughly every 2 seconds, 6 minimum, 16 maximum, evenly spaced across the clip (API image cap raised 8 → 16; the Messages API accepts up to 100 images/request with a stricter per-image size limit past 20, verified against current docs). A 30-second highlight now sends ~15 stills, so commenters follow the play developing instead of three glimpses. Video and audio input remain unsupported by the API — this is the honest ceiling of "watching" today.
+
+## Phase — DynastyTube goes YouTube (2026-09-07)
+
+**Shipped (user pick from the immersion menu):**
+- **Stats without storage**: views, likes, and upload age are deterministic — seeded by clip id, grown from real upload time (`views ∝ hours^0.62` on a heavy-tailed viral base, tag richness multiplies reach) — so numbers are identical on every machine, and higher every visit. Likes ride a seeded 3.5-8.5% ratio. Channel subscriber count = base + total library views, so it climbs as the library does.
+- **YouTube layout**: home grid of thumbnail cards (real video frame via the `#t=0.5` poster nudge, hover zoom, 2-line title clamp, channel line, "12K views · 3 weeks ago"), and a watch page — player up top, title, channel row with avatar + subscriber count + Subscribed pill, like/dislike pill, a description box holding views/age/tags/plays, and the "N Comments" section with the existing generate/regenerate controls and threads.
+- Deep links (?media=ID from the Historian) and the season-switching lookup still work — the watch panel carries the same scroll anchor.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
