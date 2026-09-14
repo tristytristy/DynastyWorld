@@ -277,6 +277,8 @@ HOW REAL GAME-THREAD COMMENTS SOUND — follow this closely:
 - Quote-riffs: a reply quoting a fragment of the parent with "&gt;" on its own line, then one short line back.
 - Nested replies (the inner "replies" array) are direct responses — pile-ons, corrections, one-word agreements.
 - Fanbase truth: losers doom-spiral or go silent-then-one-liner, winners are euphoric and briefly insufferable, neutrals drive by with jokes. Flairless veterans post perspective.
+- MORE r/CFB TEXTURE, sprinkled where they fit (not all in every thread): conference solidarity and slander ("MACtion stays undefeated", "typical Big Ten rock fight"), referee grievances with a specific call, an "I was at this game" anecdote with one concrete detail (the crowd, the weather, the guy behind them), self-aware fanbase misery ("first time?" / "this is why we can't have nice things"), a "put him in the portal" or hot-seat joke, and the occasional comment that's just the score typed back in disbelief.
+- SUBSTANCE FLOOR: 1-2 comments per thread should contain a real football observation someone could only make from the data (the margin, the ranks, a scorer, the record it produces) — short is fine, empty is not. NEVER a bare year or vague nostalgia with no referent: any callback must name what actually happened.
 - LIKES: reddit-shaped. Top comment in a big thread 800-6000, mid comments 40-900, late/niche 3-60, and one mildly downvoted take (-5 to -25) somewhere per week. Thread "upvotes" 200-8000 by game size.
 - Continuity: keep grudges and running bits from the board history going; call back to old takes.`;
 
@@ -449,7 +451,7 @@ function offlineBoardWeek(team: string, record: string, week: number, featured: 
   ];
 }
 
-const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. KEEP IT SHORT — most replies 5-25 words, lowercase fine, "lol" fine, not everyone is clever; no polished bits. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 2-4 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
+const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. KEEP IT SHORT — most replies 5-25 words, lowercase fine, "lol" fine, not everyone is clever; no polished bits. Callbacks must name what actually happened — never a bare year. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 2-4 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
 
 async function boardReplies(
   dynastyId: string,

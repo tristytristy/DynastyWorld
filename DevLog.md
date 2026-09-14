@@ -11517,3 +11517,13 @@ sits after it, so a missing directory hangs the run instead of failing.
 - The bots see the official title too: media-comment prompts carry CLIP TITLE + the uploader's description, and the Board film room and Historian's tube index prefer the title.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Board authenticity v3: no empty callbacks, more r/CFB texture (2026-09-14)
+
+**The report:** comments sometimes gestured at history without content ("1987." with no referent) — the canon note invited callbacks and the shortness rule stripped their substance. Short is fine; empty is not.
+
+**Shipped:**
+- Canon note (both strengths): WHEN YOU INVOKE THE PAST, SAY THE THING — team, year, what happened ("App State walking into the Big House in 2007"); a bare year or vague "back in my day" is the tell of someone who wasn't there and is banned outright. Applies to every Net surface.
+- Board style guide: a SUBSTANCE FLOOR (1-2 comments per thread must carry a real observation only the data supports — margin, ranks, scorer, the record it makes) and more r/CFB texture to sprinkle: conference solidarity/slander, referee grievances with a specific call, "I was at this game" anecdotes with one concrete detail, self-aware fanbase misery ("first time?"), portal/hot-seat jokes, the score typed back in disbelief. Reply prompt carries the callback rule too.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.
