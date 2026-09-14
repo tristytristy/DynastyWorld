@@ -1,4 +1,4 @@
-import type { NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings, Top10Topic } from './netTypes';
+import type { NetCaptionResult, NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings, Top10Topic } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -3746,6 +3746,13 @@ export interface DynastyApi {
     /** Neutral observer (commissioner) mode — the Net covers the nation with no home team. Per dynasty. */
     getNeutralMode: (dynastyId: string) => Promise<boolean>;
     setNeutralMode: (dynastyId: string, neutral: boolean) => Promise<boolean>;
+    /** The user's board flair ('' = flairless). */
+    getBoardFlair: (dynastyId: string) => Promise<string>;
+    setBoardFlair: (dynastyId: string, flair: string) => Promise<string>;
+    /** One vote on a post; returns the new like count. */
+    votePost: (dynastyId: string, postId: number, delta: 1 | -1) => Promise<number>;
+    /** Draft a Tube title + description from frames + tags; never auto-saves. */
+    autoCaption: (dynastyId: string, seasonId: number, mediaId: number, frames: string[]) => Promise<NetCaptionResult>;
   };
   window: {
     /**

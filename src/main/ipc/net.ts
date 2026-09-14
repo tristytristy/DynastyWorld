@@ -1,13 +1,13 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
-import { getEditions, getFeedView, getHistorianArticles, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
+import { adjustPostLikes, getEditions, getFeedView, getHistorianArticles, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
 import { askHistorian } from '../net/historian';
-import { generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
+import { autoCaption, generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
-import { getDynastyById, setDynastyNeutralMode } from '../../database/helpers';
+import { getDynastyById, setDynastyBoardFlair, setDynastyNeutralMode } from '../../database/helpers';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
 import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
-import type { NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
+import type { NetCaptionResult, NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
 
 /** DynastyNet IPC — the fake internet's read + generate surface. */
 export function registerNetHandlers(): void {
@@ -159,6 +159,31 @@ export function registerNetHandlers(): void {
     setDynastyNeutralMode(dynastyId, neutral);
     return getDynastyById(dynastyId)?.neutralMode ?? false;
   });
+
+  ipcMain.handle(IPC.net.getBoardFlair, (_e, dynastyId: string): string => {
+    return getDynastyById(dynastyId)?.boardFlair ?? '';
+  });
+
+  ipcMain.handle(IPC.net.setBoardFlair, (_e, dynastyId: string, flair: string): string => {
+    setDynastyBoardFlair(dynastyId, flair);
+    return getDynastyById(dynastyId)?.boardFlair ?? '';
+  });
+
+  ipcMain.handle(IPC.net.votePost, (_e, dynastyId: string, postId: number, delta: number): number => {
+    return adjustPostLikes(dynastyId, postId, delta);
+  });
+
+  ipcMain.handle(
+    IPC.net.autoCaption,
+    async (_e, dynastyId: string, seasonId: number, mediaId: number, frames: string[] = []): Promise<NetCaptionResult> => {
+      try {
+        return await autoCaption(dynastyId, seasonId, mediaId, frames);
+      } catch (err) {
+        console.error('[net] autoCaption failed:', err);
+        return { ok: false, message: `Auto-caption failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    },
+  );
 
   ipcMain.handle(IPC.net.getSettings, (): NetSettings => getPublicSettings());
 

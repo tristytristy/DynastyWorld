@@ -223,6 +223,19 @@ export function getEditions(dynastyId: string, seasonId: number, kind: 'article'
   ).map(mapPost);
 }
 
+/**
+ * One user vote on a post — the number simply moves (user request: "your
+ * votes count"). A single-human app needs no per-user vote ledger; repeat
+ * taps are the owner enjoying their own internet.
+ */
+export function adjustPostLikes(dynastyId: string, postId: number, delta: number): number {
+  const db = getDb();
+  db.run('UPDATE net_posts SET likes = likes + ? WHERE id = ? AND dynasty_id = ?', [delta > 0 ? 1 : -1, postId, dynastyId]);
+  persist();
+  const rows = selectRows<{ likes: number }>('SELECT likes FROM net_posts WHERE id = ? AND dynasty_id = ?', [postId, dynastyId]);
+  return rows[0]?.likes ?? 0;
+}
+
 /** The Historian's published articles for a whole dynasty, newest first — cross-season by nature, unlike getEditions. */
 export function getHistorianArticles(dynastyId: string): NetPost[] {
   return selectRows<PostRow>(

@@ -235,5 +235,9 @@ export const IPC = {
     getHistorianArticles: 'net:getHistorianArticles',
     getNeutralMode: 'net:getNeutralMode',
     setNeutralMode: 'net:setNeutralMode',
+    getBoardFlair: 'net:getBoardFlair',
+    setBoardFlair: 'net:setBoardFlair',
+    votePost: 'net:votePost',
+    autoCaption: 'net:autoCaption',
   },
 } as const;

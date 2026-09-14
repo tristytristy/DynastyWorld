@@ -66,6 +66,14 @@ export interface Top10Topic {
   angle: string;
 }
 
+export interface NetCaptionResult {
+  ok: boolean;
+  message?: string;
+  /** The drafted DynastyTube title — filled into the form, never auto-saved. */
+  title?: string;
+  description?: string;
+}
+
 export interface NetIdentityResult {
   ok: boolean;
   message?: string;

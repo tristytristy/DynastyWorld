@@ -5,6 +5,7 @@ import { getLeagueScores } from '../../database/getLeagueScores';
 import { listMediaForGame } from '../../database/media';
 import { CFP_ROUND_NAMES } from '../../shared/cfpBowls';
 import { realHistoryNote } from './canon';
+import { getDynastyById } from '../../database/helpers';
 import {
   clearWeekThreads,
   ensureAccounts,
@@ -282,6 +283,15 @@ HOW REAL GAME-THREAD COMMENTS SOUND — follow this closely:
 - LIKES: reddit-shaped. Top comment in a big thread 800-6000, mid comments 40-900, late/niche 3-60, and one mildly downvoted take (-5 to -25) somewhere per week. Thread "upvotes" 200-8000 by game size.
 - Continuity: keep grudges and running bits from the board history going; call back to old takes.`;
 
+
+/** The human member's board identity line for prompts — flair means the bots treat them as that fanbase. */
+function humanFlairLine(dynastyId: string): string {
+  const flair = getDynastyById(dynastyId)?.boardFlair ?? '';
+  return flair
+    ? `\nTHE HUMAN MEMBER wears the flair [${flair}] — treat them as a ${flair} fan in this community.`
+    : '\nTHE HUMAN MEMBER wears no flair — flairless veteran treatment.';
+}
+
 export async function generateBoardWeek(
   dynastyId: string,
   seasonId: number,
@@ -349,7 +359,7 @@ export async function generateBoardWeek(
       const population = boardPopulation(dynastyId);
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
         12000, // a playoff week carries up to 7 threads' worth of comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
@@ -468,7 +478,7 @@ async function boardReplies(
         : boardCastPrompt();
       const replies = await generateJson<{ author: string; body: string; likes?: number }[]>(
         BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
-        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${realHistoryNote(ctx.firstSeasonYear)}\n\nTHREAD (oldest first):\n${transcript}`,
+        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
         1500,
       );
       return { replies, engine: 'claude' };

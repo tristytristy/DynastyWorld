@@ -3,6 +3,7 @@ import type { DragEvent as ReactDragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { useGameModal } from '../data/GameModalProvider';
+import { captureClipFrames } from '../lib/clipFrames';
 import type { CustomAlbum, LeagueScoreGame, MediaAlbum, MediaFraming, MediaItemPatch, MediaItemWithPath, MediaPlayTag, NationalPlayer, RosterPlayer, ScheduleGame, ScheduleOverview } from '../../shared/types';
 import { InfoHint } from '../components/ui/InfoHint';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
@@ -800,6 +801,29 @@ function MediaDetailsForm({
   const [tubeTitle, setTubeTitle] = useState(item.tubeTitle);
   const [thumbTime, setThumbTime] = useState<number | null>(item.thumbTime);
   const thumbVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [captioning, setCaptioning] = useState(false);
+  const [captionNotice, setCaptionNotice] = useState<string | null>(null);
+
+  async function runAutoCaption() {
+    if (captioning) return;
+    setCaptioning(true);
+    setCaptionNotice(null);
+    try {
+      const frames = await captureClipFrames(item.absolutePath, item.mediaType);
+      const result = await window.api.net.autoCaption(dynastyId, item.seasonId, item.id, frames);
+      if (result.ok) {
+        if (result.title) setTubeTitle(result.title);
+        if (result.description) setDescription(result.description);
+        setCaptionNotice('Drafted from the clip — edit anything, then Save details.');
+      } else {
+        setCaptionNotice(result.message ?? 'Auto-caption came back empty.');
+      }
+    } catch (err) {
+      setCaptionNotice(`Auto-caption broke: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setCaptioning(false);
+    }
+  }
   const [playerIds, setPlayerIds] = useState<number[]>(item.playerIds);
   const [plays, setPlays] = useState<MediaPlayTag[]>(item.plays);
   const [availablePlays, setAvailablePlays] = useState<MediaPlayTag[]>([]);
@@ -922,7 +946,18 @@ function MediaDetailsForm({
       </div>
 
       <div>
-        <p className="type-eyebrow text-slate-400 dark:text-slate-500">DynastyTube title</p>
+        <div className="flex items-center justify-between">
+          <p className="type-eyebrow text-slate-400 dark:text-slate-500">DynastyTube title</p>
+          <button
+            type="button"
+            disabled={captioning}
+            onClick={() => void runAutoCaption()}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-900 disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"
+            title="Claude watches the clip's frames and your tags, then drafts the title and description — nothing saves until you do"
+          >
+            {captioning ? 'Watching the clip…' : '✨ Auto-caption'}
+          </button>
+        </div>
         <input
           value={tubeTitle}
           onChange={(e) => setTubeTitle(e.target.value)}
@@ -930,6 +965,7 @@ function MediaDetailsForm({
           aria-label="DynastyTube title"
           className={`${inputClass} mt-1.5`}
         />
+        {captionNotice && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{captionNotice}</p>}
       </div>
 
       {item.mediaType === 'video' && (

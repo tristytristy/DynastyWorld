@@ -57,6 +57,7 @@ interface DynastyRow {
   notes: string | null;
   is_active: number;
   neutral_mode: number;
+  board_flair: string;
 }
 
 export interface Dynasty {
@@ -73,6 +74,8 @@ export interface Dynasty {
   isActive: boolean;
   /** Neutral observer ("commissioner") mode — the Net covers the nation with no home-team bias. See schema_v26. */
   neutralMode: boolean;
+  /** The user's team flair on TheSideline.net (schema v28). Empty = flairless. */
+  boardFlair: string;
 }
 
 function mapDynasty(row: DynastyRow): Dynasty {
@@ -89,7 +92,13 @@ function mapDynasty(row: DynastyRow): Dynasty {
     notes: row.notes,
     isActive: row.is_active === 1,
     neutralMode: row.neutral_mode === 1,
+    boardFlair: row.board_flair ?? '',
   };
+}
+
+/** Set (or clear, with '') the user's board flair — see schema_v28_board_flair.sql. */
+export function setDynastyBoardFlair(dynastyId: string, flair: string): void {
+  run('UPDATE dynasties SET board_flair = ? WHERE id = ?', [flair.slice(0, 40), dynastyId]);
 }
 
 /** Flip neutral observer mode for one dynasty — see schema_v26_neutral_mode.sql. */

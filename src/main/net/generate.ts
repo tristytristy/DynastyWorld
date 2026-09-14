@@ -21,7 +21,7 @@ import { getRoster } from '../../database/getRoster';
 import { getSchedule } from '../../database/getSchedule';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getAllLeaguePlayers } from '../../database/getLeagueRoster';
-import type { NetAccount, NetGenerateResult, NetPost } from '../../shared/netTypes';
+import type { NetAccount, NetCaptionResult, NetGenerateResult, NetPost } from '../../shared/netTypes';
 
 /**
  * Generation orchestrator: builds the week's context from the archive, asks
@@ -282,6 +282,72 @@ export async function replyToUserPost(
 const COMMENTS_SYSTEM = `You write the comment section under a highlight upload on a fictional video site for a college-football video-game dynasty. Bots argue about GOATs, stats, worst moments, favorite plays, clutch moments — grounded in the clip's real game and players. If still frames from the clip are attached, you have WATCHED it: react to what actually happens on screen (the play, the formations, the broadcast score bug — read it for score/time/quarter if visible). Return ONLY JSON: [{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}] with 3-5 top-level comments, 0-2 replies each. Use only cast handles.`;
 
 export type MediaCommentMode = 'more' | 'fresh';
+
+
+const CAPTION_SYSTEM = `You run a college-football highlights channel on DynastyTube (a fictional video site for a video-game dynasty universe). You are shown frames of an upload plus its verified facts. Write its title and description the way a real CFB highlights channel would:
+- TITLE: punchy, under 80 characters, energy welcome (caps for the big moment, at most one emoji), and TRUE — every claim must come from the facts or be visible in the frames. Never invent yardage, records, or names.
+- DESCRIPTION: 1-3 plain sentences with the matchup/score context and what the clip shows.
+Return ONLY JSON: {"title","description"}.`;
+
+/**
+ * Drafts a Tube title + description from the clip's frames and tags (user
+ * request — the "creator workflow" button). Returns the draft for the form;
+ * the user approves by saving. Live engine only: a template caption would be
+ * worse than the description the user would have typed.
+ */
+export async function autoCaption(
+  dynastyId: string,
+  seasonId: number,
+  mediaId: number,
+  frames: string[] = [],
+): Promise<NetCaptionResult> {
+  if (!hasLiveEngine()) {
+    return { ok: false, message: 'Auto-caption needs the live engine — add your Claude API key on the Feed page.' };
+  }
+  const ctx = buildWeekContext(dynastyId, seasonId);
+  if (!ctx) return { ok: false, message: 'No synced data for this season yet.' };
+
+  // Mirrors generateMediaComments' fact assembly — same labels, same fallbacks.
+  const items = listMediaItems(dynastyId, seasonId) ?? [];
+  const item = items.find((m) => m.id === mediaId);
+  if (!item) return { ok: false, message: 'That upload no longer exists.' };
+  const roster = getRoster(dynastyId, seasonId) ?? [];
+  const leaguePlayers = getAllLeaguePlayers(dynastyId, seasonId) ?? [];
+  const players = (item.playerIds ?? [])
+    .map((pid) => roster.find((p) => p.id === pid) ?? leaguePlayers.find((p) => p.id === pid))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => `${p.firstName} ${p.lastName} (${p.position})`);
+  const schedule = getSchedule(dynastyId, seasonId);
+  const game = item.gameId != null ? schedule?.games.find((g) => g.gameId === item.gameId) ?? null : null;
+  const leagueGame =
+    !game && item.gameId != null
+      ? getLeagueScores(dynastyId, seasonId)?.games.find((g) => g.gameId === item.gameId) ?? null
+      : null;
+  const gameLabel = game
+    ? `${ctx.userTeam} ${game.teamScore ?? ''}-${game.opponentScore ?? ''} ${game.isHome ? 'vs' : 'at'} ${game.opponent}, week ${game.week}`
+    : leagueGame
+      ? `${leagueGame.awayTeamName} ${leagueGame.awayScore ?? ''}-${leagueGame.homeScore ?? ''} at ${leagueGame.homeTeamName}, week ${leagueGame.week}`
+      : null;
+  const playLines = (item.plays ?? [])
+    .map(
+      (p) =>
+        `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} — ${p.teamName ?? 'score'} ${p.playType}${p.scorerNames?.length ? ` by ${p.scorerNames.join(' to ')}` : ''}, score after: ${p.awayScore}-${p.homeScore}`,
+    )
+    .join('\n');
+
+  try {
+    const out = await generateJson<{ title: string; description: string }>(
+      CAPTION_SYSTEM,
+      `THE FACTS:\nGAME: ${gameLabel ?? 'not tagged'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN:\n${playLines}` : ''}${item.description ? `\nUPLOADER'S OWN NOTE: ${item.description}` : ''}`,
+      800,
+      frames,
+    );
+    if (!out.title) throw new NetClaudeError('No title came back.');
+    return { ok: true, title: out.title.slice(0, 120), description: (out.description ?? '').slice(0, 600) };
+  } catch (err) {
+    return { ok: false, message: `Auto-caption failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
 
 export async function generateMediaComments(
   dynastyId: string,

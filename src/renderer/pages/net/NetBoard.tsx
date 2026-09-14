@@ -71,31 +71,64 @@ function CommentBody({ body }: { body: string }) {
   );
 }
 
-function CommentHeader({ post }: { post: NetPost }) {
-  const { name, flair } = splitFlair(post.displayName);
+function CommentHeader({
+  post,
+  userFlair,
+  onVote,
+}: {
+  post: NetPost;
+  userFlair: string;
+  onVote: (postId: number, delta: 1 | -1) => void;
+}) {
   const isUser = post.accountKind === 'user';
+  const { name, flair } = isUser ? { name: post.displayName, flair: userFlair || null } : splitFlair(post.displayName);
   const bot = flair === 'Bot';
   return (
-    <p className="flex flex-wrap items-baseline text-xs">
+    <p className="flex flex-wrap items-center text-xs">
       <span className={`font-bold ${isUser ? 'text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>{name}</span>
       <FlairChip flair={flair} bot={bot} />
       <span className={`ml-2 ${post.likes < 0 ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
         {formatVotes(post.likes)} point{Math.abs(post.likes) === 1 ? '' : 's'}
       </span>
+      {/* your votes count — each tap really moves the number */}
+      <span className="ml-1.5 inline-flex overflow-hidden rounded-full">
+        <button
+          className="px-1 text-slate-400 hover:text-orange-600 dark:text-slate-500 dark:hover:text-orange-400"
+          title="Upvote"
+          onClick={() => onVote(post.id, 1)}
+        >
+          ▲
+        </button>
+        <button
+          className="px-1 text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400"
+          title="Downvote"
+          onClick={() => onVote(post.id, -1)}
+        >
+          ▼
+        </button>
+      </span>
     </p>
   );
 }
 
-function Comment({ post }: { post: NetPost }) {
+function Comment({
+  post,
+  userFlair,
+  onVote,
+}: {
+  post: NetPost;
+  userFlair: string;
+  onVote: (postId: number, delta: 1 | -1) => void;
+}) {
   return (
     <div className="pt-3">
-      <CommentHeader post={post} />
+      <CommentHeader post={post} userFlair={userFlair} onVote={onVote} />
       <CommentBody body={post.body} />
       {post.replies.length > 0 && (
         <div className="ml-2 mt-1 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
           {post.replies.map((r) => (
             <div key={r.id} className="pt-2">
-              <CommentHeader post={r} />
+              <CommentHeader post={r} userFlair={userFlair} onVote={onVote} />
               <CommentBody body={r.body} />
             </div>
           ))}
@@ -118,6 +151,20 @@ export function NetBoard() {
   const [titleDraft, setTitleDraft] = useState('');
   const [bodyDraft, setBodyDraft] = useState('');
   const [replyDraft, setReplyDraft] = useState('');
+  const [userFlair, setUserFlair] = useState('');
+  const [teamNames, setTeamNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    window.api.net.getBoardFlair(id).then(setUserFlair);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || selectedSeasonId === undefined) return;
+    window.api.db
+      .getLeagueTeams(id, selectedSeasonId)
+      .then((teams) => setTeamNames((teams ?? []).map((t) => t.displayName).sort((a, b) => a.localeCompare(b))));
+  }, [id, selectedSeasonId]);
 
   const reload = useCallback(() => {
     if (!id || selectedSeasonId === undefined) return;
@@ -130,6 +177,22 @@ export function NetBoard() {
   }, [reload]);
 
   if (!id || selectedSeasonId === undefined) return null;
+
+  const vote = (postId: number, delta: 1 | -1) => {
+    void window.api.net.votePost(id, postId, delta).then((likes) => {
+      // Patch the number in place — a full reload would collapse the thread.
+      setThreads((prev) => {
+        const patch = (p: NetPost): NetPost =>
+          p.id === postId ? { ...p, likes } : { ...p, replies: p.replies.map(patch) };
+        return prev.map(patch);
+      });
+    });
+  };
+
+  const saveFlair = (flair: string) => {
+    setUserFlair(flair);
+    void window.api.net.setBoardFlair(id, flair).then(setUserFlair);
+  };
 
   const generateWeek = async (regenerate: boolean) => {
     setBusy('week');
@@ -200,8 +263,24 @@ export function NetBoard() {
           >
             Regenerate week
           </button>
+          <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            Your flair
+            <select
+              value={userFlair}
+              onChange={(e) => saveFlair(e.target.value)}
+              className="border border-slate-300/80 bg-transparent px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-900"
+              title="Wear a team's colors on the board, or stay flairless old-guard — the regulars will treat you accordingly"
+            >
+              <option value="">flairless</option>
+              {teamNames.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
-            className={`${buttonClass} ml-auto`}
+            className={buttonClass}
             disabled={!userAccount}
             onClick={() => setComposing((v) => !v)}
           >
@@ -253,18 +332,33 @@ export function NetBoard() {
       <div className="space-y-2">
         {threads.map((t) => {
           const open = openId === t.id;
-          const { name: opName, flair: opFlair } = splitFlair(t.displayName);
           const isUser = t.accountKind === 'user';
+          const { name: opName, flair: opFlair } = isUser
+            ? { name: t.displayName, flair: userFlair || null }
+            : splitFlair(t.displayName);
           const commentCount = countComments(t);
           return (
             <SurfaceCard key={t.id}>
-              <button className="block w-full text-left" onClick={() => { setOpenId(open ? null : t.id); setReplyDraft(''); }}>
-                <div className="flex items-start gap-3">
-                  {/* vote column, reddit-style */}
-                  <div className="flex w-10 shrink-0 flex-col items-center pt-0.5 text-slate-400 dark:text-slate-500">
-                    <span aria-hidden className="text-sm leading-none">▲</span>
-                    <span className="mt-0.5 text-xs font-bold text-slate-600 dark:text-slate-300">{formatVotes(t.likes)}</span>
-                  </div>
+              <div className="flex items-start gap-3">
+                {/* vote column, reddit-style — and the votes are yours to cast */}
+                <div className="flex w-10 shrink-0 flex-col items-center pt-0.5">
+                  <button
+                    className="text-sm leading-none text-slate-400 hover:text-orange-600 dark:text-slate-500 dark:hover:text-orange-400"
+                    title="Upvote"
+                    onClick={() => vote(t.id, 1)}
+                  >
+                    ▲
+                  </button>
+                  <span className={`my-0.5 text-xs font-bold ${t.likes < 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{formatVotes(t.likes)}</span>
+                  <button
+                    className="text-sm leading-none text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400"
+                    title="Downvote"
+                    onClick={() => vote(t.id, -1)}
+                  >
+                    ▼
+                  </button>
+                </div>
+                <button className="block min-w-0 flex-1 text-left" onClick={() => { setOpenId(open ? null : t.id); setReplyDraft(''); }}>
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] font-bold leading-snug text-slate-950 dark:text-white">{t.title}</p>
                     <p className="mt-0.5 flex flex-wrap items-baseline text-xs text-slate-400 dark:text-slate-500">
@@ -276,8 +370,8 @@ export function NetBoard() {
                       <span className="ml-2">· wk {t.week} · {commentCount} comment{commentCount === 1 ? '' : 's'}</span>
                     </p>
                   </div>
-                </div>
-              </button>
+                </button>
+              </div>
               {open && (
                 <div className="mt-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
                   {t.body.trim() !== '' && (
@@ -287,7 +381,7 @@ export function NetBoard() {
                   )}
                   <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
                     {t.replies.map((r) => (
-                      <Comment key={r.id} post={r} />
+                      <Comment key={r.id} post={r} userFlair={userFlair} onVote={vote} />
                     ))}
                   </div>
                   {userAccount && (

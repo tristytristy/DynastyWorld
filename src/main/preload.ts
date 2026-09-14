@@ -377,6 +377,11 @@ const api: DynastyApi = {
     getHistorianArticles: (dynastyId) => ipcRenderer.invoke(IPC.net.getHistorianArticles, dynastyId),
     getNeutralMode: (dynastyId) => ipcRenderer.invoke(IPC.net.getNeutralMode, dynastyId),
     setNeutralMode: (dynastyId, neutral) => ipcRenderer.invoke(IPC.net.setNeutralMode, dynastyId, neutral),
+    getBoardFlair: (dynastyId) => ipcRenderer.invoke(IPC.net.getBoardFlair, dynastyId),
+    setBoardFlair: (dynastyId, flair) => ipcRenderer.invoke(IPC.net.setBoardFlair, dynastyId, flair),
+    votePost: (dynastyId, postId, delta) => ipcRenderer.invoke(IPC.net.votePost, dynastyId, postId, delta),
+    autoCaption: (dynastyId, seasonId, mediaId, frames) =>
+      ipcRenderer.invoke(IPC.net.autoCaption, dynastyId, seasonId, mediaId, frames),
   },
 };
 

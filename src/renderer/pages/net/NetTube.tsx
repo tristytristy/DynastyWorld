@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import type { MediaItemWithPath } from '../../../shared/types';
+import type { CustomAlbum, MediaItemWithPath } from '../../../shared/types';
 import type { NetAccount, NetPost } from '../../../shared/netTypes';
 import { PageMasthead } from '../../components/common/PageMasthead';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { PostCard } from './NetPost';
+import { captureClipFrames } from '../../lib/clipFrames';
 
 /**
  * DynastyTube — the Media gallery reframed as a video site. Every tagged
@@ -65,70 +66,8 @@ function ageLabel(uploadedAt: number): string {
   return `${Math.floor(days / 365)} year${Math.floor(days / 365) === 1 ? '' : 's'} ago`;
 }
 
-const FRAME_WIDTH = 640;
-
-function drawFrame(source: HTMLVideoElement | HTMLImageElement, width: number, height: number): string | null {
-  const canvas = document.createElement('canvas');
-  const scale = Math.min(1, FRAME_WIDTH / Math.max(1, width));
-  canvas.width = Math.round(width * scale);
-  canvas.height = Math.round(height * scale);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  try {
-    return canvas.toDataURL('image/jpeg', 0.7);
-  } catch {
-    return null; // canvas tainted or codec issue — comments still work, just unseen
-  }
-}
-
-/** Stills for the model: the image itself, or four spread-out frames of a video. */
 async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
-  const url = fileUrl(item.absolutePath);
-  if (item.mediaType === 'image') {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const frame = drawFrame(img, img.naturalWidth, img.naturalHeight);
-        resolve(frame ? [frame] : []);
-      };
-      img.onerror = () => resolve([]);
-      img.src = url;
-    });
-  }
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.muted = true;
-    video.preload = 'auto';
-    const frames: string[] = [];
-    const fail = window.setTimeout(() => resolve(frames), 45000);
-    video.onerror = () => {
-      window.clearTimeout(fail);
-      resolve(frames);
-    };
-    video.onloadedmetadata = () => {
-      // Filmstrip: one frame roughly every 2 seconds - 6 at minimum, 16 at
-      // most (the API call carries up to 16 images) - evenly spaced across
-      // 5%..95% so the bots see the play develop, not three glimpses of it.
-      const frameCount = Math.max(6, Math.min(16, Math.round(video.duration / 2)));
-      const points = Array.from({ length: frameCount }, (_, i) =>
-        video.duration * (0.05 + (0.9 * i) / Math.max(1, frameCount - 1)),
-      );
-      let at = 0;
-      video.onseeked = () => {
-        const frame = drawFrame(video, video.videoWidth, video.videoHeight);
-        if (frame) frames.push(frame);
-        at += 1;
-        if (at < points.length) video.currentTime = points[at];
-        else {
-          window.clearTimeout(fail);
-          resolve(frames);
-        }
-      };
-      video.currentTime = points[0];
-    };
-    video.src = url;
-  });
+  return captureClipFrames(item.absolutePath, item.mediaType);
 }
 
 export function NetTube() {
@@ -142,6 +81,14 @@ export function NetTube() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [channel, setChannel] = useState<NetAccount | null>(null);
+  const [playlists, setPlaylists] = useState<CustomAlbum[]>([]);
+  const [playlistId, setPlaylistId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!id || selectedSeasonId === undefined) return;
+    setPlaylistId(null);
+    window.api.media.listCustomAlbums(id, selectedSeasonId).then((albums) => setPlaylists(albums ?? []));
+  }, [id, selectedSeasonId]);
 
   const refresh = useCallback(() => {
     if (!id || selectedSeasonId === undefined) return;
@@ -370,10 +317,35 @@ export function NetTube() {
 
       {openItem && watchPage(openItem)}
 
+      {/* playlists — the Media albums, worn as a channel's playlist rail */}
+      {playlists.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${playlistId === null ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+            onClick={() => setPlaylistId(null)}
+          >
+            All uploads
+          </button>
+          {playlists.map((pl) => {
+            const count = items.filter((m) => m.albumId === pl.id).length;
+            return (
+              <button
+                key={pl.id}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${playlistId === pl.id ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                onClick={() => setPlaylistId(playlistId === pl.id ? null : pl.id)}
+              >
+                ▶ {pl.name}{count > 0 ? ` (${count})` : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* the home grid — thumbnails, titles, channel line, views · age */}
       <div className="grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {items
           .filter((item) => item.id !== openId)
+          .filter((item) => playlistId === null || item.albumId === playlistId)
           .map((item) => {
             const stats = tubeStats(item);
             return (

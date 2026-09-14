@@ -11527,3 +11527,13 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Board style guide: a SUBSTANCE FLOOR (1-2 comments per thread must carry a real observation only the data supports — margin, ranks, scorer, the record it makes) and more r/CFB texture to sprinkle: conference solidarity/slander, referee grievances with a specific call, "I was at this game" anecdotes with one concrete detail, self-aware fanbase misery ("first time?"), portal/hot-seat jokes, the score typed back in disbelief. Reply prompt carries the callback rule too.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Flair, real votes, auto-caption, playlists (2026-09-14)
+
+**Shipped (user picks #2/#3 Board, #5/#7 Tube):**
+- **Your flair** (schema v28, dynasties.board_flair): a picker in the Board toolbar — any team in the league, or flairless. Board-only identity (the Feed account stays plain); your posts and comments wear the chip, and both board prompts carry a THE HUMAN MEMBER line so the regulars treat you as that fanbase (or give flairless-veteran respect).
+- **Your votes count**: ▲/▼ on every thread and comment really move the number (adjustPostLikes; no vote ledger on purpose — a single-human app's owner may enjoy their own internet). Thread rows restructured so the vote column sits beside, not inside, the expand button; counts patch in place without collapsing the thread.
+- **Auto-caption**: ✨ button beside the Tube title field in the Media editor — captures the filmstrip (shared lib/clipFrames.ts, also now used by the Tube), sends frames + game/players/plays facts to a caption prompt, and fills the title + description fields as a DRAFT; nothing saves until Save details. Live engine only.
+- **Playlists**: custom Media albums appear as a playlist rail on the Tube home ("▶ 2026 Playoff Run (6)"), filtering the grid; All uploads restores.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
