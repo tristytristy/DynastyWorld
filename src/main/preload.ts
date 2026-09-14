@@ -380,6 +380,7 @@ const api: DynastyApi = {
     getBoardFlair: (dynastyId) => ipcRenderer.invoke(IPC.net.getBoardFlair, dynastyId),
     setBoardFlair: (dynastyId, flair) => ipcRenderer.invoke(IPC.net.setBoardFlair, dynastyId, flair),
     votePost: (dynastyId, postId, delta) => ipcRenderer.invoke(IPC.net.votePost, dynastyId, postId, delta),
+    generateSelection: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.generateSelection, dynastyId, seasonId),
     autoCaption: (dynastyId, seasonId, mediaId, frames) =>
       ipcRenderer.invoke(IPC.net.autoCaption, dynastyId, seasonId, mediaId, frames),
   },

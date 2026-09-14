@@ -11537,3 +11537,12 @@ sits after it, so a missing directory hangs the run instead of failing.
 - **Playlists**: custom Media albums appear as a playlist rail on the Tube home ("▶ 2026 Playoff Run (6)"), filtering the grid; All uploads restores.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — Selection Sunday special + the 2025 canon anchor (2026-09-14)
+
+**Shipped:**
+- **🏈 Bracket reveal** (Board toolbar): fires in the window between entering the postseason and the first round kicking off — CFP first-round games present in the archive, none played. Builds the field from the CFP poll (seeds, byes, the bubble teams just OUTSIDE), the first-round matchups, and notable bowl pairings; the feed cast and the whole board population react together: committee outrage, the snub discourse (the best team left out is instructed to dominate a conversation), seeding debates, path-mapping. Content lands additively on the championship week — Selection Sunday follows championship Saturday — so it never collides with the bowl weeks' later game threads. Honest refusals outside the window ("the first round has already kicked off — the game threads take it from here").
+- **The 2025 anchor** (canon.ts): the user's League History screenshots settled the game's canonical 2025 — 16-0 Indiana over Miami 27-21 under Cignetti — which sits right at the model's training horizon. Injected into both canon notes only for dynasties that diverged at 2026, so the record book's own 2025 stays untouched.
+- Probe verdict recorded: the save's LeagueHistory tables carry dynasty years only (pre-2026 year-by-year history is game content, unreachable); per-team ALL-TIME totals (Alabama 1006 wins etc.) are in the save and already extracted.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.

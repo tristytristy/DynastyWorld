@@ -239,5 +239,6 @@ export const IPC = {
     setBoardFlair: 'net:setBoardFlair',
     votePost: 'net:votePost',
     autoCaption: 'net:autoCaption',
+    generateSelection: 'net:generateSelection',
   },
 } as const;

@@ -3751,6 +3751,8 @@ export interface DynastyApi {
     setBoardFlair: (dynastyId: string, flair: string) => Promise<string>;
     /** One vote on a post; returns the new like count. */
     votePost: (dynastyId: string, postId: number, delta: 1 | -1) => Promise<number>;
+    /** Selection Sunday: the Net reacts to a freshly revealed CFP bracket (feed posts + board threads). */
+    generateSelection: (dynastyId: string, seasonId: number) => Promise<NetGenerateResult>;
     /** Draft a Tube title + description from frames + tags; never auto-saves. */
     autoCaption: (dynastyId: string, seasonId: number, mediaId: number, frames: string[]) => Promise<NetCaptionResult>;
   };

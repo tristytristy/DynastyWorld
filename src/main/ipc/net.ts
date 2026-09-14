@@ -7,6 +7,7 @@ import { getPublicSettings, setApiKey } from '../net/settings';
 import { getDynastyById, setDynastyBoardFlair, setDynastyNeutralMode } from '../../database/helpers';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
 import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
+import { generateSelectionReaction } from '../net/selection';
 import type { NetCaptionResult, NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
 
 /** DynastyNet IPC — the fake internet's read + generate surface. */
@@ -159,6 +160,23 @@ export function registerNetHandlers(): void {
     setDynastyNeutralMode(dynastyId, neutral);
     return getDynastyById(dynastyId)?.neutralMode ?? false;
   });
+
+  ipcMain.handle(
+    IPC.net.generateSelection,
+    async (_e, dynastyId: string, seasonId: number): Promise<NetGenerateResult> => {
+      try {
+        return await generateSelectionReaction(dynastyId, seasonId);
+      } catch (err) {
+        console.error('[net] generateSelection failed:', err);
+        return {
+          ok: false,
+          engine: 'offline',
+          message: `The reveal special failed: ${err instanceof Error ? err.message : String(err)}`,
+          postsAdded: 0,
+        };
+      }
+    },
+  );
 
   ipcMain.handle(IPC.net.getBoardFlair, (_e, dynastyId: string): string => {
     return getDynastyById(dynastyId)?.boardFlair ?? '';

@@ -194,6 +194,20 @@ export function NetBoard() {
     void window.api.net.setBoardFlair(id, flair).then(setUserFlair);
   };
 
+  const reactToBracket = async () => {
+    setBusy('week');
+    setNotice(null);
+    try {
+      const result = await window.api.net.generateSelection(id, selectedSeasonId);
+      if (result.message) setNotice(result.message);
+      reload();
+    } catch (err) {
+      setNotice(`Something broke: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const generateWeek = async (regenerate: boolean) => {
     setBusy('week');
     setNotice(null);
@@ -262,6 +276,14 @@ export function NetBoard() {
             title="Wipe this week's bot threads and regenerate them (your threads and replies stay)"
           >
             Regenerate week
+          </button>
+          <button
+            className={buttonClass}
+            disabled={busy !== null}
+            onClick={() => void reactToBracket()}
+            title="Fire between entering the postseason and the first round kicking off: the Feed and Board react to the bracket reveal — snubs, seeding outrage, paths to the title"
+          >
+            🏈 Bracket reveal
           </button>
           <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             Your flair
