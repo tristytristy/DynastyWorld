@@ -11546,3 +11546,13 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Probe verdict recorded: the save's LeagueHistory tables carry dynasty years only (pre-2026 year-by-year history is game content, unreachable); per-team ALL-TIME totals (Alabama 1006 wins etc.) are in the save and already extracted.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Cloud launcher: PC-to-PC sync with zero app changes (2026-09-17)
+
+**The ask:** "can the final program have a 'cloud' that transfers from PC to PC?" A real cloud backend (accounts, a server, conflict resolution) is overkill for a one-or-two-human app — but the app already funnels its ENTIRE data location through one env var (`CFB_USER_DATA_DIR`, main.ts sets Electron userData from it before the single-instance lock), so pointing both PCs at the same cloud-synced folder gets true follow-you data for free.
+
+**Shipped:**
+- **Playtest-Cloud.bat**: same launcher as Playtest-Isolated.bat, but the data folder is `<cloud root>\CFB-Playtest-Data`. Auto-detects OneDrive (env var), then Dropbox, then Google Drive under the user profile; a commented `CLOUD_ROOT` line at the top forces any other path. First run offers a one-time migration: if the cloud folder doesn't exist but the old local `%USERPROFILE%\CFB-Playtest-Data` does, it copies the data up (local copy left as a backup). Echo output carries the two rules that make this safe: never run on two PCs at once, and wait for green checkmarks before launching on the other machine.
+- Why it's safer than it sounds: sql.js persists by rewriting the database as a whole file, so the sync client always sees complete files — no partially-written page corruption like a live WAL database would risk.
+
+**Not done on purpose:** no live server, no merge. The cloud folder is the single source of truth; last writer wins, which is exactly the "replace, not merge" model already in use for the manual hard-drive transfer.
