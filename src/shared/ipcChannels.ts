@@ -240,5 +240,7 @@ export const IPC = {
     votePost: 'net:votePost',
     autoCaption: 'net:autoCaption',
     generateSelection: 'net:generateSelection',
+    getInbox: 'net:getInbox',
+    markInboxSeen: 'net:markInboxSeen',
   },
 } as const;

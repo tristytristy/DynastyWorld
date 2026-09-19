@@ -66,6 +66,36 @@ export interface Top10Topic {
   angle: string;
 }
 
+/** Runtime + frame clock positions of a captured clip — lets comment
+ *  generation cite real, seekable timestamps ("0:47 he's GONE"). */
+export interface NetClipInfo {
+  durationSeconds?: number;
+  /** Seconds into the clip of each attached frame, in frame order. */
+  frameTimes?: number[];
+}
+
+/** One reply to something the human member posted — the Board inbox row. */
+export interface NetInboxItem {
+  id: number;
+  handle: string;
+  displayName: string;
+  body: string;
+  likes: number;
+  week: number;
+  createdAt: string;
+  /** What the user wrote that this replies to (truncated). */
+  inReplyTo: string;
+  threadId: number | null;
+  threadTitle: string | null;
+  mediaId: number | null;
+}
+
+export interface NetInboxView {
+  items: NetInboxItem[];
+  /** Items with id above this are unread. */
+  lastSeenId: number;
+}
+
 export interface NetCaptionResult {
   ok: boolean;
   message?: string;

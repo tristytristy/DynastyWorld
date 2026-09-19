@@ -11556,3 +11556,15 @@ sits after it, so a missing directory hangs the run instead of failing.
 - Why it's safer than it sounds: sql.js persists by rewriting the database as a whole file, so the sync client always sees complete files — no partially-written page corruption like a live WAL database would risk.
 
 **Not done on purpose:** no live server, no merge. The cloud folder is the single source of truth; last writer wins, which is exactly the "replace, not merge" model already in use for the manual hard-drive transfer.
+
+## Phase — Comment sections v4: volume, length variety, timestamps, sorting, the inbox (2026-09-19)
+
+**The report:** comments were funny but uniformly SHORT — the v3 style guide's "5-25 words mostly" flattened everything, and replies never went anywhere. Plus user picks: Tube timestamps (#1), Board sorting + collapsed comments (#5), replies-to-you inbox (#10).
+
+**Shipped:**
+- **Length mix everywhere** (board week, board replies, Tube comments, Selection Sunday): roughly half short gut reactions, a third mid-size 2-4 sentence takes, and every game thread carries 1-2 genuinely LONG comments (60-150 words) — plus one true EFFORTPOST (150-250 words) in the biggest game's thread. Reply chains may now argue back and forth with substance. Volume up across the board: 10-16 comments in the big thread, 6-10 elsewhere, 2-3 talk threads, Tube 5-9 top-level. Token budgets raised to match (board week 24k, Tube 4.5k, replies 2.5k, selection 12k).
+- **Clickable Tube timestamps**: captureClipFilm now reports the clip runtime and each frame's clock position; the comments prompt anchors 2-3 comments to real M:SS moments matched to what those frames show; PostCard renders M:SS as seek links that jump (and play) the watch-page video.
+- **Board comment sorting** (best / new / controversial) per open thread, and comments below 0 points collapse to "[+] comment score below threshold — click to show", reddit-style. Your own comments never collapse.
+- **The inbox** (schema v29, dynasties.net_inbox_seen_id): ✉ Inbox on the Board toolbar with an unread badge — every bot reply to YOUR threads/comments/feed posts, newest first, with jump-to-thread. And the other half: weekly board generation now receives your unanswered posts (thread OPs + top-level comments) and writes 1-2 "lateReplies" directly under each — the board finally noticing your take is how replies arrive over time.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.

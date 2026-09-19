@@ -58,6 +58,7 @@ interface DynastyRow {
   is_active: number;
   neutral_mode: number;
   board_flair: string;
+  net_inbox_seen_id: number;
 }
 
 export interface Dynasty {
@@ -76,6 +77,8 @@ export interface Dynasty {
   neutralMode: boolean;
   /** The user's team flair on TheSideline.net (schema v28). Empty = flairless. */
   boardFlair: string;
+  /** Newest board-inbox reply id the user has seen (schema v29). Anything newer is the unread badge. */
+  netInboxSeenId: number;
 }
 
 function mapDynasty(row: DynastyRow): Dynasty {
@@ -93,7 +96,13 @@ function mapDynasty(row: DynastyRow): Dynasty {
     isActive: row.is_active === 1,
     neutralMode: row.neutral_mode === 1,
     boardFlair: row.board_flair ?? '',
+    netInboxSeenId: row.net_inbox_seen_id ?? 0,
   };
+}
+
+/** Mark the board inbox read up to this reply id — see schema_v29_inbox_seen.sql. */
+export function setDynastyInboxSeen(dynastyId: string, seenId: number): void {
+  run('UPDATE dynasties SET net_inbox_seen_id = MAX(net_inbox_seen_id, ?) WHERE id = ?', [Math.floor(seenId), dynastyId]);
 }
 
 /** Set (or clear, with '') the user's board flair — see schema_v28_board_flair.sql. */

@@ -1,14 +1,14 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
-import { adjustPostLikes, getEditions, getFeedView, getHistorianArticles, getMediaComments, getThreads, setUserIdentity } from '../../database/dynastyNet';
+import { adjustPostLikes, getEditions, getFeedView, getHistorianArticles, getMediaComments, getRepliesToUser, getThreads, setUserIdentity } from '../../database/dynastyNet';
 import { askHistorian } from '../net/historian';
 import { autoCaption, generateMediaComments, generateWeek, replyInThread, replyToUserPost } from '../net/generate';
 import { getPublicSettings, setApiKey } from '../net/settings';
-import { getDynastyById, setDynastyBoardFlair, setDynastyNeutralMode } from '../../database/helpers';
+import { getDynastyById, setDynastyBoardFlair, setDynastyInboxSeen, setDynastyNeutralMode } from '../../database/helpers';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
 import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
 import { generateSelectionReaction } from '../net/selection';
-import type { NetCaptionResult, NetFeedView, NetGenerateResult, NetPost, NetSettings } from '../../shared/netTypes';
+import type { NetCaptionResult, NetClipInfo, NetFeedView, NetGenerateResult, NetInboxView, NetPost, NetSettings } from '../../shared/netTypes';
 
 /** DynastyNet IPC — the fake internet's read + generate surface. */
 export function registerNetHandlers(): void {
@@ -50,9 +50,10 @@ export function registerNetHandlers(): void {
       mediaId: number,
       mode: 'more' | 'fresh' = 'more',
       frames: string[] = [],
+      clip?: NetClipInfo,
     ): Promise<NetGenerateResult> => {
       try {
-        return await generateMediaComments(dynastyId, seasonId, mediaId, mode, frames);
+        return await generateMediaComments(dynastyId, seasonId, mediaId, mode, frames, clip);
       } catch (err) {
         // Surface instead of vanish: an uncaught throw here left the renderer
         // spinning with no comments and no explanation.
@@ -189,6 +190,14 @@ export function registerNetHandlers(): void {
 
   ipcMain.handle(IPC.net.votePost, (_e, dynastyId: string, postId: number, delta: number): number => {
     return adjustPostLikes(dynastyId, postId, delta);
+  });
+
+  ipcMain.handle(IPC.net.getInbox, (_e, dynastyId: string): NetInboxView => {
+    return { items: getRepliesToUser(dynastyId), lastSeenId: getDynastyById(dynastyId)?.netInboxSeenId ?? 0 };
+  });
+
+  ipcMain.handle(IPC.net.markInboxSeen, (_e, dynastyId: string, seenId: number): void => {
+    setDynastyInboxSeen(dynastyId, seenId);
   });
 
   ipcMain.handle(

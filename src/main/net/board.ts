@@ -13,8 +13,10 @@ import {
   getRecentPosts,
   getThread,
   getThreads,
+  getUnansweredUserPosts,
   insertPosts,
   lastInsertId,
+  postExists,
 } from '../../database/dynastyNet';
 import { withBatchedPersist } from '../../database/init';
 import type { CastMember } from './cast';
@@ -238,6 +240,14 @@ interface ModelThread {
   replies?: ModelReply[];
 }
 
+/** A delayed answer to a take the human dropped between generations. */
+interface ModelLateReply {
+  toPostId: number;
+  author: string;
+  body: string;
+  likes?: number;
+}
+
 /**
  * The board's scorekeeping bot — every [Post Game Thread] is OP'd by it with a
  * plain box-score body, the way the real CFB subreddit's referee bot posts
@@ -263,20 +273,22 @@ function pgtBody(g: FeaturedGame): string {
 
 const BOARD_WEEK_SYSTEM = `You write the comments of TheSideline.net — the national college-football board of a video-game dynasty universe, with the exact culture of the big CFB subreddit's game threads. Everything factual (scores, records, ranks, streaks) must come from the provided data — never invent results.
 
-Return ONLY JSON: {"newUsers":[{"handle","displayName","persona"}],"threads":[{"title","author","body","upvotes":int,"replies":[{"author","body","likes":int,"replies":[{"author","body","likes":int}]}]}]}.
+Return ONLY JSON: {"newUsers":[{"handle","displayName","persona"}],"threads":[{"title","author","body","upvotes":int,"replies":[{"author","body","likes":int,"replies":[{"author","body","likes":int}]}]}],"lateReplies":[{"toPostId":int,"author","body","likes":int}]}.
 
 STRUCTURE:
-- One thread for EACH featured game, title EXACTLY as provided. For these game threads the OP is already posted by a score bot — set "author" to "SidelineBot" and "body" to "" and write ONLY the replies (6-10 for the biggest game, 4-7 for the rest).
-- Then 1-2 national talk threads (poll gripes, "so the top four are...", coach hot seat, am-I-crazy posts) — these you author fully: a real poster as OP, short body, 3-6 replies.
+- One thread for EACH featured game, title EXACTLY as provided. For these game threads the OP is already posted by a score bot — set "author" to "SidelineBot" and "body" to "" and write ONLY the replies (10-16 for the biggest game, 6-10 for the rest).
+- Then 2-3 national talk threads (poll gripes, "so the top four are...", coach hot seat, am-I-crazy posts) — these you author fully: a real poster as OP, short body, 5-8 replies.
 - "newUsers": up to 4 new posters if a featured fanbase has nobody (reddit-style usernames, flair in displayName like "corn_husked_2011 [Nebraska]"). Empty array if not needed.
+- "lateReplies": if the prompt lists UNANSWERED POSTS FROM THE HUMAN MEMBER, write 1-2 replies to each (toPostId = that post's id) — bots finally responding to their take: agree, argue, quote-riff it. Empty array if none listed.
 - Authors must be existing population usernames, your newUsers, or "SidelineBot" (OP only).
 
 HOW REAL GAME-THREAD COMMENTS SOUND — follow this closely:
-- SHORT. Most comments are 5-25 words. Several under 10. lowercase is common, so are "lol", "lmao", "bro", "man". Fragments are fine.
-- NOT EVERYONE IS CLEVER. Most comments are plain gut reactions: "WE ARE SO BACK", "i hate this sport", "fire him. i mean it this time", "nobody can tell him anything right now lol", "that man is playing a different sport". At most ONE longer, effortful comment per thread — never polished stand-up bits with twist endings on ordinary comments.
+- LENGTH MIX, every thread. Roughly half the comments are short gut reactions (5-25 words, several under 10 — lowercase, "lol", "lmao", "bro", fragments fine). A third are mid-size: 2-4 full sentences with an actual thought (what flipped the game, why the line got cooked, what this does to the poll). And every game thread carries 1-2 genuinely LONG comments (60-150 words): a fan talking themselves through the loss paragraph by paragraph, a tactical breakdown of how the game was actually won, an "I was at this game" story told properly with details, or a flairless veteran putting the result in perspective. Long comments have complete sentences and can use paragraph breaks.
+- THE EFFORTPOST: the BIGGEST game's thread gets one true effortpost (150-250 words, paragraph breaks, maybe a couple of "- " bullets mid-post) — the comment the whole board points at all week. Serious analysis grounded entirely in the data, written by someone who clearly rewatched everything. Huge likes.
+- NOT EVERYONE IS CLEVER. Short comments are plain gut reactions: "WE ARE SO BACK", "i hate this sport", "fire him. i mean it this time", "that man is playing a different sport". Never polished stand-up bits with twist endings on ordinary comments — length comes from having something to say, not from performing.
 - ONE stats-dump comment in the BIGGEST game's thread only: a bullet list (use "- " lines) of 4-7 dry factual nuggets pulled strictly from the data (records, ranks, margins, season points). It gets huge likes. Its author is a numbers-account type.
-- Quote-riffs: a reply quoting a fragment of the parent with "&gt;" on its own line, then one short line back.
-- Nested replies (the inner "replies" array) are direct responses — pile-ons, corrections, one-word agreements.
+- Quote-riffs: a reply quoting a fragment of the parent with "&gt;" on its own line, then a response — sometimes one line, sometimes a real rebuttal.
+- Nested replies (the inner "replies" array) are direct responses — pile-ons, corrections, one-word agreements, AND real comebacks: let 1-2 disagreements per thread actually go back and forth with substance (2-3 sentences each) instead of ending after one shot.
 - Fanbase truth: losers doom-spiral or go silent-then-one-liner, winners are euphoric and briefly insufferable, neutrals drive by with jokes. Flairless veterans post perspective.
 - MORE r/CFB TEXTURE, sprinkled where they fit (not all in every thread): conference solidarity and slander ("MACtion stays undefeated", "typical Big Ten rock fight"), referee grievances with a specific call, an "I was at this game" anecdote with one concrete detail (the crowd, the weather, the guy behind them), self-aware fanbase misery ("first time?" / "this is why we can't have nice things"), a "put him in the portal" or hot-seat joke, and the occasional comment that's just the score typed back in disbelief.
 - SUBSTANCE FLOOR: 1-2 comments per thread should contain a real football observation someone could only make from the data (the margin, the ranks, a scorer, the record it produces) — short is fine, empty is not. NEVER a bare year or vague nostalgia with no referent: any callback must name what actually happened.
@@ -347,7 +359,18 @@ export async function generateBoardWeek(
     ? `\n\nTHE FILM ROOM (fan-uploaded highlights for these games — commenters have watched them; in those threads let 1-3 comments reference these specific details naturally, like people who saw the broadcast; never contradict them):\n${filmRoom.join('\n')}`
     : '';
 
+  // Takes the human dropped that nobody ever answered \u2014 this week's pass
+  // finally responds to them (the "replies arrive over time" half of the
+  // inbox feature, user pick 2026-09-19).
+  const unanswered = getUnansweredUserPosts(dynastyId);
+  const unansweredSection = unanswered.length
+    ? `\n\nUNANSWERED POSTS FROM THE HUMAN MEMBER (write 1-2 lateReplies to each \u2014 the board finally noticed):\n${unanswered
+        .map((u) => `id ${u.id} (wk ${u.week}, in "${u.threadTitle}"): ${u.body}`)
+        .join('\n')}`
+    : '';
+
   let threads: ModelThread[];
+  let lateReplies: ModelLateReply[] = [];
   let engine: 'claude' | 'offline' = 'offline';
   let message: string | undefined;
   let byHandle: Map<string, NetAccount>;
@@ -357,13 +380,14 @@ export async function generateBoardWeek(
       // grown by the weekly call's newUsers as fresh fanbases get featured.
       await ensurePopulation(dynastyId, [ctx.userTeam, ...featuredTeams].filter(Boolean));
       const population = boardPopulation(dynastyId);
-      const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[] }>(
+      const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[]; lateReplies?: ModelLateReply[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
-        12000, // a playoff week carries up to 7 threads' worth of comments
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}${unansweredSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
+        24000, // a playoff week carries up to 7 threads with effortpost-length comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
       threads = out.threads ?? [];
+      lateReplies = out.lateReplies ?? [];
       engine = 'claude';
       ensureBoardAccounts(dynastyId); // the score bot must exist before PGT OPs insert
       byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
@@ -420,6 +444,18 @@ export async function generateBoardWeek(
         }
       }
     }
+    // Late replies land under the human's old posts — only the ids we
+    // actually offered, and only if the post still exists.
+    const offered = new Set(unanswered.map((u) => u.id));
+    for (const lr of lateReplies) {
+      if (!offered.has(lr.toPostId) || !postExists(dynastyId, lr.toPostId)) continue;
+      const author = resolveHandle(byHandle, lr.author);
+      if (!author) continue;
+      insertPosts(dynastyId, [
+        { seasonId, accountId: author.id, kind: 'reply', parentId: lr.toPostId, body: lr.body, likes: lr.likes ?? 0, week: ctx.week },
+      ]);
+      n += 1;
+    }
     return n;
   });
   return { ok: true, engine, message, postsAdded: added };
@@ -461,7 +497,7 @@ function offlineBoardWeek(team: string, record: string, week: number, featured: 
   ];
 }
 
-const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. KEEP IT SHORT — most replies 5-25 words, lowercase fine, "lol" fine, not everyone is clever; no polished bits. Callbacks must name what actually happened — never a bare year. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 2-4 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
+const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. LENGTH MIX: most replies short (5-25 words, lowercase fine, "lol" fine, not everyone is clever, no polished bits), but at least ONE reply genuinely engages the human's actual point at length — 2-5 full sentences that agree with a reason, push back with evidence from the data, or add something they missed. Callbacks must name what actually happened — never a bare year. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 3-6 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
 
 async function boardReplies(
   dynastyId: string,
@@ -479,7 +515,7 @@ async function boardReplies(
       const replies = await generateJson<{ author: string; body: string; likes?: number }[]>(
         BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
         `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
-        1500,
+        2500,
       );
       return { replies, engine: 'claude' };
     } catch (err) {

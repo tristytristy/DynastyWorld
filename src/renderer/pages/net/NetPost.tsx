@@ -22,11 +22,39 @@ function Avatar({ handle, isUser }: { handle: string; isUser: boolean }) {
   );
 }
 
+/**
+ * Body text with M:SS timestamps rendered as seek links (DynastyTube watch
+ * page). Only sensible clock values become links; everything else is text.
+ */
+function BodyWithTimestamps({ body, onTimestamp }: { body: string; onTimestamp: (seconds: number) => void }) {
+  const parts = body.split(/(\b\d{1,2}:[0-5]\d\b)/g);
+  return (
+    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+      {parts.map((part, i) => {
+        const m = /^(\d{1,2}):([0-5]\d)$/.exec(part);
+        if (!m) return part;
+        const seconds = Number(m[1]) * 60 + Number(m[2]);
+        return (
+          <button
+            key={i}
+            className="font-semibold text-sky-600 hover:underline dark:text-sky-400"
+            title="Jump to this moment"
+            onClick={() => onTimestamp(seconds)}
+          >
+            {part}
+          </button>
+        );
+      })}
+    </p>
+  );
+}
+
 export function PostCard({
   post,
   compact = false,
   onReply,
   replyBox,
+  onTimestamp,
 }: {
   post: NetPost;
   compact?: boolean;
@@ -34,6 +62,8 @@ export function PostCard({
   onReply?: (post: NetPost) => void;
   /** Rendered under the replies while this card's composer is open. */
   replyBox?: ReactNode;
+  /** When set (DynastyTube), M:SS in bodies becomes a seek link. */
+  onTimestamp?: (seconds: number) => void;
 }) {
   const isUser = post.accountKind === 'user';
   return (
@@ -52,7 +82,11 @@ export function PostCard({
               {post.week > 0 ? ` · wk ${post.week}` : ''}
             </span>
           </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.body}</p>
+          {onTimestamp ? (
+            <BodyWithTimestamps body={post.body} onTimestamp={onTimestamp} />
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.body}</p>
+          )}
           <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
             ♥ {post.likes.toLocaleString()}
             {onReply && (
@@ -70,7 +104,7 @@ export function PostCard({
           {post.replies.length > 0 && (
             <div className="mt-3 space-y-2 border-l-2 border-slate-200/80 pl-3 dark:border-slate-700">
               {post.replies.map((reply) => (
-                <PostCard key={reply.id} post={reply} compact />
+                <PostCard key={reply.id} post={reply} compact onTimestamp={onTimestamp} />
               ))}
             </div>
           )}

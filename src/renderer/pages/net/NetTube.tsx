@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import type { CustomAlbum, MediaItemWithPath } from '../../../shared/types';
 import type { NetAccount, NetPost } from '../../../shared/netTypes';
@@ -6,7 +6,7 @@ import { PageMasthead } from '../../components/common/PageMasthead';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
 import { PostCard } from './NetPost';
-import { captureClipFrames } from '../../lib/clipFrames';
+import { captureClipFilm, type ClipFilm } from '../../lib/clipFrames';
 
 /**
  * DynastyTube — the Media gallery reframed as a video site. Every tagged
@@ -66,8 +66,8 @@ function ageLabel(uploadedAt: number): string {
   return `${Math.floor(days / 365)} year${Math.floor(days / 365) === 1 ? '' : 's'} ago`;
 }
 
-async function captureFrames(item: MediaItemWithPath): Promise<string[]> {
-  return captureClipFrames(item.absolutePath, item.mediaType);
+async function captureFrames(item: MediaItemWithPath): Promise<ClipFilm> {
+  return captureClipFilm(item.absolutePath, item.mediaType);
 }
 
 export function NetTube() {
@@ -83,6 +83,7 @@ export function NetTube() {
   const [channel, setChannel] = useState<NetAccount | null>(null);
   const [playlists, setPlaylists] = useState<CustomAlbum[]>([]);
   const [playlistId, setPlaylistId] = useState<number | null>(null);
+  const playerRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!id || selectedSeasonId === undefined) return;
@@ -165,12 +166,16 @@ export function NetTube() {
     setBusyId(item.id);
     setNotice(null);
     try {
-      // Let the bots watch the thing they're commenting on.
-      const frames = await captureFrames(item);
-      const result = await window.api.net.generateMediaComments(id, selectedSeasonId, item.id, mode, frames);
+      // Let the bots watch the thing they're commenting on — with the clock,
+      // so their timestamps ("0:47 he's GONE") are real and seekable.
+      const film = await captureFrames(item);
+      const result = await window.api.net.generateMediaComments(id, selectedSeasonId, item.id, mode, film.frames, {
+        durationSeconds: film.durationSeconds,
+        frameTimes: film.frameTimes,
+      });
       if (result.message) setNotice(result.message);
-      else if (result.ok && frames.length > 0 && result.engine === 'claude') {
-        setNotice(`The commenters watched ${frames.length > 1 ? `${frames.length} frames of` : ''} the clip before posting.`);
+      else if (result.ok && film.frames.length > 0 && result.engine === 'claude') {
+        setNotice(`The commenters watched ${film.frames.length > 1 ? `${film.frames.length} frames of` : ''} the clip before posting.`);
       }
       await loadThread(item.id);
     } catch (err) {
@@ -204,7 +209,7 @@ export function NetTube() {
           ← Back to uploads
         </button>
         {item.mediaType === 'video' ? (
-          <video src={fileUrl(item.absolutePath)} controls autoPlay className="max-h-[480px] w-full rounded-xl bg-black" />
+          <video ref={playerRef} src={fileUrl(item.absolutePath)} controls autoPlay className="max-h-[480px] w-full rounded-xl bg-black" />
         ) : (
           <img src={fileUrl(item.absolutePath)} alt={item.description} className="max-h-[480px] w-full rounded-xl bg-black object-contain" />
         )}
@@ -284,7 +289,23 @@ export function NetTube() {
         {notice && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{notice}</p>}
         <div className="mt-3 space-y-2">
           {thread.map((c) => (
-            <PostCard key={c.id} post={c} compact />
+            <PostCard
+              key={c.id}
+              post={c}
+              compact
+              // A commenter's "0:47" jumps the player there, YouTube-style.
+              onTimestamp={
+                item.mediaType === 'video'
+                  ? (seconds) => {
+                      const v = playerRef.current;
+                      if (!v) return;
+                      v.currentTime = seconds;
+                      void v.play().catch(() => undefined);
+                      v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </SurfaceCard>

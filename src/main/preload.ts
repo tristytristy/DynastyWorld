@@ -355,8 +355,8 @@ const api: DynastyApi = {
     getMediaComments: (dynastyId, mediaId) => ipcRenderer.invoke(IPC.net.getMediaComments, dynastyId, mediaId),
     generateWeek: (dynastyId, seasonId, regenerate) => ipcRenderer.invoke(IPC.net.generateWeek, dynastyId, seasonId, regenerate),
     postAsUser: (dynastyId, seasonId, accountId, body) => ipcRenderer.invoke(IPC.net.postAsUser, dynastyId, seasonId, accountId, body),
-    generateMediaComments: (dynastyId, seasonId, mediaId, mode, frames) =>
-      ipcRenderer.invoke(IPC.net.generateMediaComments, dynastyId, seasonId, mediaId, mode, frames),
+    generateMediaComments: (dynastyId, seasonId, mediaId, mode, frames, clip) =>
+      ipcRenderer.invoke(IPC.net.generateMediaComments, dynastyId, seasonId, mediaId, mode, frames, clip),
     getSettings: () => ipcRenderer.invoke(IPC.net.getSettings),
     setApiKey: (apiKey) => ipcRenderer.invoke(IPC.net.setApiKey, apiKey),
     setUserIdentity: (dynastyId, handle, displayName) =>
@@ -383,6 +383,8 @@ const api: DynastyApi = {
     generateSelection: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.generateSelection, dynastyId, seasonId),
     autoCaption: (dynastyId, seasonId, mediaId, frames) =>
       ipcRenderer.invoke(IPC.net.autoCaption, dynastyId, seasonId, mediaId, frames),
+    getInbox: (dynastyId) => ipcRenderer.invoke(IPC.net.getInbox, dynastyId),
+    markInboxSeen: (dynastyId, seenId) => ipcRenderer.invoke(IPC.net.markInboxSeen, dynastyId, seenId),
   },
 };
 

@@ -26,6 +26,7 @@ import schemaV25 from './schema_v25_media_plays.sql';
 import schemaV26 from './schema_v26_neutral_mode.sql';
 import schemaV27 from './schema_v27_tube_meta.sql';
 import schemaV28 from './schema_v28_board_flair.sql';
+import schemaV29 from './schema_v29_inbox_seen.sql';
 
 export interface Migration {
   version: number;
@@ -66,4 +67,5 @@ export const MIGRATIONS: Migration[] = [
   { version: 26, name: 'neutral_mode', sql: schemaV26 },
   { version: 27, name: 'tube_meta', sql: schemaV27 },
   { version: 28, name: 'board_flair', sql: schemaV28 },
+  { version: 29, name: 'inbox_seen', sql: schemaV29 },
 ];

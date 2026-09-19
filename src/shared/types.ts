@@ -1,4 +1,4 @@
-import type { NetCaptionResult, NetFeedView, NetGenerateResult, NetIdentityResult, NetPost, NetSettings, Top10Topic } from './netTypes';
+import type { NetCaptionResult, NetClipInfo, NetFeedView, NetGenerateResult, NetIdentityResult, NetInboxView, NetPost, NetSettings, Top10Topic } from './netTypes';
 import type { MediaLook } from './mediaLook';
 import type {
   TeamAllTimeData,
@@ -3710,6 +3710,7 @@ export interface DynastyApi {
       mediaId: number,
       mode: 'more' | 'fresh',
       frames: string[],
+      clip?: NetClipInfo,
     ) => Promise<NetGenerateResult>;
     getSettings: () => Promise<NetSettings>;
     setApiKey: (apiKey: string) => Promise<NetSettings>;
@@ -3755,6 +3756,9 @@ export interface DynastyApi {
     generateSelection: (dynastyId: string, seasonId: number) => Promise<NetGenerateResult>;
     /** Draft a Tube title + description from frames + tags; never auto-saves. */
     autoCaption: (dynastyId: string, seasonId: number, mediaId: number, frames: string[]) => Promise<NetCaptionResult>;
+    /** Replies to the user's own posts, newest first, plus the read watermark. */
+    getInbox: (dynastyId: string) => Promise<NetInboxView>;
+    markInboxSeen: (dynastyId: string, seenId: number) => Promise<void>;
   };
   window: {
     /**

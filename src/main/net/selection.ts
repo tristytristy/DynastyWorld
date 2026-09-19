@@ -29,7 +29,7 @@ const SELECTION_SYSTEM = `You write TheSideline.net and the social feed of a col
 Return ONLY JSON: {"posts":[{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}],"threads":[{"title","author","body","upvotes":int,"replies":[{"author","body","likes":int,"replies":[{"author","body","likes":int}]}]}]}.
 
 - "posts": 6-9 feed posts from the CAST handles — committee outrage, the snub discourse, seeding debates, first-round matchup takes, one fanbase already booking title-game hotels. Short, punchy, real-fan register.
-- "threads": 2-3 board threads from POPULATION usernames: one "[Bracket Reveal Thread]" (OP lays out the field, comments argue seeds and snubs), plus a snub rant or an "am I crazy or our path is actually easy" thread. Board comment rules apply: 5-25 words mostly, lowercase fine, quote-riffs with >, one substantive seeding analysis per thread, reddit-shaped likes.
+- "threads": 2-3 board threads from POPULATION usernames: one "[Bracket Reveal Thread]" (OP lays out the field, 8-12 comments arguing seeds and snubs), plus a snub rant or an "am I crazy or our path is actually easy" thread (5-8 comments each). Board length mix applies: mostly short (5-25 words, lowercase fine, quote-riffs with >), a few mid-size 2-4 sentence takes, and one LONG comment per thread — a full seeding breakdown or a snubbed fan's paragraph-length grievance, grounded in the data. Reddit-shaped likes.
 - The biggest snub (the best team OUTSIDE the field) should dominate at least one conversation, and their fans should be inconsolable or litigious.`;
 
 interface ModelReply {
@@ -113,7 +113,7 @@ export async function generateSelectionReaction(dynastyId: string, seasonId: num
     out = await generateJson<SelectionOut>(
       SELECTION_SYSTEM,
       `CAST (feed voices):\n${castWanted.map((c) => `${c.handle}: ${c.persona}`).join('\n')}\n\nPOPULATION (board usernames):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nTHE FIELD (CFP poll = the seeding):\n${ranked.join('\n')}\n\nFIRST-ROUND MATCHUPS (higher seed hosts):\n${matchups}${bowls ? `\n\nNOTABLE BOWL PAIRINGS:\n${bowls}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${memory ? `\n\nRECENT NET HISTORY:\n${memory}` : ''}${realHistoryNote(ctx.firstSeasonYear)}`,
-      9000,
+      12000,
     );
   } catch (err) {
     const message = err instanceof NetClaudeError ? err.message : err instanceof Error ? err.message : String(err);

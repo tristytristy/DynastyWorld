@@ -1,5 +1,5 @@
 import { getDb, persist } from './init';
-import type { NetAccount, NetAccountKind, NetFeedView, NetPost, NetPostKind } from '../shared/netTypes';
+import type { NetAccount, NetAccountKind, NetFeedView, NetInboxItem, NetPost, NetPostKind } from '../shared/netTypes';
 
 /**
  * DynastyNet storage (schema v24). Same contract as media.ts: user/bot
@@ -307,6 +307,102 @@ export function getRecentPosts(
       body: r.body.slice(0, 180),
       isUser: r.account_kind === 'user',
     }));
+}
+
+/**
+ * Replies to the human member's own posts, newest first — the Board inbox
+ * (user request, 2026-09-19). Covers every surface: board threads/comments,
+ * feed posts, and Tube comments; the renderer badges anything newer than
+ * the dynasty's net_inbox_seen_id.
+ */
+export function getRepliesToUser(dynastyId: string, limit = 40): NetInboxItem[] {
+  interface InboxRow extends PostRow {
+    parent_body: string;
+    parent_kind: string;
+    parent_title: string;
+    parent_parent_id: number | null;
+    root_title: string | null;
+  }
+  const rows = selectRows<InboxRow>(
+    `SELECT p.id, p.season_id, p.account_id, a.handle, a.display_name,
+            a.kind AS account_kind, p.kind, p.parent_id, p.media_id,
+            p.title, p.body, p.likes, p.week, p.created_at,
+            parent.body AS parent_body, parent.kind AS parent_kind,
+            parent.title AS parent_title,
+            parent.parent_id AS parent_parent_id, root.title AS root_title
+     FROM net_posts p
+     JOIN net_accounts a ON a.id = p.account_id
+     JOIN net_posts parent ON parent.id = p.parent_id
+     JOIN net_accounts pa ON pa.id = parent.account_id
+     LEFT JOIN net_posts root ON root.id = parent.parent_id
+     WHERE p.dynasty_id = ? AND pa.kind = 'user' AND a.kind != 'user'
+     ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId],
+  );
+  return rows.map((r) => {
+    // Root thread: the parent itself when the user authored the thread,
+    // else the user's comment's own parent (one level up).
+    const parentIsThread = r.parent_kind === 'thread';
+    return {
+      id: r.id,
+      handle: r.handle,
+      displayName: r.display_name,
+      body: r.body,
+      likes: r.likes,
+      week: r.week,
+      createdAt: r.created_at,
+      inReplyTo: (r.parent_body || r.parent_title).slice(0, 140),
+      threadId: parentIsThread ? r.parent_id : r.parent_kind === 'reply' ? r.parent_parent_id : null,
+      threadTitle: parentIsThread ? r.parent_title || null : r.root_title || null,
+      mediaId: r.media_id,
+    };
+  });
+}
+
+/**
+ * The human member's board posts that no bot ever answered — handed to the
+ * weekly board generation so takes you dropped between generations get their
+ * replies "overnight". Only thread OPs and top-level comments qualify: a
+ * reply to anything deeper would render below the board's nesting depth.
+ */
+export function getUnansweredUserPosts(
+  dynastyId: string,
+  limit = 5,
+): { id: number; week: number; threadTitle: string; body: string }[] {
+  interface Row {
+    id: number;
+    week: number;
+    body: string;
+    kind: string;
+    title: string;
+    root_title: string | null;
+  }
+  const rows = selectRows<Row>(
+    `SELECT p.id, p.week, p.body, p.kind, p.title, root.title AS root_title
+     FROM net_posts p
+     JOIN net_accounts a ON a.id = p.account_id
+     LEFT JOIN net_posts root ON root.id = p.parent_id
+     WHERE p.dynasty_id = ? AND a.kind = 'user' AND p.media_id IS NULL
+       AND p.kind IN ('thread', 'reply')
+       AND (p.kind = 'thread' OR (root.id IS NOT NULL AND root.kind = 'thread'))
+       AND NOT EXISTS (SELECT 1 FROM net_posts c WHERE c.parent_id = p.id)
+     ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    week: r.week,
+    threadTitle: (r.kind === 'thread' ? r.title : r.root_title) || '(thread)',
+    body: r.body.slice(0, 200),
+  }));
+}
+
+/** A post exists and may take replies — guards lateReplies against invented ids. */
+export function postExists(dynastyId: string, postId: number): boolean {
+  return (
+    selectRows<{ n: number }>('SELECT COUNT(*) AS n FROM net_posts WHERE id = ? AND dynasty_id = ?', [postId, dynastyId])[0]
+      ?.n ?? 0
+  ) > 0;
 }
 
 /** Board threads for a season, newest first, replies attached (oldest first inside). */

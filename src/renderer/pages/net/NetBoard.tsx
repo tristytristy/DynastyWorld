@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { NetFeedView, NetPost } from '../../../shared/netTypes';
+import type { NetFeedView, NetInboxView, NetPost } from '../../../shared/netTypes';
 import { PageMasthead } from '../../components/common/PageMasthead';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
 import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
@@ -111,27 +111,69 @@ function CommentHeader({
   );
 }
 
+/** Reddit hides what the hivemind buried — half the texture is the click to look anyway. */
+const COLLAPSE_BELOW = 0;
+
+type CommentSort = 'best' | 'new' | 'controversial';
+
+function sortComments(replies: NetPost[], sort: CommentSort): NetPost[] {
+  const sorted = [...replies];
+  if (sort === 'best') sorted.sort((a, b) => b.likes - a.likes);
+  else if (sort === 'new') sorted.sort((a, b) => b.id - a.id);
+  // controversial: the buried and barely-tolerated first, crowd favorites last.
+  else sorted.sort((a, b) => a.likes - b.likes);
+  return sorted;
+}
+
 function Comment({
   post,
   userFlair,
   onVote,
+  revealed,
+  onReveal,
 }: {
   post: NetPost;
   userFlair: string;
   onVote: (postId: number, delta: 1 | -1) => void;
+  revealed: Set<number>;
+  onReveal: (postId: number) => void;
 }) {
+  const hidden = post.likes < COLLAPSE_BELOW && post.accountKind !== 'user' && !revealed.has(post.id);
+  if (hidden) {
+    return (
+      <div className="pt-3">
+        <button
+          className="text-xs italic text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+          onClick={() => onReveal(post.id)}
+        >
+          [+] comment score below threshold — click to show
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="pt-3">
       <CommentHeader post={post} userFlair={userFlair} onVote={onVote} />
       <CommentBody body={post.body} />
       {post.replies.length > 0 && (
         <div className="ml-2 mt-1 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
-          {post.replies.map((r) => (
-            <div key={r.id} className="pt-2">
-              <CommentHeader post={r} userFlair={userFlair} onVote={onVote} />
-              <CommentBody body={r.body} />
-            </div>
-          ))}
+          {post.replies.map((r) =>
+            r.likes < COLLAPSE_BELOW && r.accountKind !== 'user' && !revealed.has(r.id) ? (
+              <div key={r.id} className="pt-2">
+                <button
+                  className="text-xs italic text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  onClick={() => onReveal(r.id)}
+                >
+                  [+] comment score below threshold — click to show
+                </button>
+              </div>
+            ) : (
+              <div key={r.id} className="pt-2">
+                <CommentHeader post={r} userFlair={userFlair} onVote={onVote} />
+                <CommentBody body={r.body} />
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>
@@ -153,6 +195,12 @@ export function NetBoard() {
   const [replyDraft, setReplyDraft] = useState('');
   const [userFlair, setUserFlair] = useState('');
   const [teamNames, setTeamNames] = useState<string[]>([]);
+  const [sort, setSort] = useState<CommentSort>('best');
+  const [revealed, setRevealed] = useState<Set<number>>(new Set());
+  const [inbox, setInbox] = useState<NetInboxView | null>(null);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  // What counted as unread when the panel opened — kept highlighted until close.
+  const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -170,6 +218,7 @@ export function NetBoard() {
     if (!id || selectedSeasonId === undefined) return;
     window.api.net.getThreads(id, selectedSeasonId).then(setThreads);
     window.api.net.getFeed(id, selectedSeasonId).then((view) => setUserAccount(view.userAccount));
+    window.api.net.getInbox(id).then(setInbox);
   }, [id, selectedSeasonId]);
 
   useEffect(() => {
@@ -192,6 +241,21 @@ export function NetBoard() {
   const saveFlair = (flair: string) => {
     setUserFlair(flair);
     void window.api.net.setBoardFlair(id, flair).then(setUserFlair);
+  };
+
+  const unreadCount = inbox ? inbox.items.filter((i) => i.id > inbox.lastSeenId).length : 0;
+
+  const toggleInbox = () => {
+    if (!inboxOpen && inbox) {
+      // Remember what was fresh for the highlight, then move the watermark.
+      setFreshIds(new Set(inbox.items.filter((i) => i.id > inbox.lastSeenId).map((i) => i.id)));
+      const newest = inbox.items[0]?.id ?? 0;
+      if (newest > inbox.lastSeenId) {
+        void window.api.net.markInboxSeen(id, newest);
+        setInbox({ ...inbox, lastSeenId: newest });
+      }
+    }
+    setInboxOpen((v) => !v);
   };
 
   const reactToBracket = async () => {
@@ -285,6 +349,18 @@ export function NetBoard() {
           >
             🏈 Bracket reveal
           </button>
+          <button
+            className={`relative ${buttonClass}`}
+            onClick={toggleInbox}
+            title="Replies to your threads and comments"
+          >
+            ✉ Inbox
+            {unreadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 rounded-full bg-red-600 px-1.5 py-px text-[10px] font-bold leading-4 text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
           <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             Your flair
             <select
@@ -309,6 +385,61 @@ export function NetBoard() {
             {composing ? 'Cancel' : '+ New thread'}
           </button>
         </div>
+        {inboxOpen && (
+          <div className="mt-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              Replies to you
+            </p>
+            {(inbox?.items.length ?? 0) === 0 ? (
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                Nothing yet — post a thread or drop a comment, and check back after the next week generates.
+              </p>
+            ) : (
+              <div className="mt-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                {inbox!.items.slice(0, 15).map((item) => {
+                  const { name, flair } = splitFlair(item.displayName);
+                  const fresh = freshIds.has(item.id);
+                  const tid = item.threadId;
+                  const row = (
+                    <>
+                      <p className="flex flex-wrap items-center text-xs">
+                        {fresh && <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
+                        <span className="font-bold text-slate-700 dark:text-slate-300">{name}</span>
+                        <FlairChip flair={flair} bot={flair === 'Bot'} />
+                        <span className="ml-2 text-slate-400 dark:text-slate-500">
+                          replied {item.threadTitle ? `in "${item.threadTitle}"` : item.mediaId !== null ? 'on DynastyTube' : 'on the Feed'} · wk {item.week}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 truncate text-xs italic text-slate-400 dark:text-slate-500">
+                        you: {item.inReplyTo}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-sm text-slate-800 dark:text-slate-200">{item.body}</p>
+                    </>
+                  );
+                  return tid !== null ? (
+                    <button
+                      key={item.id}
+                      className="block w-full py-2 text-left hover:bg-slate-50 dark:hover:bg-white/5"
+                      onClick={() => {
+                        setOpenId(tid);
+                        setInboxOpen(false);
+                        window.setTimeout(() => {
+                          document.getElementById(`board-thread-${tid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 80);
+                      }}
+                    >
+                      {row}
+                    </button>
+                  ) : (
+                    <div key={item.id} className="py-2">
+                      {row}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {composing && (
           <div className="mt-3 space-y-2 border-t border-slate-200/80 pt-3 dark:border-slate-800">
             <input
@@ -360,7 +491,7 @@ export function NetBoard() {
             : splitFlair(t.displayName);
           const commentCount = countComments(t);
           return (
-            <SurfaceCard key={t.id}>
+            <SurfaceCard key={t.id} id={`board-thread-${t.id}`}>
               <div className="flex items-start gap-3">
                 {/* vote column, reddit-style — and the votes are yours to cast */}
                 <div className="flex w-10 shrink-0 flex-col items-center pt-0.5">
@@ -401,9 +532,30 @@ export function NetBoard() {
                       <CommentBody body={t.body} />
                     </div>
                   )}
+                  {t.replies.length > 1 && (
+                    <p className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                      sorted by:
+                      {(['best', 'new', 'controversial'] as const).map((s) => (
+                        <button
+                          key={s}
+                          className={`px-1 font-semibold ${sort === s ? 'text-slate-800 underline dark:text-slate-200' : 'hover:text-slate-600 dark:hover:text-slate-300'}`}
+                          onClick={() => setSort(s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </p>
+                  )}
                   <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {t.replies.map((r) => (
-                      <Comment key={r.id} post={r} userFlair={userFlair} onVote={vote} />
+                    {sortComments(t.replies, sort).map((r) => (
+                      <Comment
+                        key={r.id}
+                        post={r}
+                        userFlair={userFlair}
+                        onVote={vote}
+                        revealed={revealed}
+                        onReveal={(pid) => setRevealed((prev) => new Set(prev).add(pid))}
+                      />
                     ))}
                   </div>
                   {userAccount && (

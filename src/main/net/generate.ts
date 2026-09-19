@@ -21,7 +21,7 @@ import { getRoster } from '../../database/getRoster';
 import { getSchedule } from '../../database/getSchedule';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getAllLeaguePlayers } from '../../database/getLeagueRoster';
-import type { NetAccount, NetCaptionResult, NetGenerateResult, NetPost } from '../../shared/netTypes';
+import type { NetAccount, NetCaptionResult, NetClipInfo, NetGenerateResult, NetPost } from '../../shared/netTypes';
 
 /**
  * Generation orchestrator: builds the week's context from the archive, asks
@@ -279,7 +279,13 @@ export async function replyToUserPost(
   return { ok: true, engine, message, postsAdded: added };
 }
 
-const COMMENTS_SYSTEM = `You write the comment section under a highlight upload on a fictional video site for a college-football video-game dynasty. Bots argue about GOATs, stats, worst moments, favorite plays, clutch moments — grounded in the clip's real game and players. If still frames from the clip are attached, you have WATCHED it: react to what actually happens on screen (the play, the formations, the broadcast score bug — read it for score/time/quarter if visible). Return ONLY JSON: [{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}] with 3-5 top-level comments, 0-2 replies each. Use only cast handles.`;
+const COMMENTS_SYSTEM = `You write the comment section under a highlight upload on a fictional video site for a college-football video-game dynasty. Bots argue about GOATs, stats, worst moments, favorite plays, clutch moments — grounded in the clip's real game and players. If still frames from the clip are attached, you have WATCHED it: react to what actually happens on screen (the play, the formations, the broadcast score bug — read it for score/time/quarter if visible).
+
+LENGTH MIX, like a real video comment section: most comments are one or two lines, but include 1-2 LONG comments — the breakdown guy walking through what makes a play work (3-6 sentences), or an "as a [team] fan..." confession paragraph — and a couple of mid-size 2-3 sentence takes. Not everyone is clever; plain awe ("HE'S GONE lol", the score typed in disbelief) belongs here too.
+
+TIMESTAMPS: if the prompt gives a CLIP RUNTIME with frame timestamps, anchor 2-3 comments to real moments using M:SS (e.g. "0:47 he's GONE" or "the block at 1:12 needs to be studied") — only timestamps within the runtime, matched to what the frames at those times actually show. One comment can be nothing but a timestamp and a reaction.
+
+Return ONLY JSON: [{"handle","body","likes":int,"replies":[{"handle","body","likes":int}]}] with 5-9 top-level comments, 0-3 replies each (replies can be real back-and-forth, not just one-liners). Use only cast handles.`;
 
 export type MediaCommentMode = 'more' | 'fresh';
 
@@ -355,6 +361,7 @@ export async function generateMediaComments(
   mediaId: number,
   mode: MediaCommentMode = 'more',
   frames: string[] = [],
+  clip?: NetClipInfo,
 ): Promise<NetGenerateResult> {
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
@@ -400,10 +407,16 @@ export async function generateMediaComments(
             `Q${p.quarter} ${Math.floor(p.clockSeconds / 60)}:${String(p.clockSeconds % 60).padStart(2, '0')} — ${p.teamName ?? 'score'} ${p.playType}${p.scorerNames?.length ? ` by ${p.scorerNames.join(' to ')}` : p.playType === 'touchdown' ? ' (scorer not among the offensive leaders — possibly a defensive/special-teams or role-player TD; the frames may show which)' : ''} (+${p.points + p.conversionPoints}), score after: ${p.awayScore}-${p.homeScore}`,
         )
         .join('\n');
+      // Real clock positions for the frames the model is watching — what lets
+      // a comment say "0:47 he's GONE" and mean it (clickable in the player).
+      const fmtTs = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+      const clipSection = clip?.durationSeconds
+        ? `\nCLIP RUNTIME: ${fmtTs(clip.durationSeconds)}${clip.frameTimes?.length ? ` — the attached frames are stills taken at ${clip.frameTimes.map(fmtTs).join(', ')} (in that order)` : ''}`
+        : '';
       const raw = await generateJson<ModelPost[]>(
         COMMENTS_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP TITLE: ${item?.tubeTitle || item?.description || 'untitled highlight'}${item?.tubeTitle && item?.description ? `\nUPLOADER'S DESCRIPTION: ${item.description}` : ''}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
-        2500,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP TITLE: ${item?.tubeTitle || item?.description || 'untitled highlight'}${item?.tubeTitle && item?.description ? `\nUPLOADER'S DESCRIPTION: ${item.description}` : ''}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}${clipSection}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
+        4500,
         frames,
       );
       drafts = raw.map((p) => ({
