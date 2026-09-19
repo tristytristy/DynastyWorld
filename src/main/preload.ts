@@ -28,6 +28,7 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.db.getSeasonOverview, dynastyId, seasonId),
     getNcaaHub: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getNcaaHub, dynastyId, seasonId),
     getHistory: (dynastyId) => ipcRenderer.invoke(IPC.db.getHistory, dynastyId),
+    getLeagueHistory: (dynastyId) => ipcRenderer.invoke(IPC.db.getLeagueHistory, dynastyId),
     deleteDynasty: (dynastyId) => ipcRenderer.invoke(IPC.db.deleteDynasty, dynastyId),
     getSeasons: (dynastyId) => ipcRenderer.invoke(IPC.db.getSeasons, dynastyId),
     getRoster: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.db.getRoster, dynastyId, seasonId),

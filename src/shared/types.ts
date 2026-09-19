@@ -8,6 +8,10 @@ import type {
 
 export type { TeamAllTimeData, TeamHistorySeasonData, TeamStatRecordData };
 
+import type { LeagueHistoryView } from '../database/getLeagueHistory';
+
+export type { LeagueHistoryView };
+
 import type { PortraitBuild, PortraitSkinTone, PortraitType } from './portraitTaxonomy';
 
 export interface SaveFileInfo {
@@ -3175,6 +3179,8 @@ export interface DynastyApi {
     getSeasonOverview: (dynastyId: string, seasonId?: number) => Promise<SeasonOverview | null>;
     getNcaaHub: (dynastyId: string, seasonId?: number) => Promise<NcaaHubOverview | null>;
     getHistory: (dynastyId: string) => Promise<ProgramHistoryOverview | null>;
+    /** The league-wide champions timeline + all-time program table (League History page). */
+    getLeagueHistory: (dynastyId: string) => Promise<LeagueHistoryView>;
     deleteDynasty: (dynastyId: string) => Promise<void>;
     getSeasons: (dynastyId: string) => Promise<SeasonSummary[]>;
     getRoster: (dynastyId: string, seasonId?: number) => Promise<RosterPlayer[] | null>;

@@ -52,6 +52,7 @@ import { getTeamTheme } from '../../database/getTeamTheme';
 import { getSaveRivals, getLeagueRivalries } from '../../database/getSaveRivals';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
+import { getLeagueHistory, type LeagueHistoryView } from '../../database/getLeagueHistory';
 import { getRoster } from '../../database/getRoster';
 import { getPlayerStats } from '../../database/getPlayerStats';
 import { getTeamStats } from '../../database/getTeamStats';
@@ -237,6 +238,10 @@ export function registerDatabaseHandlers(): void {
       return getHistory(dynastyId) ?? null;
     },
   );
+
+  ipcMain.handle(IPC.db.getLeagueHistory, (_event, dynastyId: string): LeagueHistoryView => {
+    return getLeagueHistory(dynastyId);
+  });
 
   ipcMain.handle(IPC.db.deleteDynasty, async (_event, dynastyId: string): Promise<void> => {
     deleteDynasty(dynastyId);

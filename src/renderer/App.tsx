@@ -30,6 +30,7 @@ import { Transfers } from './pages/Transfers';
 import { Rivalries } from './pages/Rivalries';
 import { NcaaHub } from './pages/NcaaHub';
 import { NcaaRecords } from './pages/NcaaRecords';
+import { LeagueHistory } from './pages/LeagueHistory';
 import { Roster } from './pages/Roster';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
@@ -250,6 +251,7 @@ export function App() {
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />
                       <Route path="ncaa-records" element={<NcaaRecords />} />
+                      <Route path="league-history" element={<LeagueHistory />} />
                     </Route>
                   </Route>
                 </Routes>

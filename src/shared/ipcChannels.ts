@@ -21,6 +21,7 @@ export const IPC = {
     getSeasonOverview: 'db:getSeasonOverview',
     getNcaaHub: 'db:getNcaaHub',
     getHistory: 'db:getHistory',
+    getLeagueHistory: 'db:getLeagueHistory',
     deleteDynasty: 'db:deleteDynasty',
     getSeasons: 'db:getSeasons',
     getRoster: 'db:getRoster',

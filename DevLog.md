@@ -11568,3 +11568,15 @@ sits after it, so a missing directory hangs the run instead of failing.
 - **The inbox** (schema v29, dynasties.net_inbox_seen_id): ✉ Inbox on the Board toolbar with an unread badge — every bot reply to YOUR threads/comments/feed posts, newest first, with jump-to-thread. And the other half: weekly board generation now receives your unanswered posts (thread OPs + top-level comments) and writes 1-2 "lateReplies" directly under each — the board finally noticing your take is how replies arrive over time.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean on touched files.
+
+## Phase — League History page (2026-09-19)
+
+**Shipped (user pick — the in-app version of the game's "League History & Records" screen):** a new NCAA Hub tab, `/league-history`, with four panels:
+- **National champions timeline** — every archived season's `yearSummary` snapshot (full and history-only alike): champion with record, coach, and title-game score over the runner-up; the year's Heisman when the summary carries it; expandable conference-champions chips per year.
+- **Most titles — dynasty era** — title counts with years, aggregated from the timeline.
+- **From the record book** — when a `legacy:*` dynasty is in the archive (the CFB 26 master document import), its 30 champions ride along in a condensed two-column panel with its own most-decorated line. Skipped when browsing the legacy dynasty itself.
+- **All-time programs** — the save's preloaded-with-real-history per-team totals from the newest full sync's `teamHistory` snapshot: W-L-T, Pct, national titles (apps), conference titles, CFP appearances, bowls won (made), Heismans, players drafted. Ranked by wins, with a school search box.
+
+New `getLeagueHistory` assembly (database/getLeagueHistory.ts) + `db:getLeagueHistory` IPC. No new extraction — every panel reads snapshots the app already captures.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean.

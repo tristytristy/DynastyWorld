@@ -26,6 +26,7 @@ export const NCAA_TABS: { to: string; label: string; end?: boolean; postseasonOn
   { to: '/annual-awards', label: 'Annual Awards' },
   { to: '/all-america', label: 'All-America & All-Conf' },
   { to: '/ncaa-records', label: 'Record Book' },
+  { to: '/league-history', label: 'League History' },
 ];
 
 /**
