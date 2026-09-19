@@ -139,13 +139,20 @@ export function Scores() {
 
   const games = view?.games;
   const weeks = useMemo(() => [...new Set((games ?? []).map((g) => g.week))].sort((a, b) => a - b), [games]);
-  // Default to the latest week that actually has a played game (most recent
-  // action), falling back to the first week if nothing's been played.
+  // Land on the week the save is actually AT: the held week is the in-game
+  // current week (see shared/resultsHold.ts), so opening there shows this
+  // week's slate — with the on-hold note — instead of last week's results.
+  // Matters most at bowl entry, where "latest played" pins the page to the
+  // conference championships and the whole postseason looks like it never
+  // arrived. Falls back to the latest played week (nothing held = the user
+  // just played), then the first week of a fresh season.
   const defaultWeek = useMemo(() => {
+    const held = view?.heldWeek;
+    if (held != null && weeks.includes(held)) return held;
     const played = (games ?? []).filter((g) => g.homeScore !== null);
     if (played.length) return Math.max(...played.map((g) => g.week));
     return weeks[0] ?? null;
-  }, [games, weeks]);
+  }, [view, games, weeks]);
   const activeWeek = pickedWeek ?? defaultWeek;
 
   if (!id) return null;
@@ -236,8 +243,9 @@ export function Scores() {
       {heldWeek !== null && activeWeek !== null && activeWeek >= heldWeek && (
         <div className="corner-cut-sm border border-slate-200/80 bg-slate-100/70 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
           <span className="font-semibold text-slate-800 dark:text-slate-100">Week {heldWeek} results are on hold.</span>{' '}
-          The save already has the rest of the country&rsquo;s scores, but the game keeps them hidden until you play your
-          own game — so the hub does too. Play it, then sync again.
+          The save already has the rest of the country&rsquo;s scores, but the game keeps them hidden until the week is
+          behind you — so the hub does too. Play your game (or, on a week without one, advance past it), then sync again
+          and the scores fill in.
         </div>
       )}
 

@@ -21,6 +21,7 @@
     "package:polos": "node build/compile-assets-installer.js polos-installer.nsi"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "archiver": "^5.3.2",
     "electron-updater": "^6.8.9",
     "madden-franchise": "^4.3.1",

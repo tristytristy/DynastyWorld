@@ -66,7 +66,11 @@ export function formatSaveWeek(input: SyncPhaseInput & { currentWeek: number }):
   if (phase.kind === 'regular')
     return input.currentWeek > 0 ? `Week ${input.currentWeek}` : 'Regular Season';
   if (phase.kind === 'offseason') return phase.label; // "End of Season Recap", "Players Leaving", "Offseason · stage N"
-  return 'Postseason'; // bowls / playoff / national championship
+  // Bowls / playoff / national championship. CurrentWeek keeps counting here
+  // (17-20, verified on a real NC-week save), and without it every postseason
+  // sync reads identically — a user advancing through bowl weeks saw the label
+  // sit still and reported the sync itself as stuck.
+  return input.currentWeek > 0 ? `Postseason · Week ${input.currentWeek}` : 'Postseason';
 }
 
 /**
