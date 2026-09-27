@@ -16,6 +16,7 @@ import { registerCardHandlers } from './ipc/card';
 import { registerProgramHandlers } from './ipc/program';
 import { registerRivalHandlers } from './ipc/rivals';
 import { registerNotesHandlers } from './ipc/notes';
+import { registerNetHandlers } from './ipc/net';
 import { registerManualSeasonHandlers } from './ipc/manualSeasons';
 import { registerUpdateHandlers } from './updater/updateIpc';
 import { scheduleStartupCheck } from './updater/updateService';
@@ -617,6 +618,7 @@ app
       registerProgramHandlers();
       registerRivalHandlers();
       registerNotesHandlers();
+      registerNetHandlers();
       registerManualSeasonHandlers();
       registerUpdateHandlers();
       try {
@@ -646,6 +648,7 @@ app
       registerProgramHandlers();
       registerRivalHandlers();
       registerNotesHandlers();
+      registerNetHandlers();
       registerManualSeasonHandlers();
       registerUpdateHandlers();
       // Diagnostic/screenshot runs keep no menu bar so its height doesn't shift
@@ -795,6 +798,7 @@ app
       registerProgramHandlers();
       registerRivalHandlers();
       registerNotesHandlers();
+      registerNetHandlers();
       registerManualSeasonHandlers();
       registerUpdateHandlers();
       // Native menu bar (File/Edit/View/Window) — reload, DevTools, zoom, and

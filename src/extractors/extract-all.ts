@@ -1,7 +1,7 @@
 import { openFranchiseFile } from './lib/franchise';
 import { extractLeague, type LeagueData } from './extract-league';
 import { extractTeams, type TeamData } from './extract-teams';
-import { extractCoaches, findUserTeamIndex, type CoachData } from './extract-coaches';
+import { extractCoaches, pickPrimaryUserCoach, type CoachData } from './extract-coaches';
 import { extractUserCoachLastMove, type CoachMoveData } from './extract-coach-move';
 import { extractRoster, type RosterPlayerData } from './extract-roster';
 import { extractLeaguePortraits, type LeaguePortraitData } from './extract-league-portraits';
@@ -66,6 +66,13 @@ export interface ExtractionData {
 export async function extractAll(
   filePath: string,
   onProgress?: (step: ExtractionStep, status: ExtractionStepStatus) => void,
+  /**
+   * The archive's own record of which team this dynasty belongs to — passed on
+   * re-syncs so spectator coach profiles (see pickPrimaryUserCoach) can never
+   * hijack the dynasty's identity. Omitted on a first import, where the
+   * tenure heuristic decides.
+   */
+  preferredUserTeamIndex?: number,
 ): Promise<ExtractionData> {
   const franchise = await openFranchiseFile(filePath);
 
@@ -81,15 +88,16 @@ export async function extractAll(
   const coaches = await extractCoaches(franchise);
   onProgress?.('coaches', 'done');
 
-  const userTeamIndex = findUserTeamIndex(coaches);
-  const userTeam = teams.find((t) => t.teamIndex === userTeamIndex);
+  // Same picked coach for the team AND the coach id — resolving them with two
+  // independent finds let them disagree once multiple user profiles existed.
+  const userCoach = pickPrimaryUserCoach(coaches, preferredUserTeamIndex);
+  const userTeam = teams.find((t) => t.teamIndex === userCoach?.teamIndex);
   if (!userTeam) {
     throw new Error('Could not determine which team this dynasty belongs to.');
   }
 
   // The user coach's stable id + most recent school move (for move-year season
   // attribution in persistExtraction). 0 = a coach with no real id.
-  const userCoach = coaches.find((c) => c.isUserControlled);
   const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
   const coachMove = await extractUserCoachLastMove(franchise, userCoachId);
 

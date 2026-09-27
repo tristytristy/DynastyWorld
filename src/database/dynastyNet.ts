@@ -1,0 +1,462 @@
+import { getDb, persist } from './init';
+import type { NetAccount, NetAccountKind, NetFeedView, NetInboxItem, NetPost, NetPostKind } from '../shared/netTypes';
+
+/**
+ * DynastyNet storage (schema v24). Same contract as media.ts: user/bot
+ * content, never written by persistExtraction, survives re-syncs.
+ */
+
+interface AccountRow {
+  id: number;
+  handle: string;
+  display_name: string;
+  kind: string;
+  persona: string;
+}
+
+interface PostRow {
+  id: number;
+  season_id: number;
+  account_id: number;
+  handle: string;
+  display_name: string;
+  account_kind: string;
+  kind: string;
+  parent_id: number | null;
+  media_id: number | null;
+  title: string;
+  body: string;
+  likes: number;
+  week: number;
+  created_at: string;
+}
+
+function mapAccount(row: AccountRow): NetAccount {
+  return {
+    id: row.id,
+    handle: row.handle,
+    displayName: row.display_name,
+    kind: row.kind as NetAccountKind,
+    persona: row.persona,
+  };
+}
+
+function mapPost(row: PostRow): NetPost {
+  return {
+    id: row.id,
+    seasonId: row.season_id,
+    accountId: row.account_id,
+    handle: row.handle,
+    displayName: row.display_name,
+    accountKind: row.account_kind as NetAccountKind,
+    kind: row.kind as NetPostKind,
+    parentId: row.parent_id,
+    mediaId: row.media_id,
+    title: row.title,
+    body: row.body,
+    likes: row.likes,
+    week: row.week,
+    createdAt: row.created_at,
+    replies: [],
+  };
+}
+
+function selectRows<T>(sql: string, params: (string | number | null)[]): T[] {
+  const db = getDb();
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows: T[] = [];
+  while (stmt.step()) rows.push(stmt.getAsObject() as unknown as T);
+  stmt.free();
+  return rows;
+}
+
+const POST_SELECT = `
+  SELECT p.id, p.season_id, p.account_id, a.handle, a.display_name,
+         a.kind AS account_kind, p.kind, p.parent_id, p.media_id,
+         p.title, p.body, p.likes, p.week, p.created_at
+  FROM net_posts p JOIN net_accounts a ON a.id = p.account_id`;
+
+export function getAccounts(dynastyId: string): NetAccount[] {
+  return selectRows<AccountRow>(
+    'SELECT id, handle, display_name, kind, persona FROM net_accounts WHERE dynasty_id = ? ORDER BY id',
+    [dynastyId],
+  ).map(mapAccount);
+}
+
+/**
+ * Idempotent cast install: existing handles are left alone (their posts keep
+ * their author), new ones are added. Returns the full roster either way.
+ */
+export function ensureAccounts(
+  dynastyId: string,
+  wanted: { handle: string; displayName: string; kind: NetAccountKind; persona: string }[],
+): NetAccount[] {
+  const db = getDb();
+  const current = getAccounts(dynastyId);
+  let added = false;
+  // The user's identity is singular: if it already exists under an old
+  // handle (early builds used @Coach), rename it in place so every past
+  // post follows the new name instead of a second user account appearing.
+  const wantedUser = wanted.find((w) => w.kind === 'user');
+  const existingUser = current.find((a) => a.kind === 'user');
+  if (wantedUser && existingUser && existingUser.handle !== wantedUser.handle) {
+    db.run('UPDATE net_accounts SET handle = ?, display_name = ? WHERE id = ?', [
+      wantedUser.handle,
+      wantedUser.displayName,
+      existingUser.id,
+    ]);
+    existingUser.handle = wantedUser.handle;
+    added = true;
+  }
+  const existing = new Set(current.map((a) => a.handle));
+  for (const w of wanted) {
+    if (existing.has(w.handle)) continue;
+    db.run('INSERT INTO net_accounts (dynasty_id, handle, display_name, kind, persona, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
+      dynastyId,
+      w.handle,
+      w.displayName,
+      w.kind,
+      w.persona,
+      new Date().toISOString(),
+    ]);
+    added = true;
+  }
+  if (added) persist();
+  return getAccounts(dynastyId);
+}
+
+export interface NewNetPost {
+  seasonId: number;
+  accountId: number;
+  kind: NetPostKind;
+  parentId?: number | null;
+  mediaId?: number | null;
+  title?: string;
+  body: string;
+  likes?: number;
+  week: number;
+}
+
+export function insertPosts(dynastyId: string, posts: NewNetPost[]): number {
+  if (posts.length === 0) return 0;
+  const db = getDb();
+  for (const p of posts) {
+    db.run(
+      'INSERT INTO net_posts (dynasty_id, season_id, account_id, kind, parent_id, media_id, title, body, likes, week, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        dynastyId,
+        p.seasonId,
+        p.accountId,
+        p.kind,
+        p.parentId ?? null,
+        p.mediaId ?? null,
+        p.title ?? '',
+        p.body,
+        p.likes ?? 0,
+        p.week,
+        new Date().toISOString(),
+      ],
+    );
+  }
+  persist();
+  return posts.length;
+}
+
+/**
+ * The id of the most recently inserted post.
+ *
+ * ONLY VALID BEFORE THE NEXT FLUSH: sql.js's export() (inside persist())
+ * closes and reopens the connection, which resets last_insert_rowid() to 0 —
+ * the same reopen that resets PRAGMA foreign_keys (see init.ts). Callers that
+ * need this id for a reply's parent_id must run their inserts inside
+ * withBatchedPersist(), which defers the flush until the batch ends.
+ */
+export function lastInsertId(): number {
+  const rows = selectRows<{ id: number }>('SELECT last_insert_rowid() AS id', []);
+  return rows[0]?.id ?? 0;
+}
+
+function attachReplies(dynastyId: string, tops: NetPost[], deep = false): NetPost[] {
+  if (tops.length === 0) return tops;
+  const byId = new Map(tops.map((p) => [p.id, p]));
+  const replies = selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.parent_id IS NOT NULL ORDER BY p.id`,
+    [dynastyId],
+  ).map(mapPost);
+  for (const r of replies) {
+    const parent = r.parentId !== null ? byId.get(r.parentId) : undefined;
+    if (!parent) continue;
+    parent.replies.push(r);
+    // Deep mode (the board's reddit-style nesting): a reply can parent further
+    // replies. Rows come back id-ascending and parents insert before children,
+    // so registering each reply as it lands is sufficient for any depth.
+    if (deep) byId.set(r.id, r);
+  }
+  return tops;
+}
+
+/** Feed posts (and the user's) for a season, newest week first, replies attached. */
+export function getFeed(dynastyId: string, seasonId: number): NetPost[] {
+  const tops = selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind IN ('post') AND p.parent_id IS NULL ORDER BY p.week DESC, p.id ASC`,
+    [dynastyId, seasonId],
+  ).map(mapPost);
+  return attachReplies(dynastyId, tops);
+}
+
+export function getFeedView(dynastyId: string, seasonId: number): NetFeedView {
+  const posts = getFeed(dynastyId, seasonId);
+  const weeks = selectRows<{ week: number }>(
+    "SELECT DISTINCT week FROM net_posts WHERE dynasty_id = ? AND season_id = ? AND kind = 'post' ORDER BY week",
+    [dynastyId, seasonId],
+  ).map((r) => r.week);
+  const user = getAccounts(dynastyId).find((a) => a.kind === 'user') ?? null;
+  return { posts, generatedWeeks: weeks, userAccount: user };
+}
+
+/** Articles or podcast episodes for a season, newest week first. */
+export function getEditions(dynastyId: string, seasonId: number, kind: 'article' | 'podcast' | 'throwback' | 'top10'): NetPost[] {
+  return selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind = ? ORDER BY p.week DESC, p.id ASC`,
+    [dynastyId, seasonId, kind],
+  ).map(mapPost);
+}
+
+/**
+ * One user vote on a post — the number simply moves (user request: "your
+ * votes count"). A single-human app needs no per-user vote ledger; repeat
+ * taps are the owner enjoying their own internet.
+ */
+export function adjustPostLikes(dynastyId: string, postId: number, delta: number): number {
+  const db = getDb();
+  db.run('UPDATE net_posts SET likes = likes + ? WHERE id = ? AND dynasty_id = ?', [delta > 0 ? 1 : -1, postId, dynastyId]);
+  persist();
+  const rows = selectRows<{ likes: number }>('SELECT likes FROM net_posts WHERE id = ? AND dynasty_id = ?', [postId, dynastyId]);
+  return rows[0]?.likes ?? 0;
+}
+
+/** The Historian's published articles for a whole dynasty, newest first — cross-season by nature, unlike getEditions. */
+export function getHistorianArticles(dynastyId: string): NetPost[] {
+  return selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind = 'historian' ORDER BY p.id DESC`,
+    [dynastyId],
+  ).map(mapPost);
+}
+
+/** Comment threads under one media item ("video"), oldest first, replies attached. */
+export function getMediaComments(dynastyId: string, mediaId: number): NetPost[] {
+  const tops = selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.media_id = ? AND p.parent_id IS NULL ORDER BY p.id`,
+    [dynastyId, mediaId],
+  ).map(mapPost);
+  return attachReplies(dynastyId, tops);
+}
+
+/**
+ * Rename (or lazily create) the user's account. Handles are normalized to
+ * @letters/digits/underscores; collisions with cast handles are refused so
+ * the user can't impersonate a bot.
+ */
+export function setUserIdentity(
+  dynastyId: string,
+  rawHandle: string,
+  rawDisplayName: string,
+): { ok: boolean; message?: string; account?: NetAccount } {
+  const db = getDb();
+  const handle = '@' + rawHandle.replace(/^@+/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 24);
+  if (handle.length < 3) return { ok: false, message: 'Handle needs at least 2 letters or digits.' };
+  const displayName = (rawDisplayName.trim() || handle.slice(1)).slice(0, 40);
+  const accounts = getAccounts(dynastyId);
+  const user = accounts.find((a) => a.kind === 'user');
+  if (accounts.some((a) => a.handle.toLowerCase() === handle.toLowerCase() && a.id !== user?.id)) {
+    return { ok: false, message: `${handle} is taken by someone on the Net. Pick another.` };
+  }
+  if (user) {
+    db.run('UPDATE net_accounts SET handle = ?, display_name = ? WHERE id = ?', [handle, displayName, user.id]);
+  } else {
+    db.run(
+      "INSERT INTO net_accounts (dynasty_id, handle, display_name, kind, persona, created_at) VALUES (?, ?, ?, 'user', '', ?)",
+      [dynastyId, handle, displayName, new Date().toISOString()],
+    );
+  }
+  persist();
+  const account = getAccounts(dynastyId).find((a) => a.kind === 'user');
+  return { ok: true, account };
+}
+
+/**
+ * The Net's recent history, oldest first — the memory every generator is
+ * handed so feuds, takes and bad predictions carry across weeks. Bounded:
+ * bodies truncated, newest `limit` posts only.
+ */
+export function getRecentPosts(
+  dynastyId: string,
+  limit = 40,
+  kinds: string[] = ['post', 'reply'],
+): { handle: string; week: number; body: string; isUser: boolean }[] {
+  const placeholders = kinds.map(() => '?').join(', ');
+  return selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.kind IN (${placeholders}) ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId, ...kinds],
+  )
+    .reverse()
+    .map((r) => ({
+      handle: r.handle,
+      week: r.week,
+      body: r.body.slice(0, 180),
+      isUser: r.account_kind === 'user',
+    }));
+}
+
+/**
+ * Replies to the human member's own posts, newest first — the Board inbox
+ * (user request, 2026-09-19). Covers every surface: board threads/comments,
+ * feed posts, and Tube comments; the renderer badges anything newer than
+ * the dynasty's net_inbox_seen_id.
+ */
+export function getRepliesToUser(dynastyId: string, limit = 40): NetInboxItem[] {
+  interface InboxRow extends PostRow {
+    parent_body: string;
+    parent_kind: string;
+    parent_title: string;
+    parent_parent_id: number | null;
+    root_title: string | null;
+  }
+  const rows = selectRows<InboxRow>(
+    `SELECT p.id, p.season_id, p.account_id, a.handle, a.display_name,
+            a.kind AS account_kind, p.kind, p.parent_id, p.media_id,
+            p.title, p.body, p.likes, p.week, p.created_at,
+            parent.body AS parent_body, parent.kind AS parent_kind,
+            parent.title AS parent_title,
+            parent.parent_id AS parent_parent_id, root.title AS root_title
+     FROM net_posts p
+     JOIN net_accounts a ON a.id = p.account_id
+     JOIN net_posts parent ON parent.id = p.parent_id
+     JOIN net_accounts pa ON pa.id = parent.account_id
+     LEFT JOIN net_posts root ON root.id = parent.parent_id
+     WHERE p.dynasty_id = ? AND pa.kind = 'user' AND a.kind != 'user'
+     ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId],
+  );
+  return rows.map((r) => {
+    // Root thread: the parent itself when the user authored the thread,
+    // else the user's comment's own parent (one level up).
+    const parentIsThread = r.parent_kind === 'thread';
+    return {
+      id: r.id,
+      handle: r.handle,
+      displayName: r.display_name,
+      body: r.body,
+      likes: r.likes,
+      week: r.week,
+      createdAt: r.created_at,
+      inReplyTo: (r.parent_body || r.parent_title).slice(0, 140),
+      threadId: parentIsThread ? r.parent_id : r.parent_kind === 'reply' ? r.parent_parent_id : null,
+      threadTitle: parentIsThread ? r.parent_title || null : r.root_title || null,
+      mediaId: r.media_id,
+    };
+  });
+}
+
+/**
+ * The human member's board posts that no bot ever answered — handed to the
+ * weekly board generation so takes you dropped between generations get their
+ * replies "overnight". Only thread OPs and top-level comments qualify: a
+ * reply to anything deeper would render below the board's nesting depth.
+ */
+export function getUnansweredUserPosts(
+  dynastyId: string,
+  limit = 5,
+): { id: number; week: number; threadTitle: string; body: string }[] {
+  interface Row {
+    id: number;
+    week: number;
+    body: string;
+    kind: string;
+    title: string;
+    root_title: string | null;
+  }
+  const rows = selectRows<Row>(
+    `SELECT p.id, p.week, p.body, p.kind, p.title, root.title AS root_title
+     FROM net_posts p
+     JOIN net_accounts a ON a.id = p.account_id
+     LEFT JOIN net_posts root ON root.id = p.parent_id
+     WHERE p.dynasty_id = ? AND a.kind = 'user' AND p.media_id IS NULL
+       AND p.kind IN ('thread', 'reply')
+       AND (p.kind = 'thread' OR (root.id IS NOT NULL AND root.kind = 'thread'))
+       AND NOT EXISTS (SELECT 1 FROM net_posts c WHERE c.parent_id = p.id)
+     ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [dynastyId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    week: r.week,
+    threadTitle: (r.kind === 'thread' ? r.title : r.root_title) || '(thread)',
+    body: r.body.slice(0, 200),
+  }));
+}
+
+/** A post exists and may take replies — guards lateReplies against invented ids. */
+export function postExists(dynastyId: string, postId: number): boolean {
+  return (
+    selectRows<{ n: number }>('SELECT COUNT(*) AS n FROM net_posts WHERE id = ? AND dynasty_id = ?', [postId, dynastyId])[0]
+      ?.n ?? 0
+  ) > 0;
+}
+
+/** Board threads for a season, newest first, replies attached (oldest first inside). */
+export function getThreads(dynastyId: string, seasonId: number): NetPost[] {
+  const tops = selectRows<PostRow>(
+    `${POST_SELECT} WHERE p.dynasty_id = ? AND p.season_id = ? AND p.kind = 'thread' ORDER BY p.id DESC`,
+    [dynastyId, seasonId],
+  ).map(mapPost);
+  // deep: the board renders reddit-style one-level nesting under comments.
+  return attachReplies(dynastyId, tops, true);
+}
+
+/** One post and its replies, oldest first — the context for replying in-thread. */
+export function getThread(dynastyId: string, postId: number): NetPost | null {
+  const tops = selectRows<PostRow>(`${POST_SELECT} WHERE p.dynasty_id = ? AND p.id = ?`, [dynastyId, postId]).map(
+    mapPost,
+  );
+  if (!tops.length) return null;
+  return attachReplies(dynastyId, tops)[0];
+}
+
+/** Wipe one week's bot board threads (replies cascade). User threads stay. */
+export function clearWeekThreads(dynastyId: string, seasonId: number, week: number): void {
+  const db = getDb();
+  db.run(
+    "DELETE FROM net_posts WHERE dynasty_id = ? AND season_id = ? AND week = ? AND kind = 'thread' AND account_id IN (SELECT id FROM net_accounts WHERE dynasty_id = ? AND kind != 'user')",
+    [dynastyId, seasonId, week, dynastyId],
+  );
+  persist();
+}
+
+/** Wipe one media item's comment section ahead of a fresh generation. */
+export function clearMediaComments(dynastyId: string, mediaId: number): void {
+  const db = getDb();
+  db.run('DELETE FROM net_posts WHERE dynasty_id = ? AND media_id = ?', [dynastyId, mediaId]);
+  persist();
+}
+
+/** True when a week already has generated feed chatter — the regenerate guard. */
+export function weekHasPosts(dynastyId: string, seasonId: number, week: number): boolean {
+  return (
+    selectRows<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM net_posts p JOIN net_accounts a ON a.id = p.account_id WHERE p.dynasty_id = ? AND p.season_id = ? AND p.week = ? AND p.kind = 'post' AND a.kind != 'user'",
+      [dynastyId, seasonId, week],
+    )[0]?.n ?? 0
+  ) > 0;
+}
+
+/** Wipe one week's bot content (feed + article + podcast) ahead of a regenerate. User posts stay. */
+export function clearWeek(dynastyId: string, seasonId: number, week: number): void {
+  const db = getDb();
+  db.run(
+    "DELETE FROM net_posts WHERE dynasty_id = ? AND season_id = ? AND week = ? AND account_id IN (SELECT id FROM net_accounts WHERE dynasty_id = ? AND kind != 'user')",
+    [dynastyId, seasonId, week, dynastyId],
+  );
+  persist();
+}

@@ -34,8 +34,7 @@ import {
   reorderMedia,
   setMediaFraming,
   setMediaLook,
-  updateMediaItem,
-} from '../../database/media';
+  updateMediaItem, getScoringPlaysForGame } from '../../database/media';
 import type { MediaItemResolved } from '../../shared/types';
 import type { MediaLook } from '../../shared/mediaLook';
 
@@ -222,6 +221,12 @@ export function registerMediaHandlers(): void {
     IPC.media.setCustomAlbumCover,
     async (_e, dynastyId: string, seasonId: number, albumId: number, mediaId: number | null) =>
       setCustomAlbumCover(dynastyId, seasonId, albumId, mediaId),
+  );
+
+  ipcMain.handle(
+    IPC.media.scoringPlays,
+    async (_event, dynastyId: string, seasonId: number, gameId: number) =>
+      getScoringPlaysForGame(dynastyId, seasonId, gameId),
   );
 
   ipcMain.handle(IPC.media.update, async (_event, id: number, patch: MediaItemPatch): Promise<void> => {

@@ -139,10 +139,15 @@ async function findUserTeamIndexFromSave(franchise: OpenFranchise): Promise<numb
   await table.readRecords();
   // IsUserControlled reads back as a real boolean here, so compare loosely to
   // both true and the string 'true' rather than assuming one representation.
-  const user = nonEmpty(table.records).find(
+  // Several user profiles can coexist (spectator coaches — see
+  // pickPrimaryUserCoach in extract-coaches.ts); the recruiting board being
+  // edited is the CAREER coach's, i.e. the user coach with the most tenure.
+  const users = nonEmpty(table.records).filter(
     (c) => c.IsUserControlled === true || String(c.IsUserControlled) === 'true',
   );
-  return user ? Number(user.TeamIndex) : undefined;
+  if (users.length === 0) return undefined;
+  const user = users.reduce((best, c) => (Number(c.YearsCoaching) > Number(best.YearsCoaching) ? c : best));
+  return Number(user.TeamIndex);
 }
 
 async function teamNameByIndex(franchise: OpenFranchise, teamIndex: number): Promise<string> {

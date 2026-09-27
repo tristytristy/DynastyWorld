@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
 import { IPC } from '../../shared/ipcChannels';
@@ -45,12 +45,14 @@ import {
 import { formatSaveWeek, isBowlSlateSet } from '../../shared/syncPhase';
 import type { LeagueData } from '../../extractors/extract-league';
 import { formatBackfillSuffix, persistExtraction, syncDynasty } from '../../database/importExtraction';
+import { importLegacyDynasty } from '../../database/importLegacyDynasty';
 import { checkDynastyMatch, relinkDynasty } from '../../database/relinkDynasty';
 import { getSeasonOverview, getSeasonTheme } from '../../database/getSeasonOverview';
 import { getTeamTheme } from '../../database/getTeamTheme';
 import { getSaveRivals, getLeagueRivalries } from '../../database/getSaveRivals';
 import { getNcaaHub } from '../../database/getNcaaHub';
 import { getHistory } from '../../database/getHistory';
+import { getLeagueHistory, type LeagueHistoryView } from '../../database/getLeagueHistory';
 import { getRoster } from '../../database/getRoster';
 import { getPlayerStats } from '../../database/getPlayerStats';
 import { getTeamStats } from '../../database/getTeamStats';
@@ -170,6 +172,30 @@ export function registerDatabaseHandlers(): void {
   }),
   );
 
+  /*
+    Legacy dynasty import — a finished dynasty from a hand-kept record book
+    (parsed to JSON) rather than a save file. The dialog lives here rather than
+    reusing fs.selectFile so it can filter to .json and carry its own title;
+    null means the user cancelled and the renderer stays quiet.
+  */
+  ipcMain.handle(IPC.db.importLegacyDynasty, async (): Promise<ImportResult | null> => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Select a legacy dynasty record book (.json)',
+      properties: ['openFile'],
+      filters: [{ name: 'Legacy dynasty JSON', extensions: ['json'] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return null;
+    try {
+      const jsonText = await fs.readFile(picked.filePaths[0], 'utf8');
+      return importLegacyDynasty(jsonText);
+    } catch (err) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Could not read that file.',
+      };
+    }
+  });
+
   ipcMain.handle(
     IPC.db.checkDynastyMatch,
     async (_event, savePath: string): Promise<DynastyMatchCandidate | null> => {
@@ -212,6 +238,10 @@ export function registerDatabaseHandlers(): void {
       return getHistory(dynastyId) ?? null;
     },
   );
+
+  ipcMain.handle(IPC.db.getLeagueHistory, (_event, dynastyId: string): LeagueHistoryView => {
+    return getLeagueHistory(dynastyId);
+  });
 
   ipcMain.handle(IPC.db.deleteDynasty, async (_event, dynastyId: string): Promise<void> => {
     deleteDynasty(dynastyId);

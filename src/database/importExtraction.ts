@@ -2,9 +2,11 @@ import { isGamePlayed } from '../shared/gameStatus';
 import { extractAll } from '../extractors/extract-all';
 import type { ExtractionData } from '../extractors/extract-all';
 import type { ScoringPlayData } from '../extractors/extract-scoring';
+import { pickPrimaryUserCoach } from '../extractors/extract-coaches';
 import {
   createDynasty,
   createSeason,
+  getCurrentSeason,
   getDynastyById,
   getDynastyBySavePath,
   getSeasonByYear,
@@ -21,7 +23,13 @@ import {
 import { compactDatabase, getReusableSpaceBytes, withBatchedPersist } from './init';
 import { autoRecalculateTeamAwards } from './getTeamAwards';
 import { captureGameContext } from './gameContext';
-import { deriveSyncPhase, isScheduleFinal, isSeasonFinalizing, isSeasonLocked } from '../shared/syncPhase';
+import {
+  deriveSyncPhase,
+  formatSaveWeek,
+  isScheduleFinal,
+  isSeasonFinalizing,
+  isSeasonLocked,
+} from '../shared/syncPhase';
 import {
   holdGameResult,
   holdLeagueGameResult,
@@ -54,6 +62,8 @@ export interface PersistedImport {
   season: Season;
   /** Years newly backfilled as history-only seasons this call (see extractLeagueHistory) — empty on the common case where nothing was skipped. */
   backfilledSeasonYears: number[];
+  /** True when the coach has moved schools within this season year: league-wide data was written, the old school's team-scoped captures were left locked. */
+  coachMovedPartial: boolean;
 }
 
 /**
@@ -133,7 +143,9 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
 
   // The user coach's stable id (Coach.PresentationId) — the identity anchor for
   // the coaching journey. 0 (generated coordinators) is treated as "no real id".
-  const userCoach = extraction.coaches.find((c) => c.isUserControlled);
+  // With multiple user profiles in the save (spectator coaches — see
+  // pickPrimaryUserCoach), the user coach must be the one AT the chosen team.
+  const userCoach = pickPrimaryUserCoach(extraction.coaches, userTeam.teamIndex);
   const userCoachId = userCoach && userCoach.presentationId ? userCoach.presentationId : null;
 
   // Move-year attribution: a coach moves after the bowl but before the season
@@ -183,7 +195,28 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     currentOffseasonStage: league.currentOffseasonStage,
   });
   const finalizing = isSeasonFinalizing(phase);
-  const blockWrite = finalizedElsewhere || isSeasonLocked(phase) || (!!existing?.finalized && !finalizing);
+  const blockWrite = isSeasonLocked(phase) || (!!existing?.finalized && !finalizing);
+  /*
+    COACH MOVED, SEASON STILL RUNNING (user report, 2026-08-21): a coordinator
+    can accept a new job DURING the postseason — the carousel is live in bowl
+    season — after which the save's userTeam is already the new school while
+    the current season year is still playing out its bowls and the title game.
+
+    finalizedElsewhere used to sit in blockWrite and refuse the whole season,
+    which silently froze the archive at the last pre-move sync: the dashboard
+    label, held week, scores, and standings all stopped moving even though
+    every sync reported success. For a coordinator-career dynasty that means
+    losing the end of EVERY season.
+
+    The protection it provides is real but narrower than a full block: what
+    must not be overwritten is the OLD school's team-scoped captures (roster,
+    staff, player stats, recruiting...), because the extractor now reads the
+    NEW school's. League-wide snapshots carry no user-team identity at all —
+    scores, standings, brackets, the league rosters — so they keep flowing.
+    `teamScopedLocked` gates exactly the team-scoped set below; everything
+    league-wide writes as normal.
+  */
+  const teamScopedLocked = finalizedElsewhere;
 
   // Results hold (see shared/resultsHold.ts): the save pre-simulates the whole
   // current week the moment you enter it, but the game keeps those scores
@@ -265,10 +298,10 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
       capture taken while the season was live.
     */
     const staffAlreadyCaptured = getSnapshot(season.id, 'coaches') !== undefined;
-    if (phase.kind !== 'offseason' || !staffAlreadyCaptured) {
+    if (!teamScopedLocked && (phase.kind !== 'offseason' || !staffAlreadyCaptured)) {
       saveSnapshotCompressed(season.id, 'coaches', extraction.coaches);
     }
-    saveSnapshot(season.id, 'roster', extraction.roster);
+    if (!teamScopedLocked) saveSnapshot(season.id, 'roster', extraction.roster);
     saveSnapshotCompressed(season.id, 'leaguePortraits', extraction.leaguePortraits);
     saveSnapshotCompressed(season.id, 'leagueRoster', extraction.leagueRoster);
     // Schedules are user-editable in the preseason (the game count settles once
@@ -281,18 +314,20 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     // cleared the moment the week is revealed. Read by getLeagueScores so the
     // Scores page can say why a week reads empty instead of looking broken.
     saveSnapshot(season.id, 'resultsHold', { week: heldWeek } satisfies ResultsHold);
-    saveSnapshot(season.id, 'recruits', extraction.recruits);
+    if (!teamScopedLocked) saveSnapshot(season.id, 'recruits', extraction.recruits);
     // ~2,950 recruits each with a 10-school list — compressed like the other leaguewide snapshots.
     saveSnapshotCompressed(season.id, 'nationalRecruits', extraction.nationalRecruits);
     saveSnapshot(season.id, 'ncaaRecords', extraction.ncaaRecords);
-    saveSnapshot(season.id, 'stats', extraction.stats);
-    saveSnapshot(season.id, 'teamStats', extraction.teamStats);
-    saveSnapshot(season.id, 'kicking', extraction.kicking);
+    if (!teamScopedLocked) {
+      saveSnapshot(season.id, 'stats', extraction.stats);
+      saveSnapshot(season.id, 'teamStats', extraction.teamStats);
+      saveSnapshot(season.id, 'kicking', extraction.kicking);
+    }
     // Leaguewide box scores — every team's per-game lines — so compressed like
     // the other leaguewide snapshots (roster/schedule).
     saveSnapshotCompressed(season.id, 'gamelog', gamelog);
     saveSnapshot(season.id, 'conferenceChampionship', extraction.conferenceChampionship);
-    saveSnapshot(season.id, 'rivalries', extraction.rivalries);
+    if (!teamScopedLocked) saveSnapshot(season.id, 'rivalries', extraction.rivalries);
     saveSnapshot(season.id, 'leagueRivalries', extraction.leagueRivalries);
     // 138 programs x (all-time totals + up to 108 seasons + two record books) —
     // leaguewide and repetitive, so compressed like the other league snapshots.
@@ -300,7 +335,7 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     saveSnapshotCompressed(season.id, 'awards', extraction.awards);
     // Departures are only present at OffSeason stage 2 — write-once so a later
     // (or earlier) sync with an empty list never clobbers a captured one.
-    if (extraction.departures.length > 0) {
+    if (!teamScopedLocked && extraction.departures.length > 0) {
       saveSnapshotCompressed(season.id, 'departures', extraction.departures);
     }
 
@@ -376,14 +411,19 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
       phase.kind === 'regular' || phase.kind === 'postseason',
     );
 
-    recordRankingSnapshot(season.id, {
-      week: computeLastPlayedWeek(extraction.schedule, userTeam.teamIndex),
-      mediaPollRank: userTeam.mediaPollRank,
-      coachesPollRank: userTeam.coachesPollRank,
-      cfpRank: userTeam.cfpRank,
-      wins: userTeam.confWins + userTeam.nonConfWins,
-      losses: userTeam.confLosses + userTeam.nonConfLosses,
-    });
+    // Post-move, `userTeam` is the NEW school — recording its poll position
+    // onto the OLD school's season would graft Clemson's ranking history onto
+    // Akron's year. Team-scoped, so it locks with the rest.
+    if (!teamScopedLocked) {
+      recordRankingSnapshot(season.id, {
+        week: computeLastPlayedWeek(extraction.schedule, userTeam.teamIndex),
+        mediaPollRank: userTeam.mediaPollRank,
+        coachesPollRank: userTeam.coachesPollRank,
+        cfpRank: userTeam.cfpRank,
+        wins: userTeam.confWins + userTeam.nonConfWins,
+        losses: userTeam.confLosses + userTeam.nonConfLosses,
+      });
+    }
 
     // Record the phase written at + finalize the season at End of Season Recap /
     // Players Leaving so a later dirty-offseason sync can't overwrite it.
@@ -404,7 +444,7 @@ function persistExtractionInner(savePath: string, extraction: ExtractionData): P
     backfilledSeasonYears.push(yearSummary.seasonYear);
   }
 
-  return { dynasty, season, backfilledSeasonYears };
+  return { dynasty, season, backfilledSeasonYears, coachMovedPartial: teamScopedLocked && !blockWrite };
 }
 
 /**
@@ -435,10 +475,19 @@ export async function syncDynasty(dynastyId: string): Promise<ImportResult> {
   }
 
   try {
-    const extraction = await extractAll(dynasty.savePath);
+    // The archive's record of this dynasty's team anchors user-coach
+    // selection, so spectator profiles can't hijack the sync. The current
+    // season row is preferred over dynasty.teamId — the latter is a display
+    // cache refreshed even by syncs whose season write was blocked.
+    const currentSeason = getCurrentSeason(dynastyId);
+    const extraction = await extractAll(
+      dynasty.savePath,
+      undefined,
+      currentSeason?.userTeamId ?? dynasty.teamId ?? undefined,
+    );
     // One batch across BOTH halves, so the award recalculation's own writes
     // don't each trigger another full-archive flush after the import's single one.
-    const { backfilledSeasonYears } = withBatchedPersist(() => {
+    const { backfilledSeasonYears, coachMovedPartial } = withBatchedPersist(() => {
       const persisted = persistExtraction(dynasty.savePath, extraction);
       // Best-effort — a coach's confirmed/finalized winner is never touched
       // regardless, and a failure here shouldn't fail the sync itself (already
@@ -450,9 +499,23 @@ export async function syncDynasty(dynastyId: string): Promise<ImportResult> {
       }
       return persisted;
     });
+    // Name the calendar point the save was actually read at ("Week 16",
+    // "Postseason · Week 17"). Proof-of-movement: a postseason sync changes
+    // little that's immediately visible (bowls unplayed, current week's
+    // pre-sim held), so without this the sync looked like it did nothing.
+    const weekLabel = formatSaveWeek({
+      currentWeekType: extraction.league.currentWeekType,
+      currentOffseasonStage: extraction.league.currentOffseasonStage,
+      currentWeek: extraction.league.currentWeek,
+    });
+    // Say so rather than gate silently: without this note, a post-move sync
+    // looked identical to a normal one while the old school's pages sat still.
+    const movedNote = coachMovedPartial
+      ? ` Coach has moved to ${extraction.userTeam.displayName} — the previous school's roster, staff, and stats stay as captured; national scores, standings, and brackets keep updating.`
+      : '';
     return {
       success: true,
-      message: `Synced — season ${extraction.league.seasonYear}.${formatBackfillSuffix(backfilledSeasonYears)}`,
+      message: `Synced — season ${extraction.league.seasonYear} · ${weekLabel}.${movedNote}${formatBackfillSuffix(backfilledSeasonYears)}`,
       dynastyId,
     };
   } catch (err) {
