@@ -339,10 +339,25 @@ export function getRepliesToUser(dynastyId: string, limit = 40): NetInboxItem[] 
      ORDER BY p.id DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
     [dynastyId],
   );
+  if (!rows.length) return [];
+  // Board chains nest to any depth, so the root thread is found by walking
+  // parent links up to the first 'thread' — never assumed to be N levels up.
+  const links = new Map(
+    selectRows<{ id: number; parent_id: number | null; kind: string; title: string }>(
+      'SELECT id, parent_id, kind, title FROM net_posts WHERE dynasty_id = ?',
+      [dynastyId],
+    ).map((l) => [l.id, l]),
+  );
+  const rootThreadOf = (startId: number | null): { id: number; title: string } | null => {
+    let cur = startId !== null ? links.get(startId) : undefined;
+    for (let hops = 0; cur && hops < 60; hops++) {
+      if (cur.kind === 'thread') return { id: cur.id, title: cur.title };
+      cur = cur.parent_id !== null ? links.get(cur.parent_id) : undefined;
+    }
+    return null;
+  };
   return rows.map((r) => {
-    // Root thread: the parent itself when the user authored the thread,
-    // else the user's comment's own parent (one level up).
-    const parentIsThread = r.parent_kind === 'thread';
+    const root = r.media_id === null ? rootThreadOf(r.parent_id) : null;
     return {
       id: r.id,
       handle: r.handle,
@@ -352,8 +367,8 @@ export function getRepliesToUser(dynastyId: string, limit = 40): NetInboxItem[] 
       week: r.week,
       createdAt: r.created_at,
       inReplyTo: (r.parent_body || r.parent_title).slice(0, 140),
-      threadId: parentIsThread ? r.parent_id : r.parent_kind === 'reply' ? r.parent_parent_id : null,
-      threadTitle: parentIsThread ? r.parent_title || null : r.root_title || null,
+      threadId: root?.id ?? null,
+      threadTitle: root?.title || null,
       mediaId: r.media_id,
     };
   });
@@ -415,13 +430,14 @@ export function getThreads(dynastyId: string, seasonId: number): NetPost[] {
   return attachReplies(dynastyId, tops, true);
 }
 
-/** One post and its replies, oldest first — the context for replying in-thread. */
+/** One post and its replies at every depth, oldest first — the context for replying in-thread. */
 export function getThread(dynastyId: string, postId: number): NetPost | null {
   const tops = selectRows<PostRow>(`${POST_SELECT} WHERE p.dynasty_id = ? AND p.id = ?`, [dynastyId, postId]).map(
     mapPost,
   );
   if (!tops.length) return null;
-  return attachReplies(dynastyId, tops)[0];
+  // deep: board transcripts must include whole reply chains, not just the first level.
+  return attachReplies(dynastyId, tops, true)[0];
 }
 
 /** Wipe one week's bot board threads (replies cascade). User threads stay. */

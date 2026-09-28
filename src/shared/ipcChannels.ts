@@ -243,5 +243,7 @@ export const IPC = {
     generateSelection: 'net:generateSelection',
     getInbox: 'net:getInbox',
     markInboxSeen: 'net:markInboxSeen',
+    generateMoreComments: 'net:generateMoreComments',
+    generateMoreThreads: 'net:generateMoreThreads',
   },
 } as const;

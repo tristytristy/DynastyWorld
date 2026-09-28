@@ -369,8 +369,11 @@ const api: DynastyApi = {
       ipcRenderer.invoke(IPC.net.generateBoardWeek, dynastyId, seasonId, regenerate),
     createThread: (dynastyId, seasonId, accountId, title, body) =>
       ipcRenderer.invoke(IPC.net.createThread, dynastyId, seasonId, accountId, title, body),
-    replyToThread: (dynastyId, seasonId, accountId, threadId, body) =>
-      ipcRenderer.invoke(IPC.net.replyToThread, dynastyId, seasonId, accountId, threadId, body),
+    replyToThread: (dynastyId, seasonId, accountId, threadId, body, parentId) =>
+      ipcRenderer.invoke(IPC.net.replyToThread, dynastyId, seasonId, accountId, threadId, body, parentId),
+    generateMoreComments: (dynastyId, seasonId, threadId) =>
+      ipcRenderer.invoke(IPC.net.generateMoreComments, dynastyId, seasonId, threadId),
+    generateMoreThreads: (dynastyId, seasonId) => ipcRenderer.invoke(IPC.net.generateMoreThreads, dynastyId, seasonId),
     getTop10Topics: () => ipcRenderer.invoke(IPC.net.getTop10Topics),
     generateThrowback: (dynastyId) => ipcRenderer.invoke(IPC.net.generateThrowback, dynastyId),
     generateTop10: (dynastyId, topicKey) => ipcRenderer.invoke(IPC.net.generateTop10, dynastyId, topicKey),

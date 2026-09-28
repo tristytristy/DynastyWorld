@@ -11580,3 +11580,24 @@ sits after it, so a missing directory hangs the run instead of failing.
 New `getLeagueHistory` assembly (database/getLeagueHistory.ts) + `db:getLeagueHistory` IPC. No new extraction — every panel reads snapshots the app already captures.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean.
+
+## Phase — Board conversations v2: season memory, instant nested replies, load more (2026-09-28)
+
+**The reports:** (1) an offseason thread asking for the best games of 2026 (DynastyTube games only) got short, interchangeable replies; (2) "if I comment, I want replies immediately, not next week"; (3) wanted Load more threads / Load more comments like the Tube's More button.
+
+**Root causes:**
+- The board's reply prompts only ever saw the CURRENT week (`buildWeekContext`) — nothing about the rest of the season, nothing about the Tube library. A question about the season was unanswerable, so the model filled space with short generic takes.
+- Replies to a user comment WERE generated instantly, but inserted as new top-level comments (`parentId: threadId`), not under the user's comment. The comment looked unanswered; the inbox's unanswered-posts pass agreed and nested "late" replies under it a week later — hence the perceived week-long wait.
+- `getThread` attached only the first reply level, so reply transcripts silently dropped every deeper chain.
+
+**Shipped:**
+- **net/seasonDigest.ts**: `seasonLedger` (the season's notable results — postseason, ranked showdowns, upsets, one-possession games, shootouts — weighted, capped at 70, printed in week order, plus the champion line), `seasonTubeLibrary` (the season's uploads with id, title, uploader notes, players, plays with scorers, and the comment section's top comment), `seasonPhaseNote` (offseason = talk about the season as a finished whole), and `sanitizeTubeCitations` (invented `[tube:ID]`s are stripped at insert).
+- **Answer-the-question rules** shared by every conversational prompt: distinct picks per answer (same #1 must argue order/reason), grounded in the ledger and uploads, scope limits obeyed ("only DynastyTube games" means only listed uploads), at least two long answers (80-220 words), casual posts keep the normal mix. A user thread now gets 8-14 top-level answers with nested pushback.
+- **Instant nested replies**: `replyToBoardThread` takes an optional parent comment; the user's comment lands there, and bot replies nest UNDER it (with optional bot-vs-bot follow-ups). Every comment has a Reply button with an inline composer. Chains render recursively (indent stops at depth 5). After a thread-level comment the sort flips to "new" so it's visible at once. The composer moved above the comments, reddit-style.
+- **Load more comments** (per thread): late arrivals read the full nested transcript (with ids) and add 6-10 comments — new top-level takes and replies to specific existing comments (`replyTo`, validated against the thread; invalid ids fall back to top-level).
+- **Load more threads** (toolbar + bottom of list): 2-3 fresh, calendar-aware discussion threads with full comment sections; existing titles are passed in so topics don't repeat.
+- **[tube:ID] citations on the Board** render as ▶ links to the clip on DynastyTube.
+- The weekly board run gets the season ledger + phase note too.
+- Fixes found along the way: `getThread` is now deep; the inbox walks parent links to the real root thread (a reply at depth 3+ previously computed a comment id as the thread id, so "jump to thread" went nowhere); `installBoardUsers` and the new draft inserter tolerate wrong-shaped model JSON instead of throwing.
+
+**Verification:** tsc clean, all four webpack bundles compile, eslint clean. Two scratch harnesses ran the REAL dynastyNet.ts / seasonDigest.ts / board.ts on in-memory sql.js with the app's own net schema (AI, week context, and snapshot readers stubbed): 55 checks, all passing — including replies nesting under the user's comment, zero new top-level bot comments on reply, depth-5 inbox root resolution, replyTo validation, citation stripping, and a deliberately malformed population response.

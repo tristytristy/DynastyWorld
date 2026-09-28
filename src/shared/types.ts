@@ -3737,13 +3737,19 @@ export interface DynastyApi {
       title: string,
       body: string,
     ) => Promise<NetGenerateResult>;
+    /** Comment in a board thread; `parentId` targets a specific comment. Bot replies nest under the user's comment. */
     replyToThread: (
       dynastyId: string,
       seasonId: number,
       accountId: number,
       threadId: number,
       body: string,
+      parentId?: number | null,
     ) => Promise<NetGenerateResult>;
+    /** "Load more comments": late arrivals add to an existing board thread. Live engine only. */
+    generateMoreComments: (dynastyId: string, seasonId: number, threadId: number) => Promise<NetGenerateResult>;
+    /** "Load more threads": fresh calendar-aware discussion threads. Live engine only. */
+    generateMoreThreads: (dynastyId: string, seasonId: number) => Promise<NetGenerateResult>;
     getTop10Topics: () => Promise<Top10Topic[]>;
     generateThrowback: (dynastyId: string) => Promise<NetGenerateResult>;
     generateTop10: (dynastyId: string, topicKey: string) => Promise<NetGenerateResult>;

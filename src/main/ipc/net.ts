@@ -6,7 +6,13 @@ import { autoCaption, generateMediaComments, generateWeek, replyInThread, replyT
 import { getPublicSettings, setApiKey } from '../net/settings';
 import { getDynastyById, setDynastyBoardFlair, setDynastyInboxSeen, setDynastyNeutralMode } from '../../database/helpers';
 import { TOP10_TOPICS, generateThrowback, generateTop10 } from '../net/shows';
-import { createBoardThread, generateBoardWeek, replyToBoardThread } from '../net/board';
+import {
+  createBoardThread,
+  generateBoardWeek,
+  generateMoreBoardThreads,
+  generateMoreThreadComments,
+  replyToBoardThread,
+} from '../net/board';
 import { generateSelectionReaction } from '../net/selection';
 import type { NetCaptionResult, NetClipInfo, NetFeedView, NetGenerateResult, NetInboxView, NetPost, NetSettings } from '../../shared/netTypes';
 
@@ -117,8 +123,45 @@ export function registerNetHandlers(): void {
 
   ipcMain.handle(
     IPC.net.replyToThread,
-    async (_e, dynastyId: string, seasonId: number, accountId: number, threadId: number, body: string): Promise<NetGenerateResult> => {
-      return replyToBoardThread(dynastyId, seasonId, accountId, threadId, body);
+    async (
+      _e,
+      dynastyId: string,
+      seasonId: number,
+      accountId: number,
+      threadId: number,
+      body: string,
+      parentId?: number | null,
+    ): Promise<NetGenerateResult> => {
+      try {
+        return await replyToBoardThread(dynastyId, seasonId, accountId, threadId, body, parentId);
+      } catch (err) {
+        console.error('[net] replyToThread failed:', err);
+        return { ok: false, engine: 'offline', message: `Reply failed: ${err instanceof Error ? err.message : String(err)}`, postsAdded: 0 };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC.net.generateMoreComments,
+    async (_e, dynastyId: string, seasonId: number, threadId: number): Promise<NetGenerateResult> => {
+      try {
+        return await generateMoreThreadComments(dynastyId, seasonId, threadId);
+      } catch (err) {
+        console.error('[net] generateMoreComments failed:', err);
+        return { ok: false, engine: 'offline', message: `Couldn't load more comments: ${err instanceof Error ? err.message : String(err)}`, postsAdded: 0 };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC.net.generateMoreThreads,
+    async (_e, dynastyId: string, seasonId: number): Promise<NetGenerateResult> => {
+      try {
+        return await generateMoreBoardThreads(dynastyId, seasonId);
+      } catch (err) {
+        console.error('[net] generateMoreThreads failed:', err);
+        return { ok: false, engine: 'offline', message: `Couldn't load more threads: ${err instanceof Error ? err.message : String(err)}`, postsAdded: 0 };
+      }
     },
   );
 

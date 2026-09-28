@@ -5,6 +5,7 @@ import { getLeagueScores } from '../../database/getLeagueScores';
 import { listMediaForGame } from '../../database/media';
 import { CFP_ROUND_NAMES } from '../../shared/cfpBowls';
 import { realHistoryNote } from './canon';
+import { sanitizeTubeCitations, seasonLedger, seasonPhaseNote, seasonTubeLibrary } from './seasonDigest';
 import { getDynastyById } from '../../database/helpers';
 import {
   clearWeekThreads,
@@ -20,7 +21,7 @@ import {
 } from '../../database/dynastyNet';
 import { withBatchedPersist } from '../../database/init';
 import type { CastMember } from './cast';
-import type { NetAccount, NetGenerateResult } from '../../shared/netTypes';
+import type { NetAccount, NetGenerateResult, NetPost } from '../../shared/netTypes';
 
 /**
  * TheSideline.net — the Net's message board, run like the national CFB
@@ -203,7 +204,8 @@ async function ensurePopulation(dynastyId: string, mustCoverTeams: string[]): Pr
 function installBoardUsers(dynastyId: string, users: ModelUser[]): void {
   const taken = new Set(getAccounts(dynastyId).map((a) => a.handle.toLowerCase()));
   const wanted: CastMember[] = [];
-  for (const u of users ?? []) {
+  // Model JSON can come back in the wrong shape; a non-array means "nobody new", never a crash.
+  for (const u of Array.isArray(users) ? users : []) {
     const handle = sanitizeBoardHandle(u.handle ?? '');
     if (handle.length < 3 || taken.has(handle.toLowerCase())) continue;
     taken.add(handle.toLowerCase());
@@ -382,7 +384,7 @@ export async function generateBoardWeek(
       const population = boardPopulation(dynastyId);
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[]; lateReplies?: ModelLateReply[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}${unansweredSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}${unansweredSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
         24000, // a playoff week carries up to 7 threads with effortpost-length comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
@@ -497,43 +499,174 @@ function offlineBoardWeek(team: string, record: string, week: number, featured: 
   ];
 }
 
-const BOARD_REPLY_SYSTEM = `You write the next replies in a thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The newest post is from {HANDLE} — an ordinary poster (the human player); treat them like any other member: quote a fragment with > and respond, agree, pile on, drive by. LENGTH MIX: most replies short (5-25 words, lowercase fine, "lol" fine, not everyone is clever, no polished bits), but at least ONE reply genuinely engages the human's actual point at length — 2-5 full sentences that agree with a reason, push back with evidence from the data, or add something they missed. Callbacks must name what actually happened — never a bare year. Stay factual to the data. Return ONLY JSON: [{"author","body","likes":int}] with 3-6 replies (reddit-shaped likes, 3-400). Use only the given usernames as authors.`;
+/*
+  ═══ USER-FACING CONVERSATION (rebuilt 2026-09-28) ═══
 
-async function boardReplies(
-  dynastyId: string,
-  seasonId: number,
-  userHandle: string,
-  transcript: string,
-): Promise<{ replies: { author: string; body: string; likes?: number }[]; engine: 'claude' | 'offline'; message?: string }> {
-  const ctx = buildWeekContext(dynastyId, seasonId);
-  if (hasLiveEngine() && ctx) {
-    try {
-      const population = boardPopulation(dynastyId);
-      const roster = population.length
-        ? population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')
-        : boardCastPrompt();
-      const replies = await generateJson<{ author: string; body: string; likes?: number }[]>(
-        BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
-        `USERNAMES:\n${roster}\n\nWEEK DATA:\n${JSON.stringify(ctx, null, 1)}${boardMemory(dynastyId)}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}\n\nTHREAD (oldest first):\n${transcript}`,
-        2500,
-      );
-      return { replies, engine: 'claude' };
-    } catch (err) {
-      return {
-        replies: offlineBoardReplies(),
-        engine: 'offline',
-        message: err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined,
-      };
-    }
-  }
-  return { replies: offlineBoardReplies(), engine: 'offline' };
+  Three user reports drove this section:
+  1. Replies to a real question ("best games of 2026, DynastyTube games only")
+     came back short and interchangeable — the prompt only knew the current
+     week. Every prompt below now carries the whole SEASON LEDGER and the
+     season's DYNASTYTUBE library, plus explicit answer-the-question rules.
+  2. "I have to wait until next week for replies" — replies WERE instant, but
+     landed as new top-level comments instead of under the human's comment,
+     so it looked unanswered (and the inbox's unanswered-posts pass agreed,
+     nesting "late" replies a week later). Replies now nest under the
+     human's comment, and any comment can be replied to directly.
+  3. "Load more comments / load more threads", like the Tube's More button.
+*/
+
+interface Draft {
+  author: string;
+  body: string;
+  likes?: number;
+  /** load-more only: the existing comment id this answers; null/absent = top-level. */
+  replyTo?: number | null;
+  replies?: { author: string; body: string; likes?: number }[];
 }
 
-function offlineBoardReplies(): { author: string; body: string; likes?: number }[] {
+const BOARD_ANSWER_RULES = `ANSWERING A REAL QUESTION — when a post asks for something (best/most entertaining games, rankings, "who's better", predictions, "what was the most X", "am I crazy or…"), the board ANSWERS it the way a good r/CFB discussion thread does:
+- Every substantive answer takes a DIFFERENT pick or angle. Two people naming the same #1 must argue about the order or the reason. Disagreement is the point; interchangeable answers are the failure mode.
+- Ground every answer in the SEASON LEDGER and DYNASTYTUBE lists: name the teams, the week, the score, and what actually happened (from uploader notes, plays shown, and top comments). If the post limits the scope (e.g. "only DynastyTube games"), obey it strictly — only pick from the listed uploads.
+- At least TWO answers are long (80-220 words): a ranked top-3/top-5 with a sentence or two of reasoning per pick, or a single case argued across paragraphs. A few more are mid-size (2-4 sentences). Short one-liners belong mostly in the nested replies (agreement, "forgot about that one", "no way, the ___ game was better because ___").
+- When a comment discusses an upload, put [tube:ID] right after that sentence (ids from the DYNASTYTUBE list only).
+- Casual posts (jokes, shitposts, hot takes with no question) keep the normal board mix: mostly short, one or two mid-size, reddit energy.
+GENERAL: lowercase fine, "lol" fine, not everyone is clever — length comes from having something to say, never from performing. Callbacks must name what actually happened — never a bare year. Never invent results; every fact comes from the data. Reddit-shaped likes. Use only the given usernames as authors.`;
+
+const BOARD_THREAD_ANSWER_SYSTEM = `You write the comment section of a brand-new thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The OP is {HANDLE} — an ordinary member (the human player); treat them like any other poster.
+
+${BOARD_ANSWER_RULES}
+
+Return ONLY JSON: [{"author","body","likes":int,"replies":[{"author","body","likes":int}]}] with 8-14 top-level comments; roughly half carry 1-3 nested replies (pile-ons, pushback, real back-and-forth). Top comment 150-2000 likes, the rest 3-600, one mildly downvoted take (-3 to -20).`;
+
+const BOARD_REPLY_SYSTEM = `You write replies to a comment on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The comment marked [THE HUMAN'S NEW COMMENT] is from {HANDLE} — an ordinary member (the human player). Your replies land DIRECTLY UNDER that comment, so they respond to it: quote a fragment with > and answer, agree with a reason, push back with evidence, add what they missed, or drive by.
+
+${BOARD_ANSWER_RULES}
+
+For a reply chain: at least ONE reply engages the human's actual point at length (3-6 sentences, grounded in the ledger/uploads); if the human asked something, answer it properly. Return ONLY JSON: [{"author","body","likes":int,"replies":[{"author","body","likes":int}]}] with 3-6 replies; a reply may carry 0-2 nested replies where another member argues with IT. Likes 1-400.`;
+
+const MORE_COMMENTS_SYSTEM = `You add MORE comments to an existing thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture) — late arrivals who read the whole thread first. The transcript shows every comment with its [#id].
+
+${BOARD_ANSWER_RULES}
+
+New comments must NOT repeat what's already been said: new picks, new angles, rebuttals to specific earlier comments, the "late to this thread but…" effortpost, someone reviving a buried take. Return ONLY JSON: [{"author","body","likes":int,"replyTo":int|null,"replies":[{"author","body","likes":int}]}] with 6-10 new comments. "replyTo" is the [#id] of the existing comment being answered, or null for a new top-level comment — aim for about half each. Late comments get fewer likes (1-300).`;
+
+const MORE_THREADS_SYSTEM = `You write NEW threads for TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The board already has the threads listed under EXISTING THREADS — do not repeat those topics.
+
+Write 2-3 fresh threads the board would actually start given the CALENDAR and the season so far: discussion prompts ("what was the best game you watched this year and why"), rankings and power-poll arguments, a player or coach appreciation/criticism thread, "unpopular opinion", conference-bragging, a what-if, a look-ahead. Offseason = retrospectives, awards arguments, way-too-early rankings, portal/coaching chatter. Each thread: a real POPULATION username as OP, a title in reddit style, an OP body of 1-4 sentences (or a short list), and 8-12 top-level comments, roughly half with 1-3 nested replies.
+
+${BOARD_ANSWER_RULES}
+
+Return ONLY JSON: {"threads":[{"title","author","body","upvotes":int,"replies":[{"author","body","likes":int,"replies":[{"author","body","likes":int}]}]}]}. Thread upvotes 60-3000.`;
+
+/** Everything a board member could know about this season — shared by every conversational prompt. */
+function boardKnowledge(
+  dynastyId: string,
+  seasonId: number,
+  ctx: NonNullable<ReturnType<typeof buildWeekContext>>,
+): { text: string; tubeIds: Set<number> } {
+  const tube = seasonTubeLibrary(dynastyId, seasonId);
+  const neutral = ctx.neutral
+    ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER — no team is "the user\'s team". The board covers the nation.'
+    : '';
+  return {
+    text: `THIS WEEK:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${tube.text}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${neutral}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
+    tubeIds: tube.ids,
+  };
+}
+
+function rosterPrompt(dynastyId: string): string {
+  const population = boardPopulation(dynastyId);
+  return population.length ? population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n') : boardCastPrompt();
+}
+
+/** The whole thread, nested, with ids — what a late arrival reads before posting. */
+function transcriptOf(thread: NetPost, markId?: number): string {
+  const lines: string[] = [`[#${thread.id}] ${thread.handle} (OP): ${thread.title}${thread.body ? `\n${thread.body.slice(0, 900)}` : ''}`];
+  const walk = (posts: NetPost[], depth: number) => {
+    for (const p of posts) {
+      if (lines.length >= 140) return;
+      const tag = p.id === markId ? ' [THE HUMAN\'S NEW COMMENT]' : p.accountKind === 'user' ? ' [the human member]' : '';
+      lines.push(`${'  '.repeat(depth)}[#${p.id}] ${p.handle}${tag} (${p.likes} pts): ${p.body.slice(0, 500)}`);
+      walk(p.replies, depth + 1);
+    }
+  };
+  walk(thread.replies, 1);
+  return lines.join('\n');
+}
+
+function allIdsOf(thread: NetPost): Set<number> {
+  const ids = new Set<number>();
+  const walk = (posts: NetPost[]) => {
+    for (const p of posts) {
+      ids.add(p.id);
+      walk(p.replies);
+    }
+  };
+  walk(thread.replies);
+  return ids;
+}
+
+/**
+ * Insert drafts under `defaultParent` (a draft's validated replyTo wins),
+ * each draft's own replies nested under it. Must run inside
+ * withBatchedPersist — lastInsertId dies at the next flush.
+ */
+function insertDrafts(
+  dynastyId: string,
+  seasonId: number,
+  week: number,
+  byHandle: Map<string, NetAccount>,
+  defaultParent: number,
+  drafts: Draft[],
+  tubeIds: Set<number>,
+  validReplyTo?: Set<number>,
+): number {
+  let n = 0;
+  for (const d of Array.isArray(drafts) ? drafts : []) {
+    const author = resolveHandle(byHandle, d.author);
+    if (!author || typeof d.body !== 'string' || !d.body.trim()) continue;
+    const parentId = d.replyTo != null && validReplyTo?.has(d.replyTo) ? d.replyTo : defaultParent;
+    insertPosts(dynastyId, [
+      { seasonId, accountId: author.id, kind: 'reply', parentId, body: sanitizeTubeCitations(d.body, tubeIds), likes: d.likes ?? 0, week },
+    ]);
+    const id = lastInsertId();
+    n += 1;
+    if (id === 0) continue;
+    for (const r of Array.isArray(d.replies) ? d.replies : []) {
+      const child = resolveHandle(byHandle, r.author);
+      if (!child || typeof r.body !== 'string' || !r.body.trim()) continue;
+      insertPosts(dynastyId, [
+        { seasonId, accountId: child.id, kind: 'reply', parentId: id, body: sanitizeTubeCitations(r.body, tubeIds), likes: r.likes ?? 0, week },
+      ]);
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function offlineBoardReplies(): Draft[] {
   return [
     { author: 'OldGold_Stan', body: 'An interesting contribution. I have thoughts, which I will share at length this evening.\n\n— Stan' },
     { author: 'xX_BlitzKing_Xx', body: '>see above post\n\nthis is either genius or the worst thing ever posted here. no in between.' },
   ];
+}
+
+async function draftConversation(
+  system: string,
+  user: string,
+  maxTokens: number,
+): Promise<{ drafts: Draft[]; engine: 'claude' | 'offline'; message?: string }> {
+  if (!hasLiveEngine()) return { drafts: offlineBoardReplies(), engine: 'offline' };
+  try {
+    const drafts = await generateJson<Draft[]>(system, user, maxTokens);
+    return { drafts: Array.isArray(drafts) ? drafts : [], engine: 'claude' };
+  } catch (err) {
+    return {
+      drafts: offlineBoardReplies(),
+      engine: 'offline',
+      message: err instanceof NetClaudeError ? `${err.message} — used the offline engine instead.` : undefined,
+    };
+  }
 }
 
 export async function createBoardThread(
@@ -547,74 +680,146 @@ export async function createBoardThread(
   const week = ctx?.week ?? 0;
   ensureBoardAccounts(dynastyId);
   const threadId = withBatchedPersist(() => {
-    insertPosts(dynastyId, [
-      { seasonId, accountId: userAccountId, kind: 'thread', title, body, week },
-    ]);
+    insertPosts(dynastyId, [{ seasonId, accountId: userAccountId, kind: 'thread', title, body, week }]);
     return lastInsertId();
   });
   if (threadId === 0) return { ok: false, engine: 'offline', message: 'Could not create the thread.', postsAdded: 0 };
 
   const userHandle = getAccounts(dynastyId).find((a) => a.id === userAccountId)?.handle ?? 'you';
-  const { replies, engine, message } = await boardReplies(
-    dynastyId,
-    seasonId,
-    userHandle,
-    `${userHandle} (OP): ${title}\n${body}`,
+  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx) : { text: '', tubeIds: new Set<number>() };
+  const { drafts, engine, message } = await draftConversation(
+    BOARD_THREAD_ANSWER_SYSTEM.replace('{HANDLE}', userHandle),
+    `USERNAMES:\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nTHE NEW THREAD:\n${userHandle} (OP): ${title}\n${body}`,
+    10000,
   );
   const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
-  const added = withBatchedPersist(() => {
-    let n = 1;
-    for (const r of replies) {
-      const author = resolveHandle(byHandle, r.author);
-      if (!author) continue;
-      insertPosts(dynastyId, [
-        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, likes: r.likes ?? 0, week },
-      ]);
-      n += 1;
-    }
-    return n;
-  });
+  const added = withBatchedPersist(() => 1 + insertDrafts(dynastyId, seasonId, week, byHandle, threadId, drafts, knowledge.tubeIds));
   return { ok: true, engine, message, postsAdded: added };
 }
 
+/**
+ * The human comments in a thread — at the top level, or directly under any
+ * comment (`parentId`). Bot replies nest UNDER the human's comment, so the
+ * answer is visibly an answer, the inbox lights up, and nothing waits a week.
+ */
 export async function replyToBoardThread(
   dynastyId: string,
   seasonId: number,
   userAccountId: number,
   threadId: number,
   body: string,
+  parentId?: number | null,
+): Promise<NetGenerateResult> {
+  const before = getThread(dynastyId, threadId);
+  if (!before) return { ok: false, engine: 'offline', message: 'That thread no longer exists.', postsAdded: 0 };
+  const ctx = buildWeekContext(dynastyId, seasonId);
+  const week = ctx?.week ?? before.week;
+  const anchor = parentId != null && allIdsOf(before).has(parentId) ? parentId : threadId;
+
+  const userPostId = withBatchedPersist(() => {
+    insertPosts(dynastyId, [{ seasonId, accountId: userAccountId, kind: 'reply', parentId: anchor, body, week }]);
+    return lastInsertId();
+  });
+  if (userPostId === 0) return { ok: false, engine: 'offline', message: 'Could not post the comment.', postsAdded: 0 };
+
+  const thread = getThread(dynastyId, threadId) ?? before;
+  const userHandle = getAccounts(dynastyId).find((a) => a.id === userAccountId)?.handle ?? 'you';
+  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx) : { text: '', tubeIds: new Set<number>() };
+  const { drafts, engine, message } = await draftConversation(
+    BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
+    `USERNAMES:\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nTHE THREAD (nested, with ids):\n${transcriptOf(thread, userPostId)}`,
+    5000,
+  );
+  const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
+  const added = withBatchedPersist(() => 1 + insertDrafts(dynastyId, seasonId, week, byHandle, userPostId, drafts, knowledge.tubeIds));
+  return { ok: true, engine, message, postsAdded: added };
+}
+
+/** "Load more comments": late arrivals read the whole thread and add to it — top-level and replies alike. */
+export async function generateMoreThreadComments(
+  dynastyId: string,
+  seasonId: number,
+  threadId: number,
 ): Promise<NetGenerateResult> {
   const thread = getThread(dynastyId, threadId);
   if (!thread) return { ok: false, engine: 'offline', message: 'That thread no longer exists.', postsAdded: 0 };
+  if (!hasLiveEngine()) {
+    return { ok: false, engine: 'offline', message: 'Loading more comments needs the live engine — add your Claude API key on the Feed page.', postsAdded: 0 };
+  }
   const ctx = buildWeekContext(dynastyId, seasonId);
-  const week = ctx?.week ?? thread.week;
+  if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
+  const knowledge = boardKnowledge(dynastyId, seasonId, ctx);
+  let drafts: Draft[];
+  try {
+    drafts = await generateJson<Draft[]>(
+      MORE_COMMENTS_SYSTEM,
+      `USERNAMES:\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nTHE THREAD SO FAR (nested, with ids):\n${transcriptOf(thread)}`,
+      9000,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, engine: 'offline', message: `Couldn't load more comments: ${msg}`, postsAdded: 0 };
+  }
   const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
+  const valid = allIdsOf(thread);
+  // Late arrivals post in the thread's own week — they're continuing that conversation.
+  const added = withBatchedPersist(() =>
+    insertDrafts(dynastyId, seasonId, thread.week, byHandle, threadId, Array.isArray(drafts) ? drafts : [], knowledge.tubeIds, valid),
+  );
+  return { ok: true, engine: 'claude', message: added ? undefined : 'Nobody had anything new to say — try again.', postsAdded: added };
+}
 
-  withBatchedPersist(() => {
-    insertPosts(dynastyId, [
-      { seasonId, accountId: userAccountId, kind: 'reply', parentId: threadId, body, week },
-    ]);
-  });
+/** "Load more threads": fresh discussion threads that fit the calendar, never repeating what's already up. */
+export async function generateMoreBoardThreads(dynastyId: string, seasonId: number): Promise<NetGenerateResult> {
+  if (!hasLiveEngine()) {
+    return { ok: false, engine: 'offline', message: 'Loading more threads needs the live engine — add your Claude API key on the Feed page.', postsAdded: 0 };
+  }
+  const ctx = buildWeekContext(dynastyId, seasonId);
+  if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
+  await ensurePopulation(dynastyId, [ctx.userTeam, ...ctx.teamsInTheNews].filter(Boolean));
+  ensureBoardAccounts(dynastyId);
+  const knowledge = boardKnowledge(dynastyId, seasonId, ctx);
+  const existing = getThreads(dynastyId, seasonId)
+    .slice(0, 60)
+    .map((t) => `- ${t.title}`)
+    .join('\n');
 
-  const userHandle = getAccounts(dynastyId).find((a) => a.id === userAccountId)?.handle ?? 'you';
-  const transcript = [
-    `${thread.handle} (OP): ${thread.title}\n${thread.body}`,
-    ...thread.replies.map((r) => `${r.handle}: ${r.body}`),
-    `${userHandle}: ${body}`,
-  ].join('\n');
-  const { replies, engine, message } = await boardReplies(dynastyId, seasonId, userHandle, transcript);
+  let threads: ModelThread[];
+  try {
+    const out = await generateJson<{ threads: ModelThread[] }>(
+      MORE_THREADS_SYSTEM,
+      `POPULATION (usernames):\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nEXISTING THREADS (don't repeat these topics):\n${existing || '(none yet)'}`,
+      14000,
+    );
+    threads = Array.isArray(out?.threads) ? out.threads : [];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, engine: 'offline', message: `Couldn't load more threads: ${msg}`, postsAdded: 0 };
+  }
 
+  const byHandle = new Map(getAccounts(dynastyId).map((a) => [a.handle, a]));
   const added = withBatchedPersist(() => {
-    let n = 1;
-    for (const r of replies) {
-      const author = resolveHandle(byHandle, r.author);
-      if (!author) continue;
+    let n = 0;
+    for (const t of threads) {
+      const author = resolveHandle(byHandle, t.author);
+      if (!author || !t.title?.trim()) continue;
       insertPosts(dynastyId, [
-        { seasonId, accountId: author.id, kind: 'reply', parentId: threadId, body: r.body, likes: r.likes ?? 0, week },
+        {
+          seasonId,
+          accountId: author.id,
+          kind: 'thread',
+          title: t.title,
+          body: sanitizeTubeCitations(t.body ?? '', knowledge.tubeIds),
+          likes: t.upvotes ?? 300,
+          week: ctx.week,
+        },
       ]);
+      const threadId = lastInsertId();
       n += 1;
+      if (threadId === 0) continue;
+      n += insertDrafts(dynastyId, seasonId, ctx.week, byHandle, threadId, (t.replies ?? []) as Draft[], knowledge.tubeIds);
     }
     return n;
   });
-  return { ok: true, engine, message, postsAdded: added };
+  return { ok: true, engine: 'claude', postsAdded: added };
 }

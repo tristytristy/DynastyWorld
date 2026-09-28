@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { createContext, Fragment, useCallback, useContext, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import type { NetFeedView, NetInboxView, NetPost } from '../../../shared/netTypes';
 import { PageMasthead } from '../../components/common/PageMasthead';
 import { SurfaceCard } from '../../components/ui/SurfaceCard';
@@ -9,9 +9,14 @@ import { useSelectedSeason } from '../../data/SelectedSeasonProvider';
  * TheSideline.net — the message board, rendered the way its culture demands
  * (user direction, 2026-08-22, with real r/CFB game threads as reference):
  * reddit-shaped, not forum-shaped. Vote counts, "Posted by" metadata, team
- * flairs as chips, one level of comment nesting with an indent rail, and
- * quote lines (">") styled as quotes. Game threads are OP'd by the score bot
- * with a box-score body; the life is in the comments.
+ * flairs as chips, nested comment chains with indent rails, and quote lines
+ * (">") styled as quotes. Game threads are OP'd by the score bot with a
+ * box-score body; the life is in the comments.
+ *
+ * 2026-09-28: any comment can be replied to (the board answers under YOUR
+ * comment, immediately), chains nest to reddit depth, [tube:ID] citations
+ * link to DynastyTube, and Load more comments / Load more threads generate
+ * on demand like the Tube's More comments button.
  */
 
 /** "corn_husked_2011 [Nebraska]" -> name + flair chip text. */
@@ -26,7 +31,7 @@ function formatVotes(n: number): string {
 }
 
 function countComments(t: NetPost): number {
-  return t.replies.reduce((sum, r) => sum + 1 + r.replies.length, 0);
+  return t.replies.reduce((sum, r) => sum + 1 + countComments(r), 0);
 }
 
 function FlairChip({ flair, bot }: { flair: string | null; bot: boolean }) {
@@ -44,7 +49,52 @@ function FlairChip({ flair, bot }: { flair: string | null; bot: boolean }) {
   );
 }
 
-/** Body text with ">" quote lines and "- " stat bullets styled reddit-style. */
+/** Everything a comment anywhere in the tree needs — carried by context so the recursion stays small. */
+interface BoardEnvValue {
+  base: string;
+  tubeTitles: Map<number, string>;
+  userFlair: string;
+  onVote: (postId: number, delta: 1 | -1) => void;
+  revealed: Set<number>;
+  onReveal: (postId: number) => void;
+  /** Null when the user has no Net account yet — Reply is hidden. */
+  userHandle: string | null;
+  replyTarget: number | null;
+  setReplyTarget: (postId: number | null) => void;
+  commentDraft: string;
+  setCommentDraft: (text: string) => void;
+  submitCommentReply: (parentId: number) => void;
+  busy: boolean;
+}
+
+const BoardEnv = createContext<BoardEnvValue | null>(null);
+
+/** One line of text with [tube:ID] citations turned into DynastyTube links. */
+function InlineText({ text }: { text: string }) {
+  const env = useContext(BoardEnv);
+  const parts = text.split(/\[tube:(\d+)\]/g);
+  if (parts.length === 1 || !env) return <>{text.replace(/\s?\[tube:\d+\]/g, '')}</>;
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return <Fragment key={i}>{part}</Fragment>;
+        const mediaId = Number(part);
+        return (
+          <Link
+            key={i}
+            to={`${env.base}/net/tube?media=${mediaId}`}
+            className="mx-0.5 inline-flex items-baseline gap-1 whitespace-nowrap text-xs font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
+            title="Watch on DynastyTube"
+          >
+            ▶ {env.tubeTitles.get(mediaId) ?? 'clip'}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
+/** Body text with ">" quote lines, "- " bullets, and Tube citations styled reddit-style. */
 function CommentBody({ body }: { body: string }) {
   const lines = body.split('\n');
   return (
@@ -53,7 +103,7 @@ function CommentBody({ body }: { body: string }) {
         if (line.startsWith('>')) {
           return (
             <p key={i} className="my-0.5 border-l-2 border-slate-300 pl-2 text-slate-500 dark:border-slate-600 dark:text-slate-400">
-              {line.replace(/^>\s?/, '')}
+              <InlineText text={line.replace(/^>\s?/, '')} />
             </p>
           );
         }
@@ -61,11 +111,17 @@ function CommentBody({ body }: { body: string }) {
           return (
             <p key={i} className="my-0.5 pl-4">
               <span className="mr-1.5 text-slate-400">•</span>
-              {line.slice(2)}
+              <InlineText text={line.slice(2)} />
             </p>
           );
         }
-        return line.trim() === '' ? <div key={i} className="h-2" /> : <p key={i} className="my-0.5">{line}</p>;
+        return line.trim() === '' ? (
+          <div key={i} className="h-2" />
+        ) : (
+          <p key={i} className="my-0.5">
+            <InlineText text={line} />
+          </p>
+        );
       })}
     </div>
   );
@@ -113,6 +169,8 @@ function CommentHeader({
 
 /** Reddit hides what the hivemind buried — half the texture is the click to look anyway. */
 const COLLAPSE_BELOW = 0;
+/** Past this depth, chains keep going but stop indenting — a narrow app window stays readable. */
+const MAX_INDENT = 5;
 
 type CommentSort = 'best' | 'new' | 'controversial';
 
@@ -125,55 +183,71 @@ function sortComments(replies: NetPost[], sort: CommentSort): NetPost[] {
   return sorted;
 }
 
-function Comment({
-  post,
-  userFlair,
-  onVote,
-  revealed,
-  onReveal,
-}: {
-  post: NetPost;
-  userFlair: string;
-  onVote: (postId: number, delta: 1 | -1) => void;
-  revealed: Set<number>;
-  onReveal: (postId: number) => void;
-}) {
-  const hidden = post.likes < COLLAPSE_BELOW && post.accountKind !== 'user' && !revealed.has(post.id);
+function Comment({ post, depth }: { post: NetPost; depth: number }) {
+  const env = useContext(BoardEnv);
+  if (!env) return null;
+  const hidden = post.likes < COLLAPSE_BELOW && post.accountKind !== 'user' && !env.revealed.has(post.id);
   if (hidden) {
     return (
-      <div className="pt-3">
+      <div className={depth === 0 ? 'pt-3' : 'pt-2'}>
         <button
           className="text-xs italic text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-          onClick={() => onReveal(post.id)}
+          onClick={() => env.onReveal(post.id)}
         >
           [+] comment score below threshold — click to show
         </button>
       </div>
     );
   }
+  const composing = env.replyTarget === post.id;
   return (
-    <div className="pt-3">
-      <CommentHeader post={post} userFlair={userFlair} onVote={onVote} />
+    <div className={depth === 0 ? 'pt-3' : 'pt-2'}>
+      <CommentHeader post={post} userFlair={env.userFlair} onVote={env.onVote} />
       <CommentBody body={post.body} />
+      {env.userHandle && (
+        <button
+          className="mt-0.5 text-xs font-semibold text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
+          onClick={() => {
+            env.setReplyTarget(composing ? null : post.id);
+            env.setCommentDraft('');
+          }}
+        >
+          {composing ? 'Cancel' : 'Reply'}
+        </button>
+      )}
+      {composing && (
+        <div className="mt-1.5 flex gap-2">
+          <input
+            autoFocus
+            value={env.commentDraft}
+            onChange={(e) => env.setCommentDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && env.commentDraft.trim() && !env.busy) env.submitCommentReply(post.id);
+              if (e.key === 'Escape') env.setReplyTarget(null);
+            }}
+            placeholder={`Reply as ${env.userHandle}…`}
+            className="min-w-0 flex-1 border border-slate-300/80 bg-transparent px-2.5 py-1 text-sm dark:border-slate-600"
+          />
+          <button
+            className="border border-slate-300/80 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-500 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300"
+            disabled={env.busy || !env.commentDraft.trim()}
+            onClick={() => env.submitCommentReply(post.id)}
+          >
+            {env.busy ? 'The board is typing…' : 'Reply'}
+          </button>
+        </div>
+      )}
       {post.replies.length > 0 && (
-        <div className="ml-2 mt-1 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
-          {post.replies.map((r) =>
-            r.likes < COLLAPSE_BELOW && r.accountKind !== 'user' && !revealed.has(r.id) ? (
-              <div key={r.id} className="pt-2">
-                <button
-                  className="text-xs italic text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-                  onClick={() => onReveal(r.id)}
-                >
-                  [+] comment score below threshold — click to show
-                </button>
-              </div>
-            ) : (
-              <div key={r.id} className="pt-2">
-                <CommentHeader post={r} userFlair={userFlair} onVote={onVote} />
-                <CommentBody body={r.body} />
-              </div>
-            ),
-          )}
+        <div
+          className={
+            depth < MAX_INDENT
+              ? 'ml-2 mt-1 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700'
+              : 'mt-1 space-y-1'
+          }
+        >
+          {post.replies.map((r) => (
+            <Comment key={r.id} post={r} depth={depth + 1} />
+          ))}
         </div>
       )}
     </div>
@@ -187,7 +261,7 @@ export function NetBoard() {
   const [threads, setThreads] = useState<NetPost[]>([]);
   const [userAccount, setUserAccount] = useState<NetFeedView['userAccount']>(null);
   const [openId, setOpenId] = useState<number | null>(null);
-  const [busy, setBusy] = useState<'week' | 'thread' | 'reply' | null>(null);
+  const [busy, setBusy] = useState<'week' | 'thread' | 'reply' | 'more' | 'threads' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -201,11 +275,22 @@ export function NetBoard() {
   const [inboxOpen, setInboxOpen] = useState(false);
   // What counted as unread when the panel opened — kept highlighted until close.
   const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
+  const [replyTarget, setReplyTarget] = useState<number | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [tubeTitles, setTubeTitles] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     if (!id) return;
     window.api.net.getBoardFlair(id).then(setUserFlair);
   }, [id]);
+
+  // Titles for [tube:ID] citation links — the board only cites this season's uploads.
+  useEffect(() => {
+    if (!id || selectedSeasonId === undefined) return;
+    window.api.media.list(id, selectedSeasonId).then((items) =>
+      setTubeTitles(new Map((items ?? []).map((m) => [m.id, m.tubeTitle || m.description || 'clip']))),
+    );
+  }, [id, selectedSeasonId]);
 
   useEffect(() => {
     if (!id || selectedSeasonId === undefined) return;
@@ -302,18 +387,83 @@ export function NetBoard() {
     }
   };
 
-  const submitReply = async (threadId: number) => {
-    if (!replyDraft.trim() || !userAccount) return;
+  /*
+    One path for both composers: the thread-level box (parentId null) and the
+    per-comment Reply box. Either way the board answers immediately, UNDER
+    the user's comment. After a thread-level comment the sort flips to "new"
+    so the fresh comment and its replies sit at the top instead of sinking
+    to the bottom of "best" with zero points.
+  */
+  const submitReply = async (threadId: number, parentId: number | null = null) => {
+    const text = (parentId === null ? replyDraft : commentDraft).trim();
+    if (!text || !userAccount) return;
     setBusy('reply');
     setNotice(null);
     try {
-      const result = await window.api.net.replyToThread(id, selectedSeasonId, userAccount.id, threadId, replyDraft.trim());
-      setReplyDraft('');
+      const result = await window.api.net.replyToThread(id, selectedSeasonId, userAccount.id, threadId, text, parentId);
+      if (parentId === null) {
+        setReplyDraft('');
+        setSort('new');
+      } else {
+        setCommentDraft('');
+        setReplyTarget(null);
+      }
       if (result.message) setNotice(result.message);
       reload();
+    } catch (err) {
+      setNotice(`Something broke: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(null);
     }
+  };
+
+  const loadMoreComments = async (threadId: number) => {
+    setBusy('more');
+    setNotice(null);
+    try {
+      const result = await window.api.net.generateMoreComments(id, selectedSeasonId, threadId);
+      if (result.message) setNotice(result.message);
+      else if (result.postsAdded > 0) setNotice(`${result.postsAdded} new comment${result.postsAdded === 1 ? '' : 's'} — sorted by new so you can find them.`);
+      if (result.postsAdded > 0) setSort('new');
+      reload();
+    } catch (err) {
+      setNotice(`Something broke: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const loadMoreThreads = async () => {
+    setBusy('threads');
+    setNotice(null);
+    try {
+      const result = await window.api.net.generateMoreThreads(id, selectedSeasonId);
+      if (result.message) setNotice(result.message);
+      reload();
+    } catch (err) {
+      setNotice(`Something broke: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // The open thread's id, for the per-comment Reply box — replies go to that thread.
+  const env: BoardEnvValue = {
+    base: `/dynasty/${id}`,
+    tubeTitles,
+    userFlair,
+    onVote: (postId, delta) => vote(postId, delta),
+    revealed,
+    onReveal: (pid) => setRevealed((prev) => new Set(prev).add(pid)),
+    userHandle: userAccount?.handle ?? null,
+    replyTarget,
+    setReplyTarget,
+    commentDraft,
+    setCommentDraft,
+    submitCommentReply: (parentId) => {
+      if (openId !== null) void submitReply(openId, parentId);
+    },
+    busy: busy !== null,
   };
 
   const buttonClass =
@@ -348,6 +498,14 @@ export function NetBoard() {
             title="Fire between entering the postseason and the first round kicking off: the Feed and Board react to the bracket reveal — snubs, seeding outrage, paths to the title"
           >
             🏈 Bracket reveal
+          </button>
+          <button
+            className={buttonClass}
+            disabled={busy !== null}
+            onClick={() => void loadMoreThreads()}
+            title="The board starts 2-3 fresh discussion threads that fit where the season is — never repeating what's already up"
+          >
+            {busy === 'threads' ? 'Starting threads…' : '+ Load more threads'}
           </button>
           <button
             className={`relative ${buttonClass}`}
@@ -511,7 +669,14 @@ export function NetBoard() {
                     ▼
                   </button>
                 </div>
-                <button className="block min-w-0 flex-1 text-left" onClick={() => { setOpenId(open ? null : t.id); setReplyDraft(''); }}>
+                <button
+                  className="block min-w-0 flex-1 text-left"
+                  onClick={() => {
+                    setOpenId(open ? null : t.id);
+                    setReplyDraft('');
+                    setReplyTarget(null);
+                  }}
+                >
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] font-bold leading-snug text-slate-950 dark:text-white">{t.title}</p>
                     <p className="mt-0.5 flex flex-wrap items-baseline text-xs text-slate-400 dark:text-slate-500">
@@ -532,34 +697,9 @@ export function NetBoard() {
                       <CommentBody body={t.body} />
                     </div>
                   )}
-                  {t.replies.length > 1 && (
-                    <p className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                      sorted by:
-                      {(['best', 'new', 'controversial'] as const).map((s) => (
-                        <button
-                          key={s}
-                          className={`px-1 font-semibold ${sort === s ? 'text-slate-800 underline dark:text-slate-200' : 'hover:text-slate-600 dark:hover:text-slate-300'}`}
-                          onClick={() => setSort(s)}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </p>
-                  )}
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {sortComments(t.replies, sort).map((r) => (
-                      <Comment
-                        key={r.id}
-                        post={r}
-                        userFlair={userFlair}
-                        onVote={vote}
-                        revealed={revealed}
-                        onReveal={(pid) => setRevealed((prev) => new Set(prev).add(pid))}
-                      />
-                    ))}
-                  </div>
+                  {/* composer on top, reddit-style — your comment lands right under it */}
                   {userAccount && (
-                    <div className="mt-3 flex gap-2 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+                    <div className="mb-2 flex gap-2">
                       <input
                         value={replyDraft}
                         onChange={(e) => setReplyDraft(e.target.value)}
@@ -574,16 +714,56 @@ export function NetBoard() {
                         disabled={busy !== null || !replyDraft.trim()}
                         onClick={() => void submitReply(t.id)}
                       >
-                        {busy === 'reply' ? '…' : 'Comment'}
+                        {busy === 'reply' && replyTarget === null ? 'The board is typing…' : 'Comment'}
                       </button>
                     </div>
                   )}
+                  {t.replies.length > 1 && (
+                    <p className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                      sorted by:
+                      {(['best', 'new', 'controversial'] as const).map((s) => (
+                        <button
+                          key={s}
+                          className={`px-1 font-semibold ${sort === s ? 'text-slate-800 underline dark:text-slate-200' : 'hover:text-slate-600 dark:hover:text-slate-300'}`}
+                          onClick={() => setSort(s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </p>
+                  )}
+                  <BoardEnv.Provider value={env}>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {sortComments(t.replies, sort).map((r) => (
+                        <Comment key={r.id} post={r} depth={0} />
+                      ))}
+                    </div>
+                  </BoardEnv.Provider>
+                  <div className="mt-3 border-t border-slate-200/80 pt-3 dark:border-slate-800">
+                    <button
+                      className={buttonClass}
+                      disabled={busy !== null}
+                      onClick={() => void loadMoreComments(t.id)}
+                      title="Late arrivals read the whole thread and add new takes, rebuttals, and replies to existing comments"
+                    >
+                      {busy === 'more' ? 'More people are typing…' : 'Load more comments'}
+                    </button>
+                    {notice && <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{notice}</p>}
+                  </div>
                 </div>
               )}
             </SurfaceCard>
           );
         })}
       </div>
+
+      {threads.length > 0 && (
+        <div className="flex justify-center">
+          <button className={buttonClass} disabled={busy !== null} onClick={() => void loadMoreThreads()}>
+            {busy === 'threads' ? 'Starting threads…' : 'Load more threads'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
