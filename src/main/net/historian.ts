@@ -7,7 +7,17 @@ import { ensureAccounts, insertPosts } from '../../database/dynastyNet';
 import { withBatchedPersist } from '../../database/init';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { realHistoryAnalysisNote } from './canon';
-import { dynastyPerformances, mentionedPlayers, playerGameLogsText, seasonStandoutsText, statLine, type GamePerformance } from './playerGames';
+import {
+  bestStretchesText,
+  bigGameCountsText,
+  dynastyPerformances,
+  mentionedPlayers,
+  playerGameLogsText,
+  seasonStandoutsText,
+  statLine,
+  stretchWindowFor,
+  type GamePerformance,
+} from './playerGames';
 import type { YearSummaryData } from '../../extractors/extract-league-history';
 import type { NetGenerateResult } from '../../shared/netTypes';
 import type { NationalLeaderEntry } from '../../shared/types';
@@ -37,7 +47,7 @@ RULES:
 - Every DYNASTY-ERA fact — scores, records, seeds, years, names from this dynasty's seasons — must come from the archive data provided. If the archive can't answer part of the question (e.g. seasons that carry no player stats), say so plainly and answer what it CAN support. Real college-football history from before this universe diverged is shared canon (see SHARED HISTORY below) and may be drawn on for comparison and context, as any real columnist would.
 - Structure the answer as an article: a strong opening, clear sections or a countdown when the question calls for a ranking, and a closing line worth quoting.
 - FOOTAGE CITATIONS: the DYNASTYTUBE INDEX lists every uploaded highlight with its id, description, game, and tagged players. When your article discusses a team, game, or player that has a matching upload, cite it inline by placing the marker [tube:ID] immediately after the sentence it supports. Only cite ids from the index — never invent footage, and don't force a citation where none fits.
-- BOX SCORES: the archive includes real per-game player lines — each season's STANDOUT INDIVIDUAL GAMES, full GAME LOGS for any player the question names, and TEAM PERFORMANCE LOGS for any team it names. Use them: the stat line, the opponent, the week, the result ("he threw for 412 and four scores in the Week 9 shootout at Ole Miss"). Game totals are how a career or a season is remembered. Never invent a stat line that isn't in the data.
+- BOX SCORES: the app holds a box score line for EVERY player in EVERY synced game, and computes answers from all of it for you: BEST N-GAME STRETCHES and BIG-GAME COUNTS are COMPLETE leaderboards over every logged game (trust them as exhaustive — never tell the reader the archive can't verify consecutive games or only holds a sample); each season's STANDOUT INDIVIDUAL GAMES; full GAME LOGS for any player the question names; TEAM PERFORMANCE LOGS for any team it names. Use them: the stat line, the opponent, the week, the result ("he threw for 412 and four scores in the Week 9 shootout at Ole Miss"). Game totals are how a career or a season is remembered. Never invent a stat line that isn't in the data.
 - Plain text only otherwise (no markdown headers with #; use short ALL-CAPS section labels or numbered entries instead).
 
 Respond with JSON only:
@@ -250,7 +260,11 @@ function buildBoxScoreMemory(dynastyId: string, question: string): string {
         .join('\n')}`;
     })
     .join('');
-  return `${standouts}${playerLogs}${teamLogs}`;
+  // Questions about runs/streaks get the computed stretch boards; everyone
+  // gets the big-game counts (cheap, and they answer "most X-yard games").
+  const window = stretchWindowFor(question);
+  const stretches = window ? bestStretchesText(all, window) : '';
+  return `${stretches}${bigGameCountsText(all)}${standouts}${playerLogs}${teamLogs}`;
 }
 
 export async function askHistorian(dynastyId: string, question: string): Promise<NetGenerateResult> {

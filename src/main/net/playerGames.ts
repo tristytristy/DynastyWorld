@@ -244,3 +244,182 @@ export function dynastyPerformances(dynastyId: string): GamePerformance[] {
     .sort((a, b) => a.seasonYear - b.seasonYear)
     .flatMap((s) => seasonPerformances(dynastyId, s.id));
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   COMPUTED LEADERBOARDS (user report, 2026-10-26): "best five-game stretch in
+   dynasty history" came back as "the archive can't prove consecutive games" —
+   because the Historian only ever saw curated standouts, never every line,
+   and every line across eight seasons (~300k) can't fit in a prompt. So the
+   app does the counting and hands over the answers, computed over EVERY
+   logged game.
+   ───────────────────────────────────────────────────────────────────────── */
+
+interface StretchCategory {
+  key: string;
+  label: string;
+  score: (p: GamePerformance) => number;
+  /** Ignore windows whose total is below this — a 5-game "rushing stretch" by a QB isn't one. */
+  floor: number;
+}
+
+const takeaways = (p: GamePerformance) =>
+  (p.defense ? p.defense.interceptions + p.defense.fumbleRecoveries + p.defense.forcedFumbles : 0);
+
+const STRETCH_CATEGORIES: StretchCategory[] = [
+  { key: 'impact', label: 'OVERALL (all-around production score)', score: (p) => p.impact, floor: 1 },
+  { key: 'pass', label: 'PASSING YARDS', score: (p) => p.offense?.passYards ?? 0, floor: 1 },
+  { key: 'passtd', label: 'PASSING TOUCHDOWNS', score: (p) => p.offense?.passTDs ?? 0, floor: 1 },
+  { key: 'rush', label: 'RUSHING YARDS', score: (p) => p.offense?.rushYards ?? 0, floor: 1 },
+  { key: 'rec', label: 'RECEIVING YARDS', score: (p) => p.offense?.receivingYards ?? 0, floor: 1 },
+  { key: 'td', label: 'TOTAL TOUCHDOWNS (pass+rush+rec+def)', score: totalTDs, floor: 1 },
+  { key: 'sack', label: 'SACKS', score: (p) => p.defense?.sacks ?? 0, floor: 1 },
+  { key: 'take', label: 'TAKEAWAYS (INT + FF + FR)', score: takeaways, floor: 1 },
+];
+
+/** "Every game the TEAM played that season", by week — so a missed game breaks a stretch. */
+function teamWeeks(perfs: GamePerformance[]): Map<string, number[]> {
+  const out = new Map<string, Set<number>>();
+  for (const p of perfs) {
+    const k = `${p.seasonYear}|${p.team}`;
+    if (!out.has(k)) out.set(k, new Set());
+    out.get(k)!.add(p.week);
+  }
+  return new Map([...out.entries()].map(([k, s]) => [k, [...s].sort((a, b) => a - b)]));
+}
+
+interface Stretch {
+  games: GamePerformance[];
+  total: number;
+}
+
+/**
+ * Best N-game stretches: N CONSECUTIVE games of the player's team in one
+ * season, all of which he logged a line in. Returns the top `perCategory`
+ * per category, never repeating a player within a category (his best
+ * window only — otherwise one season's overlapping windows fill the list).
+ */
+export function bestStretches(perfs: GamePerformance[], window: number, perCategory = 5): { category: StretchCategory; stretches: Stretch[] }[] {
+  const schedule = teamWeeks(perfs);
+  const byPlayerSeason = new Map<string, GamePerformance[]>();
+  for (const p of perfs) {
+    const k = `${p.seasonYear}|${p.team}|${p.playerId}|${p.name}`;
+    if (!byPlayerSeason.has(k)) byPlayerSeason.set(k, []);
+    byPlayerSeason.get(k)!.push(p);
+  }
+  // Every valid consecutive window, once.
+  const windows: GamePerformance[][] = [];
+  for (const games of byPlayerSeason.values()) {
+    if (games.length < window) continue;
+    games.sort((a, b) => a.week - b.week);
+    const weeks = schedule.get(`${games[0].seasonYear}|${games[0].team}`) ?? [];
+    const slot = new Map(weeks.map((w, i) => [w, i]));
+    for (let i = 0; i + window <= games.length; i++) {
+      const run = games.slice(i, i + window);
+      const first = slot.get(run[0].week) ?? -99;
+      const last = slot.get(run[window - 1].week) ?? -99;
+      if (last - first === window - 1) windows.push(run); // no team game skipped in between
+    }
+  }
+  return STRETCH_CATEGORIES.map((category) => {
+    const best = new Map<string, Stretch>();
+    for (const run of windows) {
+      const total = run.reduce((s, g) => s + category.score(g), 0);
+      if (total < category.floor) continue;
+      const who = `${run[0].playerId}|${run[0].name}`;
+      const cur = best.get(who);
+      if (!cur || total > cur.total) best.set(who, { games: run, total });
+    }
+    const stretches = [...best.values()].sort((a, b) => b.total - a.total).slice(0, perCategory);
+    return { category, stretches };
+  });
+}
+
+/** Summed line for a stretch — the numbers a columnist would quote. */
+function stretchTotals(games: GamePerformance[]): string {
+  const sum = (f: (p: GamePerformance) => number) => games.reduce((s, g) => s + f(g), 0);
+  const bits: string[] = [];
+  const att = sum((g) => g.offense?.passAttempts ?? 0);
+  if (att) bits.push(`${sum((g) => g.offense?.passCompletions ?? 0)}/${att}, ${sum((g) => g.offense?.passYards ?? 0)} pass yds, ${sum((g) => g.offense?.passTDs ?? 0)} pass TD, ${sum((g) => g.offense?.passInts ?? 0)} INT`);
+  const car = sum((g) => g.offense?.rushAttempts ?? 0);
+  if (car) bits.push(`${car} car, ${sum((g) => g.offense?.rushYards ?? 0)} rush yds, ${sum((g) => g.offense?.rushTDs ?? 0)} rush TD`);
+  const rec = sum((g) => g.offense?.receptions ?? 0);
+  if (rec) bits.push(`${rec} rec, ${sum((g) => g.offense?.receivingYards ?? 0)} rec yds, ${sum((g) => g.offense?.receivingTDs ?? 0)} rec TD`);
+  const tkl = sum((g) => (g.defense ? g.defense.tackles + g.defense.assistedTackles : 0));
+  const sck = sum((g) => g.defense?.sacks ?? 0);
+  const ints = sum((g) => g.defense?.interceptions ?? 0);
+  if (tkl || sck || ints) bits.push(`${tkl} tkl, ${sck} sck, ${ints} INT, ${sum((g) => g.defense?.forcedFumbles ?? 0)} FF`);
+  const wins = games.filter((g) => g.result?.startsWith('W')).length;
+  return `${bits.join(' · ')} — team went ${wins}-${games.length - wins}`;
+}
+
+const WORD_NUMBERS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+/**
+ * Does the question ask about a multi-game stretch? Returns the window size
+ * ("best 3-game run" → 3; "best stretch" / "streak" / "in a row" → 5), or
+ * null when it doesn't.
+ */
+export function stretchWindowFor(question: string): number | null {
+  const q = question.toLowerCase();
+  const m = /\b(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:game|week|straight)/.exec(q);
+  const asksStretch = /stretch|streak|\brun\b|\bruns\b|span|consecutive|in a row|straight games|hot streak/.test(q);
+  if (m) {
+    const n = WORD_NUMBERS[m[1]] ?? Number(m[1]);
+    if (n >= 2 && n <= 10 && (asksStretch || /game/.test(q))) return n;
+  }
+  return asksStretch ? 5 : null;
+}
+
+/** Prompt block: best N-game stretches across the given performances, top entries with their game-by-game lines. */
+export function bestStretchesText(perfs: GamePerformance[], window: number): string {
+  const boards = bestStretches(perfs, window).filter((b) => b.stretches.length);
+  if (!boards.length) return '';
+  const blocks = boards.map(({ category, stretches }) => {
+    const rows = stretches.map((s, i) => {
+      const g0 = s.games[0];
+      const gN = s.games[s.games.length - 1];
+      const head = `${i + 1}. ${g0.name} (${g0.position}, ${g0.team}) ${g0.seasonYear}, Wk ${g0.week}–Wk ${gN.week}: ${stretchTotals(s.games)}`;
+      // Game-by-game detail for the top three of each board — enough to narrate.
+      return i < 3 ? `${head}\n${s.games.map((g) => `     ${perfLine(g)}`).join('\n')}` : head;
+    });
+    return `${category.label}:\n${rows.join('\n')}`;
+  });
+  return `\n\nBEST ${window}-GAME STRETCHES (COMPUTED over EVERY logged game in the archive — complete, not a sample. A stretch = ${window} consecutive games of the player's team in one season, all of which he played; a missed game breaks it. Each player appears once per board, at his best window):\n${blocks.join('\n\n')}`;
+}
+
+/**
+ * Big-game counts — "most 300-yard games", "100-yard rushing games" — per
+ * player-season and per career, computed over every logged game.
+ */
+export function bigGameCountsText(perfs: GamePerformance[], perList = 6): string {
+  const tests: { label: string; hit: (p: GamePerformance) => boolean }[] = [
+    { label: '300-YARD PASSING GAMES', hit: (p) => (p.offense?.passYards ?? 0) >= 300 },
+    { label: '100-YARD RUSHING GAMES', hit: (p) => (p.offense?.rushYards ?? 0) >= 100 },
+    { label: '100-YARD RECEIVING GAMES', hit: (p) => (p.offense?.receivingYards ?? 0) >= 100 },
+    { label: '3+ TOUCHDOWN GAMES (any kind)', hit: (p) => totalTDs(p) >= 3 },
+    { label: 'MULTI-SACK GAMES', hit: (p) => (p.defense?.sacks ?? 0) >= 2 },
+  ];
+  const blocks = tests.map(({ label, hit }) => {
+    const season = new Map<string, number>();
+    const career = new Map<string, { n: number; team: Set<string>; years: Set<number> }>();
+    for (const p of perfs) {
+      if (!hit(p)) continue;
+      const sk = `${p.name} (${p.position}, ${p.team}) ${p.seasonYear}`;
+      season.set(sk, (season.get(sk) ?? 0) + 1);
+      const ck = `${p.name}|${p.position}`;
+      const c = career.get(ck) ?? { n: 0, team: new Set<string>(), years: new Set<number>() };
+      c.n += 1;
+      c.team.add(p.team);
+      c.years.add(p.seasonYear);
+      career.set(ck, c);
+    }
+    if (!season.size) return '';
+    const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, perList);
+    const careerTop = [...career.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, perList);
+    return `${label} — single season: ${top(season).map(([k, n]) => `${k}: ${n}`).join('; ')} | dynasty career: ${careerTop
+      .map(([k, c]) => `${k.split('|')[0]} (${[...c.team].join('/')}, ${Math.min(...c.years)}-${Math.max(...c.years)}): ${c.n}`)
+      .join('; ')}`;
+  });
+  const body = blocks.filter(Boolean).join('\n');
+  return body ? `\n\nBIG-GAME COUNTS (COMPUTED over EVERY logged game — complete):\n${body}` : '';
+}
