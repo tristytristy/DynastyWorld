@@ -122,16 +122,13 @@ const totalTDs = (p: GamePerformance) =>
 /**
  * The season's standout single-game performances, by category, so "best
  * game of the year" arguments have the real box scores behind them.
- *
- * Games against the save's FCS placeholder opponents ("FCS Southeast") are
- * left out: on a real save half the raw leaders were 65-7 cupcake stat-pads,
- * and nobody's season is remembered for those. They stay in each player's
- * own game log, where they're simply true.
+ * Games against FCS opponents count too (user call, 2026-10-26) — the
+ * opponent is printed on every line, so the board can roast a cupcake
+ * stat-pad on its own.
  */
 export function standoutPerformances(perfs: GamePerformance[], perCategory = 6): GamePerformance[] {
-  const real = perfs.filter((p) => !/^FCS\b/i.test(p.opponent));
   const pick = (score: (p: GamePerformance) => number, floor: number) =>
-    real
+    perfs
       .filter((p) => score(p) >= floor)
       .sort((a, b) => score(b) - score(a))
       .slice(0, perCategory);

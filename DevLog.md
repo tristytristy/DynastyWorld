@@ -11618,3 +11618,6 @@ New `getLeagueHistory` assembly (database/getLeagueHistory.ts) + `db:getLeagueHi
 - **DynastyTube comments** on a game-tagged clip get that game's box score.
 
 **Verification:** tsc clean, all four bundles compile, eslint clean. Scratch harnesses on the REAL modules: 42 checks on playerGames + Historian prompt assembly, 11 on the Board (PGT leaders, standouts, named-player logs, regression on nested replies) — all passing. Then end-to-end on the real save (DYNASTY-WORKSAVE2) via the headless screenshot harness (`USE_PRE_SPLASH_ONLY=1` + xvfb): imported in 16s; LSU 2026 — 13 games, 35 players with logs, 0 lines failing to join LSU's schedule, 0 attributed to the wrong team; Harlem Berry's card renders a 13-game log through the Week 17 bowl with Best game; the digest over the real archive covers 39,741 player-game lines across 943 games and 138 teams.
+
+
+**Follow-up (same day):** user call — FCS games count. The FCS-opponent exclusion was removed from `standoutPerformances`; the opponent is printed on every standout line, so a cupcake stat-pad reads as exactly what it is.
