@@ -11621,3 +11621,5 @@ New `getLeagueHistory` assembly (database/getLeagueHistory.ts) + `db:getLeagueHi
 
 
 **Follow-up (same day):** user call — FCS games count. The FCS-opponent exclusion was removed from `standoutPerformances`; the opponent is printed on every standout line, so a cupcake stat-pad reads as exactly what it is.
+
+**Follow-up 2:** game-log lines were missing stats the data carries — interceptions thrown on passing lines, rushing TDs, receiving TDs (user screenshots: Ihenacho QB, Colon HB, Pleasants WR). `gameLogSummary` now prints `C/A, yds, TD, INT` (INT always, so a clean game shows) and appends `, N TD` to rushing/receiving lines when scored. Verified on the real save: Sam Leavitt (QB), Harlem Berry (HB), Eugene Wilson III (WR).

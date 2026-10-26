@@ -505,9 +505,17 @@ function gameLogSummary(entry: GameLogEntry): string {
   if (entry.category === 'offense') {
     const line = entry.line as OffensiveGameLine;
     const parts: string[] = [];
-    if (line.passAttempts > 0) parts.push(`${line.passCompletions}/${line.passAttempts}, ${line.passYards} yds, ${line.passTDs} TD`);
-    if (line.rushAttempts > 0) parts.push(`${line.rushAttempts} car, ${line.rushYards} yds`);
-    if (line.receptions > 0) parts.push(`${line.receptions} rec, ${line.receivingYards} yds`);
+    // INT always shows on a passing line (a clean game is worth seeing);
+    // rushing/receiving TDs only when scored, so a WR's lone carry stays short.
+    if (line.passAttempts > 0) {
+      parts.push(`${line.passCompletions}/${line.passAttempts}, ${line.passYards} yds, ${line.passTDs} TD, ${line.passInts} INT`);
+    }
+    if (line.rushAttempts > 0) {
+      parts.push(`${line.rushAttempts} car, ${line.rushYards} yds${line.rushTDs > 0 ? `, ${line.rushTDs} TD` : ''}`);
+    }
+    if (line.receptions > 0) {
+      parts.push(`${line.receptions} rec, ${line.receivingYards} yds${line.receivingTDs > 0 ? `, ${line.receivingTDs} TD` : ''}`);
+    }
     return parts.join(' | ') || '-';
   }
   const line = entry.line as DefensiveGameLine;
