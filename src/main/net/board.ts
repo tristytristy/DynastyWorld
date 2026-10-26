@@ -6,6 +6,7 @@ import { listMediaForGame } from '../../database/media';
 import { CFP_ROUND_NAMES } from '../../shared/cfpBowls';
 import { realHistoryNote } from './canon';
 import { sanitizeTubeCitations, seasonLedger, seasonPhaseNote, seasonTubeLibrary } from './seasonDigest';
+import { gameLeadersText, mentionedPlayers, playerGameLogsText, seasonPerformances, seasonStandoutsText } from './playerGames';
 import { getDynastyById } from '../../database/helpers';
 import {
   clearWeekThreads,
@@ -293,6 +294,7 @@ HOW REAL GAME-THREAD COMMENTS SOUND — follow this closely:
 - Nested replies (the inner "replies" array) are direct responses — pile-ons, corrections, one-word agreements, AND real comebacks: let 1-2 disagreements per thread actually go back and forth with substance (2-3 sentences each) instead of ending after one shot.
 - Fanbase truth: losers doom-spiral or go silent-then-one-liner, winners are euphoric and briefly insufferable, neutrals drive by with jokes. Flairless veterans post perspective.
 - MORE r/CFB TEXTURE, sprinkled where they fit (not all in every thread): conference solidarity and slander ("MACtion stays undefeated", "typical Big Ten rock fight"), referee grievances with a specific call, an "I was at this game" anecdote with one concrete detail (the crowd, the weather, the guy behind them), self-aware fanbase misery ("first time?" / "this is why we can't have nice things"), a "put him in the portal" or hot-seat joke, and the occasional comment that's just the score typed back in disbelief.
+- BOX SCORES: each featured game lists its real box score leaders — PGT comments should quote them ("QB went 24/31, 356, 3 TD", "held their RB to 41 yards"). Never invent a stat line that isn't listed.
 - SUBSTANCE FLOOR: 1-2 comments per thread should contain a real football observation someone could only make from the data (the margin, the ranks, a scorer, the record it produces) — short is fine, empty is not. NEVER a bare year or vague nostalgia with no referent: any callback must name what actually happened.
 - LIKES: reddit-shaped. Top comment in a big thread 800-6000, mid comments 40-900, late/niche 3-60, and one mildly downvoted take (-5 to -25) somewhere per week. Thread "upvotes" 200-8000 by game size.
 - Continuity: keep grudges and running bits from the board history going; call back to old takes.`;
@@ -331,7 +333,10 @@ export async function generateBoardWeek(
   const gameList = featured
     .map(
       (g, i) =>
-        `${i + 1}. TITLE: ${gameThreadTitle(g)}\n   final: ${g.away}${g.awayRank ? ` (#${g.awayRank})` : ''} ${g.awayScore} @ ${g.home}${g.homeRank ? ` (#${g.homeRank})` : ''} ${g.homeScore}${g.isNationalChampionship ? ' — NATIONAL CHAMPIONSHIP' : ''}`,
+        `${i + 1}. TITLE: ${gameThreadTitle(g)}\n   final: ${g.away}${g.awayRank ? ` (#${g.awayRank})` : ''} ${g.awayScore} @ ${g.home}${g.homeRank ? ` (#${g.homeRank})` : ''} ${g.homeScore}${g.isNationalChampionship ? ' — NATIONAL CHAMPIONSHIP' : ''}${(() => {
+          const leaders = gameLeadersText(dynastyId, seasonId, g.gameId);
+          return leaders ? `\n${leaders}` : '';
+        })()}`,
     )
     .join('\n');
 
@@ -384,7 +389,7 @@ export async function generateBoardWeek(
       const population = boardPopulation(dynastyId);
       const out = await generateJson<{ newUsers?: ModelUser[]; threads: ModelThread[]; lateReplies?: ModelLateReply[] }>(
         BOARD_WEEK_SYSTEM,
-        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}${unansweredSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
+        `POPULATION (existing posters):\n${population.map((a) => `${a.handle} (${a.displayName}): ${a.persona}`).join('\n')}\n\nFEATURED GAMES (one [Post Game Thread] each, exact titles):\n${gameList}${filmRoomSection}${unansweredSection}\n\nWEEK CONTEXT:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${seasonStandoutsText(dynastyId, seasonId, 24)}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${ctx.neutral ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER \u2014 no team is "the user\'s team". The board covers the nation; do not treat any fanbase as the home crowd.' : ''}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
         24000, // a playoff week carries up to 7 threads with effortpost-length comments
       );
       installBoardUsers(dynastyId, out.newUsers ?? []);
@@ -530,6 +535,7 @@ const BOARD_ANSWER_RULES = `ANSWERING A REAL QUESTION — when a post asks for s
 - At least TWO answers are long (80-220 words): a ranked top-3/top-5 with a sentence or two of reasoning per pick, or a single case argued across paragraphs. A few more are mid-size (2-4 sentences). Short one-liners belong mostly in the nested replies (agreement, "forgot about that one", "no way, the ___ game was better because ___").
 - When a comment discusses an upload, put [tube:ID] right after that sentence (ids from the DYNASTYTUBE list only).
 - Casual posts (jokes, shitposts, hot takes with no question) keep the normal board mix: mostly short, one or two mid-size, reddit energy.
+PLAYER STATS: when a comment talks about a player's game or season, use the real numbers from STANDOUT INDIVIDUAL GAMES and the GAME LOGS ("he went 24/31 for 356 against them") — the receipts are what make an argument land. Never invent a stat line; if a number isn't listed, talk about it without one.
 GENERAL: lowercase fine, "lol" fine, not everyone is clever — length comes from having something to say, never from performing. Callbacks must name what actually happened — never a bare year. Never invent results; every fact comes from the data. Reddit-shaped likes. Use only the given usernames as authors.`;
 
 const BOARD_THREAD_ANSWER_SYSTEM = `You write the comment section of a brand-new thread on TheSideline.net, the national college-football board of a video-game dynasty universe (CFB-subreddit culture). The OP is {HANDLE} — an ordinary member (the human player); treat them like any other poster.
@@ -563,13 +569,22 @@ function boardKnowledge(
   dynastyId: string,
   seasonId: number,
   ctx: NonNullable<ReturnType<typeof buildWeekContext>>,
+  /** The thread text being answered — any player it names gets his full game log attached. */
+  focusText = '',
 ): { text: string; tubeIds: Set<number> } {
   const tube = seasonTubeLibrary(dynastyId, seasonId);
+  const perfs = seasonPerformances(dynastyId, seasonId);
+  const named = focusText ? mentionedPlayers(focusText, perfs) : [];
+  const playerLogs = playerGameLogsText(
+    named,
+    perfs,
+    'GAME LOGS FOR PLAYERS NAMED IN THIS THREAD (every game this season, real box scores — use them when discussing these players):',
+  );
   const neutral = ctx.neutral
     ? '\n\nNOTE: This dynasty is run by a NEUTRAL COMMISSIONER — no team is "the user\'s team". The board covers the nation.'
     : '';
   return {
-    text: `THIS WEEK:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${tube.text}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${neutral}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
+    text: `THIS WEEK:\n${JSON.stringify(ctx, null, 1)}${seasonLedger(dynastyId, seasonId, ctx.userTeam)}${seasonStandoutsText(dynastyId, seasonId)}${playerLogs}${tube.text}${seasonPhaseNote(seasonId)}${boardMemory(dynastyId)}${neutral}${realHistoryNote(ctx.firstSeasonYear)}${humanFlairLine(dynastyId)}`,
     tubeIds: tube.ids,
   };
 }
@@ -686,7 +701,7 @@ export async function createBoardThread(
   if (threadId === 0) return { ok: false, engine: 'offline', message: 'Could not create the thread.', postsAdded: 0 };
 
   const userHandle = getAccounts(dynastyId).find((a) => a.id === userAccountId)?.handle ?? 'you';
-  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx) : { text: '', tubeIds: new Set<number>() };
+  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx, `${title}\n${body}`) : { text: '', tubeIds: new Set<number>() };
   const { drafts, engine, message } = await draftConversation(
     BOARD_THREAD_ANSWER_SYSTEM.replace('{HANDLE}', userHandle),
     `USERNAMES:\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nTHE NEW THREAD:\n${userHandle} (OP): ${title}\n${body}`,
@@ -724,7 +739,7 @@ export async function replyToBoardThread(
 
   const thread = getThread(dynastyId, threadId) ?? before;
   const userHandle = getAccounts(dynastyId).find((a) => a.id === userAccountId)?.handle ?? 'you';
-  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx) : { text: '', tubeIds: new Set<number>() };
+  const knowledge = ctx ? boardKnowledge(dynastyId, seasonId, ctx, transcriptOf(thread)) : { text: '', tubeIds: new Set<number>() };
   const { drafts, engine, message } = await draftConversation(
     BOARD_REPLY_SYSTEM.replace('{HANDLE}', userHandle),
     `USERNAMES:\n${rosterPrompt(dynastyId)}\n\n${knowledge.text}\n\nTHE THREAD (nested, with ids):\n${transcriptOf(thread, userPostId)}`,
@@ -748,7 +763,7 @@ export async function generateMoreThreadComments(
   }
   const ctx = buildWeekContext(dynastyId, seasonId);
   if (!ctx) return { ok: false, engine: 'offline', message: 'No synced data for this season yet.', postsAdded: 0 };
-  const knowledge = boardKnowledge(dynastyId, seasonId, ctx);
+  const knowledge = boardKnowledge(dynastyId, seasonId, ctx, transcriptOf(thread));
   let drafts: Draft[];
   try {
     drafts = await generateJson<Draft[]>(

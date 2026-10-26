@@ -22,6 +22,7 @@ import { getSchedule } from '../../database/getSchedule';
 import { getLeagueScores } from '../../database/getLeagueScores';
 import { getAllLeaguePlayers } from '../../database/getLeagueRoster';
 import type { NetAccount, NetCaptionResult, NetClipInfo, NetGenerateResult, NetPost } from '../../shared/netTypes';
+import { gameLeadersText } from './playerGames';
 
 /**
  * Generation orchestrator: builds the week's context from the archive, asks
@@ -415,7 +416,7 @@ export async function generateMediaComments(
         : '';
       const raw = await generateJson<ModelPost[]>(
         COMMENTS_SYSTEM,
-        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP TITLE: ${item?.tubeTitle || item?.description || 'untitled highlight'}${item?.tubeTitle && item?.description ? `\nUPLOADER'S DESCRIPTION: ${item.description}` : ''}\nGAME: ${gameLabel ?? 'unknown'}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}${clipSection}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
+        `CAST:\n${castPrompt([...FIXED_CAST, ...ctx.teamsInTheNews.map(fanFor)])}\n\nCLIP TITLE: ${item?.tubeTitle || item?.description || 'untitled highlight'}${item?.tubeTitle && item?.description ? `\nUPLOADER'S DESCRIPTION: ${item.description}` : ''}\nGAME: ${gameLabel ?? 'unknown'}${item?.gameId != null ? (gameLeadersText(dynastyId, seasonId, item.gameId) ? `\nTHIS GAME'S REAL BOX SCORE (use these numbers, never invent others):\n${gameLeadersText(dynastyId, seasonId, item.gameId)}` : '') : ''}\nTAGGED PLAYERS: ${players.join(', ') || 'none'}${playLines ? `\nPLAYS SHOWN IN THIS CLIP (uploader-confirmed — react to THESE moments specifically):\n${playLines}` : ''}${clipSection}\n\nSEASON CONTEXT:\n${JSON.stringify(ctx, null, 1)}${alreadySaid}${neutralNote(ctx)}${realHistoryNote(ctx.firstSeasonYear)}`,
         4500,
         frames,
       );

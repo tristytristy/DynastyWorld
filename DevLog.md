@@ -11601,3 +11601,20 @@ New `getLeagueHistory` assembly (database/getLeagueHistory.ts) + `db:getLeagueHi
 - Fixes found along the way: `getThread` is now deep; the inbox walks parent links to the real root thread (a reply at depth 3+ previously computed a comment id as the thread id, so "jump to thread" went nowhere); `installBoardUsers` and the new draft inserter tolerate wrong-shaped model JSON instead of throwing.
 
 **Verification:** tsc clean, all four webpack bundles compile, eslint clean. Two scratch harnesses ran the REAL dynastyNet.ts / seasonDigest.ts / board.ts on in-memory sql.js with the app's own net schema (AI, week context, and snapshot readers stubbed): 55 checks, all passing — including replies nesting under the user's comment, zero new top-level bot comments on reply, depth-5 inbox root resolution, replyTo validation, citation stripping, and a deliberately malformed population response.
+
+## Phase — Player game logs everywhere: every team's player cards, the Historian, the Board (2026-10-26)
+
+**The ask:** open any team in any year (e.g. LSU 2027), see each player's per-game stats on his player card, and have the Historian and the Board consider and remember player game totals.
+
+**What was already there:** the sync has stored LEAGUE-WIDE box scores (the `gamelog` snapshot, every player in every game) for a while — it's what the Game Info "Players" tab renders. But:
+- Player cards for players on OTHER teams explicitly skipped the game log ("not tracked leaguewide" — no longer true), so Game log / Recent form / Best game read "No games played yet."
+- No AI surface ever saw a single per-game line.
+
+**Shipped:**
+- **Player cards, any team**: `loadFromLeague` now fetches the player's game log plus HIS team's schedule (`getLeagueTeamSchedule`, adapted to a ScheduleOverview by `scheduleFromLeagueGames`) — never the user's schedule, which would describe the wrong team. Game log (each row opens that game's box score), Recent form, Best game, and the printable card's per-game stat sources all work for every player in the country.
+- **net/playerGames.ts** (derived only, nothing new stored): `seasonPerformances` joins a season's gamelog to game results (week, opponent, score from the player's side; offense+defense in one game merged; unplayed/unplaceable rows dropped; cached on the season's extractedAt), `statLine`, `standoutPerformances` (category leaders above real thresholds, excluding games against the save's FCS placeholder opponents — on the real save half the raw leaders were 65-7 stat-pads), `gameLeadersText` (per-team box score leaders for one game), `mentionedPlayers` (full names always; unique 4+ letter surnames not on a common-word stoplist; possessives fine), `playerGameLogsText` (every game + per-season totals), `dynastyPerformances`.
+- **The Historian** gets every season's standout individual games, the full career game log of any player the question names, and a top-20 performance log for any team it names; its rules require citing real stat lines and forbid inventing them.
+- **The Board**: every post-game thread lists its real box score leaders (PGT comments told to quote them); the weekly run and all conversations get the season's standouts; any player a thread names gets his game log attached (so a reply about "Ty Simpson" sees his games).
+- **DynastyTube comments** on a game-tagged clip get that game's box score.
+
+**Verification:** tsc clean, all four bundles compile, eslint clean. Scratch harnesses on the REAL modules: 42 checks on playerGames + Historian prompt assembly, 11 on the Board (PGT leaders, standouts, named-player logs, regression on nested replies) — all passing. Then end-to-end on the real save (DYNASTY-WORKSAVE2) via the headless screenshot harness (`USE_PRE_SPLASH_ONLY=1` + xvfb): imported in 16s; LSU 2026 — 13 games, 35 players with logs, 0 lines failing to join LSU's schedule, 0 attributed to the wrong team; Harlem Berry's card renders a 13-game log through the Week 17 bowl with Best game; the digest over the real archive covers 39,741 player-game lines across 943 games and 138 teams.

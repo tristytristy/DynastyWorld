@@ -7,6 +7,7 @@ import { ensureAccounts, insertPosts } from '../../database/dynastyNet';
 import { withBatchedPersist } from '../../database/init';
 import { generateJson, hasLiveEngine, NetClaudeError } from './claude';
 import { realHistoryAnalysisNote } from './canon';
+import { dynastyPerformances, mentionedPlayers, playerGameLogsText, seasonStandoutsText, statLine, type GamePerformance } from './playerGames';
 import type { YearSummaryData } from '../../extractors/extract-league-history';
 import type { NetGenerateResult } from '../../shared/netTypes';
 import type { NationalLeaderEntry } from '../../shared/types';
@@ -36,6 +37,7 @@ RULES:
 - Every DYNASTY-ERA fact — scores, records, seeds, years, names from this dynasty's seasons — must come from the archive data provided. If the archive can't answer part of the question (e.g. seasons that carry no player stats), say so plainly and answer what it CAN support. Real college-football history from before this universe diverged is shared canon (see SHARED HISTORY below) and may be drawn on for comparison and context, as any real columnist would.
 - Structure the answer as an article: a strong opening, clear sections or a countdown when the question calls for a ranking, and a closing line worth quoting.
 - FOOTAGE CITATIONS: the DYNASTYTUBE INDEX lists every uploaded highlight with its id, description, game, and tagged players. When your article discusses a team, game, or player that has a matching upload, cite it inline by placing the marker [tube:ID] immediately after the sentence it supports. Only cite ids from the index — never invent footage, and don't force a citation where none fits.
+- BOX SCORES: the archive includes real per-game player lines — each season's STANDOUT INDIVIDUAL GAMES, full GAME LOGS for any player the question names, and TEAM PERFORMANCE LOGS for any team it names. Use them: the stat line, the opponent, the week, the result ("he threw for 412 and four scores in the Week 9 shootout at Ole Miss"). Game totals are how a career or a season is remembered. Never invent a stat line that isn't in the data.
 - Plain text only otherwise (no markdown headers with #; use short ALL-CAPS section labels or numbered entries instead).
 
 Respond with JSON only:
@@ -211,6 +213,46 @@ function buildTubeIndex(dynastyId: string): string {
   return `DYNASTYTUBE INDEX (cite with [tube:ID] where relevant):\n${lines.join('\n')}`;
 }
 
+/**
+ * The Historian's box-score memory (user request, 2026-10-26): every synced
+ * season's best individual games, plus — targeted by the question — the full
+ * game-by-game log of any player it names and the top performances of any
+ * team it names, across the whole dynasty.
+ */
+function buildBoxScoreMemory(dynastyId: string, question: string): string {
+  const seasons = getSeasonsByDynasty(dynastyId)
+    .filter((s) => s.hasFullData)
+    .sort((a, b) => a.seasonYear - b.seasonYear);
+  const all: GamePerformance[] = dynastyPerformances(dynastyId);
+  if (!all.length) return '';
+  // Many-season archives get a tighter per-season list so the prompt stays bounded.
+  const perSeason = seasons.length > 6 ? 14 : 24;
+  const standouts = seasons.map((s) => seasonStandoutsText(dynastyId, s.id, perSeason)).join('');
+
+  const named = mentionedPlayers(question, all, 8);
+  const playerLogs = playerGameLogsText(
+    named,
+    all,
+    'GAME LOGS FOR PLAYERS NAMED IN THE QUESTION (every game across the dynasty, with season totals):',
+  );
+
+  const hay = ` ${question.toLowerCase()} `;
+  const teams = [...new Set(all.map((p) => p.team))].filter((t) => t.length > 2 && hay.includes(` ${t.toLowerCase()} `));
+  const teamLogs = teams
+    .slice(0, 3)
+    .map((team) => {
+      const top = all
+        .filter((p) => p.team === team)
+        .sort((a, b) => b.impact - a.impact)
+        .slice(0, 20);
+      return `\n\nTEAM PERFORMANCE LOG — ${team} (its 20 best individual games across the dynasty):\n${top
+        .map((p) => `${p.seasonYear} Wk ${p.week}${p.bowlName ? ` (${p.bowlName})` : ''}: ${p.name} (${p.position}) vs ${p.opponent} [${p.result}] — ${statLine(p)}`)
+        .join('\n')}`;
+    })
+    .join('');
+  return `${standouts}${playerLogs}${teamLogs}`;
+}
+
 export async function askHistorian(dynastyId: string, question: string): Promise<NetGenerateResult> {
   const trimmed = question.trim();
   if (!trimmed) return { ok: false, engine: 'offline', message: 'Ask a question first.', postsAdded: 0 };
@@ -230,11 +272,12 @@ export async function askHistorian(dynastyId: string, question: string): Promise
 
   const pack = buildArchivePack(dynastyId);
   const tube = buildTubeIndex(dynastyId);
+  const boxScores = buildBoxScoreMemory(dynastyId, trimmed);
 
   try {
     const out = await generateJson<{ headline: string; body: string }>(
       HISTORIAN_SYSTEM,
-      `QUESTION FROM THE OWNER OF THIS DYNASTY:\n${trimmed}\n\n${tube}\n\nTHE ARCHIVE:\n${pack}${realHistoryAnalysisNote(Math.min(...seasons.map((s) => s.seasonYear)))}`,
+      `QUESTION FROM THE OWNER OF THIS DYNASTY:\n${trimmed}\n\n${tube}\n\nTHE ARCHIVE:\n${pack}${boxScores}${realHistoryAnalysisNote(Math.min(...seasons.map((s) => s.seasonYear)))}`,
       9000,
     );
     if (!out.headline || !out.body) throw new NetClaudeError('Malformed article.');
