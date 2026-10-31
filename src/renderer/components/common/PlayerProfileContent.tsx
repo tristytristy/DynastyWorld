@@ -32,6 +32,7 @@ import type {
   GameLogEntry,
   HonorRosterEntry,
   LeagueAward,
+  LeagueTeamGame,
   MediaItemResolved,
   OffensiveGameLine,
   OffensiveStatLine,
@@ -49,6 +50,58 @@ import type {
 interface PlayerTeamAwardWin {
   seasonYear: number;
   awardName: string;
+}
+
+/**
+ * A browsed team's league schedule, worn as a ScheduleOverview so the game
+ * log, recent form, best game and card-stat sources work for ANY team's
+ * player exactly as they do for the user's (user request, 2026-10-26). Those
+ * consumers only read week / opponent / home-away / score / result by gameId;
+ * the rest is filled with honest blanks rather than borrowed from the user's
+ * own schedule, which would describe the wrong team.
+ */
+function scheduleFromLeagueGames(games: LeagueTeamGame[], teamName: string): ScheduleOverview {
+  return {
+    games: games.map((g) => ({
+      gameId: g.gameId,
+      week: g.week,
+      teamName,
+      opponent: g.opponent,
+      opponentTeamIndex: g.opponentTeamIndex,
+      isHome: g.isHome,
+      status: g.result ? 'Final' : 'Scheduled',
+      dayOfWeek: '',
+      broadcastScope: '',
+      kickoffTime: '',
+      date: '',
+      teamScore: g.teamScore,
+      opponentScore: g.opponentScore,
+      result: g.result,
+      opponentCurrentRank: g.opponentRank,
+      teamRank: null,
+      opponentContextCaptured: g.opponentRank !== null || g.opponentRecord !== null,
+      teamQuarterScores: [],
+      opponentQuarterScores: [],
+      teamStats: null,
+      opponentStats: null,
+      gameType: g.gameType,
+      bowlName: g.bowlName,
+      bowlAssetName: g.bowlAssetName,
+      isNationalChampionship: g.isNationalChampionship,
+      conferenceName: g.conferenceName,
+      isRivalryGame: false,
+      rivalryName: null,
+      isConferenceChampionship: g.isConferenceChampionship,
+      siteType: g.siteType,
+      neutralVenueId: g.neutralVenueId,
+      opponentRecord: g.opponentRecord,
+      runningRecord: g.runningRecord,
+    })),
+    record: { wins: 0, losses: 0 },
+    conferenceRecord: { wins: 0, losses: 0 },
+    currentStreak: { type: null, count: 0 },
+    bowlEligible: false,
+  };
 }
 
 type AwardsBySeason = {
@@ -452,9 +505,17 @@ function gameLogSummary(entry: GameLogEntry): string {
   if (entry.category === 'offense') {
     const line = entry.line as OffensiveGameLine;
     const parts: string[] = [];
-    if (line.passAttempts > 0) parts.push(`${line.passCompletions}/${line.passAttempts}, ${line.passYards} yds, ${line.passTDs} TD`);
-    if (line.rushAttempts > 0) parts.push(`${line.rushAttempts} car, ${line.rushYards} yds`);
-    if (line.receptions > 0) parts.push(`${line.receptions} rec, ${line.receivingYards} yds`);
+    // INT always shows on a passing line (a clean game is worth seeing);
+    // rushing/receiving TDs only when scored, so a WR's lone carry stays short.
+    if (line.passAttempts > 0) {
+      parts.push(`${line.passCompletions}/${line.passAttempts}, ${line.passYards} yds, ${line.passTDs} TD, ${line.passInts} INT`);
+    }
+    if (line.rushAttempts > 0) {
+      parts.push(`${line.rushAttempts} car, ${line.rushYards} yds${line.rushTDs > 0 ? `, ${line.rushTDs} TD` : ''}`);
+    }
+    if (line.receptions > 0) {
+      parts.push(`${line.receptions} rec, ${line.receivingYards} yds${line.receivingTDs > 0 ? `, ${line.receivingTDs} TD` : ''}`);
+    }
     return parts.join(' | ') || '-';
   }
   const line = entry.line as DefensiveGameLine;
@@ -1435,7 +1496,7 @@ export function PlayerProfileContent({
   seasonId?: number;
   /** Display info for players who won't be found in the local roster (e.g. an opposing team's Heisman winner) — that roster snapshot only covers the user's own team. Lets this component show a real name/team instead of a bare "not found" for leaguewide award data. */
   fallback?: PlayerModalFallback;
-  /** Set when the player was opened while browsing another team via the team switcher — the profile then resolves from that team's league snapshot (full bio + season stats + live attributes) instead of the user's roster, so it renders the same full layout as a user-team player. Per-player game logs aren't tracked leaguewide, so those sections show their honest empty states. */
+  /** Set when the player was opened while browsing another team via the team switcher — the profile then resolves from that team's league snapshot (full bio + season stats + live attributes) instead of the user's roster, so it renders the same full layout as a user-team player — including his game log, joined to that team's own schedule. */
   leagueTeamIndex?: number;
   /** Controlled tab. Supplied by the player modal so the open tab survives a Prev/Next swap. */
   tab?: ProfileTab;
@@ -1810,8 +1871,19 @@ export function PlayerProfileContent({
           .map((p) => ({ playerId: p.id, category: p.seasonStat!.category, career: null, season: p.seasonStat!.season })),
       );
       setHeroTeamName(leagueRoster.displayName ?? fallback?.teamDisplayName ?? null);
-      setPlayerSeasonGamelog(null);
-      setSchedule(null);
+      /*
+        The league-wide gamelog covers EVERY team's players, so a browsed
+        team's player gets his game-by-game lines too — joined to HIS team's
+        schedule, never the user's (user request, 2026-10-26: "LSU 2027, click
+        any game, see each player's stats — on the player card").
+      */
+      const [gamelogResult, leagueGames] = await Promise.all([
+        window.api.db.getPlayerGameLog(dynastyId, playerId, leagueRoster.seasonId),
+        window.api.db.getLeagueTeamSchedule(dynastyId, teamIndex, leagueRoster.seasonId),
+      ]);
+      if (cancelled) return true;
+      setPlayerSeasonGamelog(gamelogResult);
+      setSchedule(leagueGames ? scheduleFromLeagueGames(leagueGames, leagueRoster.displayName) : null);
       return true;
     }
 

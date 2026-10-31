@@ -55,7 +55,9 @@ export async function relinkDynasty(dynastyId: string, filePath: string): Promis
 
   let extraction;
   try {
-    extraction = await extractAll(filePath);
+    // Anchor user-coach selection to this dynasty's own team so spectator
+    // profiles in the save can't fail the team-match guard below.
+    extraction = await extractAll(filePath, undefined, dynasty.teamId ?? undefined);
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : 'Failed to read save file.' };
   }

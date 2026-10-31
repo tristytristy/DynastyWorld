@@ -16,12 +16,21 @@ import { DynastyOverview } from './pages/DynastyOverview';
 import { TeamHubLayout } from './pages/TeamHubLayout';
 import { PairLayout } from './components/common/PairLayout';
 import { NcaaHubLayout } from './pages/NcaaHubLayout';
+import { NetHubLayout } from './pages/net/NetHubLayout';
+import { NetFeed } from './pages/net/NetFeed';
+import { NetTube } from './pages/net/NetTube';
+import { NetPaper } from './pages/net/NetPaper';
+import { NetPods } from './pages/net/NetPods';
+import { NetShows } from './pages/net/NetShows';
+import { NetBoard } from './pages/net/NetBoard';
+import { NetHistorian } from './pages/net/NetHistorian';
 import { RecruitHubLayout } from './pages/RecruitHubLayout';
 import { DynastyTrends } from './pages/DynastyTrends';
 import { Transfers } from './pages/Transfers';
 import { Rivalries } from './pages/Rivalries';
 import { NcaaHub } from './pages/NcaaHub';
 import { NcaaRecords } from './pages/NcaaRecords';
+import { LeagueHistory } from './pages/LeagueHistory';
 import { Roster } from './pages/Roster';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
@@ -185,6 +194,16 @@ export function App() {
                     </Route>
                     {/* Media Hub — its own top-level section (dynasty-wide, season-scoped), not team-scoped. */}
                     <Route path="media" element={<Media />} />
+                    {/* The Net — the save's own internet (DynastyNet). */}
+                    <Route element={<NetHubLayout />}>
+                      <Route path="net" element={<NetFeed />} />
+                      <Route path="net/tube" element={<NetTube />} />
+                      <Route path="net/board" element={<NetBoard />} />
+                      <Route path="net/paper" element={<NetPaper />} />
+                      <Route path="net/pods" element={<NetPods />} />
+                      <Route path="net/shows" element={<NetShows />} />
+                      <Route path="net/historian" element={<NetHistorian />} />
+                    </Route>
                     {/* Team Hub section — persistent masthead + switcher; pages keep flat URLs. */}
                     <Route element={<TeamHubLayout />}>
                       <Route path="team-hub" element={<DynastyOverview />} />
@@ -232,6 +251,7 @@ export function App() {
                       <Route path="annual-awards" element={<AnnualAwards />} />
                       <Route path="all-america" element={<AllTeams />} />
                       <Route path="ncaa-records" element={<NcaaRecords />} />
+                      <Route path="league-history" element={<LeagueHistory />} />
                     </Route>
                   </Route>
                 </Routes>

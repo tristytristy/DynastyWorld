@@ -320,15 +320,44 @@ function resolvePresentationId(record: FranchiseRecord): number {
 }
 
 /**
- * The dynasty's team, identified by its user-controlled coach — any
- * position, not just Head Coach. Originally required `position ===
- * 'HeadCoach'` too, which meant importing an Offensive/Defensive
- * Coordinator-controlled dynasty threw ("Could not determine which team
- * this dynasty belongs to") instead of importing at all, since no row could
- * ever match both conditions in that case. `IsUserControlled` is true for
- * exactly one coach regardless of their position, so matching on it alone
- * is strictly correct and still deterministic.
+ * THE SAVE CAN HOLD MANY USER-CONTROLLED COACHES (user report, 2026-08-21).
+ *
+ * CFB 27's Members screen lets one dynasty carry several user coach profiles,
+ * and players use that as the only way to WATCH other teams' games: to
+ * spectate the ACC Championship you create a throwaway Clemson coach, play
+ * that game in TV mode, and move on. A save doing this reads five-plus
+ * IsUserControlled rows — one real career coach plus spectator profiles
+ * parked at whatever teams had games worth watching that week.
+ *
+ * Picking "the" user by first match could grab a spectator profile, which
+ * told the app the coach had changed schools and silently froze the real
+ * season's sync. The primary is now chosen deliberately:
+ *
+ *   1. `preferredTeamIndex` (the archive's own record of the dynasty's team,
+ *      passed through on re-syncs) wins when one of the user coaches is at
+ *      that team — the archive already knows who the dynasty belongs to.
+ *   2. Otherwise the most YearsCoaching wins: spectator profiles are created
+ *      brand-new mid-season, while the career coach carries real tenure.
+ *   3. Ties keep the first-listed row — creation order, i.e. the original
+ *      profile.
+ *
+ * Any position, not just Head Coach: requiring HeadCoach once made
+ * coordinator-career dynasties fail to import at all.
  */
-export function findUserTeamIndex(coaches: CoachData[]): number | undefined {
-  return coaches.find((c) => c.isUserControlled)?.teamIndex;
+export function pickPrimaryUserCoach(
+  coaches: CoachData[],
+  preferredTeamIndex?: number,
+): CoachData | undefined {
+  const users = coaches.filter((c) => c.isUserControlled);
+  if (users.length <= 1) return users[0];
+  if (preferredTeamIndex !== undefined) {
+    const preferred = users.find((c) => c.teamIndex === preferredTeamIndex);
+    if (preferred) return preferred;
+  }
+  return users.reduce((best, c) => (c.yearsCoaching > best.yearsCoaching ? c : best));
+}
+
+/** The dynasty's team, via its primary user-controlled coach — see pickPrimaryUserCoach. */
+export function findUserTeamIndex(coaches: CoachData[], preferredTeamIndex?: number): number | undefined {
+  return pickPrimaryUserCoach(coaches, preferredTeamIndex)?.teamIndex;
 }

@@ -107,6 +107,17 @@ function candidateRoots(): string[] {
   } catch {
     // app.getPath('exe') can throw very early; convention roots are optional.
   }
+  try {
+    // A library checked out INSIDE the project: the DynastyWorld fork carries
+    // one at the repo root, and in dev app.getAppPath() IS the project root —
+    // so a plain `git clone` + launch finds its art with no prompt. In a
+    // packaged build this resolves inside resources/app, where the folder
+    // doesn't exist, so the extra candidates cost nothing.
+    roots.push(path.join(app.getAppPath(), 'DynastyOS Assets'));
+    roots.push(path.join(app.getAppPath(), 'assets'));
+  } catch {
+    // Same early-startup caveat as above.
+  }
   // Bundled fallback: main.js lives at dist/main, assets at dist/renderer/assets.
   roots.push(path.join(__dirname, '..', 'renderer', 'assets'));
   return roots;

@@ -95,6 +95,7 @@ export function Dashboard() {
   const [backupTarget, setBackupTarget] = useState<{ id: string; teamName: string } | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [legacyImporting, setLegacyImporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [progress, setProgress] = useState<Record<ExtractionStep, StepState>>(initialProgress);
@@ -279,6 +280,30 @@ export function Dashboard() {
    * indistinguishable filenames; the picker still offers a raw file browser for
    * saves kept somewhere unusual.
    */
+  /*
+    Record-book import: a finished dynasty from a parsed JSON record book, not
+    a save file. Main process owns the file dialog (json filter); null means
+    the user cancelled, and the dashboard stays quiet about it.
+  */
+  async function handleLegacyImport() {
+    if (importing || restoring || legacyImporting) return;
+    setLegacyImporting(true);
+    try {
+      const result = await window.api.db.importLegacyDynasty();
+      if (result) {
+        setStatusMessage({ text: result.message, success: result.success });
+        if (result.success) {
+          const refreshed = await window.api.db.getDynasties();
+          setDynasties(refreshed);
+        }
+      }
+    } catch {
+      setStatusMessage({ text: 'Record book import failed unexpectedly.', success: false });
+    } finally {
+      setLegacyImporting(false);
+    }
+  }
+
   function handleImportClick() {
     if (importing) return;
     setStatusMessage(null);
@@ -364,15 +389,26 @@ export function Dashboard() {
           </div>
 
           {dynasties.length > 0 && (
-            <button
-              type="button"
-              onClick={handleImportClick}
-              disabled={importing || restoring}
-              style={ANGLED_PANEL}
-              className={`${ANGLED_FRAME} ${IMPORT_BUTTON_CLASS}`}
-            >
-              {importing ? 'Importing...' : restoring ? 'Restoring…' : 'Import'}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLegacyImport}
+                disabled={importing || restoring || legacyImporting}
+                title="Import a finished dynasty from a hand-kept record book (JSON) — champions, playoff brackets, conference title games, standings"
+                className="text-sm font-semibold text-slate-500 underline-offset-4 transition-colors hover:text-slate-800 hover:underline disabled:opacity-40 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                {legacyImporting ? 'Reading record book…' : 'Import record book'}
+              </button>
+              <button
+                type="button"
+                onClick={handleImportClick}
+                disabled={importing || restoring}
+                style={ANGLED_PANEL}
+                className={`${ANGLED_FRAME} ${IMPORT_BUTTON_CLASS}`}
+              >
+                {importing ? 'Importing...' : restoring ? 'Restoring…' : 'Import'}
+              </button>
+            </div>
           )}
         </div>
       </section>
